@@ -210,45 +210,6 @@ func FilterDeploymentsByStatus(deployments []appsv1.Deployment, status string) [
 	return filtered
 }
 
-// GetDeploymentEvents 获取部署事件
-func GetDeploymentEvents(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, deploymentName string, limit int) ([]*model.K8sDeploymentEvent, int64, error) {
-	eventList, err := kubeClient.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Deployment", deploymentName),
-	})
-	if err != nil {
-		return nil, 0, fmt.Errorf("获取部署事件失败: %w", err)
-	}
-
-	total := int64(len(eventList.Items))
-
-	// 按时间排序
-	sort.Slice(eventList.Items, func(i, j int) bool {
-		return eventList.Items[i].LastTimestamp.Time.After(eventList.Items[j].LastTimestamp.Time)
-	})
-
-	var events []*model.K8sDeploymentEvent
-	count := 0
-	for _, event := range eventList.Items {
-		if limit > 0 && count >= limit {
-			break
-		}
-
-		deploymentEvent := &model.K8sDeploymentEvent{
-			Type:      event.Type,
-			Reason:    event.Reason,
-			Message:   event.Message,
-			Count:     event.Count,
-			FirstTime: event.FirstTimestamp.Time,
-			LastTime:  event.LastTimestamp.Time,
-			Source:    event.Source.Component,
-		}
-		events = append(events, deploymentEvent)
-		count++
-	}
-
-	return events, total, nil
-}
-
 // GetDeploymentPods 获取部署关联的Pod列表
 func GetDeploymentPods(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, deploymentName string) ([]*model.K8sPod, int64, error) {
 	// 首先获取Deployment的标签选择器

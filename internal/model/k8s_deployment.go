@@ -43,9 +43,8 @@ const (
 	K8sDeploymentStatusError                                  // 异常
 )
 
-// K8sDeployment Kubernetes Deployment数据库实体
+// K8sDeployment Kubernetes Deployment
 type K8sDeployment struct {
-	Model
 	Name              string                `json:"name" binding:"required,min=1,max=200"`      // Deployment名称
 	Namespace         string                `json:"namespace" binding:"required,min=1,max=200"` // 所属命名空间
 	ClusterID         int                   `json:"cluster_id" gorm:"index;not null"`           // 所属集群ID
@@ -90,19 +89,6 @@ type DeploymentSpec struct {
 	ProgressDeadlineSeconds *int32                     `json:"progress_deadline_seconds,omitempty"` // 进度截止时间
 }
 
-// K8sDeploymentEvent Deployment相关事件
-type K8sDeploymentEvent struct {
-	Type      string    `json:"type"`       // 事件类型
-	Reason    string    `json:"reason"`     // 事件原因
-	Message   string    `json:"message"`    // 事件消息
-	Count     int32     `json:"count"`      // 事件计数
-	FirstTime time.Time `json:"first_time"` // 首次发生时间
-	LastTime  time.Time `json:"last_time"`  // 最后发生时间
-	Source    string    `json:"source"`     // 事件源
-}
-
-// K8sDeploymentMetrics Deployment指标信息
-
 type K8sDeploymentHistory struct {
 	Revision int64     `json:"revision"` // 版本
 	Date     time.Time `json:"date"`     // 日期
@@ -120,129 +106,110 @@ type GetDeploymentListReq struct {
 
 // GetDeploymentDetailsReq 获取Deployment详情请求
 type GetDeploymentDetailsReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间
-	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Namespace string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
+	Name      string `json:"name" form:"name" binding:"required" comment:"Deployment名称"`     // Deployment名称
 }
 
 // GetDeploymentYamlReq 获取Deployment YAML请求
 type GetDeploymentYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间
-	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Namespace string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
+	Name      string `json:"name" form:"name" binding:"required" comment:"Deployment名称"`     // Deployment名称
 }
 
 // CreateDeploymentReq 创建Deployment请求
 type CreateDeploymentReq struct {
-	ClusterID   int               `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID
-	Name        string            `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称
-	Namespace   string            `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间
-	Replicas    int32             `json:"replicas" binding:"required" comment:"副本数量"`     // 副本数量
-	Images      []string          `json:"images" binding:"required" comment:"容器镜像列表"`     // 容器镜像列表
-	Labels      map[string]string `json:"labels" comment:"标签"`                            // 标签
-	Annotations map[string]string `json:"annotations" comment:"注解"`                       // 注解
-	Spec        DeploymentSpec    `json:"spec" comment:"Deployment规格"`                    // Deployment规格
+	ClusterID   int               `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Name        string            `json:"name" form:"name" binding:"required" comment:"Deployment名称"`     // Deployment名称
+	Namespace   string            `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
+	Replicas    int32             `json:"replicas" binding:"required" comment:"副本数量"`                     // 副本数量
+	Images      []string          `json:"images" binding:"required" comment:"容器镜像列表"`                     // 容器镜像列表
+	Labels      map[string]string `json:"labels" comment:"标签"`                                            // 标签
+	Annotations map[string]string `json:"annotations" comment:"注解"`                                       // 注解
+	Spec        DeploymentSpec    `json:"spec" comment:"Deployment规格"`                                    // Deployment规格
 }
 
 // UpdateDeploymentReq 更新Deployment请求
 type UpdateDeploymentReq struct {
-	ClusterID   int               `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID
-	Name        string            `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称
-	Namespace   string            `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间
-	Replicas    int32             `json:"replicas" comment:"副本数量"`                        // 副本数量
-	Images      []string          `json:"images" comment:"容器镜像列表"`                        // 容器镜像列表
-	Labels      map[string]string `json:"labels" comment:"标签"`                            // 标签
-	Annotations map[string]string `json:"annotations" comment:"注解"`                       // 注解
-	Spec        DeploymentSpec    `json:"spec" comment:"Deployment规格"`                    // Deployment规格
+	ClusterID   int               `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Name        string            `json:"name" form:"name" binding:"required" comment:"Deployment名称"`     // Deployment名称
+	Namespace   string            `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
+	Replicas    int32             `json:"replicas" comment:"副本数量"`                                        // 副本数量
+	Images      []string          `json:"images" comment:"容器镜像列表"`                                        // 容器镜像列表
+	Labels      map[string]string `json:"labels" comment:"标签"`                                            // 标签
+	Annotations map[string]string `json:"annotations" comment:"注解"`                                       // 注解
+	Spec        DeploymentSpec    `json:"spec" comment:"Deployment规格"`                                    // Deployment规格
 }
 
 // CreateDeploymentByYamlReq 通过YAML创建Deployment请求
 type CreateDeploymentByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
-	YAML      string `json:"yaml" binding:"required" comment:"YAML内容"`     // YAML内容
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	YAML      string `json:"yaml" binding:"required" comment:"YAML内容"`                       // YAML内容
 }
 
 // UpdateDeploymentByYamlReq 通过YAML更新Deployment请求
 type UpdateDeploymentByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间
-	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称
-	YAML      string `json:"yaml" binding:"required" comment:"YAML内容"`       // YAML内容
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`                    // 命名空间
+	Name      string `json:"name" form:"name" binding:"required" comment:"Deployment名称"`     // Deployment名称
+	YAML      string `json:"yaml" binding:"required" comment:"YAML内容"`                       // YAML内容
 }
 
 // DeleteDeploymentReq 删除Deployment请求
 type DeleteDeploymentReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间
-	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Namespace string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
+	Name      string `json:"name" binding:"required" comment:"Deployment名称"`                 // Deployment名称
 }
 
 // RestartDeploymentReq 重启Deployment请求
 type RestartDeploymentReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间
-	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`                    // 命名空间
+	Name      string `json:"name" form:"name" binding:"required" comment:"Deployment名称"`     // Deployment名称
 }
 
 // ScaleDeploymentReq 伸缩Deployment请求
 type ScaleDeploymentReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间
-	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称
-	Replicas  int32  `json:"replicas" binding:"required" comment:"副本数量"`     // 副本数量
-}
-
-// GetDeploymentMetricsReq 获取Deployment指标请求
-type GetDeploymentMetricsReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间
-	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称
-	StartTime string `json:"start_time" form:"start_time" comment:"开始时间"`    // 开始时间
-	EndTime   string `json:"end_time" form:"end_time" comment:"结束时间"`        // 结束时间
-	Step      string `json:"step" form:"step" comment:"查询步长"`                // 查询步长
-}
-
-// GetDeploymentEventsReq 获取Deployment事件请求
-type GetDeploymentEventsReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间
-	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称
-	EventType string `json:"event_type" form:"event_type" comment:"事件类型"`    // 事件类型
-	Limit     int    `json:"limit" form:"limit" comment:"限制数量"`              // 限制数量
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Namespace string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
+	Name      string `json:"name" form:"name" binding:"required" comment:"Deployment名称"`     // Deployment名称
+	Replicas  int32  `json:"replicas" binding:"required" comment:"副本数量"`                     // 副本数量
 }
 
 // GetDeploymentPodsReq 获取Deployment下的Pod列表请求
 type GetDeploymentPodsReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间
-	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Namespace string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
+	Name      string `json:"name" form:"name" binding:"required" comment:"Deployment名称"`     // Deployment名称
 }
 
 // GetDeploymentHistoryReq 获取Deployment版本历史请求
 type GetDeploymentHistoryReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间
-	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Namespace string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
+	Name      string `json:"name" form:"name" binding:"required" comment:"Deployment名称"`     // Deployment名称
 }
 
 // RollbackDeploymentReq 回滚Deployment请求
 type RollbackDeploymentReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间
-	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称
-	Revision  int64  `json:"revision" binding:"required" comment:"回滚到的版本号"`  // 回滚到的版本号
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Namespace string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
+	Name      string `json:"name" form:"name" binding:"required" comment:"Deployment名称"`     // Deployment名称
+	Revision  int64  `json:"revision" binding:"required" comment:"回滚到的版本号"`                  // 回滚到的版本号
 }
 
 // PauseDeploymentReq 暂停Deployment请求
 type PauseDeploymentReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间
-	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Namespace string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
+	Name      string `json:"name" binding:"required" comment:"Deployment名称"`                 // Deployment名称
 }
 
 // ResumeDeploymentReq 恢复Deployment请求
 type ResumeDeploymentReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`   // 集群ID
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`    // 命名空间
-	Name      string `json:"name" binding:"required" comment:"Deployment名称"` // Deployment名称
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Namespace string `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
+	Name      string `json:"name" form:"name" binding:"required" comment:"Deployment名称"`     // Deployment名称
 }

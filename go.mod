@@ -23,7 +23,6 @@ require (
 	github.com/jonboulle/clockwork v0.5.0
 	github.com/mark3labs/mcp-go v0.25.0
 	github.com/openkruise/kruise-api v1.7.0
-	github.com/pingcap/errors v0.11.4
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/alertmanager v0.28.1
 	github.com/prometheus/common v0.66.0

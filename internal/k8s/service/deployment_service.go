@@ -39,27 +39,19 @@ import (
 
 // DeploymentService Deployment业务服务接口
 type DeploymentService interface {
-	// 基础 CRUD 操作
 	CreateDeployment(ctx context.Context, req *model.CreateDeploymentReq) error
 	GetDeploymentList(ctx context.Context, req *model.GetDeploymentListReq) (model.ListResp[*model.K8sDeployment], error)
 	GetDeploymentDetails(ctx context.Context, req *model.GetDeploymentDetailsReq) (*model.K8sDeployment, error)
 	GetDeploymentYaml(ctx context.Context, req *model.GetDeploymentYamlReq) (*model.K8sYaml, error)
 	UpdateDeployment(ctx context.Context, req *model.UpdateDeploymentReq) error
 	DeleteDeployment(ctx context.Context, req *model.DeleteDeploymentReq) error
-
-	// YAML 操作
 	CreateDeploymentByYaml(ctx context.Context, req *model.CreateDeploymentByYamlReq) error
 	UpdateDeploymentByYaml(ctx context.Context, req *model.UpdateDeploymentByYamlReq) error
-
-	// 扩展操作
 	RestartDeployment(ctx context.Context, req *model.RestartDeploymentReq) error
 	ScaleDeployment(ctx context.Context, req *model.ScaleDeploymentReq) error
 	RollbackDeployment(ctx context.Context, req *model.RollbackDeploymentReq) error
 	PauseDeployment(ctx context.Context, req *model.PauseDeploymentReq) error
 	ResumeDeployment(ctx context.Context, req *model.ResumeDeploymentReq) error
-
-	// 关联资源查询
-	GetDeploymentEvents(ctx context.Context, req *model.GetDeploymentEventsReq) (model.ListResp[*model.K8sDeploymentEvent], error)
 	GetDeploymentPods(ctx context.Context, req *model.GetDeploymentPodsReq) (model.ListResp[*model.K8sPod], error)
 	GetDeploymentHistory(ctx context.Context, req *model.GetDeploymentHistoryReq) (model.ListResp[*model.K8sDeploymentHistory], error)
 }
@@ -197,46 +189,6 @@ func (d *deploymentService) GetDeploymentDetails(ctx context.Context, req *model
 	}
 
 	return k8sDeployment, nil
-}
-
-// GetDeploymentEvents 获取deployment事件
-func (d *deploymentService) GetDeploymentEvents(ctx context.Context, req *model.GetDeploymentEventsReq) (model.ListResp[*model.K8sDeploymentEvent], error) {
-	if req == nil {
-		return model.ListResp[*model.K8sDeploymentEvent]{}, fmt.Errorf("获取Deployment事件请求不能为空")
-	}
-
-	if req.ClusterID <= 0 {
-		return model.ListResp[*model.K8sDeploymentEvent]{}, fmt.Errorf("集群ID不能为空")
-	}
-
-	if req.Namespace == "" {
-		return model.ListResp[*model.K8sDeploymentEvent]{}, fmt.Errorf("命名空间不能为空")
-	}
-
-	if req.Name == "" {
-		return model.ListResp[*model.K8sDeploymentEvent]{}, fmt.Errorf("Deployment名称不能为空")
-	}
-
-	// 设置默认限制数量
-	limit := req.Limit
-	if limit <= 0 {
-		limit = 100 // 默认获取100个事件
-	}
-
-	events, total, err := d.deploymentManager.GetDeploymentEvents(ctx, req.ClusterID, req.Namespace, req.Name, limit)
-	if err != nil {
-		d.logger.Error("GetDeploymentEvents: 获取部署事件失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("namespace", req.Namespace),
-			zap.String("name", req.Name))
-		return model.ListResp[*model.K8sDeploymentEvent]{}, fmt.Errorf("获取部署事件失败: %w", err)
-	}
-
-	return model.ListResp[*model.K8sDeploymentEvent]{
-		Total: total,
-		Items: events,
-	}, nil
 }
 
 // GetDeploymentHistory 获取deployment历史

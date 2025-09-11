@@ -42,7 +42,6 @@ const (
 )
 
 type K8sDaemonSet struct {
-	Model
 	Name                   string               `json:"name" binding:"required,min=1,max=200"`      // DaemonSet名称
 	Namespace              string               `json:"namespace" binding:"required,min=1,max=200"` // 所属命名空间
 	ClusterID              int                  `json:"cluster_id" gorm:"index;not null"`           // 所属集群ID
@@ -86,19 +85,7 @@ type DaemonSetSpec struct {
 	RevisionHistoryLimit *int32                          `json:"revision_history_limit,omitempty"` // 历史版本限制
 }
 
-// K8sDaemonSetEvent DaemonSet相关事件
-type K8sDaemonSetEvent struct {
-	Type      string    `json:"type"`       // 事件类型
-	Reason    string    `json:"reason"`     // 事件原因
-	Message   string    `json:"message"`    // 事件消息
-	Count     int32     `json:"count"`      // 事件计数
-	FirstTime time.Time `json:"first_time"` // 首次发生时间
-	LastTime  time.Time `json:"last_time"`  // 最后发生时间
-	Source    string    `json:"source"`     // 事件源
-}
-
-// K8sDaemonSetMetrics DaemonSet指标信息
-
+// K8sDaemonSetHistory DaemonSet历史版本
 type K8sDaemonSetHistory struct {
 	Revision int64     `json:"revision"` // 版本
 	Date     time.Time `json:"date"`     // 日期
@@ -166,25 +153,6 @@ type RestartDaemonSetReq struct {
 	Name      string `json:"name"`       // DaemonSet名称
 }
 
-// GetDaemonSetMetricsReq 获取DaemonSet指标请求
-type GetDaemonSetMetricsReq struct {
-	ClusterID int    `json:"cluster_id"`                   // 集群ID
-	Namespace string `json:"namespace"`                    // 命名空间
-	Name      string `json:"name"`                         // DaemonSet名称
-	StartTime string `json:"start_time" form:"start_time"` // 开始时间
-	EndTime   string `json:"end_time" form:"end_time"`     // 结束时间
-	Step      string `json:"step" form:"step"`             // 查询步长
-}
-
-// GetDaemonSetEventsReq 获取DaemonSet事件请求
-type GetDaemonSetEventsReq struct {
-	ClusterID int    `json:"cluster_id"`                   // 集群ID
-	Namespace string `json:"namespace"`                    // 命名空间
-	Name      string `json:"name"`                         // DaemonSet名称
-	EventType string `json:"event_type" form:"event_type"` // 事件类型
-	Limit     int    `json:"limit" form:"limit"`           // 限制数量
-}
-
 // GetDaemonSetPodsReq 获取DaemonSet下的Pod列表请求
 type GetDaemonSetPodsReq struct {
 	ClusterID int    `json:"cluster_id"` // 集群ID
@@ -197,6 +165,20 @@ type GetDaemonSetHistoryReq struct {
 	ClusterID int    `json:"cluster_id"` // 集群ID
 	Namespace string `json:"namespace"`  // 命名空间
 	Name      string `json:"name"`       // DaemonSet名称
+}
+
+// CreateDaemonSetByYamlReq 通过YAML创建DaemonSet请求
+type CreateDaemonSetByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
+// UpdateDaemonSetByYamlReq 通过YAML更新DaemonSet请求
+type UpdateDaemonSetByYamlReq struct {
+	ClusterID int    `json:"cluster_id"`              // 集群ID
+	Namespace string `json:"namespace"`               // 命名空间
+	Name      string `json:"name"`                    // DaemonSet名称
+	YAML      string `json:"yaml" binding:"required"` // YAML内容
 }
 
 // RollbackDaemonSetReq 回滚DaemonSet请求

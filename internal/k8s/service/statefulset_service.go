@@ -42,12 +42,12 @@ type StatefulSetService interface {
 	GetStatefulSetDetails(ctx context.Context, req *model.GetStatefulSetDetailsReq) (*model.K8sStatefulSet, error)
 	GetStatefulSetYaml(ctx context.Context, req *model.GetStatefulSetYamlReq) (*model.K8sYaml, error)
 	CreateStatefulSet(ctx context.Context, req *model.CreateStatefulSetReq) error
+	CreateStatefulSetByYaml(ctx context.Context, req *model.CreateStatefulSetByYamlReq) error
 	UpdateStatefulSet(ctx context.Context, req *model.UpdateStatefulSetReq) error
+	UpdateStatefulSetByYaml(ctx context.Context, req *model.UpdateStatefulSetByYamlReq) error
 	DeleteStatefulSet(ctx context.Context, req *model.DeleteStatefulSetReq) error
 	RestartStatefulSet(ctx context.Context, req *model.RestartStatefulSetReq) error
 	ScaleStatefulSet(ctx context.Context, req *model.ScaleStatefulSetReq) error
-
-	GetStatefulSetEvents(ctx context.Context, req *model.GetStatefulSetEventsReq) (model.ListResp[*model.K8sStatefulSetEvent], error)
 	GetStatefulSetPods(ctx context.Context, req *model.GetStatefulSetPodsReq) (model.ListResp[*model.K8sPod], error)
 	GetStatefulSetHistory(ctx context.Context, req *model.GetStatefulSetHistoryReq) (model.ListResp[*model.K8sStatefulSetHistory], error)
 	RollbackStatefulSet(ctx context.Context, req *model.RollbackStatefulSetReq) error
@@ -111,6 +111,49 @@ func (s *statefulSetService) CreateStatefulSet(ctx context.Context, req *model.C
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
 			zap.String("name", req.Name))
+		return fmt.Errorf("创建StatefulSet失败: %w", err)
+	}
+
+	return nil
+}
+
+// CreateStatefulSetByYaml 通过YAML创建StatefulSet
+func (s *statefulSetService) CreateStatefulSetByYaml(ctx context.Context, req *model.CreateStatefulSetByYamlReq) error {
+	if req == nil {
+		return fmt.Errorf("创建StatefulSet YAML请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.YAML == "" {
+		return fmt.Errorf("YAML内容不能为空")
+	}
+
+	// 解析YAML为StatefulSet对象
+	statefulSet, err := utils.YAMLToStatefulSet(req.YAML)
+	if err != nil {
+		s.logger.Error("CreateStatefulSetByYaml: 解析YAML失败",
+			zap.Error(err))
+		return fmt.Errorf("解析YAML失败: %w", err)
+	}
+
+	// 验证StatefulSet配置
+	if err := utils.ValidateStatefulSet(statefulSet); err != nil {
+		s.logger.Error("CreateStatefulSetByYaml: StatefulSet配置验证失败",
+			zap.Error(err),
+			zap.String("name", statefulSet.Name))
+		return fmt.Errorf("statefulSet配置验证失败: %w", err)
+	}
+
+	err = s.statefulSetManager.CreateStatefulSet(ctx, req.ClusterID, statefulSet.Namespace, statefulSet)
+	if err != nil {
+		s.logger.Error("CreateStatefulSetByYaml: 创建StatefulSet失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", statefulSet.Namespace),
+			zap.String("name", statefulSet.Name))
 		return fmt.Errorf("创建StatefulSet失败: %w", err)
 	}
 
@@ -188,46 +231,6 @@ func (s *statefulSetService) GetStatefulSetDetails(ctx context.Context, req *mod
 	}
 
 	return k8sStatefulSet, nil
-}
-
-// GetStatefulSetEvents 获取StatefulSet事件
-func (s *statefulSetService) GetStatefulSetEvents(ctx context.Context, req *model.GetStatefulSetEventsReq) (model.ListResp[*model.K8sStatefulSetEvent], error) {
-	if req == nil {
-		return model.ListResp[*model.K8sStatefulSetEvent]{}, fmt.Errorf("获取StatefulSet事件请求不能为空")
-	}
-
-	if req.ClusterID <= 0 {
-		return model.ListResp[*model.K8sStatefulSetEvent]{}, fmt.Errorf("集群ID不能为空")
-	}
-
-	if req.Namespace == "" {
-		return model.ListResp[*model.K8sStatefulSetEvent]{}, fmt.Errorf("命名空间不能为空")
-	}
-
-	if req.Name == "" {
-		return model.ListResp[*model.K8sStatefulSetEvent]{}, fmt.Errorf("StatefulSet名称不能为空")
-	}
-
-	// 设置默认限制数量
-	limit := req.Limit
-	if limit <= 0 {
-		limit = 100 // 默认获取100个事件
-	}
-
-	events, total, err := s.statefulSetManager.GetStatefulSetEvents(ctx, req.ClusterID, req.Namespace, req.Name, limit)
-	if err != nil {
-		s.logger.Error("GetStatefulSetEvents: 获取StatefulSet事件失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("namespace", req.Namespace),
-			zap.String("name", req.Name))
-		return model.ListResp[*model.K8sStatefulSetEvent]{}, fmt.Errorf("获取StatefulSet事件失败: %w", err)
-	}
-
-	return model.ListResp[*model.K8sStatefulSetEvent]{
-		Total: total,
-		Items: events,
-	}, nil
 }
 
 // GetStatefulSetHistory 获取StatefulSet版本历史
@@ -504,6 +507,73 @@ func (s *statefulSetService) ScaleStatefulSet(ctx context.Context, req *model.Sc
 			zap.String("name", req.Name),
 			zap.Int32("replicas", req.Replicas))
 		return fmt.Errorf("扩缩容StatefulSet失败: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateStatefulSetByYaml 通过YAML更新StatefulSet
+func (s *statefulSetService) UpdateStatefulSetByYaml(ctx context.Context, req *model.UpdateStatefulSetByYamlReq) error {
+	if req == nil {
+		return fmt.Errorf("更新StatefulSet YAML请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("StatefulSet名称不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.YAML == "" {
+		return fmt.Errorf("YAML内容不能为空")
+	}
+
+	// 解析YAML为StatefulSet对象
+	yamlStatefulSet, err := utils.YAMLToStatefulSet(req.YAML)
+	if err != nil {
+		s.logger.Error("UpdateStatefulSetByYaml: 解析YAML失败",
+			zap.Error(err),
+			zap.String("name", req.Name))
+		return fmt.Errorf("解析YAML失败: %w", err)
+	}
+
+	// 验证StatefulSet配置
+	if err := utils.ValidateStatefulSet(yamlStatefulSet); err != nil {
+		s.logger.Error("UpdateStatefulSetByYaml: StatefulSet配置验证失败",
+			zap.Error(err),
+			zap.String("name", req.Name))
+		return fmt.Errorf("statefulSet配置验证失败: %w", err)
+	}
+
+	// 获取现有StatefulSet以保持资源版本等元数据
+	existingStatefulSet, err := s.statefulSetManager.GetStatefulSet(ctx, req.ClusterID, req.Namespace, req.Name)
+	if err != nil {
+		s.logger.Error("UpdateStatefulSetByYaml: 获取现有StatefulSet失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return fmt.Errorf("获取现有StatefulSet失败: %w", err)
+	}
+
+	// 保留必要的元数据并更新spec
+	yamlStatefulSet.ObjectMeta.ResourceVersion = existingStatefulSet.ObjectMeta.ResourceVersion
+	yamlStatefulSet.ObjectMeta.UID = existingStatefulSet.ObjectMeta.UID
+
+	err = s.statefulSetManager.UpdateStatefulSet(ctx, req.ClusterID, req.Namespace, yamlStatefulSet)
+	if err != nil {
+		s.logger.Error("UpdateStatefulSetByYaml: 更新StatefulSet失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return fmt.Errorf("更新StatefulSet失败: %w", err)
 	}
 
 	return nil

@@ -289,19 +289,6 @@ func PaginateK8sDaemonSets(daemonSets []*model.K8sDaemonSet, page, size int) ([]
 	return daemonSets[start:end], total
 }
 
-// BuildK8sDaemonSetEvent 构建DaemonSet事件模型
-func BuildK8sDaemonSetEvent(event corev1.Event) (*model.K8sDaemonSetEvent, error) {
-	return &model.K8sDaemonSetEvent{
-		Type:      event.Type,
-		Reason:    event.Reason,
-		Message:   event.Message,
-		Source:    event.Source.Component,
-		Count:     event.Count,
-		FirstTime: event.FirstTimestamp.Time,
-		LastTime:  event.LastTimestamp.Time,
-	}, nil
-}
-
 // BuildK8sDaemonSetHistory 构建DaemonSet历史版本模型
 func BuildK8sDaemonSetHistory(revision appsv1.ControllerRevision) (*model.K8sDaemonSetHistory, error) {
 	return &model.K8sDaemonSetHistory{

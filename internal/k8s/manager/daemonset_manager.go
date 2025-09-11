@@ -52,10 +52,8 @@ type DaemonSetManager interface {
 	RestartDaemonSet(ctx context.Context, clusterID int, namespace, name string) error
 	BatchDeleteDaemonSets(ctx context.Context, clusterID int, namespace string, daemonSetNames []string) error
 	BatchRestartDaemonSets(ctx context.Context, clusterID int, namespace string, daemonSetNames []string) error
-	GetDaemonSetEvents(ctx context.Context, clusterID int, namespace, daemonSetName string, limit int) ([]*model.K8sDaemonSetEvent, int64, error)
 	GetDaemonSetHistory(ctx context.Context, clusterID int, namespace, daemonSetName string) ([]*model.K8sDaemonSetHistory, int64, error)
 	GetDaemonSetPods(ctx context.Context, clusterID int, namespace, daemonSetName string) ([]*model.K8sPod, int64, error)
-
 	RollbackDaemonSet(ctx context.Context, clusterID int, namespace, name string, revision int64) error
 }
 
@@ -354,52 +352,6 @@ func (d *daemonSetManager) BatchRestartDaemonSets(ctx context.Context, clusterID
 	}
 
 	return nil
-}
-
-// GetDaemonSetEvents 获取 DaemonSet 相关事件
-func (d *daemonSetManager) GetDaemonSetEvents(ctx context.Context, clusterID int, namespace, daemonSetName string, limit int) ([]*model.K8sDaemonSetEvent, int64, error) {
-	if daemonSetName == "" {
-		return nil, 0, fmt.Errorf("DaemonSet name 不能为空")
-	}
-
-	kubeClient, err := d.getKubeClient(clusterID)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	// 构建字段选择器，过滤与指定 DaemonSet 相关的事件
-	fieldSelector := fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=DaemonSet", daemonSetName)
-
-	listOptions := metav1.ListOptions{
-		FieldSelector: fieldSelector,
-	}
-	if limit > 0 {
-		listOptions.Limit = int64(limit)
-	}
-
-	eventList, err := kubeClient.CoreV1().Events(namespace).List(ctx, listOptions)
-	if err != nil {
-		d.logger.Error("获取 DaemonSet 事件失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.String("daemonSetName", daemonSetName),
-			zap.Error(err))
-		return nil, 0, fmt.Errorf("获取 DaemonSet 事件失败: %w", err)
-	}
-
-	var events []*model.K8sDaemonSetEvent
-	for _, event := range eventList.Items {
-		k8sEvent, err := utils.BuildK8sDaemonSetEvent(event)
-		if err != nil {
-			d.logger.Warn("构建 K8sDaemonSetEvent 失败",
-				zap.String("eventName", event.Name),
-				zap.Error(err))
-			continue
-		}
-		events = append(events, k8sEvent)
-	}
-
-	return events, int64(len(events)), nil
 }
 
 // GetDaemonSetHistory 获取 DaemonSet 历史版本

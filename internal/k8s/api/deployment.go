@@ -46,20 +46,21 @@ func (k *K8sDeploymentHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
 		// Deployment基础管理
-		k8sGroup.GET("/clusters/:cluster_id/deployments", k.GetDeploymentList)                             // 获取Deployment列表
-		k8sGroup.GET("/clusters/:cluster_id/deployments/:namespace/:name", k.GetDeploymentDetails)         // 获取Deployment详情
-		k8sGroup.GET("/clusters/:cluster_id/deployments/:namespace/:name/yaml", k.GetDeploymentYaml)       // 获取Deployment YAML
-		k8sGroup.POST("/clusters/:cluster_id/deployments", k.CreateDeployment)                             // 创建Deployment
-		k8sGroup.POST("/clusters/:cluster_id/deployments/yaml", k.CreateDeploymentByYaml)                  // 通过YAML创建Deployment
-		k8sGroup.PUT("/clusters/:cluster_id/deployments/:namespace/:name", k.UpdateDeployment)             // 更新Deployment
-		k8sGroup.PUT("/clusters/:cluster_id/deployments/:namespace/:name/yaml", k.UpdateDeploymentByYaml)  // 通过YAML更新Deployment
-		k8sGroup.DELETE("/clusters/:cluster_id/deployments/:namespace/:name", k.DeleteDeployment)          // 删除Deployment
-		k8sGroup.POST("/clusters/:cluster_id/deployments/:namespace/:name/restart", k.RestartDeployment)   // 重启Deployment
-		k8sGroup.POST("/clusters/:cluster_id/deployments/:namespace/:name/scale", k.ScaleDeployment)       // 扩缩容Deployment
-		k8sGroup.POST("/clusters/:cluster_id/deployments/:namespace/:name/pause", k.PauseDeployment)       // 暂停Deployment
-		k8sGroup.POST("/clusters/:cluster_id/deployments/:namespace/:name/resume", k.ResumeDeployment)     // 恢复Deployment
-		k8sGroup.POST("/clusters/:cluster_id/deployments/:namespace/:name/rollback", k.RollbackDeployment) // 回滚Deployment
-		k8sGroup.GET("/clusters/:cluster_id/deployments/:namespace/:name/pods", k.GetDeploymentPods)       // 获取Deployment Pod列表
+		k8sGroup.GET("/deployment/:cluster_id/list", k.GetDeploymentList)                              // 获取Deployment列表
+		k8sGroup.GET("/deployment/:cluster_id/:namespace/:name/detail", k.GetDeploymentDetails)        // 获取Deployment详情
+		k8sGroup.GET("/deployment/:cluster_id/:namespace/:name/detail/yaml", k.GetDeploymentYaml)      // 获取Deployment YAML
+		k8sGroup.POST("/deployment/:cluster_id/create", k.CreateDeployment)                            // 创建Deployment
+		k8sGroup.POST("/deployment/:cluster_id/create/yaml", k.CreateDeploymentByYaml)                 // 通过YAML创建Deployment
+		k8sGroup.PUT("/deployment/:cluster_id/:namespace/:name/update", k.UpdateDeployment)            // 更新Deployment
+		k8sGroup.PUT("/deployment/:cluster_id/:namespace/:name/update/yaml", k.UpdateDeploymentByYaml) // 通过YAML更新Deployment
+		k8sGroup.DELETE("/deployment/:cluster_id/:namespace/:name/delete", k.DeleteDeployment)         // 删除Deployment
+		k8sGroup.POST("/deployment/:cluster_id/:namespace/:name/restart", k.RestartDeployment)         // 重启Deployment
+		k8sGroup.POST("/deployment/:cluster_id/:namespace/:name/scale", k.ScaleDeployment)             // 扩缩容Deployment
+		k8sGroup.POST("/deployment/:cluster_id/:namespace/:name/pause", k.PauseDeployment)             // 暂停Deployment
+		k8sGroup.POST("/deployment/:cluster_id/:namespace/:name/resume", k.ResumeDeployment)           // 恢复Deployment
+		k8sGroup.POST("/deployment/:cluster_id/:namespace/:name/rollback", k.RollbackDeployment)       // 回滚Deployment
+		k8sGroup.GET("/deployment/:cluster_id/:namespace/:name/pods", k.GetDeploymentPods)             // 获取Deployment Pod列表
+		k8sGroup.GET("/deployment/:cluster_id/:namespace/:name/history", k.GetDeploymentHistory)       // 获取Deployment版本历史
 	}
 }
 

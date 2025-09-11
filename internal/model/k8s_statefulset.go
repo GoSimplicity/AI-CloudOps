@@ -43,7 +43,6 @@ const (
 )
 
 type K8sStatefulSet struct {
-	Model
 	Name                 string                 `json:"name" binding:"required,min=1,max=200"`      // StatefulSet名称
 	Namespace            string                 `json:"namespace" binding:"required,min=1,max=200"` // 所属命名空间
 	ClusterID            int                    `json:"cluster_id" gorm:"index;not null"`           // 所属集群ID
@@ -90,19 +89,7 @@ type StatefulSetSpec struct {
 	MinReadySeconds      *int32                            `json:"min_ready_seconds,omitempty"`      // 最小就绪时间
 }
 
-// K8sStatefulSetEvent StatefulSet相关事件
-type K8sStatefulSetEvent struct {
-	Type      string    `json:"type"`       // 事件类型
-	Reason    string    `json:"reason"`     // 事件原因
-	Message   string    `json:"message"`    // 事件消息
-	Count     int32     `json:"count"`      // 事件计数
-	FirstTime time.Time `json:"first_time"` // 首次发生时间
-	LastTime  time.Time `json:"last_time"`  // 最后发生时间
-	Source    string    `json:"source"`     // 事件源
-}
-
-// K8sStatefulSetMetrics StatefulSet指标信息
-
+// K8sStatefulSetHistory StatefulSet版本历史
 type K8sStatefulSetHistory struct {
 	Revision int64     `json:"revision"` // 版本
 	Date     time.Time `json:"date"`     // 日期
@@ -147,6 +134,12 @@ type CreateStatefulSetReq struct {
 	YAML        string            `json:"yaml"`                            // YAML内容
 }
 
+// CreateStatefulSetByYamlReq 通过YAML创建StatefulSet请求
+type CreateStatefulSetByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
 // UpdateStatefulSetReq 更新StatefulSet请求
 type UpdateStatefulSetReq struct {
 	ClusterID   int               `json:"cluster_id"`   // 集群ID
@@ -159,6 +152,14 @@ type UpdateStatefulSetReq struct {
 	Annotations map[string]string `json:"annotations"`  // 注解
 	Spec        StatefulSetSpec   `json:"spec"`         // StatefulSet规格
 	YAML        string            `json:"yaml"`         // YAML内容
+}
+
+// UpdateStatefulSetByYamlReq 通过YAML更新StatefulSet请求
+type UpdateStatefulSetByYamlReq struct {
+	ClusterID int    `json:"cluster_id"`              // 集群ID
+	Namespace string `json:"namespace"`               // 命名空间
+	Name      string `json:"name"`                    // StatefulSet名称
+	YAML      string `json:"yaml" binding:"required"` // YAML内容
 }
 
 // DeleteStatefulSetReq 删除StatefulSet请求
@@ -181,25 +182,6 @@ type ScaleStatefulSetReq struct {
 	Namespace string `json:"namespace"`                   // 命名空间
 	Name      string `json:"name"`                        // StatefulSet名称
 	Replicas  int32  `json:"replicas" binding:"required"` // 副本数量
-}
-
-// GetStatefulSetMetricsReq 获取StatefulSet指标请求
-type GetStatefulSetMetricsReq struct {
-	ClusterID int    `json:"cluster_id"`                   // 集群ID
-	Namespace string `json:"namespace"`                    // 命名空间
-	Name      string `json:"name"`                         // StatefulSet名称
-	StartTime string `json:"start_time" form:"start_time"` // 开始时间
-	EndTime   string `json:"end_time" form:"end_time"`     // 结束时间
-	Step      string `json:"step" form:"step"`             // 查询步长
-}
-
-// GetStatefulSetEventsReq 获取StatefulSet事件请求
-type GetStatefulSetEventsReq struct {
-	ClusterID int    `json:"cluster_id"`                   // 集群ID
-	Namespace string `json:"namespace"`                    // 命名空间
-	Name      string `json:"name"`                         // StatefulSet名称
-	EventType string `json:"event_type" form:"event_type"` // 事件类型
-	Limit     int    `json:"limit" form:"limit"`           // 限制数量
 }
 
 // GetStatefulSetPodsReq 获取StatefulSet下的Pod列表请求

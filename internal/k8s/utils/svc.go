@@ -353,31 +353,3 @@ func getServiceEndpoints(ctx context.Context, kubeClient *kubernetes.Clientset, 
 
 	return serviceEndpoints, nil
 }
-
-// GetServiceEvents 获取Service相关事件
-func GetServiceEvents(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, serviceName string, limit int) ([]*model.K8sServiceEvent, error) {
-	fieldSelector := fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Service", serviceName)
-	events, err := kubeClient.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{
-		FieldSelector: fieldSelector,
-		Limit:         int64(limit),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	var serviceEvents []*model.K8sServiceEvent
-	for _, event := range events.Items {
-		serviceEvent := &model.K8sServiceEvent{
-			Type:      event.Type,
-			Reason:    event.Reason,
-			Message:   event.Message,
-			Count:     event.Count,
-			FirstTime: event.FirstTimestamp.Time,
-			LastTime:  event.LastTimestamp.Time,
-			Source:    event.Source.Component,
-		}
-		serviceEvents = append(serviceEvents, serviceEvent)
-	}
-
-	return serviceEvents, nil
-}

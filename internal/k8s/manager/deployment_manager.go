@@ -28,8 +28,6 @@ package manager
 import (
 	"context"
 	"fmt"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
@@ -44,26 +42,16 @@ import (
 
 // DeploymentManager Deployment资源管理器接口
 type DeploymentManager interface {
-	// 基础 CRUD 操作
 	CreateDeployment(ctx context.Context, clusterID int, namespace string, deployment *appsv1.Deployment) error
 	GetDeployment(ctx context.Context, clusterID int, namespace, name string) (*appsv1.Deployment, error)
 	GetDeploymentList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sDeployment, error)
 	UpdateDeployment(ctx context.Context, clusterID int, namespace string, deployment *appsv1.Deployment) error
 	DeleteDeployment(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error
-
-	// 扩展操作
 	RestartDeployment(ctx context.Context, clusterID int, namespace, name string) error
 	ScaleDeployment(ctx context.Context, clusterID int, namespace, name string, replicas int32) error
 	RollbackDeployment(ctx context.Context, clusterID int, namespace, name string, revision int64) error
 	PauseDeployment(ctx context.Context, clusterID int, namespace, name string) error
 	ResumeDeployment(ctx context.Context, clusterID int, namespace, name string) error
-
-	// 批量操作
-	BatchDeleteDeployments(ctx context.Context, clusterID int, namespace string, deploymentNames []string) error
-	BatchRestartDeployments(ctx context.Context, clusterID int, namespace string, deploymentNames []string) error
-
-	// 关联资源查询
-	GetDeploymentEvents(ctx context.Context, clusterID int, namespace, deploymentName string, limit int) ([]*model.K8sDeploymentEvent, int64, error)
 	GetDeploymentHistory(ctx context.Context, clusterID int, namespace, deploymentName string) ([]*model.K8sDeploymentHistory, int64, error)
 	GetDeploymentPods(ctx context.Context, clusterID int, namespace, deploymentName string) ([]*model.K8sPod, int64, error)
 }
@@ -302,107 +290,6 @@ func (d *deploymentManager) ScaleDeployment(ctx context.Context, clusterID int, 
 	return nil
 }
 
-// BatchDeleteDeployments 批量删除deployment
-func (d *deploymentManager) BatchDeleteDeployments(ctx context.Context, clusterID int, namespace string, deploymentNames []string) error {
-	kubeClient, err := d.getKubeClient(clusterID)
-	if err != nil {
-		return err
-	}
-
-	var wg sync.WaitGroup
-	errors := make(chan error, len(deploymentNames))
-
-	for _, deploymentName := range deploymentNames {
-		wg.Add(1)
-		go func(name string) {
-			defer wg.Done()
-			if err := kubeClient.AppsV1().Deployments(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
-				errors <- fmt.Errorf("删除 Deployment %s 失败: %w", name, err)
-			}
-		}(deploymentName)
-	}
-
-	wg.Wait()
-	close(errors)
-
-	var errorMessages []string
-	for err := range errors {
-		errorMessages = append(errorMessages, err.Error())
-		d.logger.Error("批量删除中的单个 Deployment 失败", zap.Error(err))
-	}
-
-	if len(errorMessages) > 0 {
-		return fmt.Errorf("批量删除失败，详情: %s", strings.Join(errorMessages, "; "))
-	}
-
-	d.logger.Info("成功批量删除 Deployment",
-		zap.Int("clusterID", clusterID),
-		zap.String("namespace", namespace),
-		zap.Int("count", len(deploymentNames)))
-	return nil
-}
-
-// BatchRestartDeployments 批量重启deployment
-func (d *deploymentManager) BatchRestartDeployments(ctx context.Context, clusterID int, namespace string, deploymentNames []string) error {
-	var wg sync.WaitGroup
-	errors := make(chan error, len(deploymentNames))
-
-	for _, deploymentName := range deploymentNames {
-		wg.Add(1)
-		go func(name string) {
-			defer wg.Done()
-			if err := d.RestartDeployment(ctx, clusterID, namespace, name); err != nil {
-				errors <- fmt.Errorf("重启 Deployment %s 失败: %w", name, err)
-			}
-		}(deploymentName)
-	}
-
-	wg.Wait()
-	close(errors)
-
-	var errorMessages []string
-	for err := range errors {
-		errorMessages = append(errorMessages, err.Error())
-		d.logger.Error("批量重启中的单个 Deployment 失败", zap.Error(err))
-	}
-
-	if len(errorMessages) > 0 {
-		return fmt.Errorf("批量重启失败，详情: %s", strings.Join(errorMessages, "; "))
-	}
-
-	d.logger.Info("成功批量重启 Deployment",
-		zap.Int("clusterID", clusterID),
-		zap.String("namespace", namespace),
-		zap.Int("count", len(deploymentNames)))
-	return nil
-}
-
-// GetDeploymentEvents 获取deployment事件
-func (d *deploymentManager) GetDeploymentEvents(ctx context.Context, clusterID int, namespace, deploymentName string, limit int) ([]*model.K8sDeploymentEvent, int64, error) {
-	kubeClient, err := d.getKubeClient(clusterID)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	events, total, err := utils.GetDeploymentEvents(ctx, kubeClient, namespace, deploymentName, limit)
-	if err != nil {
-		d.logger.Error("获取 Deployment 事件失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.String("deploymentName", deploymentName),
-			zap.Error(err))
-		return nil, 0, fmt.Errorf("获取 Deployment 事件失败: %w", err)
-	}
-
-	d.logger.Debug("成功获取 Deployment 事件",
-		zap.Int("clusterID", clusterID),
-		zap.String("namespace", namespace),
-		zap.String("deploymentName", deploymentName),
-		zap.Int("count", len(events)),
-		zap.Int64("total", total))
-	return events, total, nil
-}
-
 // GetDeploymentHistory 获取deployment历史
 func (d *deploymentManager) GetDeploymentHistory(ctx context.Context, clusterID int, namespace, deploymentName string) ([]*model.K8sDeploymentHistory, int64, error) {
 	kubeClient, err := d.getKubeClient(clusterID)
@@ -476,18 +363,22 @@ func (d *deploymentManager) RollbackDeployment(ctx context.Context, clusterID in
 	var targetReplicaSet *appsv1.ReplicaSet
 	for _, rs := range replicaSets.Items {
 		// 检查 ReplicaSet 是否属于该 Deployment
+		isOwned := false
 		for _, ownerRef := range rs.OwnerReferences {
 			if ownerRef.Kind == "Deployment" && ownerRef.Name == name {
-				if revisionStr, ok := rs.Annotations["deployment.kubernetes.io/revision"]; ok {
-					if revisionStr == fmt.Sprintf("%d", revision) {
-						targetReplicaSet = &rs
-						break
-					}
-				}
+				isOwned = true
+				break
 			}
 		}
-		if targetReplicaSet != nil {
-			break
+
+		// 如果这个 ReplicaSet 属于该 Deployment，检查版本
+		if isOwned {
+			if revisionStr, ok := rs.Annotations["deployment.kubernetes.io/revision"]; ok {
+				if revisionStr == fmt.Sprintf("%d", revision) {
+					targetReplicaSet = &rs
+					break
+				}
+			}
 		}
 	}
 

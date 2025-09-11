@@ -44,12 +44,10 @@ type SvcService interface {
 	GetServiceYaml(ctx context.Context, req *model.GetServiceYamlReq) (*model.K8sYaml, error)
 	CreateService(ctx context.Context, req *model.CreateServiceReq) error
 	UpdateService(ctx context.Context, req *model.UpdateServiceReq) error
-	// YAML相关方法
 	CreateServiceByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error
 	UpdateServiceByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error
 	DeleteService(ctx context.Context, req *model.DeleteServiceReq) error
 	GetServiceEndpoints(ctx context.Context, req *model.GetServiceEndpointsReq) ([]*model.K8sServiceEndpoint, error)
-	GetServiceEvents(ctx context.Context, req *model.GetServiceEventsReq) ([]*model.K8sServiceEvent, error)
 }
 
 type svcService struct {
@@ -278,64 +276,6 @@ func (s *svcService) GetServiceEndpoints(ctx context.Context, req *model.GetServ
 	}
 
 	return serviceEndpoints, nil
-}
-
-// GetServiceEvents 获取Service事件
-func (s *svcService) GetServiceEvents(ctx context.Context, req *model.GetServiceEventsReq) ([]*model.K8sServiceEvent, error) {
-	if req == nil {
-		return nil, fmt.Errorf("获取Service事件请求不能为空")
-	}
-
-	if req.ClusterID <= 0 {
-		return nil, fmt.Errorf("集群ID不能为空")
-	}
-
-	if req.Name == "" {
-		return nil, fmt.Errorf("Service名称不能为空")
-	}
-
-	if req.Namespace == "" {
-		return nil, fmt.Errorf("命名空间不能为空")
-	}
-
-	// 获取Kubernetes客户端
-	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("GetServiceEvents: 获取Kubernetes客户端失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	// 设置默认限制
-	limit := 50
-	if req.Limit > 0 {
-		limit = req.Limit
-	}
-
-	// 使用utils获取Service事件
-	events, err := utils.GetServiceEvents(ctx, kubeClient, req.Namespace, req.Name, limit)
-	if err != nil {
-		s.logger.Error("GetServiceEvents: 获取Service事件失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("namespace", req.Namespace),
-			zap.String("name", req.Name))
-		return nil, fmt.Errorf("获取Service事件失败: %w", err)
-	}
-
-	// 根据事件类型过滤
-	if req.EventType != "" {
-		var filteredEvents []*model.K8sServiceEvent
-		for _, event := range events {
-			if event.Type == req.EventType {
-				filteredEvents = append(filteredEvents, event)
-			}
-		}
-		events = filteredEvents
-	}
-
-	return events, nil
 }
 
 // GetServiceList 获取Service列表

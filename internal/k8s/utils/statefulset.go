@@ -289,19 +289,6 @@ func PaginateK8sStatefulSets(statefulSets []*model.K8sStatefulSet, page, size in
 	return statefulSets[start:end], total
 }
 
-// BuildK8sStatefulSetEvent 构建StatefulSet事件模型
-func BuildK8sStatefulSetEvent(event corev1.Event) (*model.K8sStatefulSetEvent, error) {
-	return &model.K8sStatefulSetEvent{
-		Type:      event.Type,
-		Reason:    event.Reason,
-		Message:   event.Message,
-		Source:    event.Source.Component,
-		Count:     event.Count,
-		FirstTime: event.FirstTimestamp.Time,
-		LastTime:  event.LastTimestamp.Time,
-	}, nil
-}
-
 // BuildK8sStatefulSetHistory 构建StatefulSet历史版本模型
 func BuildK8sStatefulSetHistory(revision appsv1.ControllerRevision) (*model.K8sStatefulSetHistory, error) {
 	return &model.K8sStatefulSetHistory{

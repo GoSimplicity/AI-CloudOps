@@ -41,9 +41,8 @@ const (
 	K8sSvcStatusError                           // 异常
 )
 
-// K8sService k8s service 实体
+// K8sService k8s service
 type K8sService struct {
-	Model
 	Name           string               `json:"name" binding:"required,min=1,max=200"`      // Service名称
 	Namespace      string               `json:"namespace" binding:"required,min=1,max=200"` // 所属命名空间
 	ClusterID      int                  `json:"cluster_id"`                                 // 所属集群ID
@@ -118,19 +117,6 @@ type EndpointTargetRef struct {
 	ResourceVersion string `json:"resource_version"` // 资源版本
 }
 
-// K8sServiceEvent Service相关事件
-type K8sServiceEvent struct {
-	Type      string    `json:"type"`       // 事件类型
-	Reason    string    `json:"reason"`     // 事件原因
-	Message   string    `json:"message"`    // 事件消息
-	Count     int32     `json:"count"`      // 事件计数
-	FirstTime time.Time `json:"first_time"` // 首次发生时间
-	LastTime  time.Time `json:"last_time"`  // 最后发生时间
-	Source    string    `json:"source"`     // 事件源
-}
-
-// K8sServiceMetrics Service指标信息
-
 type K8sYaml struct {
 	YAML string `json:"yaml"`
 }
@@ -196,23 +182,4 @@ type GetServiceEndpointsReq struct {
 	ClusterID int    `json:"cluster_id"` // 集群ID
 	Namespace string `json:"namespace"`  // 命名空间
 	Name      string `json:"name"`       // Service名称
-}
-
-// GetServiceMetricsReq 获取Service指标请求
-type GetServiceMetricsReq struct {
-	ClusterID int    `json:"cluster_id"`                   // 集群ID
-	Namespace string `json:"namespace"`                    // 命名空间
-	Name      string `json:"name"`                         // Service名称
-	StartTime string `json:"start_time" form:"start_time"` // 开始时间
-	EndTime   string `json:"end_time" form:"end_time"`     // 结束时间
-	Step      string `json:"step" form:"step"`             // 查询步长
-}
-
-// GetServiceEventsReq 获取Service事件请求
-type GetServiceEventsReq struct {
-	ClusterID int    `json:"cluster_id"`                   // 集群ID
-	Namespace string `json:"namespace"`                    // 命名空间
-	Name      string `json:"name"`                         // Service名称
-	EventType string `json:"event_type" form:"event_type"` // 事件类型
-	Limit     int    `json:"limit" form:"limit"`           // 限制数量
 }

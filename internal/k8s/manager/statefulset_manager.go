@@ -52,10 +52,8 @@ type StatefulSetManager interface {
 	ScaleStatefulSet(ctx context.Context, clusterID int, namespace, name string, replicas int32) error
 	BatchDeleteStatefulSets(ctx context.Context, clusterID int, namespace string, statefulSetNames []string) error
 	BatchRestartStatefulSets(ctx context.Context, clusterID int, namespace string, statefulSetNames []string) error
-	GetStatefulSetEvents(ctx context.Context, clusterID int, namespace, statefulSetName string, limit int) ([]*model.K8sStatefulSetEvent, int64, error)
 	GetStatefulSetHistory(ctx context.Context, clusterID int, namespace, statefulSetName string) ([]*model.K8sStatefulSetHistory, int64, error)
 	GetStatefulSetPods(ctx context.Context, clusterID int, namespace, statefulSetName string) ([]*model.K8sPod, int64, error)
-
 	RollbackStatefulSet(ctx context.Context, clusterID int, namespace, name string, revision int64) error
 }
 
@@ -403,52 +401,6 @@ func (s *statefulSetManager) BatchRestartStatefulSets(ctx context.Context, clust
 	}
 
 	return nil
-}
-
-// GetStatefulSetEvents 获取 StatefulSet 相关事件
-func (s *statefulSetManager) GetStatefulSetEvents(ctx context.Context, clusterID int, namespace, statefulSetName string, limit int) ([]*model.K8sStatefulSetEvent, int64, error) {
-	if statefulSetName == "" {
-		return nil, 0, fmt.Errorf("StatefulSet name 不能为空")
-	}
-
-	kubeClient, err := s.getKubeClient(clusterID)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	// 构建字段选择器，过滤与指定 StatefulSet 相关的事件
-	fieldSelector := fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=StatefulSet", statefulSetName)
-
-	listOptions := metav1.ListOptions{
-		FieldSelector: fieldSelector,
-	}
-	if limit > 0 {
-		listOptions.Limit = int64(limit)
-	}
-
-	eventList, err := kubeClient.CoreV1().Events(namespace).List(ctx, listOptions)
-	if err != nil {
-		s.logger.Error("获取 StatefulSet 事件失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.String("statefulSetName", statefulSetName),
-			zap.Error(err))
-		return nil, 0, fmt.Errorf("获取 StatefulSet 事件失败: %w", err)
-	}
-
-	var events []*model.K8sStatefulSetEvent
-	for _, event := range eventList.Items {
-		k8sEvent, err := utils.BuildK8sStatefulSetEvent(event)
-		if err != nil {
-			s.logger.Warn("构建 K8sStatefulSetEvent 失败",
-				zap.String("eventName", event.Name),
-				zap.Error(err))
-			continue
-		}
-		events = append(events, k8sEvent)
-	}
-
-	return events, int64(len(events)), nil
 }
 
 // GetStatefulSetHistory 获取 StatefulSet 历史版本

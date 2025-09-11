@@ -112,3 +112,7 @@ tools/swagger-auto-gen/swagger-auto-gen
 go.sum
 go.mod
 #config
+
+edge
+internal/model/edge_*
+internal/model/kubeedge_types.go
