@@ -1,248 +1,219 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package manager
 
 import (
 	"context"
-	"sort"
-	"strings"
+	"fmt"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils/apply"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils/query"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
-// IngressManager Ingress 资源管理器
 type IngressManager interface {
-	CreateIngress(ctx context.Context, clusterID int, namespace string, restConfig *rest.Config, yml string) error
+	CreateIngress(ctx context.Context, clusterID int, namespace string, ingress *networkingv1.Ingress) error
 	GetIngress(ctx context.Context, clusterID int, namespace, name string) (*networkingv1.Ingress, error)
-	GetIngressList(ctx context.Context, clusterID int, namespace string, queryParams *query.Query) (*model.ListResp[*model.K8sIngress], error)
-	UpdateIngress(ctx context.Context, clusterID int, namespace string, restConfig *rest.Config, yml string) error
-	DeleteIngress(ctx context.Context, clusterID int, namespace, name string, options metav1.DeleteOptions) error
+	GetIngressList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sIngress, error)
+	UpdateIngress(ctx context.Context, clusterID int, namespace string, ingress *networkingv1.Ingress) error
+	DeleteIngress(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error
 }
 
 type ingressManager struct {
-	logger *zap.Logger
-	client client.K8sClient
+	clientFactory client.K8sClient
+	logger        *zap.Logger
 }
 
-// NewIngressManager 创建新的 IngressManager 实例
-func NewIngressManager(client client.K8sClient, logger *zap.Logger) IngressManager {
+func NewIngressManager(clientFactory client.K8sClient, logger *zap.Logger) IngressManager {
 	return &ingressManager{
-		logger: logger,
-		client: client,
+		clientFactory: clientFactory,
+		logger:        logger,
 	}
+}
+
+// getKubeClient 获取Kubernetes客户端
+func (i *ingressManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
+	kubeClient, err := i.clientFactory.GetKubeClient(clusterID)
+	if err != nil {
+		i.logger.Error("获取Kubernetes客户端失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	}
+	return kubeClient, nil
 }
 
 // CreateIngress 创建Ingress
-func (i *ingressManager) CreateIngress(ctx context.Context, clusterID int, namespace string, kubeConfig *rest.Config, yml string) error {
+func (i *ingressManager) CreateIngress(ctx context.Context, clusterID int, namespace string, ingress *networkingv1.Ingress) error {
+	if ingress == nil {
+		return fmt.Errorf("ingress 不能为空")
+	}
 
-	applier, err := apply.NewApplier(ctx, namespace, kubeConfig)
+	kubeClient, err := i.getKubeClient(clusterID)
 	if err != nil {
-		i.logger.Error("获取Apply对象失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.Error(err))
 		return err
 	}
 
-	err = applier.Apply(strings.NewReader(yml))
-	if err != nil {
-		i.logger.Error("创建Ingress失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			//zap.String("name", ingress.Name),
-			zap.Error(err))
+	// 如果ingress对象中没有指定namespace，使用参数中的namespace
+	targetNamespace := ingress.Namespace
+	if targetNamespace == "" {
+		targetNamespace = namespace
+		ingress.Namespace = namespace
 	}
-	return err
+
+	_, err = kubeClient.NetworkingV1().Ingresses(targetNamespace).Create(ctx, ingress, metav1.CreateOptions{})
+	if err != nil {
+		i.logger.Error("创建 Ingress 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", targetNamespace),
+			zap.String("name", ingress.Name),
+			zap.Error(err))
+		return fmt.Errorf("创建 Ingress 失败: %w", err)
+	}
+
+	i.logger.Info("成功创建 Ingress",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", targetNamespace),
+		zap.String("name", ingress.Name))
+	return nil
 }
 
 // GetIngress 获取指定Ingress
 func (i *ingressManager) GetIngress(ctx context.Context, clusterID int, namespace, name string) (*networkingv1.Ingress, error) {
-	kubeClient, err := i.validKubeClient(ctx, clusterID)
+	kubeClient, err := i.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
 
 	ingress, err := kubeClient.NetworkingV1().Ingresses(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		i.logger.Error("获取Ingress失败",
+		i.logger.Error("获取 Ingress 失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
 			zap.Error(err))
-		return nil, pkg.NewBusinessError(constants.ErrK8sResourceGet, "获取Ingress失败")
+		return nil, fmt.Errorf("获取 Ingress 失败: %w", err)
 	}
 
+	i.logger.Debug("成功获取 Ingress",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", name))
 	return ingress, nil
 }
 
 // GetIngressList 获取Ingress列表
-func (i *ingressManager) GetIngressList(ctx context.Context, clusterID int, namespace string, queryParams *query.Query) (*model.ListResp[*model.K8sIngress], error) {
-
-	kubeClient, err := i.validKubeClient(ctx, clusterID)
+func (i *ingressManager) GetIngressList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sIngress, error) {
+	kubeClient, err := i.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
 
-	ingressList, err := kubeClient.NetworkingV1().Ingresses(namespace).
-		List(ctx, metav1.ListOptions{LabelSelector: queryParams.Selector().String()})
-
+	ingressList, err := kubeClient.NetworkingV1().Ingresses(namespace).List(ctx, listOptions)
 	if err != nil {
-		i.logger.Error("获取Ingress列表失败",
+		i.logger.Error("获取 Ingress 列表失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.Error(err))
-
-		return nil, err
+		return nil, fmt.Errorf("获取 Ingress 列表失败: %w", err)
 	}
 
-	objects := make([]runtime.Object, len(ingressList.Items))
-	filtered := make([]runtime.Object, 0)
-
-	for _, item := range ingressList.Items {
-		objects = append(objects, item.DeepCopy())
+	// 转换为model结构
+	var k8sIngresses []*model.K8sIngress
+	for _, ingress := range ingressList.Items {
+		k8sIngress := utils.ConvertToK8sIngress(&ingress, clusterID)
+		k8sIngresses = append(k8sIngresses, k8sIngress)
 	}
 
-	for _, object := range objects {
-		selected := true
-		for field, value := range queryParams.Filters {
-			if !i.filterIngressFunc(object, query.Filter{Field: field, Value: value}) {
-				selected = false
-				break
-			}
-		}
-
-		if selected {
-			filtered = append(filtered, object)
-		}
-	}
-
-	sort.Slice(filtered, func(n, m int) bool {
-		if !queryParams.Ascending {
-			return i.sortIngressFunc(filtered[n], filtered[m], queryParams.SortBy)
-		}
-		return !i.sortIngressFunc(filtered[n], filtered[m], queryParams.SortBy)
-	})
-
-	total := len(filtered)
-	if queryParams.Pagination == nil {
-		queryParams.Pagination = query.DefaultPagination
-	}
-
-	start, end := queryParams.Pagination.GetValidPagination(total)
-
-	items := make([]*model.K8sIngress, 0, end-start)
-	for _, o := range filtered[start:end] {
-		ingress, ok := o.(*networkingv1.Ingress)
-		if ok {
-			items = append(items, utils.ConvertToK8sIngress(ingress, clusterID))
-		}
-	}
 	i.logger.Debug("成功获取 Ingress 列表",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
-		zap.Int("count", len(filtered)))
-
-	return &model.ListResp[*model.K8sIngress]{
-		Items: items,
-		Total: int64(len(filtered)),
-	}, nil
+		zap.Int("count", len(k8sIngresses)))
+	return k8sIngresses, nil
 }
 
 // UpdateIngress 更新Ingress
-func (i *ingressManager) UpdateIngress(ctx context.Context, clusterID int, namespace string, kubeConfig *rest.Config, yml string) error {
+func (i *ingressManager) UpdateIngress(ctx context.Context, clusterID int, namespace string, ingress *networkingv1.Ingress) error {
+	if ingress == nil {
+		return fmt.Errorf("ingress 不能为空")
+	}
 
-	applier, err := apply.NewApplier(ctx, namespace, kubeConfig)
+	kubeClient, err := i.getKubeClient(clusterID)
 	if err != nil {
-		i.logger.Error("获取Apply对象失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.Error(err))
 		return err
 	}
 
-	err = applier.Apply(strings.NewReader(yml))
-	if err != nil {
-		i.logger.Error("创建Ingress失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			//zap.String("name", ingress.Name),
-			zap.Error(err))
+	// 如果ingress对象中没有指定namespace，使用参数中的namespace
+	targetNamespace := ingress.Namespace
+	if targetNamespace == "" {
+		targetNamespace = namespace
+		ingress.Namespace = namespace
 	}
-	return err
+
+	_, err = kubeClient.NetworkingV1().Ingresses(targetNamespace).Update(ctx, ingress, metav1.UpdateOptions{})
+	if err != nil {
+		i.logger.Error("更新 Ingress 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", targetNamespace),
+			zap.String("name", ingress.Name),
+			zap.Error(err))
+		return fmt.Errorf("更新 Ingress 失败: %w", err)
+	}
+
+	i.logger.Info("成功更新 Ingress",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", targetNamespace),
+		zap.String("name", ingress.Name))
+	return nil
 }
 
 // DeleteIngress 删除Ingress
 func (i *ingressManager) DeleteIngress(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
-	cli, err := i.validKubeClient(ctx, clusterID)
+	kubeClient, err := i.getKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	err = cli.NetworkingV1().Ingresses(namespace).Delete(ctx, name, deleteOptions)
+	err = kubeClient.NetworkingV1().Ingresses(namespace).Delete(ctx, name, deleteOptions)
 	if err != nil {
-		i.logger.Error("删除Ingress失败",
+		i.logger.Error("删除 Ingress 失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
 			zap.Error(err))
-		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, "删除Ingress失败")
+		return fmt.Errorf("删除 Ingress 失败: %w", err)
 	}
 
-	i.logger.Info("成功删除Ingress",
+	i.logger.Info("成功删除 Ingress",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", name))
-
 	return nil
-}
-
-func (i *ingressManager) validKubeClient(ctx context.Context, clusterID int) (kubernetes.Interface, error) {
-	kubeClient, err := i.client.GetKubeClient(clusterID)
-	if err != nil {
-		i.logger.Error("获取Kubernetes客户端失败",
-			zap.Int("cluster_id", clusterID),
-			zap.Error(err))
-
-		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-	}
-	return kubeClient, nil
-}
-
-func (i *ingressManager) filterIngressFunc(object runtime.Object, filter query.Filter) bool {
-	ingress, ok := object.(*networkingv1.Ingress)
-	if !ok {
-		return false
-	}
-	switch filter.Field {
-	// TODO: 人为规定的ingress状态字段
-	case query.FieldStatus:
-		return strings.EqualFold(utils.IngressStatus(ingress), string(filter.Value))
-	case query.FieldSearch:
-		return strings.Contains(ingress.Name, string(filter.Value))
-	default:
-		return query.DefaultObjectMetaFilter(ingress.ObjectMeta, filter)
-	}
-}
-
-func (i *ingressManager) sortIngressFunc(left runtime.Object, right runtime.Object, field query.Field) bool {
-	leftIngress, ok := left.(*networkingv1.Ingress)
-	if !ok {
-		return false
-	}
-	rightIngress, ok := right.(*networkingv1.Ingress)
-	if !ok {
-		return false
-	}
-
-	return query.DefaultObjectMetaCompare(leftIngress.ObjectMeta, rightIngress.ObjectMeta, field)
 }

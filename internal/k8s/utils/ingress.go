@@ -1,7 +1,33 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2024 Bamboo
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ */
+
 package utils
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -344,4 +370,87 @@ func convertIngressStatusToEnum(status string) model.K8sIngressStatus {
 	default:
 		return model.K8sIngressStatusPending
 	}
+}
+
+// BuildIngressListOptions 构建Ingress列表查询选项
+func BuildIngressListOptions(req *model.GetIngressListReq) metav1.ListOptions {
+	options := metav1.ListOptions{}
+
+	// 构建标签选择器
+	var labelSelectors []string
+	for key, value := range req.Labels {
+		labelSelectors = append(labelSelectors, fmt.Sprintf("%s=%s", key, value))
+	}
+	if len(labelSelectors) > 0 {
+		options.LabelSelector = strings.Join(labelSelectors, ",")
+	}
+
+	return options
+}
+
+// FilterIngressesByStatus 根据Ingress状态过滤
+func FilterIngressesByStatus(ingresses []networkingv1.Ingress, status string) []networkingv1.Ingress {
+	if status == "" {
+		return ingresses
+	}
+
+	var filtered []networkingv1.Ingress
+	for _, ingress := range ingresses {
+		ingressStatus := IngressStatus(&ingress)
+		if strings.EqualFold(ingressStatus, status) {
+			filtered = append(filtered, ingress)
+		}
+	}
+
+	return filtered
+}
+
+// PaginateK8sIngresses 对 K8sIngress 列表进行分页
+func PaginateK8sIngresses(ingresses []*model.K8sIngress, page, size int) ([]*model.K8sIngress, int64) {
+	total := int64(len(ingresses))
+	if total == 0 {
+		return []*model.K8sIngress{}, 0
+	}
+
+	// 如果没有设置分页参数，返回所有数据
+	if page <= 0 || size <= 0 {
+		return ingresses, total
+	}
+
+	start := int64((page - 1) * size)
+	end := start + int64(size)
+
+	if start >= total {
+		return []*model.K8sIngress{}, total
+	}
+	if end > total {
+		end = total
+	}
+
+	return ingresses[start:end], total
+}
+
+// BuildIngressListPagination 构建Ingress列表分页逻辑
+func BuildIngressListPagination(ingresses []networkingv1.Ingress, page, size int) ([]networkingv1.Ingress, int64) {
+	total := int64(len(ingresses))
+	if total == 0 {
+		return []networkingv1.Ingress{}, 0
+	}
+
+	// 如果没有设置分页参数，返回所有数据
+	if page <= 0 || size <= 0 {
+		return ingresses, total
+	}
+
+	start := int64((page - 1) * size)
+	end := start + int64(size)
+
+	if start >= total {
+		return []networkingv1.Ingress{}, total
+	}
+	if end > total {
+		end = total
+	}
+
+	return ingresses[start:end], total
 }

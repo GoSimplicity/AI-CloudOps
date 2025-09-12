@@ -96,7 +96,6 @@ var HandlerSet = wire.NewSet(
 	k8sHandler.NewK8sIngressHandler,
 	k8sHandler.NewK8sPodHandler,
 	k8sHandler.NewK8sConfigMapHandler,
-
 	promHandler.NewAlertPoolHandler,
 	promHandler.NewMonitorConfigHandler,
 	promHandler.NewOnDutyGroupHandler,
@@ -143,7 +142,6 @@ var ServiceSet = wire.NewSet(
 	k8sService.NewSecretService,
 	k8sService.NewPVService,
 	k8sService.NewPVCService,
-
 	userService.NewUserService,
 	authService.NewApiService,
 	authService.NewRoleService,
@@ -186,11 +184,9 @@ var DaoSet = wire.NewSet(
 	authDao.NewRoleDAO,
 	authDao.NewApiDAO,
 	authDao.NewAuditDAO,
-
 	k8sDao.NewClusterDAO,
 	k8sDao.NewYamlTaskDAO,
 	k8sDao.NewYamlTemplateDAO,
-
 	workorderDao.NewWorkorderFormDesignDAO,
 	workorderDao.NewTemplateDAO,
 	workorderDao.NewWorkorderInstanceDAO,
@@ -232,6 +228,7 @@ var ManagerSet = wire.NewSet(
 	manager.NewClusterRoleBindingManager,
 	manager.NewRoleManager,
 	manager.NewRoleBindingManager,
+	manager.NewIngressManager,
 )
 
 var JobSet = wire.NewSet(

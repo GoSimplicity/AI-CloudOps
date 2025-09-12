@@ -49,6 +49,7 @@ type K8sClient interface {
 	GetMetricsClient(clusterID int) (*metricsClient.Clientset, error)
 	GetDynamicClient(clusterID int) (*dynamic.DynamicClient, error)
 	GetDiscoveryClient(clusterID int) (*discovery2.DiscoveryClient, error)
+	GetRestConfig(clusterID int) (*rest.Config, error)
 	RefreshClients(ctx context.Context) error
 	RemoveCluster(clusterID int)
 	CheckClusterConnection(clusterID int) error
@@ -136,6 +137,39 @@ func (k *k8sClient) GetDiscoveryClient(clusterID int) (*discovery2.DiscoveryClie
 	}
 
 	return clients.discovery, nil
+}
+
+func (k *k8sClient) GetRestConfig(clusterID int) (*rest.Config, error) {
+	k.mu.RLock()
+	clients, exists := k.clients[clusterID]
+	k.mu.RUnlock()
+
+	if exists && clients.config != nil {
+		// 复制配置以避免并发修改
+		config := rest.CopyConfig(clients.config)
+		config.QPS = 50
+		config.Burst = 100
+		return config, nil
+	}
+
+	// 如果配置不存在，先初始化客户端
+	_, err := k.initClusterClients(clusterID)
+	if err != nil {
+		return nil, fmt.Errorf("初始化集群%d客户端失败: %w", clusterID, err)
+	}
+
+	k.mu.RLock()
+	clients = k.clients[clusterID]
+	k.mu.RUnlock()
+
+	if clients == nil || clients.config == nil {
+		return nil, fmt.Errorf("集群%d的配置不可用", clusterID)
+	}
+
+	config := rest.CopyConfig(clients.config)
+	config.QPS = 50
+	config.Burst = 100
+	return config, nil
 }
 
 func (k *k8sClient) RefreshClients(ctx context.Context) error {

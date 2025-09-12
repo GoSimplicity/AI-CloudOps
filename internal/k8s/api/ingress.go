@@ -22,6 +22,7 @@
  * THE SOFTWARE.
  *
  */
+
 package api
 
 import (
@@ -45,14 +46,14 @@ func (k *K8sIngressHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
 		// Ingress基础管理
-		k8sGroup.GET("/clusters/:cluster_id/ingresses", k.GetIngressList)                            // 获取Ingress列表
-		k8sGroup.GET("/clusters/:cluster_id/ingresses/:namespace/:name", k.GetIngress)               // 获取Ingress详情
-		k8sGroup.GET("/clusters/:cluster_id/ingresses/:namespace/:name/yaml", k.GetIngressYaml)      // 获取Ingress YAML
-		k8sGroup.POST("/clusters/:cluster_id/ingresses", k.CreateIngress)                            // 创建Ingress
-		k8sGroup.POST("/clusters/:cluster_id/ingresses/yaml", k.CreateIngressByYaml)                 // 通过YAML创建Ingress
-		k8sGroup.PUT("/clusters/:cluster_id/ingresses/:namespace/:name", k.UpdateIngress)            // 更新Ingress
-		k8sGroup.PUT("/clusters/:cluster_id/ingresses/:namespace/:name/yaml", k.UpdateIngressByYaml) // 通过YAML更新Ingress
-		k8sGroup.DELETE("/clusters/:cluster_id/ingresses/:namespace/:name", k.DeleteIngress)         // 删除Ingress
+		k8sGroup.GET("/ingress/:cluster_id/list", k.GetIngressList)                              // 获取Ingress列表
+		k8sGroup.GET("/ingress/:cluster_id/:namespace/:name/detail", k.GetIngressDetails)        // 获取Ingress详情
+		k8sGroup.GET("/ingress/:cluster_id/:namespace/:name/detail/yaml", k.GetIngressYaml)      // 获取Ingress YAML
+		k8sGroup.POST("/ingress/:cluster_id/create", k.CreateIngress)                            // 创建Ingress
+		k8sGroup.POST("/ingress/:cluster_id/create/yaml", k.CreateIngressByYaml)                 // 通过YAML创建Ingress
+		k8sGroup.PUT("/ingress/:cluster_id/:namespace/:name/update", k.UpdateIngress)            // 更新Ingress
+		k8sGroup.PUT("/ingress/:cluster_id/:namespace/:name/update/yaml", k.UpdateIngressByYaml) // 通过YAML更新Ingress
+		k8sGroup.DELETE("/ingress/:cluster_id/:namespace/:name/delete", k.DeleteIngress)         // 删除Ingress
 	}
 }
 
@@ -73,8 +74,8 @@ func (k *K8sIngressHandler) GetIngressList(ctx *gin.Context) {
 	})
 }
 
-// GetIngress 获取Ingress详情
-func (k *K8sIngressHandler) GetIngress(ctx *gin.Context) {
+// GetIngressDetails 获取Ingress详情
+func (k *K8sIngressHandler) GetIngressDetails(ctx *gin.Context) {
 	var req model.GetIngressDetailsReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")

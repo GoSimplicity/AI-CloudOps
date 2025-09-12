@@ -47,20 +47,20 @@ func (k *K8sPodHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
 		// Pod基础管理
-		k8sGroup.GET("/clusters/:cluster_id/pods", k.GetPodList)                                                                // 获取Pod列表
-		k8sGroup.GET("/clusters/:cluster_id/pods/:namespace/:name", k.GetPodDetails)                                            // 获取Pod详情
-		k8sGroup.GET("/clusters/:cluster_id/pods/:namespace/:name/yaml", k.GetPodYaml)                                          // 获取Pod YAML
-		k8sGroup.POST("/clusters/:cluster_id/pods", k.CreatePod)                                                                // 创建Pod
-		k8sGroup.POST("/clusters/:cluster_id/pods/yaml", k.CreatePodByYaml)                                                     // 通过YAML创建Pod
-		k8sGroup.PUT("/clusters/:cluster_id/pods/:namespace/:name", k.UpdatePod)                                                // 更新Pod
-		k8sGroup.PUT("/clusters/:cluster_id/pods/:namespace/:name/yaml", k.UpdatePodByYaml)                                     // 通过YAML更新Pod
-		k8sGroup.DELETE("/clusters/:cluster_id/pods/:namespace/:name", k.DeletePod)                                             // 删除Pod
-		k8sGroup.GET("/clusters/:cluster_id/pods/:namespace/:pod_name/containers", k.GetPodContainers)                          // 获取Pod容器列表
-		k8sGroup.GET("/clusters/:cluster_id/pods/:namespace/:pod_name/containers/:container/logs", k.GetPodLogs)                // 获取容器日志
-		k8sGroup.POST("/clusters/:cluster_id/pods/:namespace/:pod_name/containers/:container/exec", k.PodExec)                  // Pod执行命令
-		k8sGroup.POST("/clusters/:cluster_id/pods/:namespace/:pod_name/port-forward", k.PodPortForward)                         // Pod端口转发
-		k8sGroup.POST("/clusters/:cluster_id/pods/:namespace/:pod_name/containers/:container/files/upload", k.PodFileUpload)    // Pod文件上传
-		k8sGroup.GET("/clusters/:cluster_id/pods/:namespace/:pod_name/containers/:container/files/download", k.PodFileDownload) // Pod文件下载
+		k8sGroup.GET("/pod/:cluster_id/list", k.GetPodList)                                                           // 获取Pod列表
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/detail", k.GetPodDetails)                                     // 获取Pod详情
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/detail/yaml", k.GetPodYaml)                                   // 获取Pod YAML
+		k8sGroup.POST("/pod/:cluster_id/create", k.CreatePod)                                                         // 创建Pod
+		k8sGroup.POST("/pod/:cluster_id/create/yaml", k.CreatePodByYaml)                                              // 通过YAML创建Pod
+		k8sGroup.PUT("/pod/:cluster_id/:namespace/:name/update", k.UpdatePod)                                         // 更新Pod
+		k8sGroup.PUT("/pod/:cluster_id/:namespace/:name/update/yaml", k.UpdatePodByYaml)                              // 通过YAML更新Pod
+		k8sGroup.DELETE("/pod/:cluster_id/:namespace/:name/delete", k.DeletePod)                                      // 删除Pod
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:pod_name/containers", k.GetPodContainers)                          // 获取Pod容器列表
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:pod_name/containers/:container/logs", k.GetPodLogs)                // 获取容器日志
+		k8sGroup.POST("/pod/:cluster_id/:namespace/:pod_name/containers/:container/exec", k.PodExec)                  // Pod执行命令
+		k8sGroup.POST("/pod/:cluster_id/:namespace/:pod_name/port-forward", k.PodPortForward)                         // Pod端口转发
+		k8sGroup.POST("/pod/:cluster_id/:namespace/:pod_name/containers/:container/files/upload", k.PodFileUpload)    // Pod文件上传
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:pod_name/containers/:container/files/download", k.PodFileDownload) // Pod文件下载
 	}
 }
 

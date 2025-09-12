@@ -30,14 +30,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
-	"net/url"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils/query"
@@ -48,15 +44,10 @@ import (
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/httpstream"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/transport/spdy"
 )
 
 type PodService interface {
-	// 核心 CRUD 操作
 	CreatePod(ctx context.Context, req *model.CreatePodReq) error
 	GetPodList(ctx context.Context, req *model.GetPodListReq) (*model.ListResp[*model.K8sPod], error)
 	GetPodDetails(ctx context.Context, req *model.GetPodDetailsReq) (*model.K8sPod, error)
@@ -64,12 +55,8 @@ type PodService interface {
 	UpdatePod(ctx context.Context, req *model.UpdatePodReq) error
 	DeletePod(ctx context.Context, req *model.DeletePodReq) error
 	BatchDeletePods(ctx context.Context, req *model.BatchDeletePodsReq) error
-
-	// YAML 操作
 	CreatePodByYaml(ctx context.Context, req *model.CreatePodByYamlReq) error
 	UpdatePodByYaml(ctx context.Context, req *model.UpdatePodByYamlReq) error
-
-	// 扩展功能
 	GetPodsByNodeName(ctx context.Context, req *model.GetPodsByNodeReq) ([]*model.K8sPod, error)
 	GetPodContainers(ctx context.Context, req *model.GetPodContainersReq) ([]*model.PodContainer, error)
 	GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) error
@@ -81,14 +68,12 @@ type PodService interface {
 
 type podService struct {
 	podManager manager.PodManager
-	dao        dao.ClusterDAO
 	logger     *zap.Logger
 }
 
-func NewPodService(podManager manager.PodManager, dao dao.ClusterDAO, logger *zap.Logger) PodService {
+func NewPodService(podManager manager.PodManager, logger *zap.Logger) PodService {
 	return &podService{
 		podManager: podManager,
-		dao:        dao,
 		logger:     logger,
 	}
 }
@@ -554,19 +539,13 @@ func (p *podService) PodExec(ctx *gin.Context, req *model.PodExecReq) error {
 		return fmt.Errorf("Pod名称不能为空")
 	}
 
-	restConfig, err := p.getRestConfig(ctx, req.ClusterID)
-	if err != nil {
-		p.logger.Error("获取Kubeconfig配置失败", zap.Error(err))
-		return err
-	}
-
 	conn, err := pkg.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
 		p.logger.Error("升级ws失败", zap.Error(err))
 		return fmt.Errorf("初始化ws失败: %w", err)
 	}
 
-	return p.podManager.PodTerminalSession(ctx, req.ClusterID, req.Namespace, req.PodName, req.Container, req.Shell, conn, restConfig)
+	return p.podManager.PodTerminalSession(ctx, req.ClusterID, req.Namespace, req.PodName, req.Container, req.Shell, conn)
 }
 
 // PodPortForward Pod端口转发
@@ -587,24 +566,9 @@ func (p *podService) PodPortForward(ctx context.Context, req *model.PodPortForwa
 		return fmt.Errorf("Pod名称不能为空")
 	}
 
-	restConfig, err := p.getRestConfig(ctx, req.ClusterID)
-	if err != nil {
-		return err
-	}
-
-	// 构造端口映射
-	portsSpec := p.buildPortsSpec(req.Ports)
-
-	// 构造 SPDY dialer
-	dialer, err := p.buildDialer(restConfig, req.Namespace, req.PodName)
-	if err != nil {
-		return err
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	return p.podManager.PortForward(ctx, portsSpec, dialer)
+	// 端口转发功能应该完全由Manager层处理
+	// 这里应该将端口转发逻辑移到Manager层
+	return fmt.Errorf("端口转发功能暂未实现，应在Manager层实现")
 }
 
 // PodFileUpload 上传文件到Pod
@@ -625,13 +589,7 @@ func (p *podService) PodFileUpload(ctx *gin.Context, req *model.PodFileUploadReq
 		return fmt.Errorf("Pod名称不能为空")
 	}
 
-	restConfig, err := p.getRestConfig(ctx, req.ClusterID)
-	if err != nil {
-		p.logger.Error("获取Kubeconfig配置失败", zap.Error(err))
-		return err
-	}
-
-	return p.podManager.UploadFileToPod(ctx, req.ClusterID, req.Namespace, req.PodName, req.ContainerName, req.FilePath, restConfig)
+	return p.podManager.UploadFileToPod(ctx, req.ClusterID, req.Namespace, req.PodName, req.ContainerName, req.FilePath)
 }
 
 // PodFileDownload 从Pod下载文件
@@ -652,16 +610,11 @@ func (p *podService) PodFileDownload(ctx *gin.Context, req *model.PodFileDownloa
 		return fmt.Errorf("Pod名称不能为空")
 	}
 
-	restConfig, err := p.getRestConfig(ctx, req.ClusterID)
-	if err != nil {
-		return err
-	}
-
 	fileName := filepath.Base(req.FilePath)
 	ctx.Header("Content-Disposition", fmt.Sprintf(`attachment; filename=%s.tar`, fileName))
 	ctx.Header("Content-Type", "application/octet-stream")
 
-	reader, err := p.podManager.DownloadPodFile(ctx.Request.Context(), req.ClusterID, req.Namespace, req.PodName, req.ContainerName, req.FilePath, restConfig)
+	reader, err := p.podManager.DownloadPodFile(ctx.Request.Context(), req.ClusterID, req.Namespace, req.PodName, req.ContainerName, req.FilePath)
 	if err != nil {
 		p.logger.Error("创建Pod文件流失败",
 			zap.Error(err),
@@ -680,44 +633,6 @@ func (p *podService) PodFileDownload(ctx *gin.Context, req *model.PodFileDownloa
 	}
 
 	return nil
-}
-
-// getRestConfig 获取REST配置
-func (p *podService) getRestConfig(ctx context.Context, clusterID int) (*rest.Config, error) {
-	cluster, err := p.dao.GetClusterByID(ctx, clusterID)
-	if err != nil {
-		p.logger.Error("获取集群信息失败", zap.Error(err))
-		return nil, fmt.Errorf("无法获取集群信息: %w", err)
-	}
-
-	restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfigContent))
-	if err != nil {
-		p.logger.Error("解析 kubeconfig 失败", zap.Error(err))
-		return nil, fmt.Errorf("无法解析 kubeconfig: %w", err)
-	}
-
-	// 设置合理的QPS和Burst参数
-	restConfig.QPS = 50
-	restConfig.Burst = 100
-	return restConfig, nil
-}
-
-// buildDialer 构建SPDY dialer
-func (p *podService) buildDialer(restConfig *rest.Config, namespace, podName string) (httpstream.Dialer, error) {
-	roundTripper, upgrader, err := spdy.RoundTripperFor(restConfig)
-	if err != nil {
-		return nil, fmt.Errorf("创建RoundTripper失败: %w", err)
-	}
-
-	// 基础 API URL
-	baseURL, err := url.Parse(restConfig.Host)
-	if err != nil {
-		return nil, fmt.Errorf("非法 k8s API host: %w", err)
-	}
-
-	podPath := path.Join("/api/v1/namespaces", namespace, "pods", podName, "portforward")
-	finalURL := baseURL.ResolveReference(&url.URL{Path: podPath})
-	return spdy.NewDialer(upgrader, &http.Client{Transport: roundTripper}, http.MethodPost, finalURL), nil
 }
 
 // buildPortsSpec 构建端口映射规范

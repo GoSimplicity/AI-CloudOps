@@ -48,7 +48,6 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/httpstream"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/scheme"
@@ -65,30 +64,18 @@ PodManager Pod 资源管理器，负责 Pod 相关的业务逻辑
 通过依赖注入接收客户端工厂，实现业务逻辑与客户端创建的解耦
 */
 type PodManager interface {
-	// GetPod Pod 查询
 	GetPod(ctx context.Context, clusterID int, namespace, name string) (*corev1.Pod, error)
-	// GetPodsByNodeName 获取指定节点上的 Pod 列表
 	GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) (*corev1.PodList, error)
-	// GetPodList Pod 列表查询
 	GetPodList(ctx context.Context, clusterID int, namespace string, queryParams *query.Query) (*model.ListResp[*model.K8sPod], error)
-	// CreatePod Pod 创建操作
 	CreatePod(ctx context.Context, clusterID int, pod *corev1.Pod) (*corev1.Pod, error)
-	// UpdatePod Pod 更新操作
 	UpdatePod(ctx context.Context, clusterID int, pod *corev1.Pod) (*corev1.Pod, error)
-	// DeletePod Pod 删除操作
 	DeletePod(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error
-	// GetPodLogs Pod 日志
 	GetPodLogs(ctx context.Context, clusterID int, namespace, name string, logOptions *corev1.PodLogOptions) (io.ReadCloser, error)
-	// BatchDeletePods  批量操作
 	BatchDeletePods(ctx context.Context, clusterID int, namespace string, podNames []string, deleteOptions metav1.DeleteOptions) error
-	// PodTerminalSession  Pod 终端
-	PodTerminalSession(ctx context.Context, clusterID int, namespace, pod, container, shell string, conn *websocket.Conn, config *rest.Config) error
-	// UploadFileToPod Pod 文件上传
-	UploadFileToPod(ctx *gin.Context, clusterID int, namespace, pod, container, filePath string, config *rest.Config) error
-	// PortForward Pod 端口映射
+	PodTerminalSession(ctx context.Context, clusterID int, namespace, pod, container, shell string, conn *websocket.Conn) error
+	UploadFileToPod(ctx *gin.Context, clusterID int, namespace, pod, container, filePath string) error
 	PortForward(ctx context.Context, ports []string, dialer httpstream.Dialer) error
-	// DownloadPodFile Pod 文件下载
-	DownloadPodFile(ctx context.Context, clusterID int, namespace, pod, container, filePath string, config *rest.Config) (*k8sutils.PodFileStreamPipe, error)
+	DownloadPodFile(ctx context.Context, clusterID int, namespace, pod, container, filePath string) (*k8sutils.PodFileStreamPipe, error)
 }
 
 type podManager struct {
@@ -105,8 +92,7 @@ func NewPodManager(clientFactory client.K8sClient, logger *zap.Logger) PodManage
 	}
 }
 
-// getKubeClient 私有方法：获取 Kubernetes 客户端
-// 封装客户端获取逻辑，统一错误处理
+// getKubeClient 获取 Kubernetes 客户端
 func (p *podManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
 	kubeClient, err := p.clientFactory.GetKubeClient(clusterID)
 	if err != nil {
@@ -332,7 +318,6 @@ func (p *podManager) PodTerminalSession(
 	clusterID int,
 	namespace, pod, container, shell string,
 	conn *websocket.Conn,
-	config *rest.Config,
 ) error {
 
 	kubeClient, err := p.clientFactory.GetKubeClient(clusterID)
@@ -340,20 +325,32 @@ func (p *podManager) PodTerminalSession(
 		return err
 	}
 
+	restConfig, err := p.clientFactory.GetRestConfig(clusterID)
+	if err != nil {
+		p.logger.Error("获取集群配置失败", zap.Int("clusterID", clusterID), zap.Error(err))
+		return fmt.Errorf("获取集群配置失败: %w", err)
+	}
+
 	if len(shell) == 0 {
 		shell = "sh"
 	}
 
-	terminal.NewTerminalerHandler(kubeClient, config).
+	terminal.NewTerminalerHandler(kubeClient, restConfig).
 		HandleSession(ctx, shell, namespace, pod, container, conn)
 	return nil
 }
 
-func (p *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace, pod, container, filePath string, config *rest.Config) error {
+func (p *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace, pod, container, filePath string) error {
 
 	kubeClient, err := p.getKubeClient(clusterID)
 	if err != nil {
 		return err
+	}
+
+	restConfig, err := p.clientFactory.GetRestConfig(clusterID)
+	if err != nil {
+		p.logger.Error("获取集群配置失败", zap.Int("clusterID", clusterID), zap.Error(err))
+		return fmt.Errorf("获取集群配置失败: %w", err)
 	}
 
 	targetDir := filePath
@@ -389,7 +386,7 @@ func (p *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace,
 			TTY:       false,
 		}, scheme.ParameterCodec)
 
-	exec, err := remotecommand.NewSPDYExecutor(config, http.MethodPost, execReq.URL())
+	exec, err := remotecommand.NewSPDYExecutor(restConfig, http.MethodPost, execReq.URL())
 	if err != nil {
 		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, "创建 Executor 失败")
 	}
@@ -437,14 +434,20 @@ func (p *podManager) PortForward(ctx context.Context, ports []string, dialer htt
 	return nil
 }
 
-func (p *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespace, pod, container, filePath string, config *rest.Config) (*k8sutils.PodFileStreamPipe, error) {
+func (p *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespace, pod, container, filePath string) (*k8sutils.PodFileStreamPipe, error) {
 	kubeClient, err := p.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
 
+	restConfig, err := p.clientFactory.GetRestConfig(clusterID)
+	if err != nil {
+		p.logger.Error("获取集群配置失败", zap.Int("clusterID", clusterID), zap.Error(err))
+		return nil, fmt.Errorf("获取集群配置失败: %w", err)
+	}
+
 	reader, err := k8sutils.NewPodFileStreamPipe(
-		ctx, config, kubeClient, namespace, pod, container, filePath)
+		ctx, restConfig, kubeClient, namespace, pod, container, filePath)
 
 	if err != nil {
 		p.logger.Error("创建Pod文件流失败",
