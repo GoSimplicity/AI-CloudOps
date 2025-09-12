@@ -261,15 +261,6 @@ type DeletePodReq struct {
 	Force              bool   `json:"force"`                         // 是否强制删除
 }
 
-// BatchDeletePodsReq 批量删除Pod请求
-type BatchDeletePodsReq struct {
-	ClusterID          int      `json:"cluster_id" binding:"required"` // 集群ID
-	Namespace          string   `json:"namespace" binding:"required"`  // 命名空间
-	Names              []string `json:"names" binding:"required"`      // Pod名称列表
-	GracePeriodSeconds *int64   `json:"grace_period_seconds"`          // 优雅删除时间（秒）
-	Force              bool     `json:"force"`                         // 是否强制删除
-}
-
 // GetPodsByNodeReq 根据节点获取Pod列表请求
 type GetPodsByNodeReq struct {
 	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID

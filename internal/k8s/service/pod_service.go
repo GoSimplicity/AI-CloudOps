@@ -36,7 +36,6 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils/query"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	utilsStream "github.com/GoSimplicity/AI-CloudOps/pkg/utils/stream"
@@ -49,16 +48,15 @@ import (
 
 type PodService interface {
 	CreatePod(ctx context.Context, req *model.CreatePodReq) error
-	GetPodList(ctx context.Context, req *model.GetPodListReq) (*model.ListResp[*model.K8sPod], error)
+	GetPodList(ctx context.Context, req *model.GetPodListReq) (model.ListResp[*model.K8sPod], error)
 	GetPodDetails(ctx context.Context, req *model.GetPodDetailsReq) (*model.K8sPod, error)
 	GetPodYaml(ctx context.Context, req *model.GetPodYamlReq) (*model.K8sYaml, error)
 	UpdatePod(ctx context.Context, req *model.UpdatePodReq) error
 	DeletePod(ctx context.Context, req *model.DeletePodReq) error
-	BatchDeletePods(ctx context.Context, req *model.BatchDeletePodsReq) error
 	CreatePodByYaml(ctx context.Context, req *model.CreatePodByYamlReq) error
 	UpdatePodByYaml(ctx context.Context, req *model.UpdatePodByYamlReq) error
-	GetPodsByNodeName(ctx context.Context, req *model.GetPodsByNodeReq) ([]*model.K8sPod, error)
-	GetPodContainers(ctx context.Context, req *model.GetPodContainersReq) ([]*model.PodContainer, error)
+	GetPodsByNodeName(ctx context.Context, req *model.GetPodsByNodeReq) (model.ListResp[*model.K8sPod], error)
+	GetPodContainers(ctx context.Context, req *model.GetPodContainersReq) (model.ListResp[*model.PodContainer], error)
 	GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) error
 	PodExec(ctx *gin.Context, req *model.PodExecReq) error
 	PodPortForward(ctx context.Context, req *model.PodPortForwardReq) error
@@ -114,11 +112,12 @@ func (p *podService) CreatePod(ctx context.Context, req *model.CreatePodReq) err
 	}
 
 	// 创建Pod
-	_, err = p.podManager.CreatePod(ctx, req.ClusterID, pod)
+	_, err = p.podManager.CreatePod(ctx, req.ClusterID, req.Namespace, pod)
 	if err != nil {
 		p.logger.Error("CreatePod: 创建Pod失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
 			zap.String("name", req.Name))
 		return fmt.Errorf("创建Pod失败: %w", err)
 	}
@@ -127,25 +126,14 @@ func (p *podService) CreatePod(ctx context.Context, req *model.CreatePodReq) err
 }
 
 // GetPodList 获取Pod列表
-func (p *podService) GetPodList(ctx context.Context, req *model.GetPodListReq) (*model.ListResp[*model.K8sPod], error) {
+func (p *podService) GetPodList(ctx context.Context, req *model.GetPodListReq) (model.ListResp[*model.K8sPod], error) {
 	if req == nil {
-		return nil, fmt.Errorf("获取Pod列表请求不能为空")
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("获取Pod列表请求不能为空")
 	}
 
 	if req.ClusterID <= 0 {
-		return nil, fmt.Errorf("集群ID不能为空")
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("集群ID不能为空")
 	}
-
-	// 构建查询参数
-	queryParams := &query.Query{
-		Filters:    make(map[query.Field]query.Value),
-		Pagination: &query.Pagination{Limit: req.Size, Offset: (req.Page - 1) * req.Size},
-		SortBy:     query.FieldCreationTimeStamp,
-		Ascending:  false,
-	}
-
-	// 添加标签选择器 (注意：GetPodListReq可能没有Labels字段，这里暂时跳过)
-	// queryParams.AppendLabelSelector(req.Labels)
 
 	// 设置命名空间
 	namespace := req.Namespace
@@ -153,16 +141,62 @@ func (p *podService) GetPodList(ctx context.Context, req *model.GetPodListReq) (
 		namespace = corev1.NamespaceAll
 	}
 
-	pods, err := p.podManager.GetPodList(ctx, req.ClusterID, namespace, queryParams)
+	// 构建查询选项
+	listOptions := metav1.ListOptions{}
+	if req.Search != "" {
+		// 简单的名称匹配，更复杂的搜索可以在这里扩展
+		// 注意：Kubernetes标签选择器语法有限制，这里我们获取所有后进行过滤
+	}
+
+	k8sPods, err := p.podManager.GetPodList(ctx, req.ClusterID, namespace, listOptions)
 	if err != nil {
 		p.logger.Error("GetPodList: 获取Pod列表失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", namespace))
-		return nil, fmt.Errorf("获取Pod列表失败: %w", err)
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("获取Pod列表失败: %w", err)
 	}
 
-	return pods, nil
+	// 在Service层进行过滤
+	var filteredPods []*model.K8sPod
+	for _, pod := range k8sPods {
+		// 按状态过滤
+		if req.Status != "" && pod.Status != req.Status {
+			continue
+		}
+		// 按名称搜索过滤
+		if req.Search != "" && !strings.Contains(pod.Name, req.Search) {
+			continue
+		}
+		filteredPods = append(filteredPods, pod)
+	}
+
+	// 分页处理
+	page := req.Page
+	size := req.Size
+	if page <= 0 {
+		page = 1
+	}
+	if size <= 0 {
+		size = 10 // 默认每页显示10条
+	}
+
+	total := int64(len(filteredPods))
+	start := (page - 1) * size
+	end := start + size
+
+	if start >= len(filteredPods) {
+		filteredPods = []*model.K8sPod{}
+	} else if end > len(filteredPods) {
+		filteredPods = filteredPods[start:]
+	} else {
+		filteredPods = filteredPods[start:end]
+	}
+
+	return model.ListResp[*model.K8sPod]{
+		Items: filteredPods,
+		Total: total,
+	}, nil
 }
 
 // GetPodDetails 获取Pod详情
@@ -282,11 +316,12 @@ func (p *podService) UpdatePod(ctx context.Context, req *model.UpdatePodReq) err
 	}
 
 	// 更新Pod
-	_, err = p.podManager.UpdatePod(ctx, req.ClusterID, currentPod)
+	_, err = p.podManager.UpdatePod(ctx, req.ClusterID, req.Namespace, currentPod)
 	if err != nil {
 		p.logger.Error("UpdatePod: 更新Pod失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
 			zap.String("name", req.Name))
 		return fmt.Errorf("更新Pod失败: %w", err)
 	}
@@ -334,58 +369,18 @@ func (p *podService) DeletePod(ctx context.Context, req *model.DeletePodReq) err
 	return nil
 }
 
-// BatchDeletePods 批量删除Pod
-func (p *podService) BatchDeletePods(ctx context.Context, req *model.BatchDeletePodsReq) error {
-	if req == nil {
-		return fmt.Errorf("批量删除Pod请求不能为空")
-	}
-
-	if req.ClusterID <= 0 {
-		return fmt.Errorf("集群ID不能为空")
-	}
-
-	if req.Namespace == "" {
-		return fmt.Errorf("命名空间不能为空")
-	}
-
-	if len(req.Names) == 0 {
-		return fmt.Errorf("Pod名称列表不能为空")
-	}
-
-	deleteOptions := metav1.DeleteOptions{
-		GracePeriodSeconds: req.GracePeriodSeconds,
-	}
-
-	if req.Force {
-		policy := metav1.DeletePropagationBackground
-		deleteOptions.PropagationPolicy = &policy
-	}
-
-	err := p.podManager.BatchDeletePods(ctx, req.ClusterID, req.Namespace, req.Names, deleteOptions)
-	if err != nil {
-		p.logger.Error("BatchDeletePods: 批量删除Pod失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("namespace", req.Namespace),
-			zap.Int("count", len(req.Names)))
-		return fmt.Errorf("批量删除Pod失败: %w", err)
-	}
-
-	return nil
-}
-
 // GetPodsByNodeName 获取指定节点上的Pod列表
-func (p *podService) GetPodsByNodeName(ctx context.Context, req *model.GetPodsByNodeReq) ([]*model.K8sPod, error) {
+func (p *podService) GetPodsByNodeName(ctx context.Context, req *model.GetPodsByNodeReq) (model.ListResp[*model.K8sPod], error) {
 	if req == nil {
-		return nil, fmt.Errorf("获取节点Pod列表请求不能为空")
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("获取节点Pod列表请求不能为空")
 	}
 
 	if req.ClusterID <= 0 {
-		return nil, fmt.Errorf("集群ID不能为空")
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("集群ID不能为空")
 	}
 
 	if req.NodeName == "" {
-		return nil, fmt.Errorf("节点名称不能为空")
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("节点名称不能为空")
 	}
 
 	pods, err := p.podManager.GetPodsByNodeName(ctx, req.ClusterID, req.NodeName)
@@ -394,28 +389,31 @@ func (p *podService) GetPodsByNodeName(ctx context.Context, req *model.GetPodsBy
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("nodeName", req.NodeName))
-		return nil, fmt.Errorf("获取节点Pod列表失败: %w", err)
+		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("获取节点Pod列表失败: %w", err)
 	}
 
-	return utils.ConvertToK8sPods(pods.Items), nil
+	return model.ListResp[*model.K8sPod]{
+		Items: pods,
+		Total: int64(len(pods)),
+	}, nil
 }
 
 // GetPodContainers 获取Pod的容器列表
-func (p *podService) GetPodContainers(ctx context.Context, req *model.GetPodContainersReq) ([]*model.PodContainer, error) {
+func (p *podService) GetPodContainers(ctx context.Context, req *model.GetPodContainersReq) (model.ListResp[*model.PodContainer], error) {
 	if req == nil {
-		return nil, fmt.Errorf("获取Pod容器列表请求不能为空")
+		return model.ListResp[*model.PodContainer]{}, fmt.Errorf("获取Pod容器列表请求不能为空")
 	}
 
 	if req.ClusterID <= 0 {
-		return nil, fmt.Errorf("集群ID不能为空")
+		return model.ListResp[*model.PodContainer]{}, fmt.Errorf("集群ID不能为空")
 	}
 
 	if req.Namespace == "" {
-		return nil, fmt.Errorf("命名空间不能为空")
+		return model.ListResp[*model.PodContainer]{}, fmt.Errorf("命名空间不能为空")
 	}
 
 	if req.PodName == "" {
-		return nil, fmt.Errorf("Pod名称不能为空")
+		return model.ListResp[*model.PodContainer]{}, fmt.Errorf("Pod名称不能为空")
 	}
 
 	pod, err := p.podManager.GetPod(ctx, req.ClusterID, req.Namespace, req.PodName)
@@ -425,7 +423,7 @@ func (p *podService) GetPodContainers(ctx context.Context, req *model.GetPodCont
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
 			zap.String("podName", req.PodName))
-		return nil, fmt.Errorf("获取Pod失败: %w", err)
+		return model.ListResp[*model.PodContainer]{}, fmt.Errorf("获取Pod失败: %w", err)
 	}
 
 	// 转换容器信息
@@ -435,7 +433,10 @@ func (p *podService) GetPodContainers(ctx context.Context, req *model.GetPodCont
 	for i := range containers {
 		result[i] = &containers[i]
 	}
-	return result, nil
+	return model.ListResp[*model.PodContainer]{
+		Items: result,
+		Total: int64(len(result)),
+	}, nil
 }
 
 // GetPodLogs 获取Pod日志
@@ -676,11 +677,12 @@ func (p *podService) CreatePodByYaml(ctx context.Context, req *model.CreatePodBy
 	}
 
 	// 创建Pod
-	_, err = p.podManager.CreatePod(ctx, req.ClusterID, pod)
+	_, err = p.podManager.CreatePod(ctx, req.ClusterID, pod.Namespace, pod)
 	if err != nil {
 		p.logger.Error("CreatePodByYaml: 创建Pod失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", pod.Namespace),
 			zap.String("name", pod.Name))
 		return fmt.Errorf("创建Pod失败: %w", err)
 	}
@@ -720,11 +722,12 @@ func (p *podService) UpdatePodByYaml(ctx context.Context, req *model.UpdatePodBy
 	}
 
 	// 更新Pod
-	_, err = p.podManager.UpdatePod(ctx, req.ClusterID, pod)
+	_, err = p.podManager.UpdatePod(ctx, req.ClusterID, req.Namespace, pod)
 	if err != nil {
 		p.logger.Error("UpdatePodByYaml: 更新Pod失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
 			zap.String("name", pod.Name))
 		return fmt.Errorf("更新Pod失败: %w", err)
 	}

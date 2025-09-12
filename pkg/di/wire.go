@@ -229,6 +229,7 @@ var ManagerSet = wire.NewSet(
 	manager.NewRoleManager,
 	manager.NewRoleBindingManager,
 	manager.NewIngressManager,
+	manager.NewPodManager,
 )
 
 var JobSet = wire.NewSet(

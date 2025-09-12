@@ -32,44 +32,36 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"sort"
-	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils/query"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/retry"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/terminal"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"go.uber.org/zap"
+	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/httpstream"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/scheme"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
-	"go.uber.org/zap"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
-/*
-PodManager Pod 资源管理器，负责 Pod 相关的业务逻辑
-通过依赖注入接收客户端工厂，实现业务逻辑与客户端创建的解耦
-*/
+// PodManager Pod资源管理器接口
 type PodManager interface {
+	CreatePod(ctx context.Context, clusterID int, namespace string, pod *corev1.Pod) (*corev1.Pod, error)
 	GetPod(ctx context.Context, clusterID int, namespace, name string) (*corev1.Pod, error)
-	GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) (*corev1.PodList, error)
-	GetPodList(ctx context.Context, clusterID int, namespace string, queryParams *query.Query) (*model.ListResp[*model.K8sPod], error)
-	CreatePod(ctx context.Context, clusterID int, pod *corev1.Pod) (*corev1.Pod, error)
-	UpdatePod(ctx context.Context, clusterID int, pod *corev1.Pod) (*corev1.Pod, error)
+	GetPodList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sPod, error)
+	UpdatePod(ctx context.Context, clusterID int, namespace string, pod *corev1.Pod) (*corev1.Pod, error)
 	DeletePod(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error
+	GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) ([]*model.K8sPod, error)
 	GetPodLogs(ctx context.Context, clusterID int, namespace, name string, logOptions *corev1.PodLogOptions) (io.ReadCloser, error)
 	BatchDeletePods(ctx context.Context, clusterID int, namespace string, podNames []string, deleteOptions metav1.DeleteOptions) error
 	PodTerminalSession(ctx context.Context, clusterID int, namespace, pod, container, shell string, conn *websocket.Conn) error
@@ -78,13 +70,13 @@ type PodManager interface {
 	DownloadPodFile(ctx context.Context, clusterID int, namespace, pod, container, filePath string) (*k8sutils.PodFileStreamPipe, error)
 }
 
+// podManager Pod资源管理器实现
 type podManager struct {
 	clientFactory client.K8sClient
 	logger        *zap.Logger
 }
 
-// NewPodManager 创建新的 Pod 管理器实例
-// 通过构造函数注入客户端工厂依赖
+// NewPodManager 创建新的Pod管理器实例
 func NewPodManager(clientFactory client.K8sClient, logger *zap.Logger) PodManager {
 	return &podManager{
 		clientFactory: clientFactory,
@@ -92,12 +84,14 @@ func NewPodManager(clientFactory client.K8sClient, logger *zap.Logger) PodManage
 	}
 }
 
-// getKubeClient 获取 Kubernetes 客户端
+// getKubeClient 私有方法：获取Kubernetes客户端
 func (p *podManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
 	kubeClient, err := p.clientFactory.GetKubeClient(clusterID)
 	if err != nil {
-		p.logger.Error("获取 Kubernetes 客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
-		return nil, fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
+		p.logger.Error("获取Kubernetes客户端失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 	return kubeClient, nil
 }
@@ -126,81 +120,41 @@ func (p *podManager) GetPod(ctx context.Context, clusterID int, namespace, name 
 	return pod, nil
 }
 
-// GetPodList 获取 Pod 列表
-func (p *podManager) GetPodList(ctx context.Context, clusterID int, namespace string, queryParams *query.Query) (*model.ListResp[*model.K8sPod], error) {
+// GetPodList 获取Pod列表
+func (p *podManager) GetPodList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sPod, error) {
 	kubeClient, err := p.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
 
-	podList, err := kubeClient.CoreV1().Pods(namespace).
-		List(ctx, metav1.ListOptions{LabelSelector: queryParams.Selector().String()})
-
+	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, listOptions)
 	if err != nil {
-		p.logger.Error("获取 Pod 列表失败",
+		p.logger.Error("获取Pod列表失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.Error(err))
-
-		return nil, err
+		return nil, fmt.Errorf("获取Pod列表失败: %w", err)
 	}
 
-	objects := make([]runtime.Object, len(podList.Items))
-	filtered := make([]runtime.Object, 0)
-
-	for _, item := range podList.Items {
-		objects = append(objects, item.DeepCopy())
-	}
-
-	for _, object := range objects {
-		selected := true
-		for field, value := range queryParams.Filters {
-			if !p.filterPodFunc(object, query.Filter{Field: field, Value: value}) {
-				selected = false
-				break
-			}
-		}
-
-		if selected {
-			filtered = append(filtered, object)
+	// 转换为model结构
+	var k8sPods []*model.K8sPod
+	for _, pod := range podList.Items {
+		k8sPod := utils.ConvertToK8sPod(&pod)
+		if k8sPod != nil {
+			k8sPod.ClusterID = int64(clusterID)
+			k8sPods = append(k8sPods, k8sPod)
 		}
 	}
 
-	sort.Slice(filtered, func(n, m int) bool {
-		if !queryParams.Ascending {
-			return p.sortPodFunc(filtered[n], filtered[m], queryParams.SortBy)
-		}
-		return !p.sortPodFunc(filtered[n], filtered[m], queryParams.SortBy)
-	})
-
-	total := len(filtered)
-	if queryParams.Pagination == nil {
-		queryParams.Pagination = query.DefaultPagination
-	}
-
-	start, end := queryParams.Pagination.GetValidPagination(total)
-
-	items := make([]*model.K8sPod, 0, end-start)
-	for _, o := range filtered[start:end] {
-		pod, ok := o.(*corev1.Pod)
-		if ok {
-			podModel := utils.ConvertToK8sPod(pod)
-			podModel.ClusterID = int64(clusterID)
-			items = append(items, podModel)
-		}
-	}
-
-	p.logger.Debug("成功获取 Pod 列表", zap.Int("clusterID", clusterID), zap.String("namespace", namespace),
-		zap.Int("count", len(filtered)))
-
-	return &model.ListResp[*model.K8sPod]{
-		Items: items,
-		Total: int64(len(filtered)),
-	}, nil
+	p.logger.Debug("成功获取Pod列表",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.Int("count", len(k8sPods)))
+	return k8sPods, nil
 }
 
-// GetPodsByNodeName 获取指定节点上的 Pod 列表
-func (p *podManager) GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) (*corev1.PodList, error) {
+// GetPodsByNodeName 获取指定节点上的Pod列表
+func (p *podManager) GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) ([]*model.K8sPod, error) {
 	kubeClient, err := p.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
@@ -212,18 +166,28 @@ func (p *podManager) GetPodsByNodeName(ctx context.Context, clusterID int, nodeN
 
 	pods, err := kubeClient.CoreV1().Pods("").List(ctx, listOptions)
 	if err != nil {
-		p.logger.Error("获取节点 Pod 列表失败",
+		p.logger.Error("获取节点Pod列表失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("nodeName", nodeName),
 			zap.Error(err))
-		return nil, fmt.Errorf("获取节点 Pod 列表失败: %w", err)
+		return nil, fmt.Errorf("获取节点Pod列表失败: %w", err)
 	}
 
-	p.logger.Debug("成功获取节点 Pod 列表",
+	// 转换为model结构
+	var k8sPods []*model.K8sPod
+	for _, pod := range pods.Items {
+		k8sPod := utils.ConvertToK8sPod(&pod)
+		if k8sPod != nil {
+			k8sPod.ClusterID = int64(clusterID)
+			k8sPods = append(k8sPods, k8sPod)
+		}
+	}
+
+	p.logger.Debug("成功获取节点Pod列表",
 		zap.Int("clusterID", clusterID),
 		zap.String("nodeName", nodeName),
-		zap.Int("count", len(pods.Items)))
-	return pods, nil
+		zap.Int("count", len(k8sPods)))
+	return k8sPods, nil
 }
 
 // DeletePod 删除 Pod
@@ -461,80 +425,67 @@ func (p *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespa
 	return reader, err
 }
 
-// CreatePod 创建 Pod
-func (p *podManager) CreatePod(ctx context.Context, clusterID int, pod *corev1.Pod) (*corev1.Pod, error) {
+// CreatePod 创建Pod
+func (p *podManager) CreatePod(ctx context.Context, clusterID int, namespace string, pod *corev1.Pod) (*corev1.Pod, error) {
+	if pod == nil {
+		return nil, fmt.Errorf("pod不能为空")
+	}
+
 	kubeClient, err := p.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
 
-	createdPod, err := kubeClient.CoreV1().Pods(pod.Namespace).Create(ctx, pod, metav1.CreateOptions{})
-	if err != nil {
-		p.logger.Error("创建 Pod 失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", pod.Namespace),
-			zap.String("name", pod.Name),
-			zap.Error(err))
-		return nil, fmt.Errorf("创建 Pod 失败: %w", err)
+	// 如果pod对象中没有指定namespace，使用参数中的namespace
+	targetNamespace := pod.Namespace
+	if targetNamespace == "" {
+		targetNamespace = namespace
+		pod.Namespace = namespace
 	}
 
-	p.logger.Info("成功创建 Pod",
+	createdPod, err := kubeClient.CoreV1().Pods(targetNamespace).Create(ctx, pod, metav1.CreateOptions{})
+	if err != nil {
+		p.logger.Error("创建Pod失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", targetNamespace),
+			zap.String("name", pod.Name),
+			zap.Error(err))
+		return nil, fmt.Errorf("创建Pod失败: %w", err)
+	}
+
+	p.logger.Info("成功创建Pod",
 		zap.Int("clusterID", clusterID),
-		zap.String("namespace", pod.Namespace),
+		zap.String("namespace", targetNamespace),
 		zap.String("name", pod.Name))
 	return createdPod, nil
 }
 
-// UpdatePod 更新 Pod
-func (p *podManager) UpdatePod(ctx context.Context, clusterID int, pod *corev1.Pod) (*corev1.Pod, error) {
+// UpdatePod 更新Pod
+func (p *podManager) UpdatePod(ctx context.Context, clusterID int, namespace string, pod *corev1.Pod) (*corev1.Pod, error) {
+	if pod == nil {
+		return nil, fmt.Errorf("pod不能为空")
+	}
+
 	kubeClient, err := p.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
 
-	updatedPod, err := kubeClient.CoreV1().Pods(pod.Namespace).Update(ctx, pod, metav1.UpdateOptions{})
+	updatedPod, err := kubeClient.CoreV1().Pods(namespace).Update(ctx, pod, metav1.UpdateOptions{})
 	if err != nil {
-		p.logger.Error("更新 Pod 失败",
+		p.logger.Error("更新Pod失败",
 			zap.Int("clusterID", clusterID),
-			zap.String("namespace", pod.Namespace),
+			zap.String("namespace", namespace),
 			zap.String("name", pod.Name),
 			zap.Error(err))
-		return nil, fmt.Errorf("更新 Pod 失败: %w", err)
+		return nil, fmt.Errorf("更新Pod失败: %w", err)
 	}
 
-	p.logger.Info("成功更新 Pod",
+	p.logger.Info("成功更新Pod",
 		zap.Int("clusterID", clusterID),
-		zap.String("namespace", pod.Namespace),
+		zap.String("namespace", namespace),
 		zap.String("name", pod.Name))
 	return updatedPod, nil
-}
-
-func (p *podManager) filterPodFunc(object runtime.Object, filter query.Filter) bool {
-	pod, ok := object.(*corev1.Pod)
-	if !ok {
-		return false
-	}
-	switch filter.Field {
-	case query.FieldStatus:
-		return strings.EqualFold(utils.PodStatus(pod), string(filter.Value))
-	case query.FieldSearch:
-		return strings.Contains(pod.Name, string(filter.Value))
-	default:
-		return query.DefaultObjectMetaFilter(pod.ObjectMeta, filter)
-	}
-}
-
-func (p *podManager) sortPodFunc(left runtime.Object, right runtime.Object, field query.Field) bool {
-	leftPod, ok := left.(*corev1.Pod)
-	if !ok {
-		return false
-	}
-	rightPod, ok := right.(*corev1.Pod)
-	if !ok {
-		return false
-	}
-
-	return query.DefaultObjectMetaCompare(leftPod.ObjectMeta, rightPod.ObjectMeta, field)
 }
 
 type fileWithHeader struct {

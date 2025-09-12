@@ -83,6 +83,7 @@ func InitGinServer(
 	treeLocalHdl *resourceApi.TreeLocalHandler,
 	notificationHdl *workorderApi.NotificationHandler,
 	ingressHdl *k8sApi.K8sIngressHandler,
+	k8sPodHdl *k8sApi.K8sPodHandler,
 ) *gin.Engine {
 	server := gin.Default()
 	server.Use(m...)
@@ -128,5 +129,6 @@ func InitGinServer(
 	treeLocalHdl.RegisterRouters(server)
 	notificationHdl.RegisterRouters(server)
 	ingressHdl.RegisterRouters(server)
+	k8sPodHdl.RegisterRouters(server)
 	return server
 }

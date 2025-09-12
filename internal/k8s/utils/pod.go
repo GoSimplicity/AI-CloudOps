@@ -592,22 +592,3 @@ func BuildPodFromRequest(req *model.CreatePodReq) (*corev1.Pod, error) {
 
 	return pod, nil
 }
-
-// BuildPodFromYaml 从YAML构建Pod对象
-func BuildPodFromYaml(req *model.UpdatePodReq) (*corev1.Pod, error) {
-	if req == nil {
-		return nil, fmt.Errorf("请求不能为空")
-	}
-
-	// 这里简化处理，实际应该基于当前Pod的状态进行更新
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        req.Name,
-			Namespace:   req.Namespace,
-			Labels:      req.Labels,
-			Annotations: req.Annotations,
-		},
-	}
-
-	return pod, nil
-}
