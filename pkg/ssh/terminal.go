@@ -117,12 +117,12 @@ func (c *client) WebTerminal(userID int, conn *websocket.Conn) error {
 	if session == nil {
 		// 尝试创建新会话
 		if err := c.CreateSession(userID); err != nil {
-			errMsg := fmt.Sprintf("创建SSH会话失败: %v", err)
-			c.logger.Error(errMsg, zap.Int("用户ID", userID))
-			if writeErr := conn.WriteMessage(websocket.TextMessage, []byte(errMsg+"\r\n")); writeErr != nil {
+			errMsg := "创建SSH会话失败"
+			c.logger.Error(errMsg, zap.Int("用户ID", userID), zap.Error(err))
+			if writeErr := conn.WriteMessage(websocket.TextMessage, []byte(errMsg+": "+err.Error()+"\r\n")); writeErr != nil {
 				c.logger.Error("向WebSocket发送错误消息失败", zap.Error(writeErr))
 			}
-			return err
+			return fmt.Errorf("%s: %w", errMsg, err)
 		}
 		session = c.GetSession(userID)
 	}
@@ -133,7 +133,7 @@ func (c *client) WebTerminal(userID int, conn *websocket.Conn) error {
 		if writeErr := conn.WriteMessage(websocket.TextMessage, []byte("错误: "+errMsg+"\r\n")); writeErr != nil {
 			c.logger.Error("向WebSocket发送错误消息失败", zap.Error(writeErr))
 		}
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 
 	// 配置伪终端模式
@@ -145,12 +145,12 @@ func (c *client) WebTerminal(userID int, conn *websocket.Conn) error {
 
 	// 请求伪终端（PTY）
 	if err := session.RequestPty("xterm", 25, 80, modes); err != nil {
-		errMsg := fmt.Sprintf("请求伪终端失败: %v", err)
+		errMsg := "请求伪终端失败"
 		c.logger.Error(errMsg, zap.Error(err))
 		if writeErr := conn.WriteMessage(websocket.TextMessage, []byte("错误: 无法创建终端\r\n")); writeErr != nil {
 			c.logger.Error("向WebSocket发送错误消息失败", zap.Error(writeErr))
 		}
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s: %w", errMsg, err)
 	}
 
 	// 创建终端读写器
@@ -164,12 +164,12 @@ func (c *client) WebTerminal(userID int, conn *websocket.Conn) error {
 
 	// 启动交互式Shell
 	if err := session.Shell(); err != nil {
-		errMsg := fmt.Sprintf("启动Shell失败: %v", err)
+		errMsg := "启动Shell失败"
 		c.logger.Error(errMsg, zap.Error(err))
 		if writeErr := conn.WriteMessage(websocket.TextMessage, []byte("错误: 无法启动Shell\r\n")); writeErr != nil {
 			c.logger.Error("向WebSocket发送错误消息失败", zap.Error(writeErr))
 		}
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s: %w", errMsg, err)
 	}
 
 	c.logger.Info("Web终端SSH会话已启动", zap.Int("用户ID", userID))
