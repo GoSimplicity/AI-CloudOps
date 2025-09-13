@@ -33,7 +33,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// 预定义跳过权限校验的路径
+// 跳过权限校验的路径
 var skipAuthPaths = map[string]bool{
 	"/api/user/login":         true,
 	"/api/user/logout":        true,
@@ -44,9 +44,10 @@ var skipAuthPaths = map[string]bool{
 	"/favicon.ico":            true,
 }
 
-// 预定义静态资源和WebSocket路径前缀
+// 静态资源和WebSocket路径前缀
 var skipPrefixes = []string{
 	"/api/ai/chat/ws",
+	"/api/tree/local/terminal",
 }
 
 // HTTP方法映射
@@ -67,7 +68,7 @@ func NewAuthMiddleware(roleService service.RoleService) *AuthMiddleware {
 	}
 }
 
-// 检查路径是否以指定前缀开头
+// 检查路径前缀
 func hasPrefix(path string, prefixes []string) bool {
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(path, prefix) {
@@ -77,9 +78,9 @@ func hasPrefix(path string, prefixes []string) bool {
 	return false
 }
 
-// 检查API路径是否匹配通配符路径
+// 检查通配符路径匹配
 func matchWildcardPath(apiPath, requestPath string, methodCode int8, apiMethod int8) bool {
-	// 如果API方法不匹配请求方法，则不匹配
+	// 方法不匹配则返回false
 	if apiMethod != methodCode {
 		return false
 	}
@@ -89,29 +90,29 @@ func matchWildcardPath(apiPath, requestPath string, methodCode int8, apiMethod i
 		return true
 	}
 
-	// 全局通配符 /* 匹配所有路径
+	// 全局通配符匹配所有路径
 	if apiPath == "/*" {
 		return true
 	}
 
-	// 不包含通配符，无需进一步检查
+	// 不包含通配符直接返回
 	if !strings.Contains(apiPath, "*") {
 		return false
 	}
 
-	// 处理末尾是*的情况，如/api/user/*
+	// 末尾通配符：/api/user/*
 	if strings.HasSuffix(apiPath, "*") {
 		prefix := strings.TrimSuffix(apiPath, "*")
 		return strings.HasPrefix(requestPath, prefix)
 	}
 
-	// 处理开头是*的情况，如*/logs
+	// 开头通配符：*/logs
 	if strings.HasPrefix(apiPath, "*") {
 		suffix := strings.TrimPrefix(apiPath, "*")
 		return strings.HasSuffix(requestPath, suffix)
 	}
 
-	// 处理中间带*的情况，如/api/*/logs
+	// 中间通配符：/api/*/logs
 	if strings.Count(apiPath, "*") == 1 {
 		parts := strings.Split(apiPath, "*")
 		return strings.HasPrefix(requestPath, parts[0]) && strings.HasSuffix(requestPath, parts[1])
@@ -124,28 +125,28 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
 
-		// 快速检查是否需要跳过权限校验
+		// 检查是否跳过权限校验
 		if skipAuthPaths[path] {
 			c.Next()
 			return
 		}
 
-		// 跳过swagger
+		// 跳过swagger文档
 		if strings.HasPrefix(path, "/swagger/") {
 			c.Next()
 			return
 		}
 
 		// 跳过静态资源和WebSocket路径
-		if path == "/" || hasPrefix(path, skipPrefixes) {
+		if path == "/" || hasPrefix(path, skipPrefixes) || strings.Contains(path, "/exec") {
 			c.Next()
 			return
 		}
 
-		// 兼容nginx代理后端，部分请求头丢失导致 user 取不到
+		// 获取用户信息（兼容nginx代理）
 		userVal, exists := c.Get("user")
 		if !exists {
-			// 兼容未登录时直接放行登录、注册等接口
+			// 兼容未登录时放行登录接口
 			if skipAuthPaths[path] {
 				c.Next()
 				return
@@ -161,13 +162,13 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 			return
 		}
 
-		// 管理员直接放行
+		// 管理员放行
 		if user.Username == "admin" {
 			c.Next()
 			return
 		}
 
-		// 服务账号直接放行
+		// 服务账号放行
 		if user.AccountType == 2 {
 			c.Next()
 			return
@@ -190,14 +191,14 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 			return
 		}
 
-		// 检查用户是否有权限访问当前API
+		// 检查权限
 		for _, role := range roles.Items {
-			// 跳过禁用的角色
+			// 跳过禁用角色
 			if role.Status != 1 {
 				continue
 			}
 
-			// 检查角色是否有权限访问当前API
+			// 检查API权限
 			for _, api := range role.Apis {
 				if matchWildcardPath(api.Path, path, methodCode, api.Method) {
 					c.Next()
@@ -206,7 +207,7 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 			}
 		}
 
-		// 没有找到匹配的权限
+		// 无权限访问
 		utils.ForbiddenError(c, "无权限访问该接口")
 		c.Abort()
 	}

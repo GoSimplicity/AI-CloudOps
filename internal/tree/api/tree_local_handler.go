@@ -28,20 +28,26 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/ssh"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/websocket"
 	"github.com/gin-gonic/gin"
 )
 
 type TreeLocalHandler struct {
-	service service.TreeLocalService
-	ssh     ssh.EcsSSH
+	service   service.TreeLocalService
+	sshClient ssh.Client
+	wsManager websocket.Manager
 }
 
-func NewTreeLocalHandler(service service.TreeLocalService, ssh ssh.EcsSSH) *TreeLocalHandler {
+func NewTreeLocalHandler(service service.TreeLocalService, sshClient ssh.Client) *TreeLocalHandler {
+	// 初始化WebSocket管理器
+	wsManager := websocket.NewManager(nil, nil)
+
 	return &TreeLocalHandler{
-		service: service,
-		ssh:     ssh,
+		service:   service,
+		sshClient: sshClient,
+		wsManager: wsManager,
 	}
 }
 
@@ -59,7 +65,7 @@ func (h *TreeLocalHandler) RegisterRouters(server *gin.Engine) {
 	}
 }
 
-// GetTreeLocalList 获取树节点列表
+// GetTreeLocalList 获取本地资源列表
 func (h *TreeLocalHandler) GetTreeLocalList(ctx *gin.Context) {
 	var req model.GetTreeLocalResourceListReq
 
@@ -144,7 +150,6 @@ func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
 	}
 
 	uc := ctx.MustGet("user").(utils.UserClaims)
-
 	req.ID = id
 
 	ld, err := h.service.GetTreeLocalForConnection(ctx, &req)
@@ -153,33 +158,42 @@ func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
 		return
 	}
 
-	// 升级 websocket 连接
-	ws, err := utils.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, "升级 websocket 连接失败: "+err.Error())
-		return
-	}
-
 	defer func() {
-		err := ws.Close()
-		if err != nil {
-			utils.ErrorWithMessage(ctx, "关闭 websocket 连接失败: "+err.Error())
-			return
-		}
-		err = h.ssh.Close()
-		if err != nil {
-			utils.ErrorWithMessage(ctx, "关闭 ssh 连接失败: "+err.Error())
-			return
+		if closeErr := h.sshClient.Close(); closeErr != nil {
+			utils.ErrorWithMessage(ctx, "关闭SSH连接失败: "+closeErr.Error())
 		}
 	}()
 
-	err = h.ssh.Connect(ld.IpAddr, ld.Port, ld.Username, ld.Password, ld.Key, int8(ld.AuthMode), uc.Uid)
-	if err != nil {
-		utils.ErrorWithMessage(ctx, "连接ECS实例失败: "+err.Error())
+	// 配置SSH连接
+	sshConfig := &ssh.Config{
+		Host:     ld.IpAddr,
+		Port:     ld.Port,
+		Username: ld.Username,
+		Password: ld.Password,
+		Key:      ld.Key,
+		Mode:     ssh.AuthMode(ld.AuthMode),
+		Timeout:  10,
+	}
+
+	// 建立SSH连接
+	if err := h.sshClient.Connect(sshConfig); err != nil {
+		utils.ErrorWithMessage(ctx, "连接SSH失败: "+err.Error())
 		return
 	}
-	// 进行 web-ssh 命令通信
-	h.ssh.Web2SSH(ws)
+
+	// 升级WebSocket连接
+	ws, err := utils.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, "升级WebSocket连接失败: "+err.Error())
+		return
+	}
+	defer ws.Close()
+
+	// 启动终端会话
+	if err := h.sshClient.WebTerminal(uc.Uid, ws); err != nil {
+		utils.ErrorWithMessage(ctx, "启动Web终端失败: "+err.Error())
+		return
+	}
 }
 
 // BindTreeLocal 绑定本地资源

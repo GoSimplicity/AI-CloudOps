@@ -49,21 +49,21 @@ func NewK8sPodHandler(podService service.PodService) *K8sPodHandler {
 func (k *K8sPodHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		// Pod基础管理
-		k8sGroup.GET("/pod/:cluster_id/list", k.GetPodList)                                                       // 获取Pod列表
-		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/detail", k.GetPodDetails)                                 // 获取Pod详情
-		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/detail/yaml", k.GetPodYaml)                               // 获取Pod YAML
-		k8sGroup.POST("/pod/:cluster_id/create", k.CreatePod)                                                     // 创建Pod
-		k8sGroup.POST("/pod/:cluster_id/create/yaml", k.CreatePodByYaml)                                          // 通过YAML创建Pod
-		k8sGroup.PUT("/pod/:cluster_id/:namespace/:name/update", k.UpdatePod)                                     // 更新Pod
-		k8sGroup.PUT("/pod/:cluster_id/:namespace/:name/update/yaml", k.UpdatePodByYaml)                          // 通过YAML更新Pod
-		k8sGroup.DELETE("/pod/:cluster_id/:namespace/:name/delete", k.DeletePod)                                  // 删除Pod
-		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/containers", k.GetPodContainers)                          // 获取Pod容器列表
-		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/containers/:container/logs", k.GetPodLogs)                // 获取容器日志
-		k8sGroup.POST("/pod/:cluster_id/:namespace/:name/containers/:container/exec", k.PodExec)                  // Pod执行命令
-		k8sGroup.POST("/pod/:cluster_id/:namespace/:name/port-forward", k.PodPortForward)                         // Pod端口转发
-		k8sGroup.POST("/pod/:cluster_id/:namespace/:name/containers/:container/files/upload", k.PodFileUpload)    // Pod文件上传
-		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/containers/:container/files/download", k.PodFileDownload) // Pod文件下载
+		// Pod相关接口
+		k8sGroup.GET("/pod/:cluster_id/list", k.GetPodList)
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/detail", k.GetPodDetails)
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/detail/yaml", k.GetPodYaml)
+		k8sGroup.POST("/pod/:cluster_id/create", k.CreatePod)
+		k8sGroup.POST("/pod/:cluster_id/create/yaml", k.CreatePodByYaml)
+		k8sGroup.PUT("/pod/:cluster_id/:namespace/:name/update", k.UpdatePod)
+		k8sGroup.PUT("/pod/:cluster_id/:namespace/:name/update/yaml", k.UpdatePodByYaml)
+		k8sGroup.DELETE("/pod/:cluster_id/:namespace/:name/delete", k.DeletePod)
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/containers", k.GetPodContainers)
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/containers/:container/logs", k.GetPodLogs)
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/containers/:container/exec", k.PodExec)
+		k8sGroup.POST("/pod/:cluster_id/:namespace/:name/port-forward", k.PodPortForward)
+		k8sGroup.POST("/pod/:cluster_id/:namespace/:name/containers/:container/files/upload", k.PodFileUpload)
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/containers/:container/files/download", k.PodFileDownload)
 	}
 }
 
@@ -115,13 +115,13 @@ func (k *K8sPodHandler) GetPodList(ctx *gin.Context) {
 	})
 }
 
-// GetPodContainers 获取Pod的容器列表
+// GetPodContainers 获取Pod容器列表
 func (k *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
 	var req model.GetPodContainersReq
 
-	// 绑定URL路径参数
+	// 绑定路径参数
 	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(ctx, "URL参数绑定失败: "+err.Error())
+		utils.BadRequestError(ctx, "参数绑定失败: "+err.Error())
 		return
 	}
 
@@ -130,17 +130,17 @@ func (k *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
 	})
 }
 
-// GetPodLogs 获取容器日志 - SSE流式推送
+// GetPodLogs 获取容器日志
 func (k *K8sPodHandler) GetPodLogs(ctx *gin.Context) {
 	var req model.GetPodLogsReq
 
-	// 绑定URL路径参数
+	// 绑定路径参数
 	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(ctx, "URL参数绑定失败: "+err.Error())
+		utils.BadRequestError(ctx, "参数绑定失败: "+err.Error())
 		return
 	}
 
-	// 绑定查询参数（日志选项）
+	// 绑定查询参数
 	if err := ctx.ShouldBindQuery(&req); err != nil {
 		utils.BadRequestError(ctx, "查询参数绑定失败: "+err.Error())
 		return
@@ -153,7 +153,7 @@ func (k *K8sPodHandler) GetPodLogs(ctx *gin.Context) {
 	ctx.Header("Access-Control-Allow-Origin", "*")
 	ctx.Header("Access-Control-Allow-Headers", "Cache-Control")
 
-	// 直接调用service层进行SSE流式推送
+	// 调用service层进行流式推送
 	if err := k.podService.GetPodLogs(ctx, &req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -318,11 +318,11 @@ func (k *K8sPodHandler) DeletePod(ctx *gin.Context) {
 	})
 }
 
-// PodExec Pod执行命令 - WebSocket连接
+// PodExec Pod终端连接
 func (k *K8sPodHandler) PodExec(ctx *gin.Context) {
 	var req model.PodExecReq
 
-	// 从URL路径参数获取基本信息
+	// 获取路径参数
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
 		utils.BadRequestError(ctx, "集群ID参数错误: "+err.Error())
@@ -347,7 +347,7 @@ func (k *K8sPodHandler) PodExec(ctx *gin.Context) {
 		return
 	}
 
-	// 从查询参数获取shell类型（可选）
+	// 获取shell类型
 	shell := ctx.DefaultQuery("shell", "sh")
 
 	// 参数验证
@@ -391,7 +391,7 @@ func (k *K8sPodHandler) PodExec(ctx *gin.Context) {
 	req.Container = container
 	req.Shell = shell
 
-	// 对于WebSocket连接，直接调用service，不使用HandleRequest
+	// 建立WebSocket连接
 	if err := k.podService.PodExec(ctx, &req); err != nil {
 		utils.BadRequestError(ctx, "建立终端连接失败: "+err.Error())
 		return
@@ -429,11 +429,11 @@ func (k *K8sPodHandler) PodPortForward(ctx *gin.Context) {
 	})
 }
 
-// PodFileUpload Pod文件上传
+// PodFileUpload 上传文件到Pod
 func (k *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
 	var req model.PodFileUploadReq
 
-	// 从URL路径参数获取基本信息
+	// 获取路径参数
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
 		utils.BadRequestError(ctx, "集群ID参数错误: "+err.Error())
@@ -458,7 +458,7 @@ func (k *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
 		return
 	}
 
-	// 从表单参数获取目标路径
+	// 获取目标路径
 	filePath := ctx.DefaultPostForm("file_path", "/tmp")
 
 	// 参数验证
@@ -512,7 +512,7 @@ func (k *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
 	req.ContainerName = container
 	req.FilePath = filePath
 
-	// 对于文件上传，直接调用service，不使用HandleRequest包装
+	// 调用文件上传服务
 	if err := k.podService.PodFileUpload(ctx, &req); err != nil {
 		utils.BadRequestError(ctx, "文件上传失败: "+err.Error())
 		return
@@ -521,11 +521,11 @@ func (k *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
 	utils.Success(ctx)
 }
 
-// PodFileDownload Pod文件下载
+// PodFileDownload 从Pod下载文件
 func (k *K8sPodHandler) PodFileDownload(ctx *gin.Context) {
 	var req model.PodFileDownloadReq
 
-	// 从URL路径参数获取基本信息
+	// 获取路径参数
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
 		utils.BadRequestError(ctx, "集群ID参数错误: "+err.Error())
@@ -550,7 +550,7 @@ func (k *K8sPodHandler) PodFileDownload(ctx *gin.Context) {
 		return
 	}
 
-	// 从查询参数获取文件路径
+	// 获取文件路径
 	filePath := ctx.Query("file_path")
 
 	// 参数验证
@@ -591,14 +591,14 @@ func (k *K8sPodHandler) PodFileDownload(ctx *gin.Context) {
 	req.ContainerName = container
 	req.FilePath = filePath
 
-	// 对于文件下载，直接调用service，不使用HandleRequest包装
+	// 调用文件下载服务
 	if err := k.podService.PodFileDownload(ctx, &req); err != nil {
 		utils.BadRequestError(ctx, "文件下载失败: "+err.Error())
 		return
 	}
 }
 
-// isValidPath 验证文件路径是否安全和有效
+// isValidPath 验证文件路径安全性
 func isValidPath(path string) bool {
 	if path == "" {
 		return false
@@ -607,26 +607,11 @@ func isValidPath(path string) bool {
 	// 清理路径
 	cleanPath := filepath.Clean(path)
 
-	// 检查危险的路径模式
+	// 只检查最关键的安全问题
 	dangerousPatterns := []string{
 		"..",   // 路径遍历
-		"~",    // 用户主目录
-		"$",    // 环境变量
-		"`",    // 命令替换
-		";",    // 命令分隔符
-		"|",    // 管道
-		"&",    // 后台运行
-		">",    // 重定向
-		"<",    // 重定向
-		"*",    // 通配符
-		"?",    // 通配符
-		"[",    // 通配符
-		"]",    // 通配符
-		"{",    // 花括号展开
-		"}",    // 花括号展开
 		"\n",   // 换行符
 		"\r",   // 回车符
-		"\t",   // 制表符
 		"\x00", // 空字节
 	}
 
@@ -636,13 +621,13 @@ func isValidPath(path string) bool {
 		}
 	}
 
-	// 检查是否是绝对路径或相对路径
-	if !filepath.IsAbs(cleanPath) && !strings.HasPrefix(cleanPath, "./") && !strings.HasPrefix(cleanPath, "/") {
-		cleanPath = "/" + cleanPath
+	// 长度限制
+	if len(cleanPath) > 4096 {
+		return false
 	}
 
-	// 路径长度限制
-	if len(cleanPath) > 4096 {
+	// 拒绝以某些特殊字符开头的路径
+	if strings.HasPrefix(cleanPath, "~") {
 		return false
 	}
 

@@ -39,8 +39,8 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/sse"
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-	utilsStream "github.com/GoSimplicity/AI-CloudOps/pkg/utils/stream"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -67,12 +67,14 @@ type PodService interface {
 
 type podService struct {
 	podManager manager.PodManager
+	sseHandler sse.Handler
 	logger     *zap.Logger
 }
 
-func NewPodService(podManager manager.PodManager, logger *zap.Logger) PodService {
+func NewPodService(podManager manager.PodManager, sseHandler sse.Handler, logger *zap.Logger) PodService {
 	return &podService{
 		podManager: podManager,
+		sseHandler: sseHandler,
 		logger:     logger,
 	}
 }
@@ -145,8 +147,8 @@ func (p *podService) GetPodList(ctx context.Context, req *model.GetPodListReq) (
 	// 构建查询选项
 	listOptions := metav1.ListOptions{}
 	if req.Search != "" {
-		// 简单的名称匹配，更复杂的搜索可以在这里扩展
-		// 注意：Kubernetes标签选择器语法有限制，这里我们获取所有后进行过滤
+		// 简单名称匹配，复杂搜索可在此扩展
+		// 注意：K8s标签选择器语法有限制，先获取所有再过滤
 	}
 
 	k8sPods, err := p.podManager.GetPodList(ctx, req.ClusterID, namespace, listOptions)
@@ -158,14 +160,14 @@ func (p *podService) GetPodList(ctx context.Context, req *model.GetPodListReq) (
 		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("获取Pod列表失败: %w", err)
 	}
 
-	// 在Service层进行过滤
+	// 过滤Pod列表
 	var filteredPods []*model.K8sPod
 	for _, pod := range k8sPods {
-		// 按状态过滤
+		// 状态过滤
 		if req.Status != "" && pod.Status != req.Status {
 			continue
 		}
-		// 按名称搜索过滤
+		// 名称搜索
 		if req.Search != "" && !strings.Contains(pod.Name, req.Search) {
 			continue
 		}
@@ -179,7 +181,7 @@ func (p *podService) GetPodList(ctx context.Context, req *model.GetPodListReq) (
 		page = 1
 	}
 	if size <= 0 {
-		size = 10 // 默认每页显示10条
+		size = 10 // 默认每页10条
 	}
 
 	total := int64(len(filteredPods))
@@ -429,7 +431,7 @@ func (p *podService) GetPodContainers(ctx context.Context, req *model.GetPodCont
 
 	// 转换容器信息
 	containers := utils.ConvertPodContainers(pod)
-	// 转换为指针slice
+	// 转换为指针切片
 	result := make([]*model.PodContainer, len(containers))
 	for i := range containers {
 		result[i] = &containers[i]
@@ -480,19 +482,31 @@ func (p *podService) GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) erro
 
 	out, err := p.podManager.GetPodLogs(ctx, req.ClusterID, req.Namespace, req.PodName, logOptions)
 	if err != nil {
+		// 检查是否请求previous日志但容器未重启
+		if strings.Contains(err.Error(), "previous terminated container") &&
+			strings.Contains(err.Error(), "not found") {
+			return p.sseHandler.Stream(ctx, func(ctx context.Context, msgChan chan<- interface{}) {
+				// 发送友好提示
+				msgChan <- "该容器没有重启过，无法获取之前的日志。请取消 'Previous' 选项查看当前日志。"
+				p.logger.Info("容器没有previous日志",
+					zap.Int("clusterID", req.ClusterID),
+					zap.String("namespace", req.Namespace),
+					zap.String("podName", req.PodName))
+			})
+		}
 		return err
 	}
 
-	utilsStream.SseStream(ctx, func(ctx context.Context, msgChan chan interface{}) {
+	return p.sseHandler.Stream(ctx, func(ctx context.Context, msgChan chan<- interface{}) {
 		defer func() {
 			if err := out.Close(); err != nil {
-				// 检查是否是客户端断开连接导致的正常关闭错误
+				// 检查是否是客户端断开连接
 				if errors.Is(err, context.Canceled) ||
 					strings.Contains(err.Error(), "request canceled") ||
 					strings.Contains(err.Error(), "context cancellation") {
-					p.logger.Debug("Pod 日志流已正常关闭（客户端断开连接）", zap.Error(err))
+					p.logger.Debug("Pod日志流已正常关闭（客户端断开）", zap.Error(err))
 				} else {
-					p.logger.Error("关闭 Pod 日志流失败", zap.Error(err))
+					p.logger.Error("关闭Pod日志流失败", zap.Error(err))
 				}
 			}
 		}()
@@ -504,7 +518,7 @@ func (p *podService) GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) erro
 		for {
 			select {
 			case <-ctx.Done():
-				p.logger.Info("上下文已取消，停止读取 Pod 日志")
+				p.logger.Info("上下文已取消，停止读取Pod日志")
 				return
 			default:
 				line, err := reader.ReadString('\n')
@@ -514,41 +528,55 @@ func (p *podService) GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) erro
 						if len(line) > 0 {
 							msgChan <- line
 						}
-						p.logger.Info("Pod 日志流已结束")
-						return
+
+						// Follow模式不立即关闭连接
+						// EOF可能只是暂时无新日志，继续等待
+						if logOptions.Follow {
+							p.logger.Debug("Pod日志暂时无新内容，继续等待...")
+							// 短暂等待避免CPU密集循环
+							select {
+							case <-ctx.Done():
+								return
+							case <-time.After(time.Millisecond * 100):
+								continue
+							}
+						} else {
+							p.logger.Info("Pod日志流已结束")
+							return
+						}
 					}
 
-					// 检查是否是上下文取消或网络连接问题导致的错误
+					// 检查是否是上下文取消或网络问题
 					if errors.Is(err, context.Canceled) ||
 						errors.Is(err, context.DeadlineExceeded) ||
 						strings.Contains(err.Error(), "Client.Timeout") ||
 						strings.Contains(err.Error(), "context cancellation") ||
 						strings.Contains(err.Error(), "request canceled") {
-						p.logger.Info("客户端断开连接或请求超时，停止读取 Pod 日志")
+						p.logger.Info("客户端断开连接或请求超时，停止读取Pod日志")
 						return
 					}
 
-					// 检查网络连接错误
+					// 检查网络超时
 					var netErr net.Error
 					if errors.As(err, &netErr) && netErr.Timeout() {
-						p.logger.Info("网络超时，停止读取 Pod 日志")
+						p.logger.Info("网络超时，停止读取Pod日志")
 						return
 					}
 
 					retryCount++
 					if retryCount > maxRetries {
-						p.logger.Error("读取 Pod 日志失败，已达到最大重试次数",
+						p.logger.Error("读取Pod日志失败，已达到最大重试次数",
 							zap.Error(err),
 							zap.Int("retryCount", retryCount))
 						return
 					}
 
-					p.logger.Warn("读取 Pod 日志失败，将重试",
+					p.logger.Warn("读取Pod日志失败，将重试",
 						zap.Error(err),
 						zap.Int("retryCount", retryCount),
 						zap.Int("maxRetries", maxRetries))
 
-					// 短暂等待后重试，避免连续失败
+					// 短暂等待后重试
 					select {
 					case <-ctx.Done():
 						return
@@ -557,10 +585,10 @@ func (p *podService) GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) erro
 					}
 				}
 
-				// 重置重试计数器，因为成功读取了一行
+				// 重置重试计数器
 				retryCount = 0
 
-				// 处理 \r 覆盖输出
+				// 处理回车符覆盖输出
 				if strings.ContainsRune(line, '\r') {
 					segments := strings.Split(line, "\r")
 					for _, seg := range segments {
@@ -574,15 +602,13 @@ func (p *podService) GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) erro
 				}
 			}
 		}
-	}, p.logger)
-
-	return nil
+	})
 }
 
-// PodExec Pod命令执行
+// PodExec Pod终端执行
 func (p *podService) PodExec(ctx *gin.Context, req *model.PodExecReq) error {
 	if req == nil {
-		return fmt.Errorf("Pod命令执行请求不能为空")
+		return fmt.Errorf("Pod终端执行请求不能为空")
 	}
 
 	if req.ClusterID <= 0 {
@@ -600,7 +626,7 @@ func (p *podService) PodExec(ctx *gin.Context, req *model.PodExecReq) error {
 	conn, err := pkg.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
 		p.logger.Error("升级ws失败", zap.Error(err))
-		return fmt.Errorf("初始化ws失败: %w", err)
+		return fmt.Errorf("初始化WebSocket失败: %w", err)
 	}
 
 	return p.podManager.PodTerminalSession(ctx, req.ClusterID, req.Namespace, req.PodName, req.Container, req.Shell, conn)
@@ -624,9 +650,22 @@ func (p *podService) PodPortForward(ctx context.Context, req *model.PodPortForwa
 		return fmt.Errorf("Pod名称不能为空")
 	}
 
-	// 端口转发功能应该完全由Manager层处理
-	// 这里应该将端口转发逻辑移到Manager层
-	return fmt.Errorf("端口转发功能暂未实现，应在Manager层实现")
+	if len(req.Ports) == 0 {
+		return fmt.Errorf("端口转发配置不能为空")
+	}
+
+	// 验证端口范围
+	for _, port := range req.Ports {
+		if port.LocalPort <= 0 || port.LocalPort > 65535 {
+			return fmt.Errorf("本地端口范围无效: %d", port.LocalPort)
+		}
+		if port.RemotePort <= 0 || port.RemotePort > 65535 {
+			return fmt.Errorf("远程端口范围无效: %d", port.RemotePort)
+		}
+	}
+
+	// 调用Manager层进行端口转发
+	return p.podManager.PodPortForward(ctx, req.ClusterID, req.Namespace, req.PodName, req.Ports)
 }
 
 // PodFileUpload 上传文件到Pod
@@ -717,8 +756,9 @@ func (p *podService) PodFileDownload(ctx *gin.Context, req *model.PodFileDownloa
 		zap.String("containerName", req.ContainerName),
 		zap.String("filePath", req.FilePath))
 
+	// 生成文件名
 	fileName := filepath.Base(req.FilePath)
-	if fileName == "." || fileName == "/" {
+	if fileName == "." || fileName == "/" || fileName == "" {
 		fileName = "download"
 	}
 
@@ -729,6 +769,7 @@ func (p *podService) PodFileDownload(ctx *gin.Context, req *model.PodFileDownloa
 	ctx.Header("Pragma", "no-cache")
 	ctx.Header("Expires", "0")
 
+	// 创建文件流
 	reader, err := p.podManager.DownloadPodFile(ctx.Request.Context(), req.ClusterID, req.Namespace, req.PodName, req.ContainerName, req.FilePath)
 	if err != nil {
 		p.logger.Error("创建Pod文件流失败",
@@ -738,7 +779,7 @@ func (p *podService) PodFileDownload(ctx *gin.Context, req *model.PodFileDownloa
 			zap.String("podName", req.PodName),
 			zap.String("containerName", req.ContainerName),
 			zap.String("filePath", req.FilePath))
-		return fmt.Errorf("无法创建 Pod 文件流: %w", err)
+		return fmt.Errorf("无法创建Pod文件流: %w", err)
 	}
 	defer func() {
 		if closeErr := reader.Close(); closeErr != nil {
@@ -746,13 +787,13 @@ func (p *podService) PodFileDownload(ctx *gin.Context, req *model.PodFileDownloa
 		}
 	}()
 
-	// 把流复制到响应
+	// 直接使用io.Copy进行高效复制
 	bytesWritten, err := io.Copy(ctx.Writer, reader)
 	if err != nil {
-		p.logger.Error("文件下载过程中出错",
+		p.logger.Error("文件传输失败",
 			zap.Error(err),
 			zap.Int64("bytesWritten", bytesWritten))
-		return fmt.Errorf("下载文件过程中发生错误: %w", err)
+		return fmt.Errorf("文件传输失败: %w", err)
 	}
 
 	p.logger.Info("成功下载文件从Pod",
@@ -766,7 +807,7 @@ func (p *podService) PodFileDownload(ctx *gin.Context, req *model.PodFileDownloa
 	return nil
 }
 
-// buildPortsSpec 构建端口映射规范
+// buildPortsSpec 构建端口映射
 func (p *podService) buildPortsSpec(ports []model.PodPortForwardPort) []string {
 	specs := make([]string, len(ports))
 	for i, port := range ports {

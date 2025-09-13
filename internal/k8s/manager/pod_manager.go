@@ -52,10 +52,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/client-go/transport/spdy"
 	"k8s.io/kubectl/pkg/scheme"
 )
 
-// PodManager Pod资源管理器接口
 type PodManager interface {
 	CreatePod(ctx context.Context, clusterID int, namespace string, pod *corev1.Pod) (*corev1.Pod, error)
 	GetPod(ctx context.Context, clusterID int, namespace, name string) (*corev1.Pod, error)
@@ -68,16 +68,15 @@ type PodManager interface {
 	PodTerminalSession(ctx context.Context, clusterID int, namespace, pod, container, shell string, conn *websocket.Conn) error
 	UploadFileToPod(ctx *gin.Context, clusterID int, namespace, pod, container, filePath string) error
 	PortForward(ctx context.Context, ports []string, dialer httpstream.Dialer) error
+	PodPortForward(ctx context.Context, clusterID int, namespace, podName string, ports []model.PodPortForwardPort) error
 	DownloadPodFile(ctx context.Context, clusterID int, namespace, pod, container, filePath string) (*k8sutils.PodFileStreamPipe, error)
 }
 
-// podManager Pod资源管理器实现
 type podManager struct {
 	clientFactory client.K8sClient
 	logger        *zap.Logger
 }
 
-// NewPodManager 创建新的Pod管理器实例
 func NewPodManager(clientFactory client.K8sClient, logger *zap.Logger) PodManager {
 	return &podManager{
 		clientFactory: clientFactory,
@@ -85,7 +84,7 @@ func NewPodManager(clientFactory client.K8sClient, logger *zap.Logger) PodManage
 	}
 }
 
-// getKubeClient 私有方法：获取Kubernetes客户端
+// getKubeClient 获取Kubernetes客户端
 func (p *podManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
 	kubeClient, err := p.clientFactory.GetKubeClient(clusterID)
 	if err != nil {
@@ -499,6 +498,90 @@ func (p *podManager) PortForward(ctx context.Context, ports []string, dialer htt
 	}()
 	// 等待就绪
 	<-readyChan
+	return nil
+}
+
+// PodPortForward Pod端口转发
+func (p *podManager) PodPortForward(ctx context.Context, clusterID int, namespace, podName string, ports []model.PodPortForwardPort) error {
+	if len(ports) == 0 {
+		return fmt.Errorf("端口转发配置不能为空")
+	}
+
+	// 获取Kubernetes客户端和配置
+	kubeClient, err := p.getKubeClient(clusterID)
+	if err != nil {
+		p.logger.Error("获取Kubernetes客户端失败",
+			zap.Error(err),
+			zap.Int("clusterID", clusterID))
+		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	}
+
+	restConfig, err := p.clientFactory.GetRestConfig(clusterID)
+	if err != nil {
+		p.logger.Error("获取集群配置失败",
+			zap.Error(err),
+			zap.Int("clusterID", clusterID))
+		return fmt.Errorf("获取集群配置失败: %w", err)
+	}
+
+	// 验证Pod是否存在
+	pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		p.logger.Error("获取Pod失败",
+			zap.Error(err),
+			zap.String("namespace", namespace),
+			zap.String("podName", podName))
+		return fmt.Errorf("获取Pod失败: %w", err)
+	}
+
+	if pod.Status.Phase != corev1.PodRunning {
+		return fmt.Errorf("Pod状态不是Running，当前状态: %s", pod.Status.Phase)
+	}
+
+	// 构建端口转发URL
+	req := kubeClient.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Namespace(namespace).
+		Name(podName).
+		SubResource("portforward")
+
+	// 创建SPDY升级器和拨号器
+	transport, upgrader, err := spdy.RoundTripperFor(restConfig)
+	if err != nil {
+		p.logger.Error("创建SPDY升级器失败",
+			zap.Error(err))
+		return fmt.Errorf("创建SPDY升级器失败: %w", err)
+	}
+
+	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, req.URL())
+
+	// 构建端口映射字符串
+	portSpecs := make([]string, len(ports))
+	for i, port := range ports {
+		portSpecs[i] = fmt.Sprintf("%d:%d", port.LocalPort, port.RemotePort)
+	}
+
+	p.logger.Info("开始端口转发",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("podName", podName),
+		zap.Strings("ports", portSpecs))
+
+	// 调用底层端口转发方法
+	err = p.PortForward(ctx, portSpecs, dialer)
+	if err != nil {
+		p.logger.Error("端口转发失败",
+			zap.Error(err),
+			zap.Strings("ports", portSpecs))
+		return fmt.Errorf("端口转发失败: %w", err)
+	}
+
+	p.logger.Info("端口转发成功建立",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("podName", podName),
+		zap.Strings("ports", portSpecs))
+
 	return nil
 }
 

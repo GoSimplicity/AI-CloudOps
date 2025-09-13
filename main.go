@@ -41,7 +41,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/pkg/di"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/fatih/color"
-	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -52,49 +51,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
-
-// @title           AI-CloudOps API
-// @version         1.0
-// @description     AI-CloudOps云原生运维平台API文档
-// @termsOfService  http://swagger.io/terms/
-
-// @contact.name   Bamboo Team
-// @contact.url    https://github.com/GoSimplicity/AI-CloudOps
-// @contact.email  support@example.com
-
-// @license.name  MIT
-// @license.url   https://opensource.org/licenses/MIT
-
-// @host      localhost:8889
-// @BasePath  /
-
-// @securityDefinitions.apikey  BearerAuth
-// @in                          header
-// @name                        Authorization
-// @description					Bearer Token认证
-
-// 检查环境变量是否为true
-func isEnvTrue(key string) bool {
-	value := strings.ToLower(os.Getenv(key))
-	return value == "true" || value == "1" || value == "yes" || value == "y" || value == "on"
-}
-
-// 检查是否应该启用Swagger
-func shouldEnableSwagger() bool {
-	// 优先检查环境变量
-	if swaggerEnabled := os.Getenv("SWAGGER_ENABLED"); swaggerEnabled != "" {
-		return isEnvTrue("SWAGGER_ENABLED")
-	}
-
-	// 检查配置文件
-	if viper.IsSet("swagger.enabled") {
-		return viper.GetBool("swagger.enabled")
-	}
-
-	// 默认情况下，开发环境启用，生产环境禁用
-	env := strings.ToLower(os.Getenv("GIN_MODE"))
-	return env != "release" && env != "production"
-}
 
 func main() {
 	if err := run(); err != nil {
@@ -127,14 +83,24 @@ func run() error {
 		}
 	}
 
-	// 中间件
-	cmd.Server.Use(cors.Default())
+	// 中间件 (依赖注入系统已经配置了CORS，这里只添加gzip)
 	cmd.Server.Use(gzip.Gzip(gzip.BestCompression))
 
 	cmd.Server.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "AI-CloudOps API 服务运行中",
 			"status":  "running",
+		})
+	})
+
+	// 添加测试路由
+	cmd.Server.POST("/api/v1/debug/test", func(c *gin.Context) {
+		log.Printf("DEBUG: 收到测试请求 - Method: %s, Path: %s", c.Request.Method, c.Request.URL.Path)
+		c.JSON(http.StatusOK, gin.H{
+			"message": "测试请求收到",
+			"method":  c.Request.Method,
+			"path":    c.Request.URL.Path,
+			"time":    time.Now(),
 		})
 	})
 
@@ -270,4 +236,26 @@ func showBootInfo(port string) {
 		fmt.Printf("%s  ", color.New(color.Bold).Sprint("Network:"))
 		fmt.Printf("%s\n", color.MagentaString("http://%s:%s/", ip, port))
 	}
+}
+
+func isEnvTrue(key string) bool {
+	value := strings.ToLower(os.Getenv(key))
+	return value == "true" || value == "1" || value == "yes" || value == "y" || value == "on"
+}
+
+// 检查是否应该启用Swagger
+func shouldEnableSwagger() bool {
+	// 优先检查环境变量
+	if swaggerEnabled := os.Getenv("SWAGGER_ENABLED"); swaggerEnabled != "" {
+		return isEnvTrue("SWAGGER_ENABLED")
+	}
+
+	// 检查配置文件
+	if viper.IsSet("swagger.enabled") {
+		return viper.GetBool("swagger.enabled")
+	}
+
+	// 默认情况下，开发环境启用，生产环境禁用
+	env := strings.ToLower(os.Getenv("GIN_MODE"))
+	return env != "release" && env != "production"
 }

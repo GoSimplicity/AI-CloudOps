@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/scheme"
-	"strconv"
-	"strings"
 )
 
-// PodFileStreamPipe pod内文件下载专用 实现零拷贝
+// PodFileStreamPipe pod内文件下载专用，简化实现
 type PodFileStreamPipe struct {
 	namespace     string
 	podName       string
@@ -27,15 +27,18 @@ type PodFileStreamPipe struct {
 	readerStream *io.PipeReader
 	writerStream *io.PipeWriter
 
-	bytesRead uint64
-	size      uint64
+	cancelFunc context.CancelFunc
+	done       chan struct{}
 }
 
 func NewPodFileStreamPipe(ctx context.Context, config *rest.Config, client kubernetes.Interface,
 	namespace, pod, container, filePath string) (*PodFileStreamPipe, error) {
 
+	// 创建可取消的上下文
+	downloadCtx, cancel := context.WithCancel(ctx)
+
 	pfs := &PodFileStreamPipe{
-		ctx:    ctx,
+		ctx:    downloadCtx,
 		config: config,
 		client: client,
 
@@ -43,117 +46,115 @@ func NewPodFileStreamPipe(ctx context.Context, config *rest.Config, client kuber
 		namespace:     namespace,
 		podName:       pod,
 		containerName: container,
+
+		cancelFunc: cancel,
+		done:       make(chan struct{}),
 	}
 
-	if err := pfs.fetchTotalTarSize(); err != nil {
-		return nil, err
-	}
-	if err := pfs.startReadingFromOffset(0); err != nil {
-		return nil, err
+	// 启动文件下载
+	if err := pfs.startFileDownload(); err != nil {
+		cancel()
+		return nil, fmt.Errorf("启动文件下载失败: %w", err)
 	}
 
 	return pfs, nil
 }
 
-// fetchTotalTarSize 获取 tar 流总字节数
-func (pfs *PodFileStreamPipe) fetchTotalTarSize() error {
-	req := pfs.client.
-		CoreV1().
-		RESTClient().Post().
+// startFileDownload 启动文件下载流
+func (pfs *PodFileStreamPipe) startFileDownload() error {
+	// 创建管道
+	pfs.readerStream, pfs.writerStream = io.Pipe()
+
+	// 构建tar命令，直接打包文件或目录
+	cmd := fmt.Sprintf("tar cf - '%s' 2>/dev/null || echo 'Error: file not found'", pfs.filePath)
+
+	// 构建exec请求
+	req := pfs.client.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(pfs.podName).
 		Namespace(pfs.namespace).
 		SubResource("exec").
 		VersionedParams(&corev1.PodExecOptions{
 			Container: pfs.containerName,
-			Command:   []string{"sh", "-c", fmt.Sprintf("tar cf - %s | wc -c", pfs.filePath)},
+			Command:   []string{"sh", "-c", cmd},
 			Stdout:    true,
-			Stdin:     true,
 			Stderr:    true,
 			TTY:       false,
 		}, scheme.ParameterCodec)
+
+	// 创建执行器
 	exec, err := remotecommand.NewSPDYExecutor(pfs.config, "POST", req.URL())
 	if err != nil {
-		return err
+		return fmt.Errorf("创建执行器失败: %w", err)
 	}
-	reader, writer := io.Pipe()
-	go func() {
-		defer writer.Close()
-		if err := exec.StreamWithContext(pfs.ctx, remotecommand.StreamOptions{
-			Stdin:             nil,
-			Stdout:            writer,
-			Stderr:            nil,
-			TerminalSizeQueue: nil,
-		}); err != nil {
-			writer.CloseWithError(err)
-		}
-	}()
-	output, err := io.ReadAll(reader)
-	if err != nil {
-		return err
-	}
-	size, err := strconv.ParseUint(strings.TrimSpace(string(output)), 10, 64)
-	if err != nil {
-		return err
-	}
-	pfs.size = size
+
+	// 启动异步执行
+	go pfs.executeDownload(exec)
+
 	return nil
 }
 
-// startReadingFromOffset 从偏移量读取
-func (pfs *PodFileStreamPipe) startReadingFromOffset(offset uint64) error {
-	pfs.readerStream, pfs.writerStream = io.Pipe()
-	restClient := pfs.client.CoreV1().RESTClient()
-	req := restClient.Post().
-		Resource("pods").
-		Name(pfs.podName).
-		Namespace(pfs.namespace).
-		SubResource("exec").
-		VersionedParams(&corev1.PodExecOptions{
-			Container: pfs.containerName,
-			Command:   []string{"sh", "-c", fmt.Sprintf("tar cf - %s | tail -c+%d", pfs.filePath, offset+1)},
-			Stdout:    true,
-		}, scheme.ParameterCodec)
-	exec, err := remotecommand.NewSPDYExecutor(pfs.config, "POST", req.URL())
+// executeDownload 执行下载
+func (pfs *PodFileStreamPipe) executeDownload(exec remotecommand.Executor) {
+	defer close(pfs.done)
+	defer pfs.writerStream.Close()
+	defer pfs.cancelFunc()
+
+	// 创建带超时的上下文 - 10分钟超时
+	timeoutCtx, cancel := context.WithTimeout(pfs.ctx, 10*time.Minute)
+	defer cancel()
+
+	// 执行命令并将输出写入管道
+	err := exec.StreamWithContext(timeoutCtx, remotecommand.StreamOptions{
+		Stdin:  nil,
+		Stdout: pfs.writerStream,
+		Stderr: pfs.writerStream, // 将错误输出也写入同一个流
+		Tty:    false,
+	})
+
 	if err != nil {
-		return err
+		// 将错误写入流
+		errorMsg := fmt.Sprintf("文件下载失败: %v", err)
+		pfs.writerStream.Write([]byte(errorMsg))
+		pfs.writerStream.CloseWithError(fmt.Errorf("文件下载失败: %w", err))
 	}
-	go func() {
-		defer pfs.writerStream.Close()
-		if err := exec.StreamWithContext(pfs.ctx, remotecommand.StreamOptions{
-			Stdin:             nil,
-			Stdout:            pfs.writerStream,
-			Stderr:            nil,
-			TerminalSizeQueue: nil,
-		}); err != nil {
-			pfs.writerStream.CloseWithError(err)
-		}
-	}()
-	return nil
 }
 
+// Read 实现io.Reader接口
 func (pfs *PodFileStreamPipe) Read(p []byte) (int, error) {
-	n, err := pfs.readerStream.Read(p)
-	if err != nil {
-		if pfs.bytesRead == pfs.size {
-			return n, io.EOF
-		}
-		return n, pfs.startReadingFromOffset(pfs.bytesRead + 1)
-	}
-	pfs.bytesRead += uint64(n)
-	return n, nil
+	return pfs.readerStream.Read(p)
 }
 
+// Close 关闭管道和资源
 func (pfs *PodFileStreamPipe) Close() error {
-	var readError, writerError error
+	// 取消上下文
+	if pfs.cancelFunc != nil {
+		pfs.cancelFunc()
+	}
+
+	// 等待下载协程结束（带超时）
+	select {
+	case <-pfs.done:
+		// 下载协程已结束
+	case <-time.After(5 * time.Second):
+		// 超时，强制关闭
+	}
+
+	// 关闭读取端
+	var readError error
 	if pfs.readerStream != nil {
 		readError = pfs.readerStream.Close()
 	}
+
+	// 关闭写入端
+	var writeError error
 	if pfs.writerStream != nil {
-		writerError = pfs.writerStream.Close()
+		writeError = pfs.writerStream.Close()
 	}
+
+	// 返回第一个遇到的错误
 	if readError != nil {
 		return readError
 	}
-	return writerError
+	return writeError
 }

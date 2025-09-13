@@ -50,9 +50,8 @@ func NewJWTMiddleware(hdl ijwt.Handler) *JWTMiddleware {
 func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		path := ctx.Request.URL.Path
-		// 如果请求的路径是下述路径，则不进行token验证
+		// 跳过token验证的路径
 		if path == "/api/user/login" ||
-			//path == "/api/user/signup" ||   // 不允许用户自己注册账号
 			path == "/api/user/logout" ||
 			path == "/api/user/refresh_token" ||
 			path == "/api/user/signup" ||
@@ -68,11 +67,12 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 		var uc ijwt.UserClaims
 		var tokenStr string
 
-		// 如果是/api/tree/ecs/console开头的路径，从查询参数获取token
-		if strings.HasPrefix(path, "/api/tree/local/terminal") {
+		// WebSocket路径从查询参数获取token
+		if strings.HasPrefix(path, "/api/tree/local/terminal") ||
+			strings.Contains(path, "/exec") {
 			tokenStr = ctx.Query("token")
 		} else {
-			// 从请求中提取token
+			// 从请求头提取token
 			tokenStr = m.ExtractToken(ctx)
 		}
 
@@ -82,24 +82,24 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 		})
 
 		if err != nil {
-			// token 错误
+			// token解析错误
 			ctx.AbortWithStatus(401)
 			return
 		}
 
 		if token == nil || !token.Valid {
-			// token 非法或过期
+			// token无效或过期
 			ctx.AbortWithStatus(401)
 			return
 		}
 
-		// 检查是否携带ua头
+		// 检查UserAgent
 		if uc.UserAgent == "" {
 			ctx.AbortWithStatus(401)
 			return
 		}
 
-		// 检查会话是否有效
+		// 验证会话
 		err = m.CheckSession(ctx, uc.Ssid)
 
 		if err != nil {

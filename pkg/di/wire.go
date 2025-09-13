@@ -51,13 +51,14 @@ import (
 	treeHandler "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeService "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/ssh"
 	userHandler "github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	userService "github.com/GoSimplicity/AI-CloudOps/internal/user/service"
 	workorderHandler "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
 	workorderDao "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	workorderService "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/sse"
+	pkgSSH "github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/terminal"
 	"github.com/gin-gonic/gin"
@@ -201,11 +202,12 @@ var DaoSet = wire.NewSet(
 )
 
 var SSHSet = wire.NewSet(
-	ssh.NewSSH,
+	pkgSSH.NewClient,
 )
 
 var UtilSet = wire.NewSet(
 	ijwt.NewJWTHandler,
+	sse.NewHandler,
 )
 
 var ManagerSet = wire.NewSet(

@@ -30,13 +30,14 @@ import (
 	api7 "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	dao5 "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	service6 "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/ssh"
 	"github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	dao2 "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	service2 "github.com/GoSimplicity/AI-CloudOps/internal/user/service"
 	api6 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
 	dao4 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	service5 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/sse"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/terminal"
 	"github.com/gin-gonic/gin"
@@ -188,14 +189,15 @@ func ProvideCmd() *Cmd {
 	treeNodeHandler := api7.NewTreeNodeHandler(treeNodeService)
 	treeLocalDAO := dao5.NewTreeLocalDAO(db, logger)
 	treeLocalService := service6.NewTreeLocalService(logger, treeLocalDAO)
-	ecsSSH := ssh.NewSSH(logger)
-	treeLocalHandler := api7.NewTreeLocalHandler(treeLocalService, ecsSSH)
+	sshClient := ssh.NewClient(logger)
+	treeLocalHandler := api7.NewTreeLocalHandler(treeLocalService, sshClient)
 	notificationHandler := api6.NewNotificationHandler(workorderNotificationService)
 	ingressManager := manager.NewIngressManager(k8sClient, logger)
 	ingressService := service4.NewIngressService(ingressManager, logger)
 	k8sIngressHandler := api4.NewK8sIngressHandler(ingressService)
 	podManager := manager.NewPodManager(k8sClient, logger)
-	podService := service4.NewPodService(podManager, logger)
+	sseHandler := sse.NewHandler(logger)
+	podService := service4.NewPodService(podManager, sseHandler, logger)
 	k8sPodHandler := api4.NewK8sPodHandler(podService)
 	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, systemHandler, notAuthHandler, k8sClusterHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sSvcHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sDaemonSetHandler, k8sEventHandler, k8sStatefulSetHandler, k8sServiceAccountHandler, k8sRoleHandler, k8sClusterRoleHandler, k8sRoleBindingHandler, k8sClusterRoleBindingHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, monitorConfigHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, workorderProcessHandler, templateHandler, instanceHandler, instanceFlowHandler, instanceCommentHandler, categoryGroupHandler, instanceTimeLineHandler, treeNodeHandler, treeLocalHandler, notificationHandler, k8sIngressHandler, k8sPodHandler)
 	applicationBootstrap := startup.NewApplicationBootstrap(clusterManager, logger)
@@ -222,9 +224,9 @@ var ServiceSet = wire.NewSet(service4.NewClusterService, service4.NewDeploymentS
 
 var DaoSet = wire.NewSet(alert.NewAlertManagerEventDAO, alert.NewAlertManagerOnDutyDAO, alert.NewAlertManagerPoolDAO, alert.NewAlertManagerRecordDAO, alert.NewAlertManagerRuleDAO, alert.NewAlertManagerSendDAO, scrape.NewScrapeJobDAO, scrape.NewScrapePoolDAO, config.NewMonitorConfigDAO, dao2.NewUserDAO, dao.NewRoleDAO, dao.NewApiDAO, dao.NewAuditDAO, dao3.NewClusterDAO, dao3.NewYamlTaskDAO, dao3.NewYamlTemplateDAO, dao4.NewWorkorderFormDesignDAO, dao4.NewTemplateDAO, dao4.NewWorkorderInstanceDAO, dao4.NewProcessDAO, dao4.NewWorkorderCategoryDAO, dao4.NewWorkorderInstanceCommentDAO, dao4.NewInstanceFlowDAO, dao4.NewInstanceTimeLineDAO, dao4.NewNotificationDAO, dao5.NewTreeNodeDAO, dao5.NewTreeLocalDAO)
 
-var SSHSet = wire.NewSet(ssh.NewSSH)
+var SSHSet = wire.NewSet(ssh.NewClient)
 
-var UtilSet = wire.NewSet(utils.NewJWTHandler)
+var UtilSet = wire.NewSet(utils.NewJWTHandler, sse.NewHandler)
 
 var ManagerSet = wire.NewSet(manager.NewClusterManager, manager.NewDeploymentManager, manager.NewNamespaceManager, manager.NewServiceManager, manager.NewNodeManager, manager.NewEventManager, manager.NewStatefulSetManager, manager.NewDaemonSetManager, manager.NewServiceAccountManager, manager.NewTaintManager, manager.NewYamlManager, manager.NewConfigMapManager, manager.NewSecretManager, manager.NewPVManager, manager.NewPVCManager, manager.NewClusterRoleManager, manager.NewClusterRoleBindingManager, manager.NewRoleManager, manager.NewRoleBindingManager, manager.NewIngressManager, manager.NewPodManager)
 
