@@ -116,7 +116,7 @@ var HandlerSet = wire.NewSet(
 	workorderHandler.NewNotificationHandler,
 	treeHandler.NewTreeNodeHandler,
 	treeHandler.NewTreeLocalHandler,
-	terminal.NewTerminalerHandler,
+	terminal.NewTerminalHandler,
 )
 
 var ServiceSet = wire.NewSet(

@@ -2,10 +2,11 @@ package stream
 
 import (
 	"context"
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 	"io"
 	"sync"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type producer func(context.Context, chan interface{})
@@ -22,9 +23,14 @@ func SseStream(ctx *gin.Context, prodFunc producer, log *zap.Logger) {
 	go func() {
 		defer wg.Done()
 
-		<-ctx.Writer.CloseNotify()
-		log.Info("Connection closed, stopping container Log SSE...")
-		cancel()
+		// 使用上下文监听客户端断开连接
+		select {
+		case <-ctx.Request.Context().Done():
+			log.Info("Connection closed, stopping container Log SSE...")
+			cancel()
+		case <-cancelCtx.Done():
+			log.Info("Producer finished, stopping SSE...")
+		}
 	}()
 
 	wg.Add(1)

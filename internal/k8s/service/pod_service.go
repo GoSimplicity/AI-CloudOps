@@ -28,8 +28,10 @@ package service
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"path/filepath"
 	"strings"
 	"time"
@@ -43,7 +45,6 @@ import (
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type PodService interface {
@@ -485,38 +486,94 @@ func (p *podService) GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) erro
 	utilsStream.SseStream(ctx, func(ctx context.Context, msgChan chan interface{}) {
 		defer func() {
 			if err := out.Close(); err != nil {
-				p.logger.Error("关闭 Pod 日志流失败", zap.Error(err))
+				// 检查是否是客户端断开连接导致的正常关闭错误
+				if errors.Is(err, context.Canceled) ||
+					strings.Contains(err.Error(), "request canceled") ||
+					strings.Contains(err.Error(), "context cancellation") {
+					p.logger.Debug("Pod 日志流已正常关闭（客户端断开连接）", zap.Error(err))
+				} else {
+					p.logger.Error("关闭 Pod 日志流失败", zap.Error(err))
+				}
 			}
 		}()
 
 		reader := bufio.NewReader(out)
-		wait.UntilWithContext(ctx, func(ctx context.Context) {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				if err == io.EOF {
-					line = strings.TrimSpace(line)
-					if len(line) > 0 {
-						msgChan <- line
-					}
-					return
-				}
-				p.logger.Error("读取 Pod 日志失败", zap.Error(err))
-				return
-			}
+		retryCount := 0
+		maxRetries := 5
 
-			// 处理 \r 覆盖输出
-			if strings.ContainsRune(line, '\r') {
-				segments := strings.Split(line, "\r")
-				for _, seg := range segments {
-					seg = strings.TrimSpace(seg)
-					if seg != "" {
-						msgChan <- seg
+		for {
+			select {
+			case <-ctx.Done():
+				p.logger.Info("上下文已取消，停止读取 Pod 日志")
+				return
+			default:
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					if err == io.EOF {
+						line = strings.TrimSpace(line)
+						if len(line) > 0 {
+							msgChan <- line
+						}
+						p.logger.Info("Pod 日志流已结束")
+						return
+					}
+
+					// 检查是否是上下文取消或网络连接问题导致的错误
+					if errors.Is(err, context.Canceled) ||
+						errors.Is(err, context.DeadlineExceeded) ||
+						strings.Contains(err.Error(), "Client.Timeout") ||
+						strings.Contains(err.Error(), "context cancellation") ||
+						strings.Contains(err.Error(), "request canceled") {
+						p.logger.Info("客户端断开连接或请求超时，停止读取 Pod 日志")
+						return
+					}
+
+					// 检查网络连接错误
+					var netErr net.Error
+					if errors.As(err, &netErr) && netErr.Timeout() {
+						p.logger.Info("网络超时，停止读取 Pod 日志")
+						return
+					}
+
+					retryCount++
+					if retryCount > maxRetries {
+						p.logger.Error("读取 Pod 日志失败，已达到最大重试次数",
+							zap.Error(err),
+							zap.Int("retryCount", retryCount))
+						return
+					}
+
+					p.logger.Warn("读取 Pod 日志失败，将重试",
+						zap.Error(err),
+						zap.Int("retryCount", retryCount),
+						zap.Int("maxRetries", maxRetries))
+
+					// 短暂等待后重试，避免连续失败
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(time.Millisecond * 100):
+						continue
 					}
 				}
-			} else {
-				msgChan <- strings.TrimSpace(line)
+
+				// 重置重试计数器，因为成功读取了一行
+				retryCount = 0
+
+				// 处理 \r 覆盖输出
+				if strings.ContainsRune(line, '\r') {
+					segments := strings.Split(line, "\r")
+					for _, seg := range segments {
+						seg = strings.TrimSpace(seg)
+						if seg != "" {
+							msgChan <- seg
+						}
+					}
+				} else {
+					msgChan <- strings.TrimSpace(line)
+				}
 			}
-		}, 0)
+		}
 	}, p.logger)
 
 	return nil
@@ -590,7 +647,41 @@ func (p *podService) PodFileUpload(ctx *gin.Context, req *model.PodFileUploadReq
 		return fmt.Errorf("Pod名称不能为空")
 	}
 
-	return p.podManager.UploadFileToPod(ctx, req.ClusterID, req.Namespace, req.PodName, req.ContainerName, req.FilePath)
+	if req.ContainerName == "" {
+		return fmt.Errorf("容器名称不能为空")
+	}
+
+	if req.FilePath == "" {
+		return fmt.Errorf("文件路径不能为空")
+	}
+
+	p.logger.Info("开始上传文件到Pod",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("podName", req.PodName),
+		zap.String("containerName", req.ContainerName),
+		zap.String("filePath", req.FilePath))
+
+	err := p.podManager.UploadFileToPod(ctx, req.ClusterID, req.Namespace, req.PodName, req.ContainerName, req.FilePath)
+	if err != nil {
+		p.logger.Error("上传文件到Pod失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("podName", req.PodName),
+			zap.String("containerName", req.ContainerName),
+			zap.String("filePath", req.FilePath))
+		return fmt.Errorf("上传文件到Pod失败: %w", err)
+	}
+
+	p.logger.Info("成功上传文件到Pod",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("podName", req.PodName),
+		zap.String("containerName", req.ContainerName),
+		zap.String("filePath", req.FilePath))
+
+	return nil
 }
 
 // PodFileDownload 从Pod下载文件
@@ -611,27 +702,66 @@ func (p *podService) PodFileDownload(ctx *gin.Context, req *model.PodFileDownloa
 		return fmt.Errorf("Pod名称不能为空")
 	}
 
+	if req.ContainerName == "" {
+		return fmt.Errorf("容器名称不能为空")
+	}
+
+	if req.FilePath == "" {
+		return fmt.Errorf("文件路径不能为空")
+	}
+
+	p.logger.Info("开始从Pod下载文件",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("podName", req.PodName),
+		zap.String("containerName", req.ContainerName),
+		zap.String("filePath", req.FilePath))
+
 	fileName := filepath.Base(req.FilePath)
-	ctx.Header("Content-Disposition", fmt.Sprintf(`attachment; filename=%s.tar`, fileName))
+	if fileName == "." || fileName == "/" {
+		fileName = "download"
+	}
+
+	// 设置下载响应头
+	ctx.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.tar"`, fileName))
 	ctx.Header("Content-Type", "application/octet-stream")
+	ctx.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+	ctx.Header("Pragma", "no-cache")
+	ctx.Header("Expires", "0")
 
 	reader, err := p.podManager.DownloadPodFile(ctx.Request.Context(), req.ClusterID, req.Namespace, req.PodName, req.ContainerName, req.FilePath)
 	if err != nil {
 		p.logger.Error("创建Pod文件流失败",
 			zap.Error(err),
-			zap.String("Namespace", req.Namespace),
-			zap.String("PodName", req.PodName),
-			zap.String("ContainerName", req.ContainerName),
-			zap.String("FilePath", req.FilePath))
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("podName", req.PodName),
+			zap.String("containerName", req.ContainerName),
+			zap.String("filePath", req.FilePath))
 		return fmt.Errorf("无法创建 Pod 文件流: %w", err)
 	}
-	defer reader.Close()
+	defer func() {
+		if closeErr := reader.Close(); closeErr != nil {
+			p.logger.Error("关闭文件流失败", zap.Error(closeErr))
+		}
+	}()
 
 	// 把流复制到响应
-	if _, err := io.Copy(ctx.Writer, reader); err != nil {
-		p.logger.Error("文件下载过程中出错", zap.Error(err))
+	bytesWritten, err := io.Copy(ctx.Writer, reader)
+	if err != nil {
+		p.logger.Error("文件下载过程中出错",
+			zap.Error(err),
+			zap.Int64("bytesWritten", bytesWritten))
 		return fmt.Errorf("下载文件过程中发生错误: %w", err)
 	}
+
+	p.logger.Info("成功下载文件从Pod",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("podName", req.PodName),
+		zap.String("containerName", req.ContainerName),
+		zap.String("filePath", req.FilePath),
+		zap.Int64("bytesDownloaded", bytesWritten))
 
 	return nil
 }

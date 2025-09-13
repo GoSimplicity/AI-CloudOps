@@ -271,29 +271,29 @@ type GetPodsByNodeReq struct {
 type GetPodContainersReq struct {
 	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
 	Namespace string `json:"namespace" uri:"namespace" binding:"required"`   // 命名空间
-	PodName   string `json:"pod_name" uri:"pod_name" binding:"required"`     // Pod名称
+	PodName   string `json:"pod_name" uri:"name" binding:"required"`         // Pod名称 - 匹配路由参数:name
 }
 
 // GetPodLogsReq Pod日志查询请求
 type GetPodLogsReq struct {
 	ClusterID    int    `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
 	Namespace    string `json:"namespace" uri:"namespace" binding:"required"`   // 命名空间
-	PodName      string `json:"pod_name" uri:"pod_name" binding:"required"`     // Pod名称
+	PodName      string `json:"pod_name" uri:"name" binding:"required"`         // Pod名称 - 匹配路由参数:name
 	Container    string `json:"container" uri:"container" binding:"required"`   // 容器名称
-	Follow       bool   `json:"follow"`                                         // 是否持续跟踪
-	Previous     bool   `json:"previous"`                                       // 是否获取前一个容器的日志
-	SinceSeconds *int64 `json:"since_seconds"`                                  // 获取多少秒内的日志
-	SinceTime    string `json:"since_time"`                                     // 从指定时间开始获取日志
-	Timestamps   bool   `json:"timestamps"`                                     // 是否显示时间戳
-	TailLines    *int64 `json:"tail_lines"`                                     // 获取最后几行日志
-	LimitBytes   *int64 `json:"limit_bytes"`                                    // 限制日志字节数
+	Follow       bool   `json:"follow" form:"follow"`                           // 是否持续跟踪
+	Previous     bool   `json:"previous" form:"previous"`                       // 是否获取前一个容器的日志
+	SinceSeconds *int64 `json:"since_seconds" form:"since_seconds"`             // 获取多少秒内的日志
+	SinceTime    string `json:"since_time" form:"since_time"`                   // 从指定时间开始获取日志
+	Timestamps   bool   `json:"timestamps" form:"timestamps"`                   // 是否显示时间戳
+	TailLines    *int64 `json:"tail_lines" form:"tail_lines"`                   // 获取最后几行日志
+	LimitBytes   *int64 `json:"limit_bytes" form:"limit_bytes"`                 // 限制日志字节数
 }
 
 // PodExecReq Pod执行命令请求
 type PodExecReq struct {
 	ClusterID int    `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
 	Namespace string `json:"namespace" uri:"namespace" binding:"required"`   // 命名空间
-	PodName   string `json:"pod_name" uri:"pod_name" binding:"required"`     // Pod名称
+	PodName   string `json:"pod_name" uri:"name" binding:"required"`         // Pod名称 - 匹配路由参数:name
 	Container string `json:"container" uri:"container" binding:"required"`   // 容器名称
 	Shell     string `json:"shell" form:"shell"`                             // shell类型
 }
@@ -302,7 +302,7 @@ type PodExecReq struct {
 type PodPortForwardReq struct {
 	ClusterID int                  `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
 	Namespace string               `json:"namespace" uri:"namespace" binding:"required"`   // 命名空间
-	PodName   string               `json:"pod_name" uri:"pod_name" binding:"required"`     // Pod名称
+	PodName   string               `json:"pod_name" uri:"name" binding:"required"`         // Pod名称 - 匹配路由参数:name
 	Ports     []PodPortForwardPort `json:"ports" binding:"required"`                       // 端口转发配置
 }
 
@@ -316,7 +316,7 @@ type PodPortForwardPort struct {
 type PodFileUploadReq struct {
 	ClusterID     int    `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
 	Namespace     string `json:"namespace" uri:"namespace" binding:"required"`   // 命名空间
-	PodName       string `json:"pod_name" uri:"pod_name" binding:"required"`     // Pod名称
+	PodName       string `json:"pod_name" uri:"name" binding:"required"`         // Pod名称 - 匹配路由参数:name
 	ContainerName string `json:"container" uri:"container" binding:"required"`   // 容器名称
 	FilePath      string `json:"file_path" uri:"file_path" binding:"required"`   // 文件路径
 }
@@ -325,7 +325,7 @@ type PodFileUploadReq struct {
 type PodFileDownloadReq struct {
 	ClusterID     int    `json:"cluster_id" uri:"cluster_id" binding:"required"` // 集群ID
 	Namespace     string `json:"namespace" uri:"namespace" binding:"required"`   // 命名空间
-	PodName       string `json:"pod_name" uri:"pod_name" binding:"required"`     // Pod名称
+	PodName       string `json:"pod_name" uri:"name" binding:"required"`         // Pod名称 - 匹配路由参数:name
 	ContainerName string `json:"container" uri:"container" binding:"required"`   // 容器名称
 	FilePath      string `json:"file_path" uri:"file_path" binding:"required"`   // 文件路径
 }

@@ -32,6 +32,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
@@ -299,12 +300,22 @@ func (p *podManager) PodTerminalSession(
 		shell = "sh"
 	}
 
-	terminal.NewTerminalerHandler(kubeClient, restConfig).
+	terminal.NewTerminalHandler(kubeClient, restConfig, p.logger).
 		HandleSession(ctx, shell, namespace, pod, container, conn)
 	return nil
 }
 
 func (p *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace, pod, container, filePath string) error {
+	// 参数验证
+	if namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+	if pod == "" {
+		return fmt.Errorf("Pod名称不能为空")
+	}
+	if container == "" {
+		return fmt.Errorf("容器名称不能为空")
+	}
 
 	kubeClient, err := p.getKubeClient(clusterID)
 	if err != nil {
@@ -317,25 +328,100 @@ func (p *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace,
 		return fmt.Errorf("获取集群配置失败: %w", err)
 	}
 
+	// 验证Pod是否存在并且正在运行
+	podObj, err := kubeClient.CoreV1().Pods(namespace).Get(ctx.Request.Context(), pod, metav1.GetOptions{})
+	if err != nil {
+		p.logger.Error("获取Pod信息失败",
+			zap.Error(err),
+			zap.String("namespace", namespace),
+			zap.String("pod", pod))
+		return fmt.Errorf("获取Pod信息失败: %w", err)
+	}
+
+	if podObj.Status.Phase != corev1.PodRunning {
+		return fmt.Errorf("Pod状态不是Running，当前状态: %s", podObj.Status.Phase)
+	}
+
+	// 验证容器是否存在
+	var containerExists bool
+	for _, c := range podObj.Spec.Containers {
+		if c.Name == container {
+			containerExists = true
+			break
+		}
+	}
+	if !containerExists {
+		return fmt.Errorf("容器 %s 在Pod中不存在", container)
+	}
+
 	targetDir := filePath
 	if targetDir == "" {
-		targetDir = "/"
+		targetDir = "/tmp"
 	}
+
 	// 解析上传的文件
 	files, err := parseMultipartFiles(ctx)
 	if err != nil {
-		return err
+		p.logger.Error("解析上传文件失败", zap.Error(err))
+		return fmt.Errorf("解析上传文件失败: %w", err)
 	}
 
+	if len(files) == 0 {
+		return fmt.Errorf("没有找到要上传的文件")
+	}
+
+	p.logger.Info("开始上传文件到Pod",
+		zap.String("namespace", namespace),
+		zap.String("pod", pod),
+		zap.String("container", container),
+		zap.String("targetDir", targetDir),
+		zap.Int("fileCount", len(files)))
+
 	reader, writer := io.Pipe()
+	var tarErr error
+
 	go func() {
 		defer writer.Close()
-		if tarErr := writeFilesToTar(files, writer); tarErr != nil {
+		if tarErr = writeFilesToTar(files, writer); tarErr != nil {
 			p.logger.Error("打包文件成 tar 失败", zap.Error(tarErr))
 			_ = writer.CloseWithError(tarErr)
 		}
 	}()
 
+	// 检查目标目录是否存在，如果不存在则创建
+	createDirReq := kubeClient.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(pod).
+		Namespace(namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Container: container,
+			Command:   []string{"mkdir", "-p", targetDir},
+			Stdin:     false,
+			Stdout:    true,
+			Stderr:    true,
+			TTY:       false,
+		}, scheme.ParameterCodec)
+
+	exec, err := remotecommand.NewSPDYExecutor(restConfig, http.MethodPost, createDirReq.URL())
+	if err != nil {
+		return fmt.Errorf("创建目录命令executor失败: %w", err)
+	}
+
+	var stdout, stderr strings.Builder
+	err = exec.StreamWithContext(ctx.Request.Context(), remotecommand.StreamOptions{
+		Stdin:  nil,
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+	if err != nil {
+		p.logger.Warn("创建目录失败，可能目录已存在",
+			zap.Error(err),
+			zap.String("stdout", stdout.String()),
+			zap.String("stderr", stderr.String()))
+	}
+
+	// 执行文件上传
 	execReq := kubeClient.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(pod).
@@ -350,19 +436,37 @@ func (p *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace,
 			TTY:       false,
 		}, scheme.ParameterCodec)
 
-	exec, err := remotecommand.NewSPDYExecutor(restConfig, http.MethodPost, execReq.URL())
+	exec, err = remotecommand.NewSPDYExecutor(restConfig, http.MethodPost, execReq.URL())
 	if err != nil {
-		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, "创建 Executor 失败")
+		return fmt.Errorf("创建上传executor失败: %w", err)
 	}
 
-	if err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
+	var uploadStderr strings.Builder
+	err = exec.StreamWithContext(ctx.Request.Context(), remotecommand.StreamOptions{
 		Stdin:             reader,
 		Stdout:            nil,
-		Stderr:            ctx.Writer,
+		Stderr:            &uploadStderr,
 		TerminalSizeQueue: nil,
-	}); err != nil {
-		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, "执行上传失败")
+	})
+
+	if err != nil {
+		p.logger.Error("执行上传失败",
+			zap.Error(err),
+			zap.String("stderr", uploadStderr.String()))
+		return fmt.Errorf("执行上传失败: %w, stderr: %s", err, uploadStderr.String())
 	}
+
+	if tarErr != nil {
+		return fmt.Errorf("打包tar文件失败: %w", tarErr)
+	}
+
+	p.logger.Info("成功上传文件到Pod",
+		zap.String("namespace", namespace),
+		zap.String("pod", pod),
+		zap.String("container", container),
+		zap.String("targetDir", targetDir),
+		zap.Int("fileCount", len(files)))
+
 	return nil
 }
 
@@ -399,6 +503,20 @@ func (p *podManager) PortForward(ctx context.Context, ports []string, dialer htt
 }
 
 func (p *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespace, pod, container, filePath string) (*k8sutils.PodFileStreamPipe, error) {
+	// 参数验证
+	if namespace == "" {
+		return nil, fmt.Errorf("命名空间不能为空")
+	}
+	if pod == "" {
+		return nil, fmt.Errorf("Pod名称不能为空")
+	}
+	if container == "" {
+		return nil, fmt.Errorf("容器名称不能为空")
+	}
+	if filePath == "" {
+		return nil, fmt.Errorf("文件路径不能为空")
+	}
+
 	kubeClient, err := p.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
@@ -410,19 +528,58 @@ func (p *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespa
 		return nil, fmt.Errorf("获取集群配置失败: %w", err)
 	}
 
+	// 验证Pod是否存在并且正在运行
+	podObj, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, pod, metav1.GetOptions{})
+	if err != nil {
+		p.logger.Error("获取Pod信息失败",
+			zap.Error(err),
+			zap.String("namespace", namespace),
+			zap.String("pod", pod))
+		return nil, fmt.Errorf("获取Pod信息失败: %w", err)
+	}
+
+	if podObj.Status.Phase != corev1.PodRunning {
+		return nil, fmt.Errorf("Pod状态不是Running，当前状态: %s", podObj.Status.Phase)
+	}
+
+	// 验证容器是否存在
+	var containerExists bool
+	for _, c := range podObj.Spec.Containers {
+		if c.Name == container {
+			containerExists = true
+			break
+		}
+	}
+	if !containerExists {
+		return nil, fmt.Errorf("容器 %s 在Pod中不存在", container)
+	}
+
+	p.logger.Info("开始下载Pod文件",
+		zap.String("namespace", namespace),
+		zap.String("pod", pod),
+		zap.String("container", container),
+		zap.String("filePath", filePath))
+
 	reader, err := k8sutils.NewPodFileStreamPipe(
 		ctx, restConfig, kubeClient, namespace, pod, container, filePath)
 
 	if err != nil {
 		p.logger.Error("创建Pod文件流失败",
 			zap.Error(err),
-			zap.String("Namespace", namespace),
-			zap.String("PodName", pod),
-			zap.String("ContainerName", container),
-			zap.String("FilePath", filePath),
-		)
+			zap.String("namespace", namespace),
+			zap.String("podName", pod),
+			zap.String("containerName", container),
+			zap.String("filePath", filePath))
+		return nil, fmt.Errorf("创建Pod文件流失败: %w", err)
 	}
-	return reader, err
+
+	p.logger.Info("成功创建Pod文件流",
+		zap.String("namespace", namespace),
+		zap.String("pod", pod),
+		zap.String("container", container),
+		zap.String("filePath", filePath))
+
+	return reader, nil
 }
 
 // CreatePod 创建Pod
@@ -494,40 +651,92 @@ type fileWithHeader struct {
 }
 
 func parseMultipartFiles(ctx *gin.Context) ([]fileWithHeader, error) {
-	if err := ctx.Request.ParseMultipartForm(10 << 20); err != nil {
-		return nil, pkg.NewBusinessError(constants.ErrK8sResourceDelete, "读取上传文件失败")
+	if err := ctx.Request.ParseMultipartForm(32 << 20); err != nil { // 32MB max
+		return nil, fmt.Errorf("解析多部分表单失败: %w", err)
 	}
+
+	if ctx.Request.MultipartForm == nil || len(ctx.Request.MultipartForm.File) == 0 {
+		return nil, fmt.Errorf("没有找到上传的文件")
+	}
+
 	files := make([]fileWithHeader, 0)
 	for name := range ctx.Request.MultipartForm.File {
 		file, header, err := ctx.Request.FormFile(name)
 		if err != nil {
-			return nil, pkg.NewBusinessError(constants.ErrK8sResourceDelete, "解析上传文件失败")
+			return nil, fmt.Errorf("解析文件 %s 失败: %w", name, err)
 		}
+
+		// 验证文件大小
+		if header.Size > 100<<20 { // 100MB per file limit
+			file.Close()
+			return nil, fmt.Errorf("文件 %s 太大，最大允许100MB", header.Filename)
+		}
+
+		// 验证文件名
+		if header.Filename == "" {
+			file.Close()
+			return nil, fmt.Errorf("文件名不能为空")
+		}
+
 		files = append(files, fileWithHeader{file: file, header: header})
 	}
 	return files, nil
 }
 
 func writeFilesToTar(files []fileWithHeader, w io.Writer) error {
-	tarWriter := tar.NewWriter(w)
-	defer tarWriter.Close()
-	for _, f := range files {
-		func(f fileWithHeader) {
-			defer f.file.Close()
-			hdr := &tar.Header{
-				Name: f.header.Filename,
-				Mode: 0600,
-				Size: f.header.Size,
-			}
-			if err := tarWriter.WriteHeader(hdr); err != nil {
-				_ = w.(io.WriteCloser).Close()
-				return
-			}
-			if _, err := io.Copy(tarWriter, f.file); err != nil {
-				_ = w.(io.WriteCloser).Close()
-				return
-			}
-		}(f)
+	if len(files) == 0 {
+		return fmt.Errorf("没有文件需要打包")
 	}
+
+	tarWriter := tar.NewWriter(w)
+	defer func() {
+		if err := tarWriter.Close(); err != nil {
+			// 日志记录tarWriter关闭错误，但不返回错误
+		}
+	}()
+
+	for i, f := range files {
+		// 确保每个文件都会被正确关闭
+		err := func(fileInfo fileWithHeader, index int) error {
+			defer func() {
+				if err := fileInfo.file.Close(); err != nil {
+					// 记录文件关闭错误，但继续处理
+				}
+			}()
+
+			// 验证文件名，避免路径遍历攻击
+			filename := fileInfo.header.Filename
+			if strings.Contains(filename, "..") || strings.Contains(filename, "/") {
+				return fmt.Errorf("文件名包含非法字符: %s", filename)
+			}
+
+			hdr := &tar.Header{
+				Name: filename,
+				Mode: 0644, // 使用更安全的权限
+				Size: fileInfo.header.Size,
+			}
+
+			if err := tarWriter.WriteHeader(hdr); err != nil {
+				return fmt.Errorf("写入tar头失败(文件 %s): %w", filename, err)
+			}
+
+			bytesWritten, err := io.Copy(tarWriter, fileInfo.file)
+			if err != nil {
+				return fmt.Errorf("写入文件内容失败(文件 %s): %w", filename, err)
+			}
+
+			if bytesWritten != fileInfo.header.Size {
+				return fmt.Errorf("文件大小不匹配(文件 %s): 期望 %d 字节，实际写入 %d 字节",
+					filename, fileInfo.header.Size, bytesWritten)
+			}
+
+			return nil
+		}(f, i)
+
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
