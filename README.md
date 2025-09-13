@@ -1162,7 +1162,8 @@ git commit -m "docs(readme): update installation guide"
 
 ### 📱 微信群二维码
 
-<img src="https://github.com/user-attachments/assets/75c84edc-7a12-4ce0-bbce-8ccbbc84a83e" alt="微信群二维码" width="200"/>
+![image](https://github.com/user-attachments/assets/6aa7bd2f-ee80-40d0-9301-0fd62292e82f)
+
 
 *加入我们的技术交流群，与更多开发者一起讨论*
 
