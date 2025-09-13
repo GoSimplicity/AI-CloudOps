@@ -181,7 +181,7 @@
 
 ## 🌐 在线体验 (Live Demo)
 
-<div align="center">
+< align="center">
 
 ### 🎯 立即体验我们的平台
 
@@ -209,132 +209,6 @@
 **🤖 AI 分析**: 尝试智能故障分析
 **📋 工单系统**: 体验完整工单流程
 
-</div>
-
-## 📸 产品演示 (Product Screenshots)
-
-<div align="center">
-
-### 🎨 界面预览
-
-<table>
-<tr>
-<td align="center" width="50%">
-<h4>🔐 首页</h4>
-<img src="image/login.png" alt="登录页面" width="60%" style="max-width: 600px;" />
-<em>现代化的登录界面设计</em>
-</td>
-<td align="center" width="50%">
-<h4>📊 审计日志</h4>
-<img src="image/dashboard.png" alt="系统仪表板" width="60%" style="max-width: 600px;" />
-<em>审计日志管理</em>
-</td>
-</tr>
-<tr>
-<td align="center" width="50%">
-<h4>⚙️ 表单设计</h4>
-<img src="image/api_management.png" alt="API管理" width="60%" style="max-width: 600px;" />
-<em>表单设计管理</em>
-</td>
-<td align="center" width="50%">
-<h4>📋 流程设计</h4>
-<img src="image/form_designer.png" alt="表单设计" width="60%" style="max-width: 600px;" />
-<em>流程设计管理</em>
-</td>
-</tr>
-<tr>
-<td align="center" width="50%">
-<h4>🔄 通知管理</h4>
-<img src="image/workflow_management.png" alt="流程管理" width="60%" style="max-width: 600px;" />
-<em>通知管理</em>
-</td>
-<td align="center" width="50%">
-<h4>🌲 服务树概览</h4>
-<img src="image/service_tree.png" alt="服务树概览" width="60%" style="max-width: 600px;" />
-<em>清晰的服务依赖关系图</em>
-</td>
-</tr>
-<tr>
-<td align="center" width="50%">
-<h4>📊 本地资源</h4>
-<img src="image/monitoring.png" alt="监控面板" width="60%" style="max-width: 600px;" />
-<em>本地资源管理</em>
-</td>
-<td align="center" width="50%">
-<h4>⚠️ 终端管理</h4>
-<img src="image/alert_management.png" alt="终端管理" width="60%" style="max-width: 600px;" />
-<em>终端管理</em>
-</td>
-</tr>
-<tr>
-<td align="center" width="50%">
-<h4>📋 告警管理</h4>
-<img src="image/workorder_system.png" alt="工单系统" width="60%" style="max-width: 600px;" />
-<em>告警管理</em>
-</td>
-<td align="center" width="50%">
-<h4>👥 发送组管理</h4>
-<img src="image/user_management.png" alt="用户管理" width="60%" style="max-width: 600px;" />
-<em>发送组管理</em>
-</td>
-</tr>
-<tr>
-<td align="center" width="50%">
-<h4>☸️ K8s 集群管理</h4>
-<img src="image/k8s_cluster.png" alt="K8s集群管理" width="60%" style="max-width: 600px;" />
-<em>多集群统一管理与监控</em>
-</td>
-<td align="center" width="50%">
-<h4>🚀 K8s 应用部署</h4>
-<img src="image/k8s_deployment.png" alt="K8s应用部署" width="60%" style="max-width: 600px;" />
-<em>可视化应用部署与管理</em>
-</td>
-</tr>
-<tr>
-<td align="center" width="50%">
-<h4>🤖 实时日志流</h4>
-<img src="image/ai_analysis.png" alt="AI智能分析" width="60%" style="max-width: 600px;" />
-<em>实时日志流</em>
-</td>
-<td align="center" width="50%">
-<h4>🔍 pod文件上传</h4>
-<img src="image/root_cause_analysis.png" alt="根因分析" width="60%" style="max-width: 600px;" />
-<em>pod文件上传</em>
-</td>
-</tr>
-<tr>
-<td align="center" colspan="2">
-<h4>🛠️ AIOps智能运维</h4>
-<table width="100%">
-<tr>
-<td align="center" width="50%">
-<img src="image/k8s_auto_healing_1.png" alt="K8s自动修复-1" width="60%" style="max-width: 600px;" />
-</td>
-<td align="center" width="50%">
-<img src="image/k8s_auto_healing_2.png" alt="K8s自动修复-2" width="60%" style="max-width: 600px;" />
-</td>
-</tr>
-</table>
-<em>智能化的 Kubernetes 集群故障检测与自动修复</em>
-</td>
-</tr>
-<tr>
-<td align="center" width="50%">
-<h4>📜 日志分析</h4>
-<img src="image/log_analysis.png" alt="日志分析" width="60%" style="max-width: 600px;" />
-<em>智能日志聚合与分析</em>
-</td>
-<td align="center" width="50%">
-<h4>🌐 系统概览</h4>
-<img src="image/system_overview.png" alt="系统概览" width="60%" style="max-width: 600px;" />
-<em>全局系统状态总览</em>
-</td>
-</tr>
-</table>
-
-</div>
-
----
 
 ## 🏆 核心贡献者 (Core Contributors)
 
