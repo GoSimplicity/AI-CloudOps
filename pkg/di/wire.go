@@ -29,6 +29,11 @@ package di
 
 import (
 	cron "github.com/GoSimplicity/AI-CloudOps/internal/cron"
+	cronApi "github.com/GoSimplicity/AI-CloudOps/internal/cron/api"
+	cronDao "github.com/GoSimplicity/AI-CloudOps/internal/cron/dao"
+	cronHandler "github.com/GoSimplicity/AI-CloudOps/internal/cron/handler"
+	cronScheduler "github.com/GoSimplicity/AI-CloudOps/internal/cron/scheduler"
+	cronService "github.com/GoSimplicity/AI-CloudOps/internal/cron/service"
 	k8sHandler "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
@@ -64,12 +69,17 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	_ "github.com/google/wire"
+	"github.com/hibiken/asynq"
 )
 
 type Cmd struct {
-	Server    *gin.Engine
-	Bootstrap startup.ApplicationBootstrap
-	Cron      cron.CronManager
+	Server       *gin.Engine
+	Bootstrap    startup.ApplicationBootstrap
+	CronManager  cron.CronManager
+	AsynqServer  *asynq.Server
+	AsynqClient  *asynq.Client
+	Scheduler    *asynq.Scheduler
+	CronHandlers *cronHandler.CronHandlers
 }
 
 var HandlerSet = wire.NewSet(
@@ -118,6 +128,7 @@ var HandlerSet = wire.NewSet(
 	treeHandler.NewTreeNodeHandler,
 	treeHandler.NewTreeLocalHandler,
 	terminal.NewTerminalHandler,
+	cronApi.NewCronAPI,
 )
 
 var ServiceSet = wire.NewSet(
@@ -169,6 +180,7 @@ var ServiceSet = wire.NewSet(
 	workorderService.NewWorkorderNotificationService,
 	treeService.NewTreeNodeService,
 	treeService.NewTreeLocalService,
+	cronService.NewCronService,
 )
 
 var DaoSet = wire.NewSet(
@@ -199,6 +211,7 @@ var DaoSet = wire.NewSet(
 	workorderDao.NewNotificationDAO,
 	treeDao.NewTreeNodeDAO,
 	treeDao.NewTreeLocalDAO,
+	cronDao.NewCronJobDAO,
 )
 
 var SSHSet = wire.NewSet(
@@ -239,7 +252,9 @@ var JobSet = wire.NewSet(
 )
 
 var CronSet = wire.NewSet(
-	cron.NewCronManager,
+	cron.NewUnifiedCronManager,
+	cronHandler.NewCronHandlers,
+	cronScheduler.NewCronScheduler,
 )
 
 var Injector = wire.NewSet(
@@ -265,8 +280,13 @@ var ClientSet = wire.NewSet(
 	client.NewK8sClient,
 )
 
-var NotificationSet = wire.NewSet(
+var AsynqSet = wire.NewSet(
 	InitAsynqClient,
+	InitAsynqServer,
+	InitScheduler,
+)
+
+var NotificationSet = wire.NewSet(
 	InitNotificationConfig,
 	InitNotificationManager,
 )
@@ -283,6 +303,7 @@ func ProvideCmd() *Cmd {
 		ManagerSet,
 		CacheSet,
 		ClientSet,
+		AsynqSet,
 		NotificationSet,
 	)
 	return &Cmd{}

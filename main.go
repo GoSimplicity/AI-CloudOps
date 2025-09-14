@@ -43,6 +43,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
+	"github.com/hibiken/asynq"
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 	swaggerFiles "github.com/swaggo/files"
@@ -128,33 +129,55 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 启动定时任务
+	// 启动统一Cron管理器（包含系统内置任务和用户自定义任务）
 	if di.IsDBAvailable(db) {
+		// 启动Asynq服务器
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Printf("StartOnDutyHistoryManager panic: %v", r)
+					log.Printf("Asynq Server panic: %v", r)
 				}
 			}()
-			_ = cmd.Cron.StartOnDutyHistoryManager(ctx)
+
+			// 注册任务处理器
+			mux := asynq.NewServeMux()
+			mux.Handle("cron:task", cmd.CronHandlers)
+
+			log.Printf("启动Asynq服务器...")
+			if err := cmd.AsynqServer.Run(mux); err != nil {
+				log.Printf("Asynq服务器运行失败: %v", err)
+			}
 		}()
+
+		// 启动Asynq调度器
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Printf("StartPrometheusConfigRefreshManager panic: %v", r)
+					log.Printf("Asynq Scheduler panic: %v", r)
 				}
 			}()
-			_ = cmd.Cron.StartPrometheusConfigRefreshManager(ctx)
+
+			log.Printf("启动Asynq调度器...")
+			if err := cmd.Scheduler.Run(); err != nil {
+				log.Printf("Asynq调度器运行失败: %v", err)
+			}
 		}()
-		// go func() {
-		// 	defer func() {
-		// 		if r := recover(); r != nil {
-		// 			log.Printf("StartCheckK8sStatusManager panic: %v", r)
-		// 		}
-		// 	}()
-		// 	_ = cmd.Cron.StartCheckK8sStatusManager(ctx)
-		// }()
-		log.Printf("系统启动完成")
+
+		// 启动统一Cron管理器
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("Unified Cron Manager panic: %v", r)
+				}
+			}()
+
+			log.Printf("启动统一Cron管理器...")
+			if err := cmd.CronManager.Start(ctx); err != nil {
+				log.Printf("统一Cron管理器启动失败: %v", err)
+			}
+		}()
+
+		log.Printf("系统启动完成 - 包含Asynq任务队列和统一Cron管理器")
 	} else {
 		log.Printf("降级模式运行")
 	}
@@ -176,6 +199,22 @@ func run() error {
 
 	<-quit
 	log.Println("正在关闭服务器...")
+
+	// 关闭统一Cron管理器和Asynq服务
+	if di.IsDBAvailable(db) {
+		log.Println("正在关闭Cron管理器和Asynq服务...")
+
+		// 停止统一Cron管理器
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer stopCancel()
+		if err := cmd.CronManager.Stop(stopCtx); err != nil {
+			log.Printf("Cron管理器停止超时: %v", err)
+		}
+
+		// 停止Asynq服务
+		cmd.AsynqServer.Shutdown()
+		cmd.Scheduler.Shutdown()
+	}
 
 	cancel()
 
