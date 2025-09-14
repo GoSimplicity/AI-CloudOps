@@ -173,7 +173,7 @@ func (e *SSHExecutor) buildSSHCommand(job *model.CronJob) string {
 	// 设置环境变量
 	if len(job.SSHEnvironment) > 0 {
 		for key, value := range job.SSHEnvironment {
-			commandParts = append(commandParts, fmt.Sprintf("export %s=%s", key, value))
+			commandParts = append(commandParts, fmt.Sprintf("export %d=%s", key, value))
 		}
 	}
 
