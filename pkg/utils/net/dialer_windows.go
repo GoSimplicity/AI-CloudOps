@@ -1,9 +1,10 @@
 package net
 
 import (
-	"golang.org/x/sys/unix"
 	"net"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 // go: build windows

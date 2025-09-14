@@ -2,15 +2,16 @@ package apply
 
 import (
 	"context"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/client-go/openapi/cached"
-	"k8s.io/kubectl/pkg/cmd/util"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/openapi/cached"
+	"k8s.io/kubectl/pkg/cmd/util"
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"

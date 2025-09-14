@@ -4,9 +4,10 @@ package net
 // + build !windows
 
 import (
-	"golang.org/x/sys/unix"
 	"net"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 func CheckDialer() *net.Dialer {

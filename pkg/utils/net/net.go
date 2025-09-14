@@ -3,11 +3,12 @@ package net
 import (
 	"context"
 	"crypto/tls"
-	"github.com/pkg/errors"
 	"net"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 type ConnOptions struct {

@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"os"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,8 +18,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/kubectl/pkg/util"
 	"k8s.io/kubectl/pkg/validation"
-	"net/http"
-	"os"
 )
 
 type Apply interface {
