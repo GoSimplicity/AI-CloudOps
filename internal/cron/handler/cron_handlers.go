@@ -39,7 +39,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// CronHandlers 任务处理器集合 - 实现asynq.Handler接口
 type CronHandlers struct {
 	logger *zap.Logger
 
@@ -54,7 +53,6 @@ type CronHandlers struct {
 	sshExecutor     *executor.SSHExecutor
 }
 
-// NewCronHandlers 创建任务处理器
 func NewCronHandlers(
 	logger *zap.Logger,
 	cronDAO dao.CronJobDAO,
@@ -96,6 +94,14 @@ func (h *CronHandlers) ProcessTask(ctx context.Context, t *asynq.Task) error {
 	// 获取任务详情
 	job, err := h.cronDAO.GetCronJob(ctx, payload.JobID)
 	if err != nil {
+		// 如果任务不存在，记录警告但不返回错误，这样可以防止调度器重复尝试
+		if err.Error() == "任务不存在" || err.Error() == "record not found" {
+			h.logger.Warn("任务已被删除或不存在，跳过执行",
+				zap.Int("jobID", payload.JobID),
+				zap.String("jobName", payload.JobName),
+				zap.Error(err))
+			return nil // 返回nil表示任务"成功"完成（虽然是跳过）
+		}
 		h.logger.Error("获取任务详情失败", zap.Int("jobID", payload.JobID), zap.Error(err))
 		return fmt.Errorf("获取任务详情失败: %w", err)
 	}

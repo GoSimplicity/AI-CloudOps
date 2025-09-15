@@ -37,19 +37,15 @@ import (
 )
 
 type CronJobDAO interface {
-	// 基础CRUD操作
 	CreateCronJob(ctx context.Context, job *model.CronJob) error
 	GetCronJob(ctx context.Context, id int) (*model.CronJob, error)
+	GetCronJobByName(ctx context.Context, name string) (*model.CronJob, error)
 	GetCronJobList(ctx context.Context, req *model.GetCronJobListReq) ([]*model.CronJob, int64, error)
 	UpdateCronJob(ctx context.Context, job *model.CronJob) error
 	DeleteCronJob(ctx context.Context, id int) error
-
-	// 状态管理
 	UpdateCronJobStatus(ctx context.Context, id int, status model.CronJobStatus) error
 	UpdateCronJobRunInfo(ctx context.Context, id int, lastRunTime *time.Time, status int8, duration int, errorMsg string) error
 	GetEnabledCronJobs(ctx context.Context) ([]*model.CronJob, error)
-
-	// 调度相关
 	UpdateNextRunTime(ctx context.Context, id int, nextRunTime time.Time) error
 }
 
@@ -119,6 +115,19 @@ func (d *cronJobDAO) GetCronJob(ctx context.Context, id int) (*model.CronJob, er
 			return nil, errors.New("任务不存在")
 		}
 		d.logger.Error("获取任务失败", zap.Int("id", id), zap.Error(err))
+		return nil, err
+	}
+	return &job, nil
+}
+
+// GetCronJobByName 根据名称获取任务详情
+func (d *cronJobDAO) GetCronJobByName(ctx context.Context, name string) (*model.CronJob, error) {
+	var job model.CronJob
+	if err := d.db.WithContext(ctx).Where("name = ?", name).First(&job).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, gorm.ErrRecordNotFound
+		}
+		d.logger.Error("根据名称获取任务失败", zap.String("name", name), zap.Error(err))
 		return nil, err
 	}
 	return &job, nil
@@ -218,6 +227,11 @@ func (d *cronJobDAO) DeleteCronJob(ctx context.Context, id int) error {
 	job, err := d.GetCronJob(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	// 检查是否为内置任务
+	if job.IsBuiltIn {
+		return errors.New("内置系统任务不能被删除")
 	}
 
 	// 检查任务是否在运行中

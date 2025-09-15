@@ -140,12 +140,25 @@ func (s *cronService) UpdateCronJob(ctx context.Context, req *model.UpdateCronJo
 func (s *cronService) DeleteCronJob(ctx context.Context, id int) error {
 	s.logger.Info("删除任务", zap.Int("id", id))
 
+	// 先检查任务是否存在并且是否为内置任务
+	job, err := s.cronDAO.GetCronJob(ctx, id)
+	if err != nil {
+		s.logger.Error("获取任务信息失败", zap.Int("id", id), zap.Error(err))
+		return err
+	}
+
+	// 检查是否为内置任务
+	if job.IsBuiltIn {
+		s.logger.Warn("尝试删除内置任务被拒绝", zap.Int("id", id), zap.String("name", job.Name))
+		return fmt.Errorf("内置系统任务不能被删除")
+	}
+
 	if err := s.cronDAO.DeleteCronJob(ctx, id); err != nil {
 		s.logger.Error("删除任务失败", zap.Int("id", id), zap.Error(err))
 		return err
 	}
 
-	s.logger.Info("删除任务成功", zap.Int("id", id))
+	s.logger.Info("删除任务成功", zap.Int("id", id), zap.String("name", job.Name))
 	return nil
 }
 
@@ -214,6 +227,14 @@ func (s *cronService) TriggerCronJob(ctx context.Context, id int) error {
 	// 检查任务状态
 	if job.Status != model.CronJobStatusEnabled {
 		return fmt.Errorf("任务未启用，无法手动触发")
+	}
+
+	// 系统内置任务不支持手动触发
+	if job.JobType == model.CronJobTypeSystem {
+		s.logger.Warn("系统内置任务不支持手动触发",
+			zap.Int("id", id),
+			zap.String("name", job.Name))
+		return fmt.Errorf("系统内置任务不支持手动触发")
 	}
 
 	// 创建任务载荷

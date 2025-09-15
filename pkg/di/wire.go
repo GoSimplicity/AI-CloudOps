@@ -128,7 +128,7 @@ var HandlerSet = wire.NewSet(
 	treeHandler.NewTreeNodeHandler,
 	treeHandler.NewTreeLocalHandler,
 	terminal.NewTerminalHandler,
-	cronApi.NewCronAPI,
+	cronApi.NewCronJobHandler,
 )
 
 var ServiceSet = wire.NewSet(
@@ -253,6 +253,7 @@ var JobSet = wire.NewSet(
 
 var CronSet = wire.NewSet(
 	cron.NewUnifiedCronManager,
+	cron.NewBuiltinTaskManager,
 	cronHandler.NewCronHandlers,
 	cronScheduler.NewCronScheduler,
 )

@@ -33,21 +33,21 @@ import (
 	"go.uber.org/zap"
 )
 
-type CronAPI struct {
+type CronJobHandler struct {
 	logger      *zap.Logger
 	cronService service.CronService
 }
 
-func NewCronAPI(logger *zap.Logger, cronService service.CronService) *CronAPI {
-	return &CronAPI{
+func NewCronJobHandler(logger *zap.Logger, cronService service.CronService) *CronJobHandler {
+	return &CronJobHandler{
 		logger:      logger,
 		cronService: cronService,
 	}
 }
 
-// RegisterRoutes 注册路由
-func (api *CronAPI) RegisterRoutes(r *gin.RouterGroup) {
-	cronGroup := r.Group("/cron")
+// RegisterRouters 注册路由
+func (api *CronJobHandler) RegisterRouters(server *gin.Engine) {
+	cronGroup := server.Group("/api/cron")
 	{
 		cronGroup.POST("/job/create", api.CreateCronJob)
 		cronGroup.PUT("/job/:id/update", api.UpdateCronJob)
@@ -62,7 +62,7 @@ func (api *CronAPI) RegisterRoutes(r *gin.RouterGroup) {
 }
 
 // CreateCronJob 创建任务
-func (api *CronAPI) CreateCronJob(ctx *gin.Context) {
+func (api *CronJobHandler) CreateCronJob(ctx *gin.Context) {
 	var req model.CreateCronJobReq
 
 	user := ctx.MustGet("user").(utils.UserClaims)
@@ -76,7 +76,7 @@ func (api *CronAPI) CreateCronJob(ctx *gin.Context) {
 }
 
 // UpdateCronJob 更新任务
-func (api *CronAPI) UpdateCronJob(ctx *gin.Context) {
+func (api *CronJobHandler) UpdateCronJob(ctx *gin.Context) {
 	var req model.UpdateCronJobReq
 
 	id, err := utils.GetParamID(ctx)
@@ -93,7 +93,7 @@ func (api *CronAPI) UpdateCronJob(ctx *gin.Context) {
 }
 
 // DeleteCronJob 删除任务
-func (api *CronAPI) DeleteCronJob(ctx *gin.Context) {
+func (api *CronJobHandler) DeleteCronJob(ctx *gin.Context) {
 	var req model.DeleteCronJobReq
 
 	id, err := utils.GetParamID(ctx)
@@ -110,7 +110,7 @@ func (api *CronAPI) DeleteCronJob(ctx *gin.Context) {
 }
 
 // GetCronJob 获取任务详情
-func (api *CronAPI) GetCronJob(ctx *gin.Context) {
+func (api *CronJobHandler) GetCronJob(ctx *gin.Context) {
 	var req model.GetCronJobReq
 
 	id, err := utils.GetParamID(ctx)
@@ -127,7 +127,7 @@ func (api *CronAPI) GetCronJob(ctx *gin.Context) {
 }
 
 // GetCronJobList 获取任务列表
-func (api *CronAPI) GetCronJobList(ctx *gin.Context) {
+func (api *CronJobHandler) GetCronJobList(ctx *gin.Context) {
 	var req model.GetCronJobListReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
@@ -136,7 +136,7 @@ func (api *CronAPI) GetCronJobList(ctx *gin.Context) {
 }
 
 // EnableCronJob 启用任务
-func (api *CronAPI) EnableCronJob(ctx *gin.Context) {
+func (api *CronJobHandler) EnableCronJob(ctx *gin.Context) {
 	var req model.EnableCronJobReq
 
 	id, err := utils.GetParamID(ctx)
@@ -151,7 +151,7 @@ func (api *CronAPI) EnableCronJob(ctx *gin.Context) {
 }
 
 // DisableCronJob 禁用任务
-func (api *CronAPI) DisableCronJob(ctx *gin.Context) {
+func (api *CronJobHandler) DisableCronJob(ctx *gin.Context) {
 	var req model.DisableCronJobReq
 
 	id, err := utils.GetParamID(ctx)
@@ -166,7 +166,7 @@ func (api *CronAPI) DisableCronJob(ctx *gin.Context) {
 }
 
 // TriggerCronJob 手动触发任务
-func (api *CronAPI) TriggerCronJob(ctx *gin.Context) {
+func (api *CronJobHandler) TriggerCronJob(ctx *gin.Context) {
 	var req model.TriggerCronJobReq
 
 	id, err := utils.GetParamID(ctx)
@@ -181,7 +181,7 @@ func (api *CronAPI) TriggerCronJob(ctx *gin.Context) {
 }
 
 // ValidateSchedule 验证调度表达式
-func (api *CronAPI) ValidateSchedule(ctx *gin.Context) {
+func (api *CronJobHandler) ValidateSchedule(ctx *gin.Context) {
 	var req model.ValidateScheduleReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {

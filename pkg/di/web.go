@@ -26,6 +26,7 @@
 package di
 
 import (
+	cronApi "github.com/GoSimplicity/AI-CloudOps/internal/cron/api"
 	k8sApi "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	notAuthHandler "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	prometheusApi "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
@@ -33,7 +34,6 @@ import (
 	resourceApi "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	userApi "github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	workorderApi "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -60,7 +60,6 @@ func InitGinServer(
 	clusterRoleHdl *k8sApi.K8sClusterRoleHandler,
 	roleBindingHdl *k8sApi.K8sRoleBindingHandler,
 	clusterRoleBindingHdl *k8sApi.K8sClusterRoleBindingHandler,
-
 	alertEventHdl *prometheusApi.AlertEventHandler,
 	alertPoolHdl *prometheusApi.AlertPoolHandler,
 	alertRuleHdl *prometheusApi.AlertRuleHandler,
@@ -84,6 +83,7 @@ func InitGinServer(
 	notificationHdl *workorderApi.NotificationHandler,
 	ingressHdl *k8sApi.K8sIngressHandler,
 	k8sPodHdl *k8sApi.K8sPodHandler,
+	cronJobHdl *cronApi.CronJobHandler,
 ) *gin.Engine {
 	server := gin.Default()
 	server.Use(m...)
@@ -130,5 +130,6 @@ func InitGinServer(
 	notificationHdl.RegisterRouters(server)
 	ingressHdl.RegisterRouters(server)
 	k8sPodHdl.RegisterRouters(server)
+	cronJobHdl.RegisterRouters(server)
 	return server
 }

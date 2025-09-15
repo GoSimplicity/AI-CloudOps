@@ -81,6 +81,9 @@ type unifiedCronManager struct {
 	// 用户自定义任务调度器
 	cronScheduler *scheduler.CronScheduler
 
+	// 内置任务管理器
+	builtinTaskMgr *BuiltinTaskManager
+
 	// 管理器状态
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -95,6 +98,7 @@ func NewUnifiedCronManager(
 	clusterMgr manager.ClusterManager,
 	promConfigCache cache.MonitorCache,
 	cronScheduler *scheduler.CronScheduler,
+	builtinTaskMgr *BuiltinTaskManager,
 ) CronManager {
 	return &unifiedCronManager{
 		logger:          logger,
@@ -104,6 +108,7 @@ func NewUnifiedCronManager(
 		clusterMgr:      clusterMgr,
 		promConfigCache: promConfigCache,
 		cronScheduler:   cronScheduler,
+		builtinTaskMgr:  builtinTaskMgr,
 	}
 }
 
@@ -117,7 +122,28 @@ func (cm *unifiedCronManager) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	cm.cancel = cancel
 
-	// 启动系统内置任务
+	// 验证和初始化内置任务到数据库
+	if err := cm.builtinTaskMgr.ValidateBuiltinTasks(ctx); err != nil {
+		cm.logger.Warn("内置任务完整性验证失败，尝试重新初始化", zap.Error(err))
+		// 尝试正常初始化
+		if initErr := cm.builtinTaskMgr.InitializeBuiltinTasks(ctx); initErr != nil {
+			cm.logger.Error("正常初始化内置任务失败，尝试强制初始化", zap.Error(initErr))
+			// 如果正常初始化失败，尝试强制初始化
+			if forceErr := cm.builtinTaskMgr.ForceInitializeBuiltinTasks(ctx); forceErr != nil {
+				cm.logger.Error("强制初始化内置任务也失败", zap.Error(forceErr))
+				return forceErr
+			}
+		}
+	} else {
+		cm.logger.Info("内置任务完整性验证通过")
+		// 即使验证通过，也运行一次正常初始化以确保配置是最新的
+		if err := cm.builtinTaskMgr.InitializeBuiltinTasks(ctx); err != nil {
+			cm.logger.Error("更新内置任务配置失败", zap.Error(err))
+			return err
+		}
+	}
+
+	// 启动系统内置任务（根据数据库状态）
 	if err := cm.StartSystemTasks(ctx); err != nil {
 		cm.logger.Error("启动系统内置任务失败", zap.Error(err))
 		return err
@@ -133,36 +159,54 @@ func (cm *unifiedCronManager) Start(ctx context.Context) error {
 	return nil
 }
 
-// StartSystemTasks 启动系统内置任务
+// StartSystemTasks 启动系统内置任务（根据数据库状态）
 func (cm *unifiedCronManager) StartSystemTasks(ctx context.Context) error {
 	cm.logger.Info("启动系统内置任务")
 
-	// 启动值班历史记录管理任务
-	cm.wg.Add(1)
-	go func() {
-		defer cm.wg.Done()
-		if err := cm.startOnDutyHistoryManager(ctx); err != nil {
-			cm.logger.Error("值班历史记录管理任务异常退出", zap.Error(err))
-		}
-	}()
+	// 获取启用的内置任务
+	enabledTasks, err := cm.builtinTaskMgr.GetEnabledBuiltinTasks(ctx)
+	if err != nil {
+		cm.logger.Error("获取启用的内置任务失败", zap.Error(err))
+		return err
+	}
 
-	// 启动K8s状态检查任务
-	cm.wg.Add(1)
-	go func() {
-		defer cm.wg.Done()
-		if err := cm.startCheckK8sStatusManager(ctx); err != nil {
-			cm.logger.Error("K8s状态检查任务异常退出", zap.Error(err))
-		}
-	}()
+	// 根据数据库状态启动对应的任务
+	for _, task := range enabledTasks {
+		taskType := task.Command // 任务类型存储在Command字段中
+		cm.logger.Info("启动内置任务", zap.String("taskName", task.Name), zap.String("taskType", taskType))
 
-	// 启动Prometheus配置刷新任务
-	cm.wg.Add(1)
-	go func() {
-		defer cm.wg.Done()
-		if err := cm.startPrometheusConfigRefreshManager(ctx); err != nil {
-			cm.logger.Error("Prometheus配置刷新任务异常退出", zap.Error(err))
+		switch taskType {
+		case "on_duty_history":
+			cm.wg.Add(1)
+			go func(taskName string) {
+				defer cm.wg.Done()
+				if err := cm.startOnDutyHistoryManager(ctx); err != nil {
+					cm.logger.Error("值班历史记录管理任务异常退出", zap.String("taskName", taskName), zap.Error(err))
+				}
+			}(task.Name)
+
+		case "k8s_status_check":
+			cm.wg.Add(1)
+			go func(taskName string) {
+				defer cm.wg.Done()
+				if err := cm.startCheckK8sStatusManager(ctx); err != nil {
+					cm.logger.Error("K8s状态检查任务异常退出", zap.String("taskName", taskName), zap.Error(err))
+				}
+			}(task.Name)
+
+		case "prometheus_config_refresh":
+			cm.wg.Add(1)
+			go func(taskName string) {
+				defer cm.wg.Done()
+				if err := cm.startPrometheusConfigRefreshManager(ctx); err != nil {
+					cm.logger.Error("Prometheus配置刷新任务异常退出", zap.String("taskName", taskName), zap.Error(err))
+				}
+			}(task.Name)
+
+		default:
+			cm.logger.Warn("未知的内置任务类型", zap.String("taskName", task.Name), zap.String("taskType", taskType))
 		}
-	}()
+	}
 
 	return nil
 }
@@ -782,21 +826,46 @@ func (cm *unifiedCronManager) checkK8sStatusWithRetry(ctx context.Context) error
 
 // checkClusterStatus 检查单个集群状态
 func (cm *unifiedCronManager) checkClusterStatus(ctx context.Context, cluster *model.K8sCluster) error {
+	startTime := time.Now()
+	var newStatus model.ClusterStatus
+
 	if err := cm.clusterMgr.CheckClusterStatus(ctx, cluster.ID); err != nil {
-		cm.logger.Warn("集群连接检查失败",
-			zap.Error(err),
-			zap.String("cluster", cluster.Name))
-		cluster.Status = model.StatusError
+		// 分类处理不同类型的连接错误
+		if strings.Contains(err.Error(), "connection refused") {
+			cm.logger.Debug("集群连接被拒绝（可能是正常的离线状态）",
+				zap.String("cluster", cluster.Name),
+				zap.String("endpoint", "检测到连接被拒绝"))
+		} else if strings.Contains(err.Error(), "timeout") {
+			cm.logger.Warn("集群连接超时",
+				zap.Error(err),
+				zap.String("cluster", cluster.Name))
+		} else {
+			cm.logger.Warn("集群连接检查失败",
+				zap.Error(err),
+				zap.String("cluster", cluster.Name))
+		}
+		newStatus = model.StatusError
 	} else {
-		cluster.Status = model.StatusRunning
+		newStatus = model.StatusRunning
+		cm.logger.Debug("集群状态检查成功",
+			zap.String("cluster", cluster.Name),
+			zap.Duration("duration", time.Since(startTime)))
 	}
 
-	if err := cm.k8sDao.UpdateClusterStatus(ctx, cluster.ID, cluster.Status); err != nil {
-		cm.logger.Error("更新集群状态失败",
-			zap.Error(err),
+	// 只有状态发生变化时才更新数据库，减少不必要的写操作
+	if cluster.Status != newStatus {
+		if err := cm.k8sDao.UpdateClusterStatus(ctx, cluster.ID, newStatus); err != nil {
+			cm.logger.Error("更新集群状态失败",
+				zap.Error(err),
+				zap.String("cluster", cluster.Name),
+				zap.Int8("oldStatus", int8(cluster.Status)),
+				zap.Int8("newStatus", int8(newStatus)))
+			return fmt.Errorf("更新集群[%s]状态失败: %w", cluster.Name, err)
+		}
+		cm.logger.Info("集群状态已更新",
 			zap.String("cluster", cluster.Name),
-			zap.Int8("status", int8(cluster.Status)))
-		return fmt.Errorf("更新集群[%s]状态失败: %w", cluster.Name, err)
+			zap.Int8("oldStatus", int8(cluster.Status)),
+			zap.Int8("newStatus", int8(newStatus)))
 	}
 
 	return nil

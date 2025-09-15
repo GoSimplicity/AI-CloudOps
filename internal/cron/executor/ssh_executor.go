@@ -53,16 +53,21 @@ func NewSSHExecutor(logger *zap.Logger, treeLocalDAO dao.TreeLocalDAO) *SSHExecu
 
 // ExecuteSSHJob 执行SSH任务
 func (e *SSHExecutor) ExecuteSSHJob(ctx context.Context, job *model.CronJob) (string, error) {
+	resourceID := 0
+	if job.SSHResourceID != nil {
+		resourceID = *job.SSHResourceID
+	}
+
 	e.logger.Info("开始执行SSH任务",
 		zap.String("任务名称", job.Name),
-		zap.Int("资源ID", job.SSHResourceID))
+		zap.Int("资源ID", resourceID))
 
 	// 验证SSH任务配置
 	if job.JobType != model.CronJobTypeSSH {
 		return "", fmt.Errorf("任务类型不是SSH执行任务")
 	}
 
-	if job.SSHResourceID == 0 {
+	if job.SSHResourceID == nil || *job.SSHResourceID == 0 {
 		return "", fmt.Errorf("SSH资源ID不能为空")
 	}
 
@@ -71,16 +76,16 @@ func (e *SSHExecutor) ExecuteSSHJob(ctx context.Context, job *model.CronJob) (st
 	}
 
 	// 获取SSH资源信息
-	resource, err := e.treeLocalDAO.GetByID(ctx, job.SSHResourceID)
+	resource, err := e.treeLocalDAO.GetByID(ctx, *job.SSHResourceID)
 	if err != nil {
 		e.logger.Error("获取SSH资源失败",
-			zap.Int("资源ID", job.SSHResourceID),
+			zap.Int("资源ID", *job.SSHResourceID),
 			zap.Error(err))
 		return "", fmt.Errorf("获取SSH资源失败: %w", err)
 	}
 
 	if resource == nil {
-		return "", fmt.Errorf("SSH资源不存在: ID=%d", job.SSHResourceID)
+		return "", fmt.Errorf("SSH资源不存在: ID=%d", *job.SSHResourceID)
 	}
 
 	// 验证资源状态
@@ -190,7 +195,7 @@ func (e *SSHExecutor) ValidateSSHJob(ctx context.Context, job *model.CronJob) er
 		return fmt.Errorf("任务类型不是SSH执行任务")
 	}
 
-	if job.SSHResourceID == 0 {
+	if job.SSHResourceID == nil || *job.SSHResourceID == 0 {
 		return fmt.Errorf("SSH资源ID不能为空")
 	}
 
@@ -199,7 +204,7 @@ func (e *SSHExecutor) ValidateSSHJob(ctx context.Context, job *model.CronJob) er
 	}
 
 	// 验证SSH资源是否存在且可用
-	resource, err := e.treeLocalDAO.GetByID(ctx, job.SSHResourceID)
+	resource, err := e.treeLocalDAO.GetByID(ctx, *job.SSHResourceID)
 	if err != nil {
 		return fmt.Errorf("获取SSH资源失败: %w", err)
 	}

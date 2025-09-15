@@ -57,6 +57,7 @@ type CronJob struct {
 	Description   string        `json:"description" gorm:"type:text;comment:任务描述"`
 	JobType       CronJobType   `json:"job_type" gorm:"type:tinyint(1);not null;default:2;comment:任务类型 1系统任务 2命令行 3HTTP 4脚本 5SSH"`
 	Status        CronJobStatus `json:"status" gorm:"type:tinyint(1);not null;default:1;comment:任务状态 1启用 2禁用 3运行中 4错误"`
+	IsBuiltIn     bool          `json:"is_built_in" gorm:"type:tinyint(1);not null;default:0;comment:是否为内置任务 0否 1是"`
 	Schedule      string        `json:"schedule" gorm:"type:varchar(100);not null;comment:调度表达式"`
 	Command       string        `json:"command" gorm:"type:text;comment:执行命令"`
 	Args          StringList    `json:"args" gorm:"type:text;comment:命令参数"`
@@ -69,7 +70,7 @@ type CronJob struct {
 	ScriptType    string        `json:"script_type" gorm:"type:varchar(20);comment:脚本类型"`
 	ScriptContent string        `json:"script_content" gorm:"type:longtext;comment:脚本内容"`
 	// SSH远程执行相关字段
-	SSHResourceID   int                `json:"ssh_resource_id" gorm:"default:0;comment:SSH资源ID,关联树资源"`
+	SSHResourceID   *int               `json:"ssh_resource_id" gorm:"comment:SSH资源ID,关联树资源"`
 	SSHResource     *TreeLocalResource `json:"ssh_resource,omitempty" gorm:"foreignKey:SSHResourceID"`
 	SSHCommand      string             `json:"ssh_command" gorm:"type:text;comment:SSH执行命令"`
 	SSHWorkDir      string             `json:"ssh_work_dir" gorm:"type:varchar(500);comment:SSH工作目录"`
@@ -118,7 +119,7 @@ type CreateCronJobReq struct {
 	ScriptType    string       `json:"script_type"`
 	ScriptContent string       `json:"script_content"`
 	// SSH相关字段
-	SSHResourceID  int          `json:"ssh_resource_id"`
+	SSHResourceID  *int         `json:"ssh_resource_id"`
 	SSHCommand     string       `json:"ssh_command"`
 	SSHWorkDir     string       `json:"ssh_work_dir"`
 	SSHEnvironment KeyValueList `json:"ssh_environment"`
@@ -146,7 +147,7 @@ type UpdateCronJobReq struct {
 	ScriptType    string       `json:"script_type"`
 	ScriptContent string       `json:"script_content"`
 	// SSH相关字段
-	SSHResourceID  int          `json:"ssh_resource_id"`
+	SSHResourceID  *int         `json:"ssh_resource_id"`
 	SSHCommand     string       `json:"ssh_command"`
 	SSHWorkDir     string       `json:"ssh_work_dir"`
 	SSHEnvironment KeyValueList `json:"ssh_environment"`

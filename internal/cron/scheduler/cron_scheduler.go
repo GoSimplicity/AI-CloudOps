@@ -71,8 +71,8 @@ func (cs *CronScheduler) StartScheduler(ctx context.Context) error {
 		return err
 	}
 
-	// 定期重新加载任务配置（每分钟检查一次）
-	ticker := time.NewTicker(1 * time.Minute)
+	// 定期重新加载任务配置（每5分钟检查一次，减少数据库查询频率）
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
 	for {
@@ -81,8 +81,11 @@ func (cs *CronScheduler) StartScheduler(ctx context.Context) error {
 			cs.logger.Info("Cron任务调度器已停止")
 			return nil
 		case <-ticker.C:
+			cs.logger.Debug("重新加载任务配置")
 			if err := cs.loadAndScheduleJobs(ctx); err != nil {
 				cs.logger.Error("重新加载任务失败", zap.Error(err))
+			} else {
+				cs.logger.Debug("任务配置重新加载完成")
 			}
 		}
 	}
@@ -97,26 +100,51 @@ func (cs *CronScheduler) loadAndScheduleJobs(ctx context.Context) error {
 		Status:  &enabledStatus,                     // 只获取启用的任务
 	})
 	if err != nil {
+		cs.logger.Error("获取启用任务列表失败", zap.Error(err))
 		return err
 	}
 
 	// 清除现有的调度任务
 	cs.scheduler.Unregister("*")
+	cs.logger.Debug("已清除所有现有调度任务")
+
+	// 统计调度成功的任务数量
+	scheduledCount := 0
+	skippedCount := 0
+	failedCount := 0
 
 	// 为每个任务注册调度
 	for _, job := range jobs {
+		// 跳过系统内置任务，这些任务由统一Cron管理器直接管理
+		if job.JobType == model.CronJobTypeSystem {
+			cs.logger.Debug("跳过系统内置任务",
+				zap.Int("jobID", job.ID),
+				zap.String("jobName", job.Name))
+			skippedCount++
+			continue
+		}
+
 		if err := cs.scheduleJob(job); err != nil {
 			cs.logger.Error("调度任务失败",
 				zap.Int("jobID", job.ID),
 				zap.String("jobName", job.Name),
 				zap.Error(err))
+			failedCount++
 			continue
 		}
-		cs.logger.Info("任务调度成功",
+
+		cs.logger.Debug("任务调度成功",
 			zap.Int("jobID", job.ID),
 			zap.String("jobName", job.Name),
 			zap.String("schedule", job.Schedule))
+		scheduledCount++
 	}
+
+	cs.logger.Info("任务调度完成",
+		zap.Int("total", len(jobs)),
+		zap.Int("scheduled", scheduledCount),
+		zap.Int("skipped", skippedCount),
+		zap.Int("failed", failedCount))
 
 	return nil
 }
