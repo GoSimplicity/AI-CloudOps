@@ -764,44 +764,6 @@ kubectl get pods,svc,ingress -l app=ai-cloudops
 
 </details>
 
-<div align="center">
-
-### ✅ 部署检查清单
-
-<table>
-<tr>
-<td align="center">
-
-**🔧 后端服务**
-- [ ] 服务启动成功
-- [ ] 数据库连接正常
-- [ ] API 接口可访问
-- [ ] 健康检查通过
-
-</td>
-<td align="center">
-
-**🎨 前端应用**
-- [ ] 静态资源加载
-- [ ] 路由配置正确
-- [ ] API 调用成功
-- [ ] 页面渲染正常
-
-</td>
-<td align="center">
-
-**📊 监控告警**
-- [ ] 监控指标采集
-- [ ] 告警规则配置
-- [ ] 日志聚合正常
-- [ ] 性能指标正常
-
-</td>
-</tr>
-</table>
-
-</div>
-
 ## 🏗️ 项目架构 (Project Architecture)
 
 <div align="center">
