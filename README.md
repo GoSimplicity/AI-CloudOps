@@ -181,8 +181,6 @@
 
 ## 🌐 在线体验 (Live Demo)
 
-< align="center">
-
 ### 🎯 立即体验我们的平台
 
 <table>
