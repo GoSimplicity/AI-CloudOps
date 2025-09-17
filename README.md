@@ -1164,7 +1164,7 @@ git commit -m "docs(readme): update installation guide"
 <td align="center" width="25%">
 <h4>🔧 技术支持</h4>
 <p>Go 生态系统</p>
-<p>React 生态系统</p>
+<p>Vue 生态系统</p>
 <p>Kubernetes 社区</p>
 <p>开源社区</p>
 </td>
@@ -1184,7 +1184,7 @@ git commit -m "docs(readme): update installation guide"
 </td>
 <td align="center" width="25%">
 <h4>🎨 设计资源</h4>
-<p>Ant Design</p>
+<p>Ant Design Vue</p>
 <p>Heroicons</p>
 <p>Unsplash</p>
 <p>Figma</p>
