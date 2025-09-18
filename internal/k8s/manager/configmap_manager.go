@@ -44,13 +44,8 @@ type ConfigMapManager interface {
 	UpdateConfigMap(ctx context.Context, clusterID int, configMap *corev1.ConfigMap) (*corev1.ConfigMap, error)
 	DeleteConfigMap(ctx context.Context, clusterID int, namespace, name string, options metav1.DeleteOptions) error
 
-	// 批量操作
-	BatchDeleteConfigMaps(ctx context.Context, clusterID int, namespace string, configMapNames []string, options metav1.DeleteOptions) error
-
 	// 业务功能
 	ListConfigMapsBySelector(ctx context.Context, clusterID int, namespace string, selector string) (*corev1.ConfigMapList, error)
-	GetConfigMapData(ctx context.Context, clusterID int, namespace, name string, key string) (string, error)
-	UpdateConfigMapData(ctx context.Context, clusterID int, namespace, name string, data map[string]string) (*corev1.ConfigMap, error)
 }
 
 // configMapManager ConfigMap管理器实现
@@ -163,37 +158,6 @@ func (m *configMapManager) DeleteConfigMap(ctx context.Context, clusterID int, n
 	return nil
 }
 
-// BatchDeleteConfigMaps 批量删除ConfigMap
-func (m *configMapManager) BatchDeleteConfigMaps(ctx context.Context, clusterID int, namespace string, configMapNames []string, options metav1.DeleteOptions) error {
-	if len(configMapNames) == 0 {
-		return nil
-	}
-
-	clientset, err := m.client.GetKubeClient(clusterID)
-	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	var errors []error
-	for _, configMapName := range configMapNames {
-		if err := clientset.CoreV1().ConfigMaps(namespace).Delete(ctx, configMapName, options); err != nil {
-			m.logger.Error("批量删除ConfigMap失败", zap.Error(err),
-				zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", configMapName))
-			errors = append(errors, fmt.Errorf("删除ConfigMap %s/%s 失败: %w", namespace, configMapName, err))
-		} else {
-			m.logger.Info("成功删除ConfigMap",
-				zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", configMapName))
-		}
-	}
-
-	if len(errors) > 0 {
-		return fmt.Errorf("批量删除ConfigMap时发生 %d 个错误: %v", len(errors), errors)
-	}
-
-	return nil
-}
-
 // ListConfigMapsBySelector 根据选择器获取ConfigMap列表
 func (m *configMapManager) ListConfigMapsBySelector(ctx context.Context, clusterID int, namespace string, selector string) (*corev1.ConfigMapList, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
@@ -215,42 +179,4 @@ func (m *configMapManager) ListConfigMapsBySelector(ctx context.Context, cluster
 	}
 
 	return configMaps, nil
-}
-
-// GetConfigMapData 获取ConfigMap中特定键的数据
-func (m *configMapManager) GetConfigMapData(ctx context.Context, clusterID int, namespace, name string, key string) (string, error) {
-	configMap, err := m.GetConfigMap(ctx, clusterID, namespace, name)
-	if err != nil {
-		return "", err
-	}
-
-	if configMap.Data == nil {
-		return "", fmt.Errorf("ConfigMap %s/%s 没有数据", namespace, name)
-	}
-
-	value, exists := configMap.Data[key]
-	if !exists {
-		return "", fmt.Errorf("ConfigMap %s/%s 中不存在键 %s", namespace, name, key)
-	}
-
-	return value, nil
-}
-
-// UpdateConfigMapData 更新ConfigMap的数据
-func (m *configMapManager) UpdateConfigMapData(ctx context.Context, clusterID int, namespace, name string, data map[string]string) (*corev1.ConfigMap, error) {
-	configMap, err := m.GetConfigMap(ctx, clusterID, namespace, name)
-	if err != nil {
-		return nil, err
-	}
-
-	if configMap.Data == nil {
-		configMap.Data = make(map[string]string)
-	}
-
-	// 更新数据
-	for key, value := range data {
-		configMap.Data[key] = value
-	}
-
-	return m.UpdateConfigMap(ctx, clusterID, configMap)
 }

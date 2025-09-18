@@ -27,8 +27,6 @@ package model
 
 import (
 	"time"
-
-	corev1 "k8s.io/api/core/v1"
 )
 
 // K8sConfigMap K8s ConfigMap模型
@@ -102,19 +100,4 @@ type GetConfigMapYAMLReq struct {
 	ResourceName string `json:"resource_name" form:"resource_name" uri:"name" binding:"required"`
 }
 
-// CreateConfigMapByYamlReq 通过YAML创建ConfigMap请求
-type CreateConfigMapByYamlReq struct {
-	ClusterID int               `json:"cluster_id" binding:"required"`
-	Namespace string            `json:"namespace" binding:"required"`
-	Content   string            `json:"content" binding:"required"`
-	ConfigMap *corev1.ConfigMap `json:"config_map"`
-}
-
-// UpdateConfigMapByYamlReq 通过YAML更新ConfigMap请求
-type UpdateConfigMapByYamlReq struct {
-	ClusterID int               `json:"cluster_id" binding:"required"`
-	Namespace string            `json:"namespace" binding:"required"`
-	Name      string            `json:"name" binding:"required"`
-	Content   string            `json:"content" binding:"required"`
-	ConfigMap *corev1.ConfigMap `json:"config_map"`
-}
+// 删除冗余的ConfigMap YAML专用请求结构，统一使用通用YAML请求

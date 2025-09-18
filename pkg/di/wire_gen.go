@@ -48,9 +48,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	"github.com/hibiken/asynq"
-)
 
-import (
 	_ "github.com/google/wire"
 )
 
@@ -127,6 +125,13 @@ func ProvideCmd() *Cmd {
 	clusterRoleBindingManager := manager.NewClusterRoleBindingManager(k8sClient, logger)
 	clusterRoleBindingService := service4.NewClusterRoleBindingService(clusterRoleBindingManager, logger)
 	k8sClusterRoleBindingHandler := api4.NewK8sClusterRoleBindingHandler(clusterRoleBindingService)
+	// Added ConfigMap and Secret wiring
+	configMapManager := manager.NewConfigMapManager(k8sClient, logger)
+	configMapService := service4.NewConfigMapService(k8sClient, configMapManager, logger)
+	k8sConfigMapHandler := api4.NewK8sConfigMapHandler(configMapService)
+	secretManager := manager.NewSecretManager(k8sClient, logger)
+	secretService := service4.NewSecretService(k8sClient, secretManager, logger)
+	k8sSecretHandler := api4.NewK8sSecretHandler(secretService)
 	alertManagerEventDAO := alert.NewAlertManagerEventDAO(db, logger, userDAO)
 	scrapePoolDAO := scrape.NewScrapePoolDAO(db, logger, userDAO)
 	scrapeJobDAO := scrape.NewScrapeJobDAO(db, logger)
@@ -208,7 +213,7 @@ func ProvideCmd() *Cmd {
 	cronJobDAO := dao6.NewCronJobDAO(logger, db)
 	cronService := service7.NewCronService(logger, cronJobDAO, asynqClient)
 	cronJobHandler := api8.NewCronJobHandler(logger, cronService)
-	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, systemHandler, notAuthHandler, k8sClusterHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sSvcHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sDaemonSetHandler, k8sEventHandler, k8sStatefulSetHandler, k8sServiceAccountHandler, k8sRoleHandler, k8sClusterRoleHandler, k8sRoleBindingHandler, k8sClusterRoleBindingHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, monitorConfigHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, workorderProcessHandler, templateHandler, instanceHandler, instanceFlowHandler, instanceCommentHandler, categoryGroupHandler, instanceTimeLineHandler, treeNodeHandler, treeLocalHandler, notificationHandler, k8sIngressHandler, k8sPodHandler, cronJobHandler)
+	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, systemHandler, notAuthHandler, k8sClusterHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sSvcHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sDaemonSetHandler, k8sEventHandler, k8sStatefulSetHandler, k8sServiceAccountHandler, k8sRoleHandler, k8sClusterRoleHandler, k8sRoleBindingHandler, k8sClusterRoleBindingHandler, k8sConfigMapHandler, k8sSecretHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, monitorConfigHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, workorderProcessHandler, templateHandler, instanceHandler, instanceFlowHandler, instanceCommentHandler, categoryGroupHandler, instanceTimeLineHandler, treeNodeHandler, treeLocalHandler, notificationHandler, k8sIngressHandler, k8sPodHandler, cronJobHandler)
 	applicationBootstrap := startup.NewApplicationBootstrap(clusterManager, logger)
 	asynqScheduler := InitScheduler()
 	cronScheduler := scheduler.NewCronScheduler(logger, cronJobDAO, asynqScheduler, asynqClient)

@@ -107,6 +107,7 @@ var HandlerSet = wire.NewSet(
 	k8sHandler.NewK8sIngressHandler,
 	k8sHandler.NewK8sPodHandler,
 	k8sHandler.NewK8sConfigMapHandler,
+	k8sHandler.NewK8sSecretHandler,
 	promHandler.NewAlertPoolHandler,
 	promHandler.NewMonitorConfigHandler,
 	promHandler.NewOnDutyGroupHandler,
