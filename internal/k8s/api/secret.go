@@ -32,19 +32,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// K8sSecretHandler Secret处理器
 type K8sSecretHandler struct {
 	secretService service.SecretService
 }
 
-// NewK8sSecretHandler 创建Secret处理器
 func NewK8sSecretHandler(secretService service.SecretService) *K8sSecretHandler {
 	return &K8sSecretHandler{
 		secretService: secretService,
 	}
 }
 
-// RegisterRouters 注册路由（集群作用域）
 func (h *K8sSecretHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
@@ -68,13 +65,10 @@ func (h *K8sSecretHandler) GetSecretList(ctx *gin.Context) {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(ctx, "参数绑定错误: "+err.Error())
-		return
-	}
+
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.secretService.GetSecretList(ctx, &req)
 	})
 }
@@ -88,26 +82,24 @@ func (h *K8sSecretHandler) GetSecret(ctx *gin.Context) {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	ns, err := utils.GetParamCustomName(ctx, "namespace")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	name, err := utils.GetParamCustomName(ctx, "name")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	req.ClusterID = clusterID
 	req.Namespace = ns
 	req.Name = name
 
-	if req.Namespace == "" || req.Name == "" {
-		utils.BadRequestError(ctx, "命名空间和Secret名称不能为空")
-		return
-	}
-
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.secretService.GetSecret(ctx, &req)
 	})
 }
@@ -121,6 +113,7 @@ func (h *K8sSecretHandler) CreateSecret(ctx *gin.Context) {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
@@ -137,16 +130,19 @@ func (h *K8sSecretHandler) UpdateSecret(ctx *gin.Context) {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	ns, err := utils.GetParamCustomName(ctx, "namespace")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	name, err := utils.GetParamCustomName(ctx, "name")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	req.ClusterID = clusterID
 	req.Namespace = ns
 	req.Name = name
@@ -165,21 +161,24 @@ func (h *K8sSecretHandler) DeleteSecret(ctx *gin.Context) {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	ns, err := utils.GetParamCustomName(ctx, "namespace")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	name, err := utils.GetParamCustomName(ctx, "name")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	req.ClusterID = clusterID
 	req.Namespace = ns
 	req.Name = name
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.secretService.DeleteSecret(ctx, &req)
 	})
 }
@@ -210,7 +209,7 @@ func (h *K8sSecretHandler) GetSecretYAML(ctx *gin.Context) {
 	req.Namespace = ns
 	req.Name = name
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.secretService.GetSecretYAML(ctx, &req)
 	})
 }
@@ -224,6 +223,7 @@ func (h *K8sSecretHandler) CreateSecretByYaml(ctx *gin.Context) {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
@@ -240,16 +240,19 @@ func (h *K8sSecretHandler) UpdateSecretByYaml(ctx *gin.Context) {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	ns, err := utils.GetParamCustomName(ctx, "namespace")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	name, err := utils.GetParamCustomName(ctx, "name")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	req.ClusterID = clusterID
 	req.Namespace = ns
 	req.Name = name

@@ -131,7 +131,7 @@ func ProvideCmd() *Cmd {
 	configMapService := service4.NewConfigMapService(k8sClient, configMapManager, logger)
 	k8sConfigMapHandler := api4.NewK8sConfigMapHandler(configMapService)
 	secretManager := manager.NewSecretManager(k8sClient, logger)
-	secretService := service4.NewSecretService(k8sClient, secretManager, logger)
+	secretService := service4.NewSecretService(secretManager, logger)
 	k8sSecretHandler := api4.NewK8sSecretHandler(secretService)
 	alertManagerEventDAO := alert.NewAlertManagerEventDAO(db, logger, userDAO)
 	scrapePoolDAO := scrape.NewScrapePoolDAO(db, logger, userDAO)

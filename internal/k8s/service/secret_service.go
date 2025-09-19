@@ -31,7 +31,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -56,15 +55,13 @@ type SecretService interface {
 
 // secretService Secret服务实现
 type secretService struct {
-	k8sClient     client.K8sClient      // 保持向后兼容
-	secretManager manager.SecretManager // 新的依赖注入
+	secretManager manager.SecretManager
 	logger        *zap.Logger
 }
 
 // NewSecretService 创建新的Secret服务实例
-func NewSecretService(k8sClient client.K8sClient, secretManager manager.SecretManager, logger *zap.Logger) SecretService {
+func NewSecretService(secretManager manager.SecretManager, logger *zap.Logger) SecretService {
 	return &secretService{
-		k8sClient:     k8sClient,
 		secretManager: secretManager,
 		logger:        logger,
 	}
