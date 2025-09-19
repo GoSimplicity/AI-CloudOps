@@ -48,7 +48,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	"github.com/hibiken/asynq"
+)
 
+import (
 	_ "github.com/google/wire"
 )
 
@@ -125,7 +127,6 @@ func ProvideCmd() *Cmd {
 	clusterRoleBindingManager := manager.NewClusterRoleBindingManager(k8sClient, logger)
 	clusterRoleBindingService := service4.NewClusterRoleBindingService(clusterRoleBindingManager, logger)
 	k8sClusterRoleBindingHandler := api4.NewK8sClusterRoleBindingHandler(clusterRoleBindingService)
-	// Added ConfigMap and Secret wiring
 	configMapManager := manager.NewConfigMapManager(k8sClient, logger)
 	configMapService := service4.NewConfigMapService(k8sClient, configMapManager, logger)
 	k8sConfigMapHandler := api4.NewK8sConfigMapHandler(configMapService)
@@ -245,7 +246,7 @@ type Cmd struct {
 	CronHandlers *handler.CronHandlers
 }
 
-var HandlerSet = wire.NewSet(api2.NewRoleHandler, api2.NewApiHandler, api2.NewAuditHandler, api2.NewSystemHandler, api.NewUserHandler, api3.NewNotAuthHandler, api4.NewK8sNodeHandler, api4.NewK8sClusterHandler, api4.NewK8sDeploymentHandler, api4.NewK8sNamespaceHandler, api4.NewK8sSvcHandler, api4.NewK8sYamlTaskHandler, api4.NewK8sYamlTemplateHandler, api4.NewK8sDaemonSetHandler, api4.NewK8sEventHandler, api4.NewK8sStatefulSetHandler, api4.NewK8sServiceAccountHandler, api4.NewK8sRoleHandler, api4.NewK8sClusterRoleHandler, api4.NewK8sRoleBindingHandler, api4.NewK8sClusterRoleBindingHandler, api4.NewK8sIngressHandler, api4.NewK8sPodHandler, api4.NewK8sConfigMapHandler, api5.NewAlertPoolHandler, api5.NewMonitorConfigHandler, api5.NewOnDutyGroupHandler, api5.NewRecordRuleHandler, api5.NewAlertRuleHandler, api5.NewSendGroupHandler, api5.NewScrapeJobHandler, api5.NewScrapePoolHandler, api5.NewAlertEventHandler, api6.NewFormDesignHandler, api6.NewInstanceHandler, api6.NewInstanceFlowHandler, api6.NewInstanceCommentHandler, api6.NewInstanceTimeLineHandler, api6.NewTemplateHandler, api6.NewWorkorderProcessHandler, api6.NewCategoryGroupHandler, api6.NewNotificationHandler, api7.NewTreeNodeHandler, api7.NewTreeLocalHandler, terminal.NewTerminalHandler, api8.NewCronJobHandler)
+var HandlerSet = wire.NewSet(api2.NewRoleHandler, api2.NewApiHandler, api2.NewAuditHandler, api2.NewSystemHandler, api.NewUserHandler, api3.NewNotAuthHandler, api4.NewK8sNodeHandler, api4.NewK8sClusterHandler, api4.NewK8sDeploymentHandler, api4.NewK8sNamespaceHandler, api4.NewK8sSvcHandler, api4.NewK8sYamlTaskHandler, api4.NewK8sYamlTemplateHandler, api4.NewK8sDaemonSetHandler, api4.NewK8sEventHandler, api4.NewK8sStatefulSetHandler, api4.NewK8sServiceAccountHandler, api4.NewK8sRoleHandler, api4.NewK8sClusterRoleHandler, api4.NewK8sRoleBindingHandler, api4.NewK8sClusterRoleBindingHandler, api4.NewK8sIngressHandler, api4.NewK8sPodHandler, api4.NewK8sConfigMapHandler, api4.NewK8sSecretHandler, api5.NewAlertPoolHandler, api5.NewMonitorConfigHandler, api5.NewOnDutyGroupHandler, api5.NewRecordRuleHandler, api5.NewAlertRuleHandler, api5.NewSendGroupHandler, api5.NewScrapeJobHandler, api5.NewScrapePoolHandler, api5.NewAlertEventHandler, api6.NewFormDesignHandler, api6.NewInstanceHandler, api6.NewInstanceFlowHandler, api6.NewInstanceCommentHandler, api6.NewInstanceTimeLineHandler, api6.NewTemplateHandler, api6.NewWorkorderProcessHandler, api6.NewCategoryGroupHandler, api6.NewNotificationHandler, api7.NewTreeNodeHandler, api7.NewTreeLocalHandler, terminal.NewTerminalHandler, api8.NewCronJobHandler)
 
 var ServiceSet = wire.NewSet(service4.NewClusterService, service4.NewDeploymentService, service4.NewNamespaceService, service4.NewSvcService, service4.NewNodeService, service4.NewTaintService, service4.NewYamlTaskService, service4.NewYamlTemplateService, service4.NewDaemonSetService, service4.NewEventService, service4.NewStatefulSetService, service4.NewServiceAccountService, service4.NewRoleService, service4.NewClusterRoleService, service4.NewRoleBindingService, service4.NewClusterRoleBindingService, service4.NewIngressService, service4.NewPodService, service4.NewConfigMapService, service4.NewSecretService, service4.NewPVService, service4.NewPVCService, service2.NewUserService, service.NewApiService, service.NewRoleService, service.NewAuditService, service.NewSystemService, alert2.NewAlertManagerEventService, alert2.NewAlertManagerOnDutyService, alert2.NewAlertManagerPoolService, alert2.NewAlertManagerRecordService, alert2.NewAlertManagerRuleService, alert2.NewAlertManagerSendService, scrape2.NewPrometheusScrapeService, scrape2.NewPrometheusPoolService, config2.NewMonitorConfigService, service3.NewNotAuthService, service5.NewFormDesignService, service5.NewInstanceService, service5.NewInstanceFlowService, service5.NewInstanceCommentService, service5.NewWorkorderInstanceTimeLineService, service5.NewWorkorderTemplateService, service5.NewWorkorderProcessService, service5.NewCategoryGroupService, service5.NewWorkorderNotificationService, service6.NewTreeNodeService, service6.NewTreeLocalService, service7.NewCronService)
 

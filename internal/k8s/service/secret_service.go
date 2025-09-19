@@ -39,20 +39,19 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/yaml"
 )
 
 // SecretService Secret服务接口
 type SecretService interface {
-	GetSecretList(ctx context.Context, req *model.GetSecretListReq) (model.ListResp[*model.K8sSecretEntity], error)
-	GetSecret(ctx context.Context, req *model.K8sSecretDeleteReq) (*model.K8sSecretEntity, error)
-	CreateSecret(ctx context.Context, req *model.K8sSecretCreateReq) error
-	UpdateSecret(ctx context.Context, req *model.K8sSecretUpdateReq) error
+	GetSecretList(ctx context.Context, req *model.GetSecretListReq) (model.ListResp[*model.K8sSecret], error)
+	GetSecret(ctx context.Context, req *model.GetSecretDetailsReq) (*model.K8sSecret, error)
+	CreateSecret(ctx context.Context, req *model.CreateSecretReq) error
+	UpdateSecret(ctx context.Context, req *model.UpdateSecretReq) error
 	// YAML相关方法
-	CreateSecretByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error
-	UpdateSecretByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error
-	DeleteSecret(ctx context.Context, req *model.K8sSecretDeleteReq) error
-	GetSecretYAML(ctx context.Context, req *model.K8sSecretDeleteReq) (*model.K8sYaml, error)
+	CreateSecretByYaml(ctx context.Context, req *model.CreateSecretByYamlReq) error
+	UpdateSecretByYaml(ctx context.Context, req *model.UpdateSecretByYamlReq) error
+	DeleteSecret(ctx context.Context, req *model.DeleteSecretReq) error
+	GetSecretYAML(ctx context.Context, req *model.GetSecretYamlReq) (string, error)
 }
 
 // secretService Secret服务实现
@@ -72,57 +71,43 @@ func NewSecretService(k8sClient client.K8sClient, secretManager manager.SecretMa
 }
 
 // GetSecretList 获取Secret列表
-func (s *secretService) GetSecretList(ctx context.Context, req *model.GetSecretListReq) (model.ListResp[*model.K8sSecretEntity], error) {
+func (s *secretService) GetSecretList(ctx context.Context, req *model.GetSecretListReq) (model.ListResp[*model.K8sSecret], error) {
 	var list *corev1.SecretList
 	var err error
-	if req.LabelSelector != "" || req.FieldSelector != "" {
-		list, err = s.secretManager.ListSecretsBySelectors(ctx, req.ClusterID, req.Namespace, req.LabelSelector, req.FieldSelector)
+
+	// 构建标签选择器
+	labelSelector := ""
+	if req.Labels != nil && len(req.Labels) > 0 {
+		var labels []string
+		for k, v := range req.Labels {
+			labels = append(labels, fmt.Sprintf("%s=%s", k, v))
+		}
+		labelSelector = strings.Join(labels, ",")
+	}
+
+	if labelSelector != "" {
+		list, err = s.secretManager.ListSecretsBySelectors(ctx, req.ClusterID, req.Namespace, labelSelector, "")
 	} else {
 		list, err = s.secretManager.ListSecrets(ctx, req.ClusterID, req.Namespace)
 	}
 	if err != nil {
 		s.logger.Error("获取Secret列表失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID), zap.String("namespace", req.Namespace))
-		return model.ListResp[*model.K8sSecretEntity]{}, fmt.Errorf("获取Secret列表失败: %w", err)
+		return model.ListResp[*model.K8sSecret]{}, fmt.Errorf("获取Secret列表失败: %w", err)
 	}
 
-	entities := make([]*model.K8sSecretEntity, 0, len(list.Items))
+	entities := make([]*model.K8sSecret, 0, len(list.Items))
 	for _, item := range list.Items {
-		entity := s.convertToK8sSecretEntity(&item)
-		// 名称过滤
-		if req.Name != "" && entity.Name != "" && !strings.Contains(entity.Name, req.Name) {
-			continue
-		}
+		entity := s.convertToK8sSecret(&item, req.ClusterID)
 		// 类型过滤
-		if req.Type != "" && entity.Type != req.Type {
+		if req.Type != "" && string(entity.Type) != string(req.Type) {
 			continue
-		}
-		// 数据键过滤
-		if req.DataKey != "" {
-			matched := false
-			for k := range entity.Data {
-				if strings.Contains(k, req.DataKey) {
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				for k := range entity.StringData {
-					if strings.Contains(k, req.DataKey) {
-						matched = true
-						break
-					}
-				}
-			}
-			if !matched {
-				continue
-			}
 		}
 		entities = append(entities, entity)
 	}
 
 	page := req.Page
-	size := req.PageSize
+	size := req.Size
 	if page <= 0 {
 		page = 1
 	}
@@ -144,11 +129,11 @@ func (s *secretService) GetSecretList(ctx context.Context, req *model.GetSecretL
 		zap.String("namespace", req.Namespace),
 		zap.Int("count", len(entities)))
 
-	return model.ListResp[*model.K8sSecretEntity]{Items: entities[start:end], Total: total}, nil
+	return model.ListResp[*model.K8sSecret]{Items: entities[start:end], Total: total}, nil
 }
 
 // GetSecret 获取单个Secret详情
-func (s *secretService) GetSecret(ctx context.Context, req *model.K8sSecretDeleteReq) (*model.K8sSecretEntity, error) {
+func (s *secretService) GetSecret(ctx context.Context, req *model.GetSecretDetailsReq) (*model.K8sSecret, error) {
 	// 使用 SecretManager 获取 Secret
 	secret, err := s.secretManager.GetSecret(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
@@ -162,7 +147,7 @@ func (s *secretService) GetSecret(ctx context.Context, req *model.K8sSecretDelet
 		return nil, fmt.Errorf("获取Secret失败: %w", err)
 	}
 
-	result := s.convertToK8sSecretEntity(secret)
+	result := s.convertToK8sSecret(secret, req.ClusterID)
 
 	s.logger.Info("成功获取Secret详情",
 		zap.Int("cluster_id", req.ClusterID),
@@ -172,33 +157,84 @@ func (s *secretService) GetSecret(ctx context.Context, req *model.K8sSecretDelet
 	return result, nil
 }
 
-// convertToK8sSecretEntity 将Kubernetes Secret转换为模型对象
-func (s *secretService) convertToK8sSecretEntity(secret *corev1.Secret) *model.K8sSecretEntity {
-	return &model.K8sSecretEntity{
-		Name:              secret.Name,
-		Namespace:         secret.Namespace,
-		UID:               string(secret.UID),
-		Type:              string(secret.Type),
-		Data:              secret.Data,
-		Labels:            secret.Labels,
-		Annotations:       secret.Annotations,
-		CreationTimestamp: secret.CreationTimestamp.Time,
-		Age:               time.Since(secret.CreationTimestamp.Time).String(),
-		DataCount:         len(secret.Data),
+// convertToK8sSecret 将Kubernetes Secret转换为模型对象
+func (s *secretService) convertToK8sSecret(secret *corev1.Secret, clusterID int) *model.K8sSecret {
+	// 计算数据大小
+	var totalSize int64
+	for _, v := range secret.Data {
+		totalSize += int64(len(v))
+	}
+	for _, v := range secret.StringData {
+		totalSize += int64(len(v))
+	}
+
+	// 格式化大小
+	size := formatBytes(totalSize)
+
+	// 计算数据条目数量
+	dataCount := len(secret.Data) + len(secret.StringData)
+
+	// 判断是否不可变
+	immutable := false
+	if secret.Immutable != nil {
+		immutable = *secret.Immutable
+	}
+
+	// 构建StringData，如果存在的话
+	stringData := make(map[string]string)
+	for k, v := range secret.StringData {
+		stringData[k] = v
+	}
+
+	return &model.K8sSecret{
+		Name:        secret.Name,
+		Namespace:   secret.Namespace,
+		ClusterID:   clusterID,
+		UID:         string(secret.UID),
+		Type:        model.K8sSecretType(secret.Type),
+		Data:        secret.Data,
+		StringData:  stringData,
+		Labels:      secret.Labels,
+		Annotations: secret.Annotations,
+		Immutable:   immutable,
+		DataCount:   dataCount,
+		Size:        size,
+		Age:         time.Since(secret.CreationTimestamp.Time).String(),
+		CreatedAt:   secret.CreationTimestamp.Time,
+		UpdatedAt:   secret.CreationTimestamp.Time, // K8s doesn't track update time separately
+		RawSecret:   secret,
 	}
 }
 
 // CreateSecret 创建Secret
-func (s *secretService) CreateSecret(ctx context.Context, req *model.K8sSecretCreateReq) error {
-	secret, err := k8sutils.BuildSecretFromRequest(req)
-	if err != nil {
-		s.logger.Error("构建Secret失败", zap.Error(err))
-		return fmt.Errorf("构建Secret失败: %w", err)
+func (s *secretService) CreateSecret(ctx context.Context, req *model.CreateSecretReq) error {
+	// 构造Secret对象
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        req.Name,
+			Namespace:   req.Namespace,
+			Labels:      req.Labels,
+			Annotations: req.Annotations,
+		},
+		Type:       corev1.SecretType(req.Type),
+		Data:       req.Data,
+		StringData: req.StringData,
 	}
+
+	// 如果没有指定类型，默认为 Opaque
+	if secret.Type == "" {
+		secret.Type = corev1.SecretTypeOpaque
+	}
+
+	// 设置不可变标志
+	if req.Immutable {
+		secret.Immutable = &req.Immutable
+	}
+
 	if err := k8sutils.ValidateSecretData(secret.Type, secret.Data, secret.StringData); err != nil {
 		return err
 	}
-	_, err = s.secretManager.CreateSecret(ctx, req.ClusterID, secret)
+	_, err := s.secretManager.CreateSecret(ctx, req.ClusterID, secret)
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
 			return fmt.Errorf("Secret已存在: %s/%s", req.Namespace, req.Name)
@@ -217,9 +253,9 @@ func (s *secretService) CreateSecret(ctx context.Context, req *model.K8sSecretCr
 }
 
 // UpdateSecret 更新Secret
-func (s *secretService) UpdateSecret(ctx context.Context, req *model.K8sSecretUpdateReq) error {
-	// 获取现有 Secret
-	existing, err := s.secretManager.GetSecret(ctx, req.ClusterID, req.Namespace, req.Name)
+func (s *secretService) UpdateSecret(ctx context.Context, req *model.UpdateSecretReq) error {
+	// 先获取现有的Secret
+	existingSecret, err := s.secretManager.GetSecret(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("Secret不存在: %s/%s", req.Namespace, req.Name)
@@ -231,14 +267,22 @@ func (s *secretService) UpdateSecret(ctx context.Context, req *model.K8sSecretUp
 		return fmt.Errorf("获取Secret失败: %w", err)
 	}
 
-	updated, err := k8sutils.UpdateSecretFromRequest(existing, req)
-	if err != nil {
-		return err
+	// 更新Secret数据
+	if req.Data != nil {
+		existingSecret.Data = req.Data
 	}
-	if err := k8sutils.ValidateSecretData(updated.Type, updated.Data, updated.StringData); err != nil {
-		return err
+	if req.StringData != nil {
+		existingSecret.StringData = req.StringData
 	}
-	_, err = s.secretManager.UpdateSecret(ctx, req.ClusterID, updated)
+	if req.Labels != nil {
+		existingSecret.Labels = req.Labels
+	}
+	if req.Annotations != nil {
+		existingSecret.Annotations = req.Annotations
+	}
+
+	// 使用 SecretManager 更新 Secret
+	_, err = s.secretManager.UpdateSecret(ctx, req.ClusterID, existingSecret)
 	if err != nil {
 		s.logger.Error("更新Secret失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID),
@@ -246,23 +290,20 @@ func (s *secretService) UpdateSecret(ctx context.Context, req *model.K8sSecretUp
 			zap.String("name", req.Name))
 		return fmt.Errorf("更新Secret失败: %w", err)
 	}
+
 	s.logger.Info("成功更新Secret",
 		zap.Int("cluster_id", req.ClusterID),
 		zap.String("namespace", req.Namespace),
 		zap.String("name", req.Name))
+
 	return nil
 }
 
 // DeleteSecret 删除Secret
-func (s *secretService) DeleteSecret(ctx context.Context, req *model.K8sSecretDeleteReq) error {
-	var options metav1.DeleteOptions
-	if req.GracePeriodSeconds != nil {
-		options.GracePeriodSeconds = req.GracePeriodSeconds
-	} else if req.Force {
-		var zero int64 = 0
-		options.GracePeriodSeconds = &zero
-	}
-	if err := s.secretManager.DeleteSecret(ctx, req.ClusterID, req.Namespace, req.Name, options); err != nil {
+func (s *secretService) DeleteSecret(ctx context.Context, req *model.DeleteSecretReq) error {
+	// 使用 SecretManager 删除 Secret
+	err := s.secretManager.DeleteSecret(ctx, req.ClusterID, req.Namespace, req.Name, metav1.DeleteOptions{})
+	if err != nil {
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("Secret不存在: %s/%s", req.Namespace, req.Name)
 		}
@@ -272,61 +313,71 @@ func (s *secretService) DeleteSecret(ctx context.Context, req *model.K8sSecretDe
 			zap.String("name", req.Name))
 		return fmt.Errorf("删除Secret失败: %w", err)
 	}
+
 	s.logger.Info("成功删除Secret",
 		zap.Int("cluster_id", req.ClusterID),
 		zap.String("namespace", req.Namespace),
 		zap.String("name", req.Name))
+
 	return nil
 }
 
 // GetSecretYAML 获取Secret的YAML配置
-func (s *secretService) GetSecretYAML(ctx context.Context, req *model.K8sSecretDeleteReq) (*model.K8sYaml, error) {
+func (s *secretService) GetSecretYAML(ctx context.Context, req *model.GetSecretYamlReq) (string, error) {
+	// 使用 SecretManager 获取 Secret
 	secret, err := s.secretManager.GetSecret(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return nil, fmt.Errorf("Secret不存在: %s/%s", req.Namespace, req.Name)
+			return "", fmt.Errorf("Secret不存在: %s/%s", req.Namespace, req.Name)
 		}
 		s.logger.Error("获取Secret失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID),
 			zap.String("namespace", req.Namespace),
 			zap.String("name", req.Name))
-		return nil, fmt.Errorf("获取Secret失败: %w", err)
+		return "", fmt.Errorf("获取Secret失败: %w", err)
 	}
-	cleaned := k8sutils.CleanSecretForYAML(secret)
-	data, err := yaml.Marshal(cleaned)
+
+	yamlStr, err := k8sutils.SecretToYAML(secret)
 	if err != nil {
 		s.logger.Error("转换Secret为YAML失败", zap.Error(err))
-		return nil, fmt.Errorf("转换Secret为YAML失败: %w", err)
+		return "", fmt.Errorf("转换Secret为YAML失败: %w", err)
 	}
-	return &model.K8sYaml{YAML: string(data)}, nil
+
+	s.logger.Info("成功获取Secret YAML",
+		zap.Int("cluster_id", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
+
+	return yamlStr, nil
 }
 
 // CreateSecretByYaml 通过YAML创建Secret
-func (s *secretService) CreateSecretByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error {
-	var sec corev1.Secret
-	if err := yaml.Unmarshal([]byte(req.YAML), &sec); err != nil {
-		return fmt.Errorf("解析YAML失败: %w", err)
+func (s *secretService) CreateSecretByYaml(ctx context.Context, req *model.CreateSecretByYamlReq) error {
+	sec, err := k8sutils.YAMLToSecret(req.YAML)
+	if err != nil {
+		return err
 	}
-	if sec.Namespace == "" {
-		sec.Namespace = req.Namespace
-	}
-	if _, err := s.secretManager.CreateSecret(ctx, req.ClusterID, &sec); err != nil {
+
+	_, err = s.secretManager.CreateSecret(ctx, req.ClusterID, sec)
+	if err != nil {
 		s.logger.Error("通过YAML创建Secret失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID), zap.String("namespace", sec.Namespace), zap.String("name", sec.Name))
 		return fmt.Errorf("通过YAML创建Secret失败: %w", err)
 	}
+
 	return nil
 }
 
 // UpdateSecretByYaml 通过YAML更新Secret
-func (s *secretService) UpdateSecretByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error {
-	var sec corev1.Secret
-	if err := yaml.Unmarshal([]byte(req.YAML), &sec); err != nil {
-		return fmt.Errorf("解析YAML失败: %w", err)
+func (s *secretService) UpdateSecretByYaml(ctx context.Context, req *model.UpdateSecretByYamlReq) error {
+	sec, err := k8sutils.YAMLToSecret(req.YAML)
+	if err != nil {
+		return err
 	}
 	sec.Namespace = req.Namespace
 	sec.Name = req.Name
-	if _, err := s.secretManager.UpdateSecret(ctx, req.ClusterID, &sec); err != nil {
+	_, err = s.secretManager.UpdateSecret(ctx, req.ClusterID, sec)
+	if err != nil {
 		s.logger.Error("通过YAML更新Secret失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID), zap.String("namespace", req.Namespace), zap.String("name", req.Name))
 		return fmt.Errorf("通过YAML更新Secret失败: %w", err)

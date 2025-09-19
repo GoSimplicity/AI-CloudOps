@@ -45,7 +45,6 @@ func NewK8sClusterHandler(clusterService service.ClusterService) *K8sClusterHand
 func (h *K8sClusterHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		// 集群基础管理
 		k8sGroup.GET("/cluster/list", h.GetClusterList)                  // 获取集群列表
 		k8sGroup.GET("/cluster/:cluster_id/detail", h.GetCluster)        // 获取集群详情
 		k8sGroup.POST("/cluster/create", h.CreateCluster)                // 创建集群

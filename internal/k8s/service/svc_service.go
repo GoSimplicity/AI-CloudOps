@@ -44,8 +44,8 @@ type SvcService interface {
 	GetServiceYaml(ctx context.Context, req *model.GetServiceYamlReq) (*model.K8sYaml, error)
 	CreateService(ctx context.Context, req *model.CreateServiceReq) error
 	UpdateService(ctx context.Context, req *model.UpdateServiceReq) error
-	CreateServiceByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error
-	UpdateServiceByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error
+	CreateServiceByYaml(ctx context.Context, req *model.CreateServiceByYamlReq) error
+	UpdateServiceByYaml(ctx context.Context, req *model.UpdateServiceByYamlReq) error
 	DeleteService(ctx context.Context, req *model.DeleteServiceReq) error
 	GetServiceEndpoints(ctx context.Context, req *model.GetServiceEndpointsReq) ([]*model.K8sServiceEndpoint, error)
 }
@@ -469,7 +469,7 @@ func (s *svcService) UpdateService(ctx context.Context, req *model.UpdateService
 }
 
 // CreateServiceByYaml 通过YAML创建Service
-func (s *svcService) CreateServiceByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error {
+func (s *svcService) CreateServiceByYaml(ctx context.Context, req *model.CreateServiceByYamlReq) error {
 	if req == nil {
 		return fmt.Errorf("通过YAML创建Service请求不能为空")
 	}
@@ -484,9 +484,6 @@ func (s *svcService) CreateServiceByYaml(ctx context.Context, req *model.CreateR
 	if err != nil {
 		s.logger.Error("CreateServiceByYaml: 解析YAML失败", zap.Error(err))
 		return fmt.Errorf("解析YAML失败: %w", err)
-	}
-	if svc.Namespace == "" {
-		svc.Namespace = req.Namespace
 	}
 	if err := utils.ValidateService(svc); err != nil {
 		s.logger.Error("CreateServiceByYaml: Service配置验证失败", zap.Error(err))
@@ -509,7 +506,7 @@ func (s *svcService) CreateServiceByYaml(ctx context.Context, req *model.CreateR
 }
 
 // UpdateServiceByYaml 通过YAML更新Service
-func (s *svcService) UpdateServiceByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error {
+func (s *svcService) UpdateServiceByYaml(ctx context.Context, req *model.UpdateServiceByYamlReq) error {
 	if req == nil {
 		return fmt.Errorf("通过YAML更新Service请求不能为空")
 	}

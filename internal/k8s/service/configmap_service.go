@@ -43,14 +43,14 @@ import (
 
 // ConfigMapService ConfigMap服务接口
 type ConfigMapService interface {
-	GetConfigMapList(ctx context.Context, req *model.ListConfigMapsReq) (model.ListResp[*model.K8sConfigMap], error)
-	GetConfigMap(ctx context.Context, req *model.GetConfigMapReq) (*model.K8sConfigMap, error)
+	GetConfigMapList(ctx context.Context, req *model.GetConfigMapListReq) (model.ListResp[*model.K8sConfigMap], error)
+	GetConfigMap(ctx context.Context, req *model.GetConfigMapDetailsReq) (*model.K8sConfigMap, error)
 	CreateConfigMap(ctx context.Context, req *model.CreateConfigMapReq) error
 	UpdateConfigMap(ctx context.Context, req *model.UpdateConfigMapReq) error
-	CreateConfigMapByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error
-	UpdateConfigMapByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error
+	CreateConfigMapByYaml(ctx context.Context, req *model.CreateConfigMapByYamlReq) error
+	UpdateConfigMapByYaml(ctx context.Context, req *model.UpdateConfigMapByYamlReq) error
 	DeleteConfigMap(ctx context.Context, req *model.DeleteConfigMapReq) error
-	GetConfigMapYAML(ctx context.Context, req *model.GetConfigMapYAMLReq) (string, error)
+	GetConfigMapYAML(ctx context.Context, req *model.GetConfigMapYamlReq) (string, error)
 }
 
 // configMapService ConfigMap服务实现
@@ -70,13 +70,24 @@ func NewConfigMapService(k8sClient client.K8sClient, configMapManager manager.Co
 }
 
 // GetConfigMapList 获取ConfigMap列表
-func (s *configMapService) GetConfigMapList(ctx context.Context, req *model.ListConfigMapsReq) (model.ListResp[*model.K8sConfigMap], error) {
+func (s *configMapService) GetConfigMapList(ctx context.Context, req *model.GetConfigMapListReq) (model.ListResp[*model.K8sConfigMap], error) {
 	var list *corev1.ConfigMapList
 	var err error
-	if req.LabelSelector != "" {
-		list, err = s.configMapManager.ListConfigMapsBySelector(ctx, req.ClusterID, "", req.LabelSelector)
+
+	// 构建标签选择器
+	labelSelector := ""
+	if req.Labels != nil && len(req.Labels) > 0 {
+		var labels []string
+		for k, v := range req.Labels {
+			labels = append(labels, fmt.Sprintf("%s=%s", k, v))
+		}
+		labelSelector = strings.Join(labels, ",")
+	}
+
+	if labelSelector != "" {
+		list, err = s.configMapManager.ListConfigMapsBySelector(ctx, req.ClusterID, req.Namespace, labelSelector)
 	} else {
-		list, err = s.configMapManager.ListConfigMaps(ctx, req.ClusterID, "")
+		list, err = s.configMapManager.ListConfigMaps(ctx, req.ClusterID, req.Namespace)
 	}
 	if err != nil {
 		s.logger.Error("获取ConfigMap列表失败", zap.Error(err),
@@ -86,19 +97,7 @@ func (s *configMapService) GetConfigMapList(ctx context.Context, req *model.List
 
 	entities := make([]*model.K8sConfigMap, 0, len(list.Items))
 	for _, cm := range list.Items {
-		entity := s.convertToK8sConfigMap(&cm)
-		if req.DataKey != "" {
-			matched := false
-			for k := range entity.Data {
-				if strings.Contains(k, req.DataKey) {
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				continue
-			}
-		}
+		entity := s.convertToK8sConfigMap(&cm, req.ClusterID)
 		entities = append(entities, entity)
 	}
 
@@ -124,26 +123,26 @@ func (s *configMapService) GetConfigMapList(ctx context.Context, req *model.List
 }
 
 // GetConfigMap 获取单个ConfigMap详情
-func (s *configMapService) GetConfigMap(ctx context.Context, req *model.GetConfigMapReq) (*model.K8sConfigMap, error) {
+func (s *configMapService) GetConfigMap(ctx context.Context, req *model.GetConfigMapDetailsReq) (*model.K8sConfigMap, error) {
 	// 使用 ConfigMapManager 获取 ConfigMap
-	configMap, err := s.configMapManager.GetConfigMap(ctx, req.ClusterID, req.Namespace, req.ResourceName)
+	configMap, err := s.configMapManager.GetConfigMap(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return nil, fmt.Errorf("ConfigMap不存在: %s/%s", req.Namespace, req.ResourceName)
+			return nil, fmt.Errorf("ConfigMap不存在: %s/%s", req.Namespace, req.Name)
 		}
 		s.logger.Error("获取ConfigMap失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID),
 			zap.String("namespace", req.Namespace),
-			zap.String("name", req.ResourceName))
+			zap.String("name", req.Name))
 		return nil, fmt.Errorf("获取ConfigMap失败: %w", err)
 	}
 
-	result := s.convertToK8sConfigMap(configMap)
+	result := s.convertToK8sConfigMap(configMap, req.ClusterID)
 
 	s.logger.Info("成功获取ConfigMap详情",
 		zap.Int("cluster_id", req.ClusterID),
 		zap.String("namespace", req.Namespace),
-		zap.String("name", req.ResourceName))
+		zap.String("name", req.Name))
 
 	return result, nil
 }
@@ -186,15 +185,15 @@ func (s *configMapService) CreateConfigMap(ctx context.Context, req *model.Creat
 // UpdateConfigMap 更新ConfigMap
 func (s *configMapService) UpdateConfigMap(ctx context.Context, req *model.UpdateConfigMapReq) error {
 	// 先获取现有的ConfigMap
-	existingConfigMap, err := s.configMapManager.GetConfigMap(ctx, req.ClusterID, req.Namespace, req.ResourceName)
+	existingConfigMap, err := s.configMapManager.GetConfigMap(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return fmt.Errorf("ConfigMap不存在: %s/%s", req.Namespace, req.ResourceName)
+			return fmt.Errorf("ConfigMap不存在: %s/%s", req.Namespace, req.Name)
 		}
 		s.logger.Error("获取ConfigMap失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID),
 			zap.String("namespace", req.Namespace),
-			zap.String("name", req.ResourceName))
+			zap.String("name", req.Name))
 		return fmt.Errorf("获取ConfigMap失败: %w", err)
 	}
 
@@ -214,14 +213,14 @@ func (s *configMapService) UpdateConfigMap(ctx context.Context, req *model.Updat
 		s.logger.Error("更新ConfigMap失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID),
 			zap.String("namespace", req.Namespace),
-			zap.String("name", req.ResourceName))
+			zap.String("name", req.Name))
 		return fmt.Errorf("更新ConfigMap失败: %w", err)
 	}
 
 	s.logger.Info("成功更新ConfigMap",
 		zap.Int("cluster_id", req.ClusterID),
 		zap.String("namespace", req.Namespace),
-		zap.String("name", req.ResourceName))
+		zap.String("name", req.Name))
 
 	return nil
 }
@@ -229,38 +228,38 @@ func (s *configMapService) UpdateConfigMap(ctx context.Context, req *model.Updat
 // DeleteConfigMap 删除ConfigMap
 func (s *configMapService) DeleteConfigMap(ctx context.Context, req *model.DeleteConfigMapReq) error {
 	// 使用 ConfigMapManager 删除 ConfigMap
-	err := s.configMapManager.DeleteConfigMap(ctx, req.ClusterID, req.Namespace, req.ResourceName, metav1.DeleteOptions{})
+	err := s.configMapManager.DeleteConfigMap(ctx, req.ClusterID, req.Namespace, req.Name, metav1.DeleteOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return fmt.Errorf("ConfigMap不存在: %s/%s", req.Namespace, req.ResourceName)
+			return fmt.Errorf("ConfigMap不存在: %s/%s", req.Namespace, req.Name)
 		}
 		s.logger.Error("删除ConfigMap失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID),
 			zap.String("namespace", req.Namespace),
-			zap.String("name", req.ResourceName))
+			zap.String("name", req.Name))
 		return fmt.Errorf("删除ConfigMap失败: %w", err)
 	}
 
 	s.logger.Info("成功删除ConfigMap",
 		zap.Int("cluster_id", req.ClusterID),
 		zap.String("namespace", req.Namespace),
-		zap.String("name", req.ResourceName))
+		zap.String("name", req.Name))
 
 	return nil
 }
 
 // GetConfigMapYAML 获取ConfigMap的YAML配置
-func (s *configMapService) GetConfigMapYAML(ctx context.Context, req *model.GetConfigMapYAMLReq) (string, error) {
+func (s *configMapService) GetConfigMapYAML(ctx context.Context, req *model.GetConfigMapYamlReq) (string, error) {
 	// 使用 ConfigMapManager 获取 ConfigMap
-	configMap, err := s.configMapManager.GetConfigMap(ctx, req.ClusterID, req.Namespace, req.ResourceName)
+	configMap, err := s.configMapManager.GetConfigMap(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return "", fmt.Errorf("ConfigMap不存在: %s/%s", req.Namespace, req.ResourceName)
+			return "", fmt.Errorf("ConfigMap不存在: %s/%s", req.Namespace, req.Name)
 		}
 		s.logger.Error("获取ConfigMap失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID),
 			zap.String("namespace", req.Namespace),
-			zap.String("name", req.ResourceName))
+			zap.String("name", req.Name))
 		return "", fmt.Errorf("获取ConfigMap失败: %w", err)
 	}
 
@@ -273,46 +272,86 @@ func (s *configMapService) GetConfigMapYAML(ctx context.Context, req *model.GetC
 	s.logger.Info("成功获取ConfigMap YAML",
 		zap.Int("cluster_id", req.ClusterID),
 		zap.String("namespace", req.Namespace),
-		zap.String("name", req.ResourceName))
+		zap.String("name", req.Name))
 
 	return yamlStr, nil
 }
 
 // convertToK8sConfigMap 将Kubernetes ConfigMap转换为模型对象
-func (s *configMapService) convertToK8sConfigMap(configMap *corev1.ConfigMap) *model.K8sConfigMap {
+func (s *configMapService) convertToK8sConfigMap(configMap *corev1.ConfigMap, clusterID int) *model.K8sConfigMap {
+	// 计算数据大小
+	var totalSize int64
+	for _, v := range configMap.Data {
+		totalSize += int64(len(v))
+	}
+	for _, v := range configMap.BinaryData {
+		totalSize += int64(len(v))
+	}
+
+	// 格式化大小
+	size := formatBytes(totalSize)
+
+	// 计算数据条目数量
+	dataCount := len(configMap.Data) + len(configMap.BinaryData)
+
+	// 判断是否不可变
+	immutable := false
+	if configMap.Immutable != nil {
+		immutable = *configMap.Immutable
+	}
+
 	return &model.K8sConfigMap{
-		Name:              configMap.Name,
-		UID:               string(configMap.UID),
-		Namespace:         configMap.Namespace,
-		Data:              configMap.Data,
-		BinaryData:        configMap.BinaryData,
-		Labels:            configMap.Labels,
-		Annotations:       configMap.Annotations,
-		CreationTimestamp: configMap.CreationTimestamp.Time,
-		Age:               time.Since(configMap.CreationTimestamp.Time).String(),
+		Name:         configMap.Name,
+		Namespace:    configMap.Namespace,
+		ClusterID:    clusterID,
+		UID:          string(configMap.UID),
+		Data:         configMap.Data,
+		BinaryData:   configMap.BinaryData,
+		Labels:       configMap.Labels,
+		Annotations:  configMap.Annotations,
+		Immutable:    immutable,
+		DataCount:    dataCount,
+		Size:         size,
+		CreatedAt:    configMap.CreationTimestamp.Time,
+		UpdatedAt:    configMap.CreationTimestamp.Time, // K8s doesn't track update time separately
+		Age:          time.Since(configMap.CreationTimestamp.Time).String(),
+		RawConfigMap: configMap,
 	}
 }
 
+// formatBytes 格式化字节数
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
 // CreateConfigMapByYaml 通过YAML创建ConfigMap
-func (c *configMapService) CreateConfigMapByYaml(ctx context.Context, req *model.CreateResourceByYamlReq) error {
+func (c *configMapService) CreateConfigMapByYaml(ctx context.Context, req *model.CreateConfigMapByYamlReq) error {
 	cm, err := k8sutils.YAMLToConfigMap(req.YAML)
 	if err != nil {
 		return err
 	}
-	if cm.Namespace == "" {
-		cm.Namespace = req.Namespace
-	}
+
 	_, err = c.configMapManager.CreateConfigMap(ctx, req.ClusterID, cm)
 	if err != nil {
 		c.logger.Error("通过YAML创建ConfigMap失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID), zap.String("namespace", cm.Namespace), zap.String("name", cm.Name))
 		return fmt.Errorf("通过YAML创建ConfigMap失败: %w", err)
 	}
+
 	return nil
 }
 
 // UpdateConfigMapByYaml 通过YAML更新ConfigMap
-func (c *configMapService) UpdateConfigMapByYaml(ctx context.Context, req *model.UpdateResourceByYamlReq) error {
+func (c *configMapService) UpdateConfigMapByYaml(ctx context.Context, req *model.UpdateConfigMapByYamlReq) error {
 	cm, err := k8sutils.YAMLToConfigMap(req.YAML)
 	if err != nil {
 		return err

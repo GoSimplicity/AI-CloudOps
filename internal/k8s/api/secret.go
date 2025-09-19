@@ -48,14 +48,14 @@ func NewK8sSecretHandler(secretService service.SecretService) *K8sSecretHandler 
 func (h *K8sSecretHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/clusters/:cluster_id/secrets", h.GetSecretList)
-		k8sGroup.GET("/clusters/:cluster_id/secrets/:namespace/:name", h.GetSecret)
-		k8sGroup.GET("/clusters/:cluster_id/secrets/:namespace/:name/yaml", h.GetSecretYAML)
-		k8sGroup.POST("/clusters/:cluster_id/secrets", h.CreateSecret)
-		k8sGroup.PUT("/clusters/:cluster_id/secrets/:namespace/:name", h.UpdateSecret)
-		k8sGroup.DELETE("/clusters/:cluster_id/secrets/:namespace/:name", h.DeleteSecret)
-		k8sGroup.POST("/clusters/:cluster_id/secrets/yaml", h.CreateSecretByYaml)
-		k8sGroup.PUT("/clusters/:cluster_id/secrets/:namespace/:name/yaml", h.UpdateSecretByYaml)
+		k8sGroup.GET("/secret/:cluster_id/list", h.GetSecretList)
+		k8sGroup.GET("/secret/:cluster_id/:namespace/:name/detail", h.GetSecret)
+		k8sGroup.GET("/secret/:cluster_id/:namespace/:name/detail/yaml", h.GetSecretYAML)
+		k8sGroup.POST("/secret/:cluster_id/create", h.CreateSecret)
+		k8sGroup.PUT("/secret/:cluster_id/:namespace/:name/update", h.UpdateSecret)
+		k8sGroup.DELETE("/secret/:cluster_id/:namespace/:name/delete", h.DeleteSecret)
+		k8sGroup.POST("/secret/:cluster_id/create/yaml", h.CreateSecretByYaml)
+		k8sGroup.PUT("/secret/:cluster_id/:namespace/:name/update/yaml", h.UpdateSecretByYaml)
 	}
 }
 
@@ -81,7 +81,7 @@ func (h *K8sSecretHandler) GetSecretList(ctx *gin.Context) {
 
 // GetSecret 获取单个Secret详情
 func (h *K8sSecretHandler) GetSecret(ctx *gin.Context) {
-	var req model.K8sSecretDeleteReq
+	var req model.GetSecretDetailsReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
@@ -114,7 +114,7 @@ func (h *K8sSecretHandler) GetSecret(ctx *gin.Context) {
 
 // CreateSecret 创建Secret
 func (h *K8sSecretHandler) CreateSecret(ctx *gin.Context) {
-	var req model.K8sSecretCreateReq
+	var req model.CreateSecretReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
@@ -130,7 +130,7 @@ func (h *K8sSecretHandler) CreateSecret(ctx *gin.Context) {
 
 // UpdateSecret 更新Secret
 func (h *K8sSecretHandler) UpdateSecret(ctx *gin.Context) {
-	var req model.K8sSecretUpdateReq
+	var req model.UpdateSecretReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
@@ -158,7 +158,7 @@ func (h *K8sSecretHandler) UpdateSecret(ctx *gin.Context) {
 
 // DeleteSecret 删除Secret
 func (h *K8sSecretHandler) DeleteSecret(ctx *gin.Context) {
-	var req model.K8sSecretDeleteReq
+	var req model.DeleteSecretReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
@@ -178,11 +178,6 @@ func (h *K8sSecretHandler) DeleteSecret(ctx *gin.Context) {
 	req.ClusterID = clusterID
 	req.Namespace = ns
 	req.Name = name
-
-	if req.Namespace == "" || req.Name == "" {
-		utils.BadRequestError(ctx, "命名空间和Secret名称不能为空")
-		return
-	}
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, h.secretService.DeleteSecret(ctx, &req)
@@ -191,31 +186,29 @@ func (h *K8sSecretHandler) DeleteSecret(ctx *gin.Context) {
 
 // GetSecretYAML 获取Secret的YAML配置
 func (h *K8sSecretHandler) GetSecretYAML(ctx *gin.Context) {
-	var req model.K8sSecretDeleteReq
+	var req model.GetSecretYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	ns, err := utils.GetParamCustomName(ctx, "namespace")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	name, err := utils.GetParamCustomName(ctx, "name")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
+
 	req.ClusterID = clusterID
 	req.Namespace = ns
 	req.Name = name
-
-	if req.Namespace == "" || req.Name == "" {
-		utils.BadRequestError(ctx, "命名空间和Secret名称不能为空")
-		return
-	}
 
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.secretService.GetSecretYAML(ctx, &req)
@@ -224,7 +217,7 @@ func (h *K8sSecretHandler) GetSecretYAML(ctx *gin.Context) {
 
 // CreateSecretByYaml 通过YAML创建Secret
 func (h *K8sSecretHandler) CreateSecretByYaml(ctx *gin.Context) {
-	var req model.CreateResourceByYamlReq
+	var req model.CreateSecretByYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
@@ -240,7 +233,7 @@ func (h *K8sSecretHandler) CreateSecretByYaml(ctx *gin.Context) {
 
 // UpdateSecretByYaml 通过YAML更新Secret
 func (h *K8sSecretHandler) UpdateSecretByYaml(ctx *gin.Context) {
-	var req model.UpdateResourceByYamlReq
+	var req model.UpdateSecretByYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
