@@ -939,10 +939,6 @@ AI-CloudOps-aiops/
 
 ### 🚀 快速开始贡献
 
-<table>
-<tr>
-<td width="50%">
-
 #### 📝 代码贡献流程
 
 ```bash
@@ -965,9 +961,6 @@ git push origin feature/amazing-feature
 gh pr create --title "Add amazing feature" --body "Description of the feature"
 ```
 
-</td>
-<td width="50%">
-
 #### 🎯 贡献类型
 
 - **🐛 Bug 修复**: 发现并修复代码问题
@@ -978,10 +971,6 @@ gh pr create --title "Add amazing feature" --body "Description of the feature"
 - **🧪 测试**: 增加测试覆盖率
 - **🔧 工具**: 改进开发工具和流程
 - **🌐 国际化**: 支持多语言和本地化
-
-</td>
-</tr>
-</table>
 
 ### 📋 贡献规范
 
