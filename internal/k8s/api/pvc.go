@@ -43,15 +43,16 @@ func NewK8sPVCHandler(pvcService service.PVCService) *K8sPVCHandler {
 func (k *K8sPVCHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		// Unify to /clusters/:cluster_id/pvcs style
-		k8sGroup.GET("/clusters/:cluster_id/pvcs", k.GetPVCList)
-		k8sGroup.GET("/clusters/:cluster_id/pvcs/:namespace/:name", k.GetPVCDetails)
-		k8sGroup.GET("/clusters/:cluster_id/pvcs/:namespace/:name/yaml", k.GetPVCYaml)
-		k8sGroup.POST("/clusters/:cluster_id/pvcs", k.CreatePVC)
-		k8sGroup.POST("/clusters/:cluster_id/pvcs/yaml", k.CreatePVCByYaml)
-		k8sGroup.PUT("/clusters/:cluster_id/pvcs/:namespace/:name", k.UpdatePVC)
-		k8sGroup.PUT("/clusters/:cluster_id/pvcs/:namespace/:name/yaml", k.UpdatePVCByYaml)
-		k8sGroup.DELETE("/clusters/:cluster_id/pvcs/:namespace/:name", k.DeletePVC)
+		k8sGroup.GET("/pvc/:cluster_id/list", k.GetPVCList)                              // 获取PVC列表
+		k8sGroup.GET("/pvc/:cluster_id/:namespace/:name/detail", k.GetPVCDetails)        // 获取PVC详情
+		k8sGroup.GET("/pvc/:cluster_id/:namespace/:name/detail/yaml", k.GetPVCYaml)      // 获取PVC YAML
+		k8sGroup.POST("/pvc/:cluster_id/create", k.CreatePVC)                            // 创建PVC
+		k8sGroup.POST("/pvc/:cluster_id/create/yaml", k.CreatePVCByYaml)                 // 通过YAML创建PVC
+		k8sGroup.PUT("/pvc/:cluster_id/:namespace/:name/update", k.UpdatePVC)            // 更新PVC
+		k8sGroup.PUT("/pvc/:cluster_id/:namespace/:name/update/yaml", k.UpdatePVCByYaml) // 通过YAML更新PVC
+		k8sGroup.DELETE("/pvc/:cluster_id/:namespace/:name/delete", k.DeletePVC)         // 删除PVC
+		k8sGroup.POST("/pvc/:cluster_id/:namespace/:name/expand", k.ExpandPVC)           // 扩容PVC
+		k8sGroup.GET("/pvc/:cluster_id/:namespace/:name/pods", k.GetPVCPods)             // 获取使用PVC的Pod列表
 	}
 }
 
@@ -216,5 +217,55 @@ func (k *K8sPVCHandler) UpdatePVCByYaml(ctx *gin.Context) {
 	req.Name = name
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.pvcService.UpdatePVCByYaml(ctx, &req)
+	})
+}
+
+func (k *K8sPVCHandler) ExpandPVC(ctx *gin.Context) {
+	var req model.ExpandPVCReq
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	ns, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	req.ClusterID = clusterID
+	req.Namespace = ns
+	req.Name = name
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.pvcService.ExpandPVC(ctx, &req)
+	})
+}
+
+func (k *K8sPVCHandler) GetPVCPods(ctx *gin.Context) {
+	var req model.GetPVCPodsReq
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	ns, err := utils.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	name, err := utils.GetParamCustomName(ctx, "name")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+	req.ClusterID = clusterID
+	req.Namespace = ns
+	req.Name = name
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.pvcService.GetPVCPods(ctx, &req)
 	})
 }

@@ -60,7 +60,6 @@ func InitGinServer(
 	clusterRoleHdl *k8sApi.K8sClusterRoleHandler,
 	roleBindingHdl *k8sApi.K8sRoleBindingHandler,
 	clusterRoleBindingHdl *k8sApi.K8sClusterRoleBindingHandler,
-	// Newly added k8s handlers
 	k8sConfigMapHdl *k8sApi.K8sConfigMapHandler,
 	k8sSecretHdl *k8sApi.K8sSecretHandler,
 	alertEventHdl *prometheusApi.AlertEventHandler,
@@ -86,6 +85,8 @@ func InitGinServer(
 	notificationHdl *workorderApi.NotificationHandler,
 	ingressHdl *k8sApi.K8sIngressHandler,
 	k8sPodHdl *k8sApi.K8sPodHandler,
+	k8sPVHdl *k8sApi.K8sPVHandler,
+	k8sPVCHdl *k8sApi.K8sPVCHandler,
 	cronJobHdl *cronApi.CronJobHandler,
 ) *gin.Engine {
 	server := gin.Default()
@@ -136,5 +137,7 @@ func InitGinServer(
 	ingressHdl.RegisterRouters(server)
 	k8sPodHdl.RegisterRouters(server)
 	cronJobHdl.RegisterRouters(server)
+	k8sPVHdl.RegisterRouters(server)
+	k8sPVCHdl.RegisterRouters(server)
 	return server
 }

@@ -71,8 +71,8 @@ func (cs *CronScheduler) StartScheduler(ctx context.Context) error {
 		return err
 	}
 
-	// 定期重新加载任务配置（每5分钟检查一次，减少数据库查询频率）
-	ticker := time.NewTicker(5 * time.Minute)
+	// 定期重新加载任务配置（每30秒检查一次，及时清理已删除的任务）
+	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -176,6 +176,26 @@ func (cs *CronScheduler) scheduleJob(job *model.CronJob) error {
 	// 注册到调度器
 	_, err = cs.scheduler.Register(job.Schedule, task, asynq.TaskID(entryID))
 	return err
+}
+
+// RemoveScheduledJob 立即从调度器中移除指定任务
+func (cs *CronScheduler) RemoveScheduledJob(jobID int) error {
+	entryID := generateEntryID(jobID)
+
+	// 从调度器中取消注册任务
+	err := cs.scheduler.Unregister(entryID)
+	if err != nil {
+		cs.logger.Warn("从调度器移除任务失败，可能任务不存在",
+			zap.Int("jobID", jobID),
+			zap.String("entryID", entryID),
+			zap.Error(err))
+		return err
+	}
+
+	cs.logger.Info("成功从调度器移除任务",
+		zap.Int("jobID", jobID),
+		zap.String("entryID", entryID))
+	return nil
 }
 
 // generateEntryID 生成调度条目ID

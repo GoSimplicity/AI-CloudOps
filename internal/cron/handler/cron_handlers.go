@@ -94,13 +94,12 @@ func (h *CronHandlers) ProcessTask(ctx context.Context, t *asynq.Task) error {
 	// 获取任务详情
 	job, err := h.cronDAO.GetCronJob(ctx, payload.JobID)
 	if err != nil {
-		// 如果任务不存在，记录警告但不返回错误，这样可以防止调度器重复尝试
+		// 如果任务不存在，记录信息级别日志并跳过执行，这样可以防止调度器重复尝试
 		if err.Error() == "任务不存在" || err.Error() == "record not found" {
-			h.logger.Warn("任务已被删除或不存在，跳过执行",
+			h.logger.Info("任务已被删除，跳过执行（正常情况，调度器将在下次重新加载时清理）",
 				zap.Int("jobID", payload.JobID),
-				zap.String("jobName", payload.JobName),
-				zap.Error(err))
-			return nil // 返回nil表示任务"成功"完成（虽然是跳过）
+				zap.String("jobName", payload.JobName))
+			return nil // 返回nil表示任务"成功"完成（跳过执行）
 		}
 		h.logger.Error("获取任务详情失败", zap.Int("jobID", payload.JobID), zap.Error(err))
 		return fmt.Errorf("获取任务详情失败: %w", err)

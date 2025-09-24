@@ -33,6 +33,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/handler"
+	"github.com/GoSimplicity/AI-CloudOps/internal/cron/scheduler"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/hibiken/asynq"
 	"github.com/robfig/cron/v3"
@@ -52,20 +53,23 @@ type CronService interface {
 }
 
 type cronService struct {
-	logger  *zap.Logger
-	cronDAO dao.CronJobDAO
-	client  *asynq.Client // Asynq客户端，用于手动触发任务
+	logger        *zap.Logger
+	cronDAO       dao.CronJobDAO
+	client        *asynq.Client            // Asynq客户端，用于手动触发任务
+	cronScheduler *scheduler.CronScheduler // Cron调度器，用于管理调度任务
 }
 
 func NewCronService(
 	logger *zap.Logger,
 	cronDAO dao.CronJobDAO,
 	client *asynq.Client,
+	cronScheduler *scheduler.CronScheduler,
 ) CronService {
 	return &cronService{
-		logger:  logger,
-		cronDAO: cronDAO,
-		client:  client,
+		logger:        logger,
+		cronDAO:       cronDAO,
+		client:        client,
+		cronScheduler: cronScheduler,
 	}
 }
 
@@ -156,6 +160,19 @@ func (s *cronService) DeleteCronJob(ctx context.Context, id int) error {
 	if err := s.cronDAO.DeleteCronJob(ctx, id); err != nil {
 		s.logger.Error("删除任务失败", zap.Int("id", id), zap.Error(err))
 		return err
+	}
+
+	// 立即从调度器中移除任务，避免已删除的任务继续执行
+	if s.cronScheduler != nil && job.JobType != model.CronJobTypeSystem {
+		if err := s.cronScheduler.RemoveScheduledJob(id); err != nil {
+			// 记录警告但不影响删除操作的成功
+			s.logger.Warn("从调度器移除任务失败，但任务已成功删除",
+				zap.Int("id", id),
+				zap.String("name", job.Name),
+				zap.Error(err))
+		} else {
+			s.logger.Info("成功从调度器移除任务", zap.Int("id", id), zap.String("name", job.Name))
+		}
 	}
 
 	s.logger.Info("删除任务成功", zap.Int("id", id), zap.String("name", job.Name))
