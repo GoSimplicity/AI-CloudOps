@@ -29,6 +29,21 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 )
 
+// K8sClusterRoleBinding ClusterRoleBinding主model
+type K8sClusterRoleBinding struct {
+	Name                  string                     `json:"name"`
+	ClusterID             int                        `json:"cluster_id"`
+	UID                   string                     `json:"uid"`
+	CreationTimestamp     string                     `json:"creation_timestamp"`
+	Labels                map[string]string          `json:"labels"`
+	Annotations           map[string]string          `json:"annotations"`
+	RoleRef               RoleRef                    `json:"role_ref"`
+	Subjects              []Subject                  `json:"subjects"`
+	ResourceVersion       string                     `json:"resource_version"`
+	Age                   string                     `json:"age"`
+	RawClusterRoleBinding *rbacv1.ClusterRoleBinding `json:"-"` // 原始ClusterRoleBinding对象，不序列化
+}
+
 // GetClusterRoleBindingListReq 获取ClusterRoleBinding列表请求
 type GetClusterRoleBindingListReq struct {
 	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
@@ -86,19 +101,4 @@ type UpdateClusterRoleBindingByYamlReq struct {
 type DeleteClusterRoleBindingReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`
 	Name      string `json:"name" binding:"required" comment:"ClusterRoleBinding名称"`
-}
-
-// K8sClusterRoleBinding ClusterRoleBinding主model
-type K8sClusterRoleBinding struct {
-	Name                  string                     `json:"name"`
-	ClusterID             int                        `json:"cluster_id"`
-	UID                   string                     `json:"uid"`
-	CreationTimestamp     string                     `json:"creation_timestamp"`
-	Labels                map[string]string          `json:"labels"`
-	Annotations           map[string]string          `json:"annotations"`
-	RoleRef               RoleRef                    `json:"role_ref"`
-	Subjects              []Subject                  `json:"subjects"`
-	ResourceVersion       string                     `json:"resource_version"`
-	Age                   string                     `json:"age"`
-	RawClusterRoleBinding *rbacv1.ClusterRoleBinding `json:"-"` // 原始ClusterRoleBinding对象，不序列化
 }

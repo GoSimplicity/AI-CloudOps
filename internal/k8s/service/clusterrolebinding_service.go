@@ -49,7 +49,8 @@ type ClusterRoleBindingService interface {
 	DeleteClusterRoleBinding(ctx context.Context, req *model.DeleteClusterRoleBindingReq) error
 
 	// YAML 操作
-	GetClusterRoleBindingYaml(ctx context.Context, req *model.GetClusterRoleBindingYamlReq) (string, error)
+	GetClusterRoleBindingYaml(ctx context.Context, req *model.GetClusterRoleBindingYamlReq) (*model.K8sYaml, error)
+	CreateClusterRoleBindingByYaml(ctx context.Context, req *model.CreateClusterRoleBindingByYamlReq) error
 	UpdateClusterRoleBindingYaml(ctx context.Context, req *model.UpdateClusterRoleBindingByYamlReq) error
 }
 
@@ -223,23 +224,45 @@ func (c *clusterRoleBindingService) DeleteClusterRoleBinding(ctx context.Context
 }
 
 // GetClusterRoleBindingYaml 获取ClusterRoleBinding YAML
-func (c *clusterRoleBindingService) GetClusterRoleBindingYaml(ctx context.Context, req *model.GetClusterRoleBindingYamlReq) (string, error) {
+func (c *clusterRoleBindingService) GetClusterRoleBindingYaml(ctx context.Context, req *model.GetClusterRoleBindingYamlReq) (*model.K8sYaml, error) {
 	if req == nil {
-		return "", fmt.Errorf("获取ClusterRoleBinding YAML请求不能为空")
+		return nil, fmt.Errorf("获取ClusterRoleBinding YAML请求不能为空")
 	}
 
 	// 获取 ClusterRoleBinding
 	clusterRoleBinding, err := c.clusterRoleBindingManager.GetClusterRoleBinding(ctx, req.ClusterID, req.Name)
 	if err != nil {
-		return "", fmt.Errorf("failed to get cluster role binding: %w", err)
+		return nil, fmt.Errorf("failed to get cluster role binding: %w", err)
 	}
 
 	yamlContent, err := k8sutils.ClusterRoleBindingToYAML(clusterRoleBinding)
 	if err != nil {
-		return "", fmt.Errorf("failed to convert cluster role binding to yaml: %w", err)
+		return nil, fmt.Errorf("failed to convert cluster role binding to yaml: %w", err)
 	}
 
-	return yamlContent, nil
+	return &model.K8sYaml{
+		YAML: yamlContent,
+	}, nil
+}
+
+// CreateClusterRoleBindingByYaml 通过YAML创建ClusterRoleBinding
+func (c *clusterRoleBindingService) CreateClusterRoleBindingByYaml(ctx context.Context, req *model.CreateClusterRoleBindingByYamlReq) error {
+	if req == nil {
+		return fmt.Errorf("通过YAML创建ClusterRoleBinding请求不能为空")
+	}
+
+	clusterRoleBinding, err := k8sutils.YAMLToClusterRoleBinding(req.YamlContent)
+	if err != nil {
+		return fmt.Errorf("failed to parse yaml: %w", err)
+	}
+
+	// 使用 ClusterRoleBindingManager 创建 ClusterRoleBinding
+	err = c.clusterRoleBindingManager.CreateClusterRoleBinding(ctx, req.ClusterID, clusterRoleBinding)
+	if err != nil {
+		return fmt.Errorf("failed to create cluster role binding: %w", err)
+	}
+
+	return nil
 }
 
 // UpdateClusterRoleBindingYaml 更新ClusterRoleBinding YAML

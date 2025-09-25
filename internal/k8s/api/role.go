@@ -45,14 +45,14 @@ func NewK8sRoleHandler(roleService service.RoleService) *K8sRoleHandler {
 func (k *K8sRoleHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/clusters/:cluster_id/roles", k.GetRoleList)
-		k8sGroup.GET("/clusters/:cluster_id/roles/:namespace/:name", k.GetRoleDetails)
-		k8sGroup.GET("/clusters/:cluster_id/roles/:namespace/:name/yaml", k.GetRoleYaml)
-		k8sGroup.POST("/clusters/:cluster_id/roles", k.CreateRole)
-		k8sGroup.POST("/clusters/:cluster_id/roles/yaml", k.CreateRoleByYaml)
-		k8sGroup.PUT("/clusters/:cluster_id/roles/:namespace/:name", k.UpdateRole)
-		k8sGroup.PUT("/clusters/:cluster_id/roles/:namespace/:name/yaml", k.UpdateRoleByYaml)
-		k8sGroup.DELETE("/clusters/:cluster_id/roles/:namespace/:name", k.DeleteRole)
+		k8sGroup.GET("/role/:cluster_id/list", k.GetRoleList)
+		k8sGroup.GET("/role/:cluster_id/:namespace/:name/detail", k.GetRoleDetails)
+		k8sGroup.GET("/role/:cluster_id/:namespace/:name/detail/yaml", k.GetRoleYaml)
+		k8sGroup.POST("/role/:cluster_id/create", k.CreateRole)
+		k8sGroup.POST("/role/:cluster_id/create/yaml", k.CreateRoleByYaml)
+		k8sGroup.PUT("/role/:cluster_id/:namespace/:name/update", k.UpdateRole)
+		k8sGroup.PUT("/role/:cluster_id/:namespace/:name/update/yaml", k.UpdateRoleByYaml)
+		k8sGroup.DELETE("/role/:cluster_id/:namespace/:name/delete", k.DeleteRole)
 	}
 }
 
