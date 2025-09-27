@@ -45,15 +45,15 @@ func NewK8sPVHandler(pvService service.PVService) *K8sPVHandler {
 func (k *K8sPVHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/clusters/:cluster_id/pvs", k.GetPVList)
-		k8sGroup.GET("/clusters/:cluster_id/pvs/:name", k.GetPVDetails)
-		k8sGroup.GET("/clusters/:cluster_id/pvs/:name/yaml", k.GetPVYaml)
-		k8sGroup.POST("/clusters/:cluster_id/pvs", k.CreatePV)
-		k8sGroup.POST("/clusters/:cluster_id/pvs/yaml", k.CreatePVByYaml)
-		k8sGroup.PUT("/clusters/:cluster_id/pvs/:name", k.UpdatePV)
-		k8sGroup.PUT("/clusters/:cluster_id/pvs/:name/yaml", k.UpdatePVByYaml)
-		k8sGroup.DELETE("/clusters/:cluster_id/pvs/:name", k.DeletePV)
-		k8sGroup.POST("/clusters/:cluster_id/pvs/:name/reclaim", k.ReclaimPV)
+		k8sGroup.GET("/pv/:cluster_id/list", k.GetPVList)                   // 获取PV列表
+		k8sGroup.GET("/pv/:cluster_id/:name/detail", k.GetPVDetails)        // 获取PV详情
+		k8sGroup.GET("/pv/:cluster_id/:name/detail/yaml", k.GetPVYaml)      // 获取PV YAML
+		k8sGroup.POST("/pv/:cluster_id/create", k.CreatePV)                 // 创建PV
+		k8sGroup.POST("/pv/:cluster_id/create/yaml", k.CreatePVByYaml)      // 通过YAML创建PV
+		k8sGroup.PUT("/pv/:cluster_id/:name/update", k.UpdatePV)            // 更新PV
+		k8sGroup.PUT("/pv/:cluster_id/:name/update/yaml", k.UpdatePVByYaml) // 通过YAML更新PV
+		k8sGroup.DELETE("/pv/:cluster_id/:name/delete", k.DeletePV)         // 删除PV
+		k8sGroup.POST("/pv/:cluster_id/:name/reclaim", k.ReclaimPV)         // 回收PV
 	}
 }
 

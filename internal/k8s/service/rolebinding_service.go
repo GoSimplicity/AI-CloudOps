@@ -45,9 +45,8 @@ type RoleBindingService interface {
 
 	// YAML 操作
 	GetRoleBindingYaml(ctx context.Context, req *model.GetRoleBindingYamlReq) (*model.K8sYaml, error)
+	CreateRoleBindingByYaml(ctx context.Context, req *model.CreateRoleBindingByYamlReq) error
 	UpdateRoleBindingYaml(ctx context.Context, req *model.UpdateRoleBindingByYamlReq) error
-
-	// 扩展功能
 }
 
 type roleBindingService struct {
@@ -128,6 +127,15 @@ func (s *roleBindingService) GetRoleBindingYaml(ctx context.Context, req *model.
 	return &model.K8sYaml{
 		YAML: yamlContent,
 	}, nil
+}
+
+func (s *roleBindingService) CreateRoleBindingByYaml(ctx context.Context, req *model.CreateRoleBindingByYamlReq) error {
+	roleBinding, err := k8sutils.YAMLToRoleBinding(req.YamlContent)
+	if err != nil {
+		return err
+	}
+
+	return s.roleBindingManager.CreateRoleBinding(ctx, req.ClusterID, roleBinding.Namespace, roleBinding)
 }
 
 func (s *roleBindingService) UpdateRoleBindingYaml(ctx context.Context, req *model.UpdateRoleBindingByYamlReq) error {

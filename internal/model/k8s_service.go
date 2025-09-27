@@ -183,3 +183,15 @@ type GetServiceEndpointsReq struct {
 	Namespace string `json:"namespace"`  // 命名空间
 	Name      string `json:"name"`       // Service名称
 }
+
+type CreateServiceByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+}
+
+type UpdateServiceByYamlReq struct {
+	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
+	YAML      string `json:"yaml" binding:"required"`       // YAML内容
+	Namespace string `json:"namespace" binding:"required"`  // 命名空间
+	Name      string `json:"name" binding:"required"`       // Service名称
+}

@@ -108,12 +108,14 @@ func (p *pvService) GetPVList(ctx context.Context, req *model.GetPVListReq) (mod
 	// optional filters
 	filtered := make([]*model.K8sPV, 0, len(entities))
 	for _, e := range entities {
-		if req.Status != "" && !strings.EqualFold(e.Status, req.Status) {
-			continue
+		// 过滤状态
+		if req.Status != "" {
+			statusStr := p.pvStatusToString(e.Status)
+			if !strings.EqualFold(statusStr, req.Status) {
+				continue
+			}
 		}
-		if req.StorageClass != "" && !strings.EqualFold(e.StorageClass, req.StorageClass) {
-			continue
-		}
+		// 过滤访问模式
 		if req.AccessMode != "" {
 			ok := false
 			for _, m := range e.AccessModes {
@@ -126,6 +128,7 @@ func (p *pvService) GetPVList(ctx context.Context, req *model.GetPVListReq) (mod
 				continue
 			}
 		}
+		// 过滤卷类型
 		if req.VolumeType != "" && !strings.EqualFold(e.VolumeMode, req.VolumeType) {
 			continue
 		}
@@ -133,7 +136,7 @@ func (p *pvService) GetPVList(ctx context.Context, req *model.GetPVListReq) (mod
 	}
 	// pagination
 	page := req.Page
-	size := req.PageSize
+	size := req.Size
 	if page <= 0 {
 		page = 1
 	}
@@ -228,8 +231,28 @@ func (p *pvService) CreatePV(ctx context.Context, req *model.CreatePVReq) error 
 
 // UpdatePV 更新PV
 func (p *pvService) UpdatePV(ctx context.Context, req *model.UpdatePVReq) error {
-	// 将请求转换为 Kubernetes PV 对象
-	pv := utils.ConvertUpdatePVReqToPV(req)
+	// 先获取现有的PV对象
+	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
+	if err != nil {
+		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
+		return pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
+	}
+
+	existingPV, err := kubeClient.CoreV1().PersistentVolumes().Get(ctx, req.Name, metav1.GetOptions{})
+	if err != nil {
+		p.logger.Error("获取现有PV失败",
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("name", req.Name),
+			zap.Error(err))
+		return pkg.NewBusinessError(constants.ErrK8sResourceGet, "获取现有PV失败")
+	}
+
+	// 基于现有PV对象更新可变字段
+	pv := utils.ConvertUpdatePVReqToPV(req, existingPV)
+	if pv == nil {
+		return pkg.NewBusinessError(constants.ErrInvalidParam, "无效的更新请求")
+	}
+
 	return p.pvManager.UpdatePV(ctx, req.ClusterID, pv)
 }
 
@@ -266,6 +289,10 @@ func (p *pvService) ReclaimPV(ctx context.Context, req *model.ReclaimPVReq) erro
 
 // convertPVToEntity 将Kubernetes PV对象转换为实体模型
 func (p *pvService) convertPVToEntity(pv *corev1.PersistentVolume, clusterID int) *model.K8sPV {
+	if pv == nil {
+		return nil
+	}
+
 	// 获取容量
 	capacity := ""
 	if pv.Spec.Capacity != nil {
@@ -286,31 +313,97 @@ func (p *pvService) convertPVToEntity(pv *corev1.PersistentVolume, clusterID int
 	// 获取存储类
 	storageClass := pv.Spec.StorageClassName
 
-	// 计算年龄
-	age := pkg.GetAge(pv.CreationTimestamp.Time)
+	// 转换状态为枚举类型
+	status := p.convertPVStatus(pv.Status.Phase)
+
+	// 获取卷模式
+	volumeMode := string(corev1.PersistentVolumeFilesystem)
+	if pv.Spec.VolumeMode != nil {
+		volumeMode = string(*pv.Spec.VolumeMode)
+	}
 
 	// 获取绑定信息
 	claimRef := make(map[string]string)
 	if pv.Spec.ClaimRef != nil {
 		claimRef["namespace"] = pv.Spec.ClaimRef.Namespace
 		claimRef["name"] = pv.Spec.ClaimRef.Name
+		claimRef["uid"] = string(pv.Spec.ClaimRef.UID)
 	}
 
+	// 获取卷源配置
+	volumeSource := make(map[string]interface{})
+	if pv.Spec.PersistentVolumeSource.HostPath != nil {
+		volumeSource["hostPath"] = map[string]interface{}{
+			"path": pv.Spec.PersistentVolumeSource.HostPath.Path,
+			"type": pv.Spec.PersistentVolumeSource.HostPath.Type,
+		}
+	}
+	// 其他卷源类型可以根据需要添加
+
+	// 获取节点亲和性
+	nodeAffinity := make(map[string]interface{})
+	if pv.Spec.NodeAffinity != nil && pv.Spec.NodeAffinity.Required != nil {
+		// 简化节点亲和性处理，可根据需要扩展
+		nodeAffinity["required"] = "true"
+	}
+
+	// 计算年龄
+	age := utils.GetPVAge(*pv)
+
+	// 获取资源版本
+	resourceVersion := pv.ResourceVersion
+
 	return &model.K8sPV{
-		Name:              pv.Name,
-		ClusterID:         clusterID,
-		UID:               string(pv.UID),
-		Capacity:          capacity,
-		AccessModes:       accessModes,
-		ReclaimPolicy:     reclaimPolicy,
-		Status:            string(pv.Status.Phase),
-		StorageClass:      storageClass,
-		VolumeMode:        string(*pv.Spec.VolumeMode),
-		ClaimRef:          claimRef,
-		Labels:            pv.Labels,
-		Annotations:       pv.Annotations,
-		CreationTimestamp: pv.CreationTimestamp.Time.Format("2006-01-02T15:04:05Z07:00"),
-		Age:               age,
+		Name:            pv.Name,
+		ClusterID:       clusterID,
+		UID:             string(pv.UID),
+		Capacity:        capacity,
+		AccessModes:     accessModes,
+		ReclaimPolicy:   reclaimPolicy,
+		StorageClass:    storageClass,
+		VolumeMode:      volumeMode,
+		Status:          status,
+		ClaimRef:        claimRef,
+		VolumeSource:    volumeSource,
+		NodeAffinity:    nodeAffinity,
+		Labels:          pv.Labels,
+		Annotations:     pv.Annotations,
+		ResourceVersion: resourceVersion,
+		CreatedAt:       pv.CreationTimestamp.Time,
+		Age:             age,
+		RawPV:           pv,
+	}
+}
+
+// convertPVStatus 转换PV状态为枚举类型
+func (p *pvService) convertPVStatus(phase corev1.PersistentVolumePhase) model.K8sPVStatus {
+	switch phase {
+	case corev1.VolumeAvailable:
+		return model.K8sPVStatusAvailable
+	case corev1.VolumeBound:
+		return model.K8sPVStatusBound
+	case corev1.VolumeReleased:
+		return model.K8sPVStatusReleased
+	case corev1.VolumeFailed:
+		return model.K8sPVStatusFailed
+	default:
+		return model.K8sPVStatusUnknown
+	}
+}
+
+// pvStatusToString 将PV状态枚举转换为字符串
+func (p *pvService) pvStatusToString(status model.K8sPVStatus) string {
+	switch status {
+	case model.K8sPVStatusAvailable:
+		return "Available"
+	case model.K8sPVStatusBound:
+		return "Bound"
+	case model.K8sPVStatusReleased:
+		return "Released"
+	case model.K8sPVStatusFailed:
+		return "Failed"
+	default:
+		return "Unknown"
 	}
 }
 
@@ -322,10 +415,10 @@ func (p *pvService) CreatePVByYaml(ctx context.Context, req *model.CreatePVByYam
 	if req.ClusterID <= 0 {
 		return pkg.NewBusinessError(constants.ErrInvalidParam, "集群ID不能为空")
 	}
-	if req.YamlContent == "" {
+	if req.YAML == "" {
 		return pkg.NewBusinessError(constants.ErrInvalidParam, "YAML内容不能为空")
 	}
-	pv, err := utils.YAMLToPV(req.YamlContent)
+	pv, err := utils.YAMLToPV(req.YAML)
 	if err != nil {
 		p.logger.Error("解析PV YAML失败", zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrK8sResourceOperation, "解析YAML失败")
@@ -349,10 +442,10 @@ func (p *pvService) UpdatePVByYaml(ctx context.Context, req *model.UpdatePVByYam
 	if req.ClusterID <= 0 {
 		return pkg.NewBusinessError(constants.ErrInvalidParam, "集群ID不能为空")
 	}
-	if req.YamlContent == "" {
+	if req.YAML == "" {
 		return pkg.NewBusinessError(constants.ErrInvalidParam, "YAML内容不能为空")
 	}
-	desired, err := utils.YAMLToPV(req.YamlContent)
+	desired, err := utils.YAMLToPV(req.YAML)
 	if err != nil {
 		p.logger.Error("解析PV YAML失败", zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrK8sResourceOperation, "解析YAML失败")

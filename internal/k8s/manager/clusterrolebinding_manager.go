@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -116,17 +117,13 @@ func (c *clusterRoleBindingManager) GetClusterRoleBindingList(ctx context.Contex
 	// 转换为模型格式
 	var k8sClusterRoleBindings []*model.K8sClusterRoleBinding
 	for _, crb := range clusterRoleBindings.Items {
-		k8sClusterRoleBinding := &model.K8sClusterRoleBinding{
-			ClusterID:             clusterID,
-			Name:                  crb.Name,
-			UID:                   string(crb.UID),
-			CreationTimestamp:     crb.CreationTimestamp.Time.Format(time.RFC3339),
-			Labels:                crb.Labels,
-			Annotations:           crb.Annotations,
-			ResourceVersion:       crb.ResourceVersion,
-			RawClusterRoleBinding: &crb,
-		}
-		k8sClusterRoleBindings = append(k8sClusterRoleBindings, k8sClusterRoleBinding)
+		// 使用 utils 中的转换函数，确保所有字段都被正确填充
+		k8sClusterRoleBinding := k8sutils.ConvertK8sClusterRoleBindingToClusterRoleBindingInfo(&crb, clusterID)
+		// 添加原始对象引用
+		k8sClusterRoleBinding.RawClusterRoleBinding = &crb
+		// 计算 Age
+		k8sClusterRoleBinding.Age = calculateAge(crb.CreationTimestamp.Time)
+		k8sClusterRoleBindings = append(k8sClusterRoleBindings, &k8sClusterRoleBinding)
 	}
 
 	c.logger.Debug("成功获取ClusterRoleBinding列表",
@@ -193,4 +190,36 @@ func (c *clusterRoleBindingManager) DeleteClusterRoleBinding(ctx context.Context
 	c.logger.Info("成功删除ClusterRoleBinding",
 		zap.Int("cluster_id", clusterID), zap.String("name", name))
 	return nil
+}
+
+// calculateAge 计算资源的年龄，返回可读的时间格式
+func calculateAge(creationTime time.Time) string {
+	duration := time.Since(creationTime)
+
+	days := int(duration.Hours() / 24)
+	hours := int(duration.Hours()) % 24
+	minutes := int(duration.Minutes()) % 60
+
+	if days > 0 {
+		if days == 1 {
+			return "1d"
+		}
+		return fmt.Sprintf("%dd", days)
+	} else if hours > 0 {
+		if hours == 1 {
+			return "1h"
+		}
+		return fmt.Sprintf("%dh", hours)
+	} else if minutes > 0 {
+		if minutes == 1 {
+			return "1m"
+		}
+		return fmt.Sprintf("%dm", minutes)
+	} else {
+		seconds := int(duration.Seconds())
+		if seconds <= 1 {
+			return "1s"
+		}
+		return fmt.Sprintf("%ds", seconds)
+	}
 }

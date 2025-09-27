@@ -29,6 +29,11 @@ package di
 
 import (
 	cron "github.com/GoSimplicity/AI-CloudOps/internal/cron"
+	cronApi "github.com/GoSimplicity/AI-CloudOps/internal/cron/api"
+	cronDao "github.com/GoSimplicity/AI-CloudOps/internal/cron/dao"
+	cronHandler "github.com/GoSimplicity/AI-CloudOps/internal/cron/handler"
+	cronScheduler "github.com/GoSimplicity/AI-CloudOps/internal/cron/scheduler"
+	cronService "github.com/GoSimplicity/AI-CloudOps/internal/cron/service"
 	k8sHandler "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	k8sDao "github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
@@ -64,12 +69,17 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	_ "github.com/google/wire"
+	"github.com/hibiken/asynq"
 )
 
 type Cmd struct {
-	Server    *gin.Engine
-	Bootstrap startup.ApplicationBootstrap
-	Cron      cron.CronManager
+	Server       *gin.Engine
+	Bootstrap    startup.ApplicationBootstrap
+	CronManager  cron.CronManager
+	AsynqServer  *asynq.Server
+	AsynqClient  *asynq.Client
+	Scheduler    *asynq.Scheduler
+	CronHandlers *cronHandler.CronHandlers
 }
 
 var HandlerSet = wire.NewSet(
@@ -94,9 +104,13 @@ var HandlerSet = wire.NewSet(
 	k8sHandler.NewK8sClusterRoleHandler,
 	k8sHandler.NewK8sRoleBindingHandler,
 	k8sHandler.NewK8sClusterRoleBindingHandler,
+	k8sHandler.NewK8sRBACHandler,
 	k8sHandler.NewK8sIngressHandler,
 	k8sHandler.NewK8sPodHandler,
 	k8sHandler.NewK8sConfigMapHandler,
+	k8sHandler.NewK8sSecretHandler,
+	k8sHandler.NewK8sPVHandler,
+	k8sHandler.NewK8sPVCHandler,
 	promHandler.NewAlertPoolHandler,
 	promHandler.NewMonitorConfigHandler,
 	promHandler.NewOnDutyGroupHandler,
@@ -118,6 +132,7 @@ var HandlerSet = wire.NewSet(
 	treeHandler.NewTreeNodeHandler,
 	treeHandler.NewTreeLocalHandler,
 	terminal.NewTerminalHandler,
+	cronApi.NewCronJobHandler,
 )
 
 var ServiceSet = wire.NewSet(
@@ -137,6 +152,7 @@ var ServiceSet = wire.NewSet(
 	k8sService.NewClusterRoleService,
 	k8sService.NewRoleBindingService,
 	k8sService.NewClusterRoleBindingService,
+	k8sService.NewRBACService,
 	k8sService.NewIngressService,
 	k8sService.NewPodService,
 	k8sService.NewConfigMapService,
@@ -169,6 +185,7 @@ var ServiceSet = wire.NewSet(
 	workorderService.NewWorkorderNotificationService,
 	treeService.NewTreeNodeService,
 	treeService.NewTreeLocalService,
+	cronService.NewCronService,
 )
 
 var DaoSet = wire.NewSet(
@@ -199,6 +216,7 @@ var DaoSet = wire.NewSet(
 	workorderDao.NewNotificationDAO,
 	treeDao.NewTreeNodeDAO,
 	treeDao.NewTreeLocalDAO,
+	cronDao.NewCronJobDAO,
 )
 
 var SSHSet = wire.NewSet(
@@ -239,7 +257,10 @@ var JobSet = wire.NewSet(
 )
 
 var CronSet = wire.NewSet(
-	cron.NewCronManager,
+	cron.NewUnifiedCronManager,
+	cron.NewBuiltinTaskManager,
+	cronHandler.NewCronHandlers,
+	cronScheduler.NewCronScheduler,
 )
 
 var Injector = wire.NewSet(
@@ -265,8 +286,13 @@ var ClientSet = wire.NewSet(
 	client.NewK8sClient,
 )
 
-var NotificationSet = wire.NewSet(
+var AsynqSet = wire.NewSet(
 	InitAsynqClient,
+	InitAsynqServer,
+	InitScheduler,
+)
+
+var NotificationSet = wire.NewSet(
 	InitNotificationConfig,
 	InitNotificationManager,
 )
@@ -283,6 +309,7 @@ func ProvideCmd() *Cmd {
 		ManagerSet,
 		CacheSet,
 		ClientSet,
+		AsynqSet,
 		NotificationSet,
 	)
 	return &Cmd{}

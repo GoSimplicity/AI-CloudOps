@@ -44,15 +44,8 @@ type SecretManager interface {
 	UpdateSecret(ctx context.Context, clusterID int, secret *corev1.Secret) (*corev1.Secret, error)
 	DeleteSecret(ctx context.Context, clusterID int, namespace, name string, options metav1.DeleteOptions) error
 
-	// 批量操作
-	BatchDeleteSecrets(ctx context.Context, clusterID int, namespace string, secretNames []string, options metav1.DeleteOptions) error
-
 	// 业务功能
-	ListSecretsBySelector(ctx context.Context, clusterID int, namespace string, selector string) (*corev1.SecretList, error)
 	ListSecretsBySelectors(ctx context.Context, clusterID int, namespace string, labelSelector string, fieldSelector string) (*corev1.SecretList, error)
-	ListSecretsByType(ctx context.Context, clusterID int, namespace string, secretType corev1.SecretType) (*corev1.SecretList, error)
-	GetSecretData(ctx context.Context, clusterID int, namespace, name string, key string) ([]byte, error)
-	UpdateSecretData(ctx context.Context, clusterID int, namespace, name string, data map[string][]byte) (*corev1.Secret, error)
 }
 
 // secretManager Secret管理器实现
@@ -166,58 +159,10 @@ func (m *secretManager) DeleteSecret(ctx context.Context, clusterID int, namespa
 }
 
 // BatchDeleteSecrets 批量删除Secret
-func (m *secretManager) BatchDeleteSecrets(ctx context.Context, clusterID int, namespace string, secretNames []string, options metav1.DeleteOptions) error {
-	if len(secretNames) == 0 {
-		return nil
-	}
-
-	clientset, err := m.client.GetKubeClient(clusterID)
-	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	var errors []error
-	for _, secretName := range secretNames {
-		if err := clientset.CoreV1().Secrets(namespace).Delete(ctx, secretName, options); err != nil {
-			m.logger.Error("批量删除Secret失败", zap.Error(err),
-				zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", secretName))
-			errors = append(errors, fmt.Errorf("删除Secret %s/%s 失败: %w", namespace, secretName, err))
-		} else {
-			m.logger.Info("成功删除Secret",
-				zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", secretName))
-		}
-	}
-
-	if len(errors) > 0 {
-		return fmt.Errorf("批量删除Secret时发生 %d 个错误: %v", len(errors), errors)
-	}
-
-	return nil
-}
+// 删除未使用的批量删除接口以简化实现
 
 // ListSecretsBySelector 根据选择器获取Secret列表
-func (m *secretManager) ListSecretsBySelector(ctx context.Context, clusterID int, namespace string, selector string) (*corev1.SecretList, error) {
-	clientset, err := m.client.GetKubeClient(clusterID)
-	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	listOptions := metav1.ListOptions{}
-	if selector != "" {
-		listOptions.LabelSelector = selector
-	}
-
-	secrets, err := clientset.CoreV1().Secrets(namespace).List(ctx, listOptions)
-	if err != nil {
-		m.logger.Error("根据选择器获取Secret列表失败", zap.Error(err),
-			zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("selector", selector))
-		return nil, fmt.Errorf("根据选择器获取Secret列表失败: %w", err)
-	}
-
-	return secrets, nil
-}
+// 删除未使用的单一选择器方法，保留复合选择器方法
 
 // ListSecretsBySelectors 根据 label 与 field 选择器获取Secret列表
 func (m *secretManager) ListSecretsBySelectors(ctx context.Context, clusterID int, namespace string, labelSelector string, fieldSelector string) (*corev1.SecretList, error) {
@@ -247,70 +192,10 @@ func (m *secretManager) ListSecretsBySelectors(ctx context.Context, clusterID in
 }
 
 // ListSecretsByType 根据类型获取Secret列表
-func (m *secretManager) ListSecretsByType(ctx context.Context, clusterID int, namespace string, secretType corev1.SecretType) (*corev1.SecretList, error) {
-	clientset, err := m.client.GetKubeClient(clusterID)
-	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	secretList, err := clientset.CoreV1().Secrets(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		m.logger.Error("获取Secret列表失败", zap.Error(err),
-			zap.Int("cluster_id", clusterID), zap.String("namespace", namespace))
-		return nil, fmt.Errorf("获取Secret列表失败: %w", err)
-	}
-
-	// 过滤指定类型的Secret
-	filteredSecrets := &corev1.SecretList{
-		TypeMeta: secretList.TypeMeta,
-		ListMeta: secretList.ListMeta,
-		Items:    []corev1.Secret{},
-	}
-
-	for _, secret := range secretList.Items {
-		if secret.Type == secretType {
-			filteredSecrets.Items = append(filteredSecrets.Items, secret)
-		}
-	}
-
-	return filteredSecrets, nil
-}
+// 删除未使用的按类型过滤方法
 
 // GetSecretData 获取Secret中特定键的数据
-func (m *secretManager) GetSecretData(ctx context.Context, clusterID int, namespace, name string, key string) ([]byte, error) {
-	secret, err := m.GetSecret(ctx, clusterID, namespace, name)
-	if err != nil {
-		return nil, err
-	}
-
-	if secret.Data == nil {
-		return nil, fmt.Errorf("secret %s/%s 没有数据", namespace, name)
-	}
-
-	value, exists := secret.Data[key]
-	if !exists {
-		return nil, fmt.Errorf("secret %s/%s 中不存在键 %s", namespace, name, key)
-	}
-
-	return value, nil
-}
+// 删除未使用的数据读取方法
 
 // UpdateSecretData 更新Secret的数据
-func (m *secretManager) UpdateSecretData(ctx context.Context, clusterID int, namespace, name string, data map[string][]byte) (*corev1.Secret, error) {
-	secret, err := m.GetSecret(ctx, clusterID, namespace, name)
-	if err != nil {
-		return nil, err
-	}
-
-	if secret.Data == nil {
-		secret.Data = make(map[string][]byte)
-	}
-
-	// 更新数据
-	for key, value := range data {
-		secret.Data[key] = value
-	}
-
-	return m.UpdateSecret(ctx, clusterID, secret)
-}
+// 删除未使用的数据更新方法

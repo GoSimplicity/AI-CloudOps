@@ -45,21 +45,30 @@ func NewK8sServiceAccountHandler(serviceAccountService service.ServiceAccountSer
 func (s *K8sServiceAccountHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/serviceaccounts", s.GetServiceAccountList)
-		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/details", s.GetServiceAccountDetails)
-		k8sGroup.POST("/serviceaccounts", s.CreateServiceAccount)
-		k8sGroup.PUT("/serviceaccounts/:cluster_id/:namespace/:name/update", s.UpdateServiceAccount)
-		k8sGroup.DELETE("/serviceaccounts/:cluster_id/:namespace/:name", s.DeleteServiceAccount)
-		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/yaml", s.GetServiceAccountYaml)
-		k8sGroup.PUT("/serviceaccounts/:cluster_id/:namespace/:name/yaml", s.UpdateServiceAccountYaml)
-		k8sGroup.GET("/serviceaccounts/:cluster_id/:namespace/:name/token", s.GetServiceAccountToken)
-		k8sGroup.POST("/serviceaccounts/token", s.CreateServiceAccountToken)
+		k8sGroup.GET("/serviceaccount/:cluster_id/list", s.GetServiceAccountList)
+		k8sGroup.GET("/serviceaccount/:cluster_id/:namespace/:name/detail", s.GetServiceAccountDetails)
+		k8sGroup.GET("/serviceaccount/:cluster_id/:namespace/:name/detail/yaml", s.GetServiceAccountYaml)
+		k8sGroup.POST("/serviceaccount/:cluster_id/create", s.CreateServiceAccount)
+		k8sGroup.POST("/serviceaccount/:cluster_id/create/yaml", s.CreateServiceAccountByYaml)
+		k8sGroup.PUT("/serviceaccount/:cluster_id/:namespace/:name/update", s.UpdateServiceAccount)
+		k8sGroup.PUT("/serviceaccount/:cluster_id/:namespace/:name/update/yaml", s.UpdateServiceAccountYaml)
+		k8sGroup.DELETE("/serviceaccount/:cluster_id/:namespace/:name/delete", s.DeleteServiceAccount)
+		k8sGroup.GET("/serviceaccount/:cluster_id/:namespace/:name/token", s.GetServiceAccountToken)
+		k8sGroup.POST("/serviceaccount/:cluster_id/:namespace/:name/token", s.CreateServiceAccountToken)
 	}
 }
 
 // GetServiceAccountList 获取 ServiceAccount 列表
 func (s *K8sServiceAccountHandler) GetServiceAccountList(ctx *gin.Context) {
 	var req model.GetServiceAccountListReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return s.serviceAccountService.GetServiceAccountList(ctx, &req)
@@ -101,8 +110,33 @@ func (s *K8sServiceAccountHandler) GetServiceAccountDetails(ctx *gin.Context) {
 func (s *K8sServiceAccountHandler) CreateServiceAccount(ctx *gin.Context) {
 	var req model.CreateServiceAccountReq
 
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, s.serviceAccountService.CreateServiceAccount(ctx, &req)
+	})
+}
+
+// CreateServiceAccountByYaml 通过YAML创建 ServiceAccount
+func (s *K8sServiceAccountHandler) CreateServiceAccountByYaml(ctx *gin.Context) {
+	var req model.CreateServiceAccountByYamlReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, s.serviceAccountService.CreateServiceAccountByYaml(ctx, &req)
 	})
 }
 

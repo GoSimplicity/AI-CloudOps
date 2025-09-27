@@ -468,11 +468,17 @@ func (t *terminaler) handleTerminalSession(ctx context.Context, shell, namespace
 	// 根据检测结果构建优化的shell fallback列表
 	fallbackShells := t.buildOptimizedShellListWithContainerInfo(shell, availableCommands, containerInfo)
 
-	// 如果没有检测到可用命令，记录警告并使用默认列表
+	// 如果没有检测到可用命令，尝试极简容器的特殊处理
 	if len(availableCommands) == 0 {
-		t.logger.Warn("容器中没有检测到可用的基本命令，将使用默认fallback列表尝试连接")
-		// 使用默认shell列表
-		fallbackShells = buildShellFallbackList(shell)
+		t.logger.Warn("容器中没有检测到可用的基本命令，可能是极简容器（如distroless、scratch等）")
+
+		// 对于极简容器，尝试直接运行特定的应用命令或init进程
+		fallbackShells = t.buildMinimalContainerFallbackList(ctx, namespace, podName, containerName, shell)
+
+		if len(fallbackShells) == 0 {
+			t.logger.Warn("极简容器检测也未找到可用命令，使用最基本的fallback列表")
+			fallbackShells = []string{shell, "sh", "/bin/sh"}
+		}
 	}
 
 	// 尝试执行终端命令，使用fallback机制
@@ -640,6 +646,45 @@ func (t *terminaler) formatUserFriendlyError(err error, triedShells []string) st
 
 // formatShellNotFoundError 格式化Shell未找到错误
 func (t *terminaler) formatShellNotFoundError(triedShells []string) string {
+	// 检查是否尝试了很多shell，这通常意味着是极简容器
+	isMinimalContainer := len(triedShells) >= 10
+
+	if isMinimalContainer {
+		return fmt.Sprintf(`检测到极简容器镜像，无法建立终端连接。
+
+已尝试的命令: %s
+
+这通常发生在以下镜像类型：
+🔹 Distroless镜像 (gcr.io/distroless/*)
+🔹 Scratch镜像 (FROM scratch) 
+🔹 精简Alpine镜像
+🔹 专用应用镜像（只包含应用二进制文件）
+
+💡 推荐解决方案：
+
+【方案1：使用debug容器】（Kubernetes 1.23+）
+kubectl debug <pod-name> -it --image=busybox:latest --target=<container-name>
+
+【方案2：修改镜像构建】
+Dockerfile中添加基本shell：
+  # 多阶段构建示例
+  FROM alpine:latest as debug
+  RUN apk add --no-cache busybox
+  
+  FROM your-minimal-image
+  COPY --from=debug /bin/busybox /bin/busybox
+  RUN /bin/busybox --install -s /bin
+
+【方案3：临时调试容器】
+kubectl run debug-pod --rm -i --tty --image=busybox:latest
+
+【方案4：Pod安全策略允许的话，添加调试Sidecar】
+在Pod spec中添加包含shell的sidecar容器。
+
+📖 更多调试极简容器的方法请参考Kubernetes官方文档。`,
+			strings.Join(triedShells, ", "))
+	}
+
 	return fmt.Sprintf(`容器中未找到可用的Shell程序。
 
 已尝试的Shell: %s
@@ -1129,31 +1174,45 @@ func (t *terminaler) detectAvailableCommands(ctx context.Context, namespace, pod
 
 // testCommandExists 测试指定命令是否在容器中存在
 func (t *terminaler) testCommandExists(ctx context.Context, namespace, podName, containerName, cmd string) bool {
-	// 使用更简单和直接的方式测试命令存在性
-	testCommands := [][]string{
-		// 优先使用最基本的测试方法
-		{"ls", "-la", cmd},           // 直接检查文件是否存在
-		{"test", "-f", cmd},          // 检查文件是否存在且为普通文件
-		{"test", "-x", cmd},          // 检查文件是否存在且可执行
-		{"which", cmd},               // 查找命令路径
-		{"command", "-v", cmd},       // 检查命令是否可用
-		{"/bin/ls", "-la", cmd},      // 使用绝对路径的ls
-		{"/usr/bin/test", "-f", cmd}, // 使用绝对路径的test
-	}
+	// 直接尝试执行命令来检测是否存在，避免依赖其他命令
 
-	for _, testCmd := range testCommands {
-		if t.executeQuickTest(ctx, namespace, podName, containerName, testCmd) {
-			t.logger.Debug("检测到可用命令", zap.String("命令", cmd), zap.Strings("测试命令", testCmd))
-			return true
-		}
-	}
-
-	// 作为最后的尝试，直接执行命令看是否存在
 	// 对于shell命令，尝试执行一个简单的操作
-	if strings.Contains(cmd, "sh") || strings.Contains(cmd, "bash") {
-		if t.executeQuickTest(ctx, namespace, podName, containerName, []string{cmd, "-c", "echo test"}) {
+	if strings.Contains(cmd, "sh") || strings.Contains(cmd, "bash") || strings.Contains(cmd, "ash") || strings.Contains(cmd, "dash") {
+		// 尝试执行一个最简单的shell命令
+		if t.executeQuickTest(ctx, namespace, podName, containerName, []string{cmd, "-c", "exit 0"}) {
 			t.logger.Debug("通过直接执行检测到shell命令", zap.String("命令", cmd))
 			return true
+		}
+		// 尝试不带参数执行（某些shell可能不支持-c参数）
+		if t.executeQuickTestWithoutArgs(ctx, namespace, podName, containerName, cmd) {
+			t.logger.Debug("通过无参数执行检测到shell命令", zap.String("命令", cmd))
+			return true
+		}
+	} else {
+		// 对于非shell命令（如cat, echo），直接执行看是否存在
+		// 尝试使用--help参数（大多数命令都支持）
+		if t.executeQuickTest(ctx, namespace, podName, containerName, []string{cmd, "--help"}) {
+			t.logger.Debug("通过--help检测到命令", zap.String("命令", cmd))
+			return true
+		}
+		// 尝试使用--version参数
+		if t.executeQuickTest(ctx, namespace, podName, containerName, []string{cmd, "--version"}) {
+			t.logger.Debug("通过--version检测到命令", zap.String("命令", cmd))
+			return true
+		}
+		// 对于cat命令，尝试读取一个不存在的文件（会返回错误但不会是127）
+		if cmd == "cat" || strings.HasSuffix(cmd, "/cat") {
+			if t.executeQuickTestExpectingError(ctx, namespace, podName, containerName, []string{cmd, "/dev/null"}) {
+				t.logger.Debug("通过/dev/null检测到cat命令", zap.String("命令", cmd))
+				return true
+			}
+		}
+		// 对于echo命令，尝试输出空字符串
+		if cmd == "echo" || strings.HasSuffix(cmd, "/echo") {
+			if t.executeQuickTest(ctx, namespace, podName, containerName, []string{cmd, ""}) {
+				t.logger.Debug("通过空参数检测到echo命令", zap.String("命令", cmd))
+				return true
+			}
 		}
 	}
 
@@ -1218,6 +1277,248 @@ func (t *terminaler) executeQuickTest(ctx context.Context, namespace, podName, c
 	}
 
 	return false
+}
+
+// executeQuickTestWithoutArgs 执行不带参数的快速测试
+func (t *terminaler) executeQuickTestWithoutArgs(ctx context.Context, namespace, podName, containerName, cmd string) bool {
+	// 创建更短的超时上下文
+	testCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	// 构建exec请求
+	req := t.client.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(podName).
+		Namespace(namespace).
+		SubResource("exec")
+
+	// 设置exec选项 - 不使用TTY，仅获取退出状态
+	req.VersionedParams(&v1.PodExecOptions{
+		Container: containerName,
+		Command:   []string{cmd},
+		Stdin:     false,
+		Stdout:    false,
+		Stderr:    false,
+		TTY:       false,
+	}, scheme.ParameterCodec)
+
+	// 创建SPDY执行器
+	exec, err := remotecommand.NewSPDYExecutor(t.config, "POST", req.URL())
+	if err != nil {
+		t.logger.Debug("创建测试SPDY执行器失败", zap.Error(err), zap.String("命令", cmd))
+		return false
+	}
+
+	// 执行测试命令
+	err = exec.StreamWithContext(testCtx, remotecommand.StreamOptions{
+		Stdin:  nil,
+		Stdout: nil,
+		Stderr: nil,
+		Tty:    false,
+	})
+
+	// 检查错误，exit code 127表示命令未找到
+	if err != nil {
+		errorStr := err.Error()
+		t.logger.Debug("无参数命令测试结果", zap.String("命令", cmd), zap.String("错误", errorStr))
+
+		// exit code 127表示命令未找到
+		if strings.Contains(errorStr, "exit code 127") {
+			return false
+		}
+		// 其他退出码可能表示命令存在但执行有问题（比如缺少参数）
+		return true
+	}
+
+	t.logger.Debug("无参数命令测试成功", zap.String("命令", cmd))
+	return true
+}
+
+// executeQuickTestExpectingError 执行期望有错误的快速测试
+func (t *terminaler) executeQuickTestExpectingError(ctx context.Context, namespace, podName, containerName string, cmd []string) bool {
+	// 创建更短的超时上下文
+	testCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	// 构建exec请求
+	req := t.client.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(podName).
+		Namespace(namespace).
+		SubResource("exec")
+
+	// 设置exec选项 - 不使用TTY，仅获取退出状态
+	req.VersionedParams(&v1.PodExecOptions{
+		Container: containerName,
+		Command:   cmd,
+		Stdin:     false,
+		Stdout:    false,
+		Stderr:    false,
+		TTY:       false,
+	}, scheme.ParameterCodec)
+
+	// 创建SPDY执行器
+	exec, err := remotecommand.NewSPDYExecutor(t.config, "POST", req.URL())
+	if err != nil {
+		t.logger.Debug("创建测试SPDY执行器失败", zap.Error(err), zap.Strings("命令", cmd))
+		return false
+	}
+
+	// 执行测试命令
+	err = exec.StreamWithContext(testCtx, remotecommand.StreamOptions{
+		Stdin:  nil,
+		Stdout: nil,
+		Stderr: nil,
+		Tty:    false,
+	})
+
+	// 对于这类测试，我们期望有错误但不是127（命令未找到）
+	if err != nil {
+		errorStr := err.Error()
+		t.logger.Debug("期望错误的命令测试结果", zap.Strings("测试命令", cmd), zap.String("错误", errorStr))
+
+		// exit code 127表示命令未找到
+		if strings.Contains(errorStr, "exit code 127") {
+			return false
+		}
+		// 其他错误码表示命令存在但执行有问题，这正是我们期望的
+		return true
+	}
+
+	// 命令成功执行也表示存在
+	t.logger.Debug("期望错误的命令测试成功", zap.Strings("测试命令", cmd))
+	return true
+}
+
+// buildMinimalContainerFallbackList 为极简容器构建fallback列表
+func (t *terminaler) buildMinimalContainerFallbackList(ctx context.Context, namespace, podName, containerName, preferredShell string) []string {
+	var fallbackList []string
+
+	t.logger.Info("尝试为极简容器构建fallback列表",
+		zap.String("namespace", namespace),
+		zap.String("podName", podName),
+		zap.String("containerName", containerName))
+
+	// 1. 首先尝试用户指定的shell
+	if preferredShell != "" {
+		fallbackList = append(fallbackList, preferredShell)
+	}
+
+	// 2. 尝试检查容器的ENTRYPOINT或CMD
+	if entrypoint := t.getContainerEntrypoint(ctx, namespace, podName, containerName); entrypoint != "" {
+		// 如果entrypoint是shell脚本或包含shell
+		if strings.Contains(entrypoint, "sh") || strings.Contains(entrypoint, "bash") {
+			fallbackList = append(fallbackList, entrypoint)
+		}
+
+		// 尝试提取可能的shell路径
+		if parts := strings.Fields(entrypoint); len(parts) > 0 {
+			firstPart := parts[0]
+			if strings.Contains(firstPart, "sh") || strings.Contains(firstPart, "bash") {
+				fallbackList = append(fallbackList, firstPart)
+			}
+		}
+	}
+
+	// 3. 对于一些已知的极简镜像类型，尝试特定的命令
+	minimalCommands := []string{
+		// 尝试最基本的shell
+		"sh", "/bin/sh", "/usr/bin/sh",
+		// 一些极简容器可能只有busybox
+		"busybox", "/bin/busybox", "busybox sh",
+		// Alpine Linux的ash
+		"ash", "/bin/ash",
+		// 一些容器可能有静态编译的shell
+		"/static/sh", "/app/sh",
+	}
+
+	for _, cmd := range minimalCommands {
+		// 直接尝试执行看是否存在（不依赖其他检测命令）
+		if t.testMinimalCommand(ctx, namespace, podName, containerName, cmd) {
+			fallbackList = append(fallbackList, cmd)
+		}
+	}
+
+	// 4. 最后的尝试：检查是否有任何可执行文件在常见位置
+	commonPaths := []string{"/bin/*", "/usr/bin/*", "/usr/local/bin/*", "/app/*"}
+	for _, path := range commonPaths {
+		if executables := t.findExecutablesInPath(ctx, namespace, podName, containerName, path); len(executables) > 0 {
+			fallbackList = append(fallbackList, executables...)
+			break // 找到一个路径就够了
+		}
+	}
+
+	// 去重
+	seen := make(map[string]bool)
+	var uniqueList []string
+	for _, cmd := range fallbackList {
+		if !seen[cmd] {
+			seen[cmd] = true
+			uniqueList = append(uniqueList, cmd)
+		}
+	}
+
+	t.logger.Info("为极简容器构建的fallback列表", zap.Strings("commands", uniqueList))
+	return uniqueList
+}
+
+// testMinimalCommand 测试极简容器中的命令（不依赖其他命令）
+func (t *terminaler) testMinimalCommand(ctx context.Context, namespace, podName, containerName, cmd string) bool {
+	// 创建很短的超时
+	testCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
+	// 直接尝试执行命令，不依赖任何其他工具
+	args := []string{cmd}
+
+	// 对于shell命令，添加简单的测试参数
+	if strings.Contains(cmd, "sh") || strings.Contains(cmd, "bash") {
+		args = []string{cmd, "-c", "exit 0"}
+	}
+
+	// 构建exec请求
+	req := t.client.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(podName).
+		Namespace(namespace).
+		SubResource("exec")
+
+	req.VersionedParams(&v1.PodExecOptions{
+		Container: containerName,
+		Command:   args,
+		Stdin:     false,
+		Stdout:    false,
+		Stderr:    false,
+		TTY:       false,
+	}, scheme.ParameterCodec)
+
+	exec, err := remotecommand.NewSPDYExecutor(t.config, "POST", req.URL())
+	if err != nil {
+		return false
+	}
+
+	err = exec.StreamWithContext(testCtx, remotecommand.StreamOptions{})
+
+	// 任何非127的退出码都表示命令存在
+	if err != nil && strings.Contains(err.Error(), "exit code 127") {
+		return false
+	}
+
+	return true
+}
+
+// getContainerEntrypoint 尝试获取容器的入口点信息
+func (t *terminaler) getContainerEntrypoint(ctx context.Context, namespace, podName, containerName string) string {
+	// 这里可以通过Kubernetes API获取Pod的容器信息
+	// 简化实现，返回空字符串
+	return ""
+}
+
+// findExecutablesInPath 在指定路径查找可执行文件
+func (t *terminaler) findExecutablesInPath(ctx context.Context, namespace, podName, containerName, path string) []string {
+	// 由于不能依赖ls等命令，这个功能在极简容器中难以实现
+	// 返回空列表
+	return []string{}
 }
 
 // buildOptimizedShellList 构建优化的shell列表

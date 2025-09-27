@@ -33,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/cron/scheduler"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
@@ -50,47 +51,201 @@ var (
 )
 
 const (
-	OnDutyBatchSize     = 100
-	HostCheckBatchSize  = 100
-	K8sMaxConcurrency   = 5
-	OnDutyCheckInterval = 10 * time.Second
-	// Prometheus 刷新默认间隔，支持通过配置覆盖
+	OnDutyBatchSize                        = 100
+	K8sMaxConcurrency                      = 5
+	OnDutyCheckInterval                    = 10 * time.Second
 	DefaultPrometheusConfigRefreshInterval = 15 * time.Second
-	HostCheckInterval                      = 30 * time.Second
 	K8sCheckInterval                       = 60 * time.Second
 	MaxRetries                             = 3
 	RetryDelay                             = 5 * time.Second
 )
 
+// CronManager 统一的 Cron 管理器接口 - 整合系统内置任务和用户自定义任务
 type CronManager interface {
-	StartOnDutyHistoryManager(ctx context.Context) error
-	// StartCheckHostStatusManager(ctx context.Context) error
-	StartCheckK8sStatusManager(ctx context.Context) error
-	StartPrometheusConfigRefreshManager(ctx context.Context) error
+	// 统一管理方法
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
 }
 
-type cronManager struct {
-	logger          *zap.Logger
+// unifiedCronManager 统一的 Cron 管理器实现
+type unifiedCronManager struct {
+	logger *zap.Logger
+
+	// 系统内置任务依赖 (从原 cron.go 迁移)
 	onDutyDao       alert.AlertManagerOnDutyDAO
 	k8sDao          dao.ClusterDAO
 	k8sClient       client.K8sClient
 	promConfigCache cache.MonitorCache
 	clusterMgr      manager.ClusterManager
+
+	// 用户自定义任务调度器
+	cronScheduler *scheduler.CronScheduler
+
+	// 内置任务管理器
+	builtinTaskMgr *BuiltinTaskManager
+
+	// 管理器状态
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
-func NewCronManager(logger *zap.Logger, onDutyDao alert.AlertManagerOnDutyDAO, k8sDao dao.ClusterDAO, k8sClient client.K8sClient, clusterMgr manager.ClusterManager, promConfigCache cache.MonitorCache) CronManager {
-	return &cronManager{
+// NewUnifiedCronManager 创建统一的 Cron 管理器
+func NewUnifiedCronManager(
+	logger *zap.Logger,
+	onDutyDao alert.AlertManagerOnDutyDAO,
+	k8sDao dao.ClusterDAO,
+	k8sClient client.K8sClient,
+	clusterMgr manager.ClusterManager,
+	promConfigCache cache.MonitorCache,
+	cronScheduler *scheduler.CronScheduler,
+	builtinTaskMgr *BuiltinTaskManager,
+) CronManager {
+	return &unifiedCronManager{
 		logger:          logger,
 		onDutyDao:       onDutyDao,
 		k8sDao:          k8sDao,
 		k8sClient:       k8sClient,
 		clusterMgr:      clusterMgr,
 		promConfigCache: promConfigCache,
+		cronScheduler:   cronScheduler,
+		builtinTaskMgr:  builtinTaskMgr,
 	}
 }
 
-// StartOnDutyHistoryManager 启动值班历史记录填充任务
-func (cm *cronManager) StartOnDutyHistoryManager(ctx context.Context) error {
+// === 统一管理方法 ===
+
+// Start 统一启动所有定时任务
+func (cm *unifiedCronManager) Start(ctx context.Context) error {
+	cm.logger.Info("启动统一Cron管理器")
+
+	// 创建带取消的上下文
+	ctx, cancel := context.WithCancel(ctx)
+	cm.cancel = cancel
+
+	// 初始化内置任务到数据库
+	if err := cm.builtinTaskMgr.InitializeBuiltinTasks(ctx); err != nil {
+		cm.logger.Error("初始化内置任务失败，尝试强制初始化", zap.Error(err))
+		// 如果正常初始化失败，尝试强制初始化
+		if forceErr := cm.builtinTaskMgr.ForceInitializeBuiltinTasks(ctx); forceErr != nil {
+			cm.logger.Error("强制初始化内置任务也失败", zap.Error(forceErr))
+			return forceErr
+		}
+	}
+
+	// 启动系统内置任务（根据数据库状态）
+	if err := cm.StartSystemTasks(ctx); err != nil {
+		cm.logger.Error("启动系统内置任务失败", zap.Error(err))
+		return err
+	}
+
+	// 启动用户自定义任务调度器
+	if err := cm.StartUserTaskScheduler(ctx); err != nil {
+		cm.logger.Error("启动用户任务调度器失败", zap.Error(err))
+		return err
+	}
+
+	cm.logger.Info("统一Cron管理器启动成功")
+	return nil
+}
+
+// StartSystemTasks 启动系统内置任务（根据数据库状态）
+func (cm *unifiedCronManager) StartSystemTasks(ctx context.Context) error {
+	cm.logger.Info("启动系统内置任务")
+
+	// 获取启用的内置任务
+	enabledTasks, err := cm.builtinTaskMgr.GetEnabledBuiltinTasks(ctx)
+	if err != nil {
+		cm.logger.Error("获取启用的内置任务失败", zap.Error(err))
+		return err
+	}
+
+	// 根据数据库状态启动对应的任务
+	for _, task := range enabledTasks {
+		taskType := task.Command // 任务类型存储在Command字段中
+		cm.logger.Info("启动内置任务", zap.String("taskName", task.Name), zap.String("taskType", taskType))
+
+		switch taskType {
+		case "on_duty_history":
+			cm.wg.Add(1)
+			go func(taskName string) {
+				defer cm.wg.Done()
+				if err := cm.startOnDutyHistoryManager(ctx); err != nil {
+					cm.logger.Error("值班历史记录管理任务异常退出", zap.String("taskName", taskName), zap.Error(err))
+				}
+			}(task.Name)
+
+		case "k8s_status_check":
+			cm.wg.Add(1)
+			go func(taskName string) {
+				defer cm.wg.Done()
+				if err := cm.startCheckK8sStatusManager(ctx); err != nil {
+					cm.logger.Error("K8s状态检查任务异常退出", zap.String("taskName", taskName), zap.Error(err))
+				}
+			}(task.Name)
+
+		case "prometheus_config_refresh":
+			cm.wg.Add(1)
+			go func(taskName string) {
+				defer cm.wg.Done()
+				if err := cm.startPrometheusConfigRefreshManager(ctx); err != nil {
+					cm.logger.Error("Prometheus配置刷新任务异常退出", zap.String("taskName", taskName), zap.Error(err))
+				}
+			}(task.Name)
+
+		default:
+			cm.logger.Warn("未知的内置任务类型", zap.String("taskName", task.Name), zap.String("taskType", taskType))
+		}
+	}
+
+	return nil
+}
+
+// StartUserTaskScheduler 启动用户自定义任务调度器
+func (cm *unifiedCronManager) StartUserTaskScheduler(ctx context.Context) error {
+	cm.logger.Info("启动用户自定义任务调度器")
+
+	cm.wg.Add(1)
+	go func() {
+		defer cm.wg.Done()
+		if err := cm.cronScheduler.StartScheduler(ctx); err != nil {
+			cm.logger.Error("用户任务调度器异常退出", zap.Error(err))
+		}
+	}()
+
+	return nil
+}
+
+// Stop 优雅停止所有任务
+func (cm *unifiedCronManager) Stop(ctx context.Context) error {
+	cm.logger.Info("停止统一Cron管理器")
+
+	// 取消所有任务
+	if cm.cancel != nil {
+		cm.cancel()
+	}
+
+	// 等待所有goroutine结束
+	done := make(chan struct{})
+	go func() {
+		cm.wg.Wait()
+		close(done)
+	}()
+
+	// 等待停止或超时
+	select {
+	case <-done:
+		cm.logger.Info("统一Cron管理器已停止")
+		return nil
+	case <-ctx.Done():
+		cm.logger.Warn("统一Cron管理器停止超时")
+		return ctx.Err()
+	}
+}
+
+// === 以下是从原 cron.go 迁移的系统内置任务实现 ===
+
+// startOnDutyHistoryManager 启动值班历史记录填充任务
+func (cm *unifiedCronManager) startOnDutyHistoryManager(ctx context.Context) error {
 	cm.logger.Info("启动值班历史记录填充任务")
 
 	// 使用 wait.UntilWithContext 确保周期性执行，并添加 panic 恢复
@@ -100,7 +255,7 @@ func (cm *cronManager) StartOnDutyHistoryManager(ctx context.Context) error {
 				cm.logger.Error("值班历史记录填充任务发生 panic，正在重启", zap.Any("panic", r))
 				// 重启任务
 				time.Sleep(RetryDelay)
-				go cm.StartOnDutyHistoryManager(ctx)
+				go cm.startOnDutyHistoryManager(ctx)
 			}
 		}()
 
@@ -146,24 +301,124 @@ func (cm *cronManager) StartOnDutyHistoryManager(ctx context.Context) error {
 	return nil
 }
 
-// fillOnDutyHistory 填充所有值班组的历史记录
-func (cm *cronManager) fillOnDutyHistory(ctx context.Context) {
-	allGroups, err := cm.fetchAllEnabledGroups(ctx)
-	if err != nil {
-		cm.logger.Error("获取启用的值班组失败", zap.Error(err))
-		return
-	}
+// startCheckK8sStatusManager 启动k8s状态检查任务
+func (cm *unifiedCronManager) startCheckK8sStatusManager(ctx context.Context) error {
+	cm.logger.Info("启动k8s状态检查任务")
 
-	if len(allGroups) == 0 {
-		cm.logger.Debug("没有找到需要处理的值班组")
-		return
-	}
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				cm.logger.Error("k8s状态检查任务发生 panic，正在重启", zap.Any("panic", r))
+				// 重启任务
+				time.Sleep(RetryDelay)
+				go cm.startCheckK8sStatusManager(ctx)
+			}
+		}()
 
-	cm.processGroupsInParallel(ctx, allGroups)
+		wait.UntilWithContext(ctx, func(ctx context.Context) {
+			defer func() {
+				if r := recover(); r != nil {
+					cm.logger.Error("k8s状态检查任务执行时发生 panic", zap.Any("panic", r))
+				}
+			}()
+
+			// 添加重试机制
+			var lastErr error
+			for attempt := 1; attempt <= MaxRetries; attempt++ {
+				if err := cm.checkK8sStatusWithRetry(ctx); err != nil {
+					lastErr = err
+					if attempt < MaxRetries {
+						cm.logger.Warn("k8s状态检查任务执行失败，准备重试",
+							zap.Int("attempt", attempt),
+							zap.Int("maxRetries", MaxRetries),
+							zap.Error(err))
+						time.Sleep(RetryDelay)
+						continue
+					}
+				} else {
+					if attempt > 1 {
+						cm.logger.Info("k8s状态检查任务重试成功",
+							zap.Int("attempt", attempt))
+					}
+					return
+				}
+			}
+
+			if lastErr != nil {
+				cm.logger.Error("k8s状态检查任务重试失败，已达到最大重试次数",
+					zap.Int("maxRetries", MaxRetries),
+					zap.Error(lastErr))
+			}
+		}, K8sCheckInterval)
+	}()
+
+	<-ctx.Done()
+	cm.logger.Info("k8s状态检查任务已停止")
+	return nil
 }
 
+// startPrometheusConfigRefreshManager 启动Prometheus配置刷新任务
+func (cm *unifiedCronManager) startPrometheusConfigRefreshManager(ctx context.Context) error {
+	cm.logger.Info("启动Prometheus配置刷新任务")
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				cm.logger.Error("Prometheus配置刷新任务发生 panic，正在重启", zap.Any("panic", r))
+				// 重启任务
+				time.Sleep(RetryDelay)
+				go cm.startPrometheusConfigRefreshManager(ctx)
+			}
+		}()
+
+		wait.UntilWithContext(ctx, func(ctx context.Context) {
+			defer func() {
+				if r := recover(); r != nil {
+					cm.logger.Error("Prometheus配置刷新任务执行时发生 panic", zap.Any("panic", r))
+				}
+			}()
+
+			// 添加重试机制
+			var lastErr error
+			for attempt := 1; attempt <= MaxRetries; attempt++ {
+				if err := cm.promConfigCache.MonitorCacheManager(ctx); err != nil {
+					lastErr = err
+					if attempt < MaxRetries {
+						cm.logger.Warn("Prometheus配置定时刷新失败，准备重试",
+							zap.Int("attempt", attempt),
+							zap.Int("maxRetries", MaxRetries),
+							zap.Error(err))
+						time.Sleep(RetryDelay)
+						continue
+					}
+				} else {
+					if attempt > 1 {
+						cm.logger.Info("Prometheus配置定时刷新重试成功",
+							zap.Int("attempt", attempt))
+					} else {
+						cm.logger.Info("Prometheus配置定时刷新成功")
+					}
+					return
+				}
+			}
+
+			if lastErr != nil {
+				cm.logger.Error("Prometheus配置定时刷新重试失败，已达到最大重试次数",
+					zap.Int("maxRetries", MaxRetries),
+					zap.Error(lastErr))
+			}
+		}, cm.getPrometheusRefreshInterval())
+	}()
+
+	<-ctx.Done()
+	cm.logger.Info("Prometheus配置定时刷新任务已停止")
+	return nil
+}
+
+// === 以下是从原 cron.go 迁移的辅助方法实现 ===
+
 // fillOnDutyHistoryWithRetry 带重试机制的值班历史记录填充
-func (cm *cronManager) fillOnDutyHistoryWithRetry(ctx context.Context) error {
+func (cm *unifiedCronManager) fillOnDutyHistoryWithRetry(ctx context.Context) error {
 	allGroups, err := cm.fetchAllEnabledGroups(ctx)
 	if err != nil {
 		return fmt.Errorf("获取启用的值班组失败: %w", err)
@@ -179,7 +434,7 @@ func (cm *cronManager) fillOnDutyHistoryWithRetry(ctx context.Context) error {
 }
 
 // fetchAllEnabledGroups 获取所有启用的值班组
-func (cm *cronManager) fetchAllEnabledGroups(ctx context.Context) ([]*model.MonitorOnDutyGroup, error) {
+func (cm *unifiedCronManager) fetchAllEnabledGroups(ctx context.Context) ([]*model.MonitorOnDutyGroup, error) {
 	var allGroups []*model.MonitorOnDutyGroup
 	page := 1
 	enable := int8(1)
@@ -215,7 +470,7 @@ func (cm *cronManager) fetchAllEnabledGroups(ctx context.Context) ([]*model.Moni
 }
 
 // filterValidGroups 过滤有效的值班组
-func (cm *cronManager) filterValidGroups(groups []*model.MonitorOnDutyGroup) []*model.MonitorOnDutyGroup {
+func (cm *unifiedCronManager) filterValidGroups(groups []*model.MonitorOnDutyGroup) []*model.MonitorOnDutyGroup {
 	var validGroups []*model.MonitorOnDutyGroup
 	for _, group := range groups {
 		if group.Enable == 2 {
@@ -232,7 +487,7 @@ func (cm *cronManager) filterValidGroups(groups []*model.MonitorOnDutyGroup) []*
 }
 
 // processGroupsInParallel 并行处理值班组
-func (cm *cronManager) processGroupsInParallel(ctx context.Context, groups []*model.MonitorOnDutyGroup) {
+func (cm *unifiedCronManager) processGroupsInParallel(ctx context.Context, groups []*model.MonitorOnDutyGroup) {
 	errChan := make(chan error, len(groups))
 	var wg sync.WaitGroup
 
@@ -266,7 +521,7 @@ func (cm *cronManager) processGroupsInParallel(ctx context.Context, groups []*mo
 }
 
 // logProcessResults 记录处理结果
-func (cm *cronManager) logProcessResults(errChan <-chan error, totalGroups int) {
+func (cm *unifiedCronManager) logProcessResults(errChan <-chan error, totalGroups int) {
 	errCount := 0
 	for err := range errChan {
 		errCount++
@@ -283,7 +538,7 @@ func (cm *cronManager) logProcessResults(errChan <-chan error, totalGroups int) 
 }
 
 // processOnDutyHistoryForGroup 填充单个值班组的历史记录
-func (cm *cronManager) processOnDutyHistoryForGroup(ctx context.Context, group *model.MonitorOnDutyGroup) error {
+func (cm *unifiedCronManager) processOnDutyHistoryForGroup(ctx context.Context, group *model.MonitorOnDutyGroup) error {
 	if len(group.Users) == 0 {
 		return ErrNoUsers
 	}
@@ -436,7 +691,7 @@ func (cm *cronManager) processOnDutyHistoryForGroup(ctx context.Context, group *
 }
 
 // isShiftNeeded 判断是否需要轮换值班人
-func (cm *cronManager) isShiftNeeded(ctx context.Context, group *model.MonitorOnDutyGroup, lastHistory *model.MonitorOnDutyHistory) (bool, error) {
+func (cm *unifiedCronManager) isShiftNeeded(ctx context.Context, group *model.MonitorOnDutyGroup, lastHistory *model.MonitorOnDutyHistory) (bool, error) {
 	if group == nil || lastHistory == nil {
 		return false, errors.New("group or lastHistory cannot be nil")
 	}
@@ -470,7 +725,7 @@ func (cm *cronManager) isShiftNeeded(ctx context.Context, group *model.MonitorOn
 }
 
 // getMemberIndex 获取成员在值班组中的索引
-func (cm *cronManager) getMemberIndex(group *model.MonitorOnDutyGroup, userID int) int {
+func (cm *unifiedCronManager) getMemberIndex(group *model.MonitorOnDutyGroup, userID int) int {
 	if group == nil || len(group.Users) == 0 {
 		return 0
 	}
@@ -488,215 +743,8 @@ func (cm *cronManager) getMemberIndex(group *model.MonitorOnDutyGroup, userID in
 	return 0
 }
 
-// // StartCheckHostStatusManager 定期检查ecs主机状态
-// func (cm *cronManager) StartCheckHostStatusManager(ctx context.Context) error {
-// 	cm.logger.Info("启动主机状态检查任务")
-
-// 	go func() {
-// 		defer func() {
-// 			if r := recover(); r != nil {
-// 				cm.logger.Error("主机状态检查任务发生 panic，正在重启", zap.Any("panic", r))
-// 				// 重启任务
-// 				time.Sleep(RetryDelay)
-// 				go cm.StartCheckHostStatusManager(ctx)
-// 			}
-// 		}()
-
-// 		wait.UntilWithContext(ctx, func(ctx context.Context) {
-// 			defer func() {
-// 				if r := recover(); r != nil {
-// 					cm.logger.Error("主机状态检查任务执行时发生 panic", zap.Any("panic", r))
-// 				}
-// 			}()
-
-// 			// 添加重试机制
-// 			var lastErr error
-// 			for attempt := 1; attempt <= MaxRetries; attempt++ {
-// 				if err := cm.checkHostStatusWithRetry(ctx); err != nil {
-// 					lastErr = err
-// 					if attempt < MaxRetries {
-// 						cm.logger.Warn("主机状态检查任务执行失败，准备重试",
-// 							zap.Int("attempt", attempt),
-// 							zap.Int("maxRetries", MaxRetries),
-// 							zap.Error(err))
-// 						time.Sleep(RetryDelay)
-// 						continue
-// 					}
-// 				} else {
-// 					if attempt > 1 {
-// 						cm.logger.Info("主机状态检查任务重试成功",
-// 							zap.Int("attempt", attempt))
-// 					}
-// 					return
-// 				}
-// 			}
-
-// 			if lastErr != nil {
-// 				cm.logger.Error("主机状态检查任务重试失败，已达到最大重试次数",
-// 					zap.Int("maxRetries", MaxRetries),
-// 					zap.Error(lastErr))
-// 			}
-// 		}, HostCheckInterval)
-// 	}()
-
-// 	<-ctx.Done()
-// 	cm.logger.Info("主机状态检查任务已停止")
-// 	return nil
-// }
-
-// // checkHostStatusWithRetry 带重试机制的主机状态检查
-// func (cm *cronManager) checkHostStatusWithRetry(ctx context.Context) error {
-// 	cm.logger.Info("开始检查ecs主机状态")
-
-// 	const batchSize = HostCheckBatchSize
-// 	offset := 0
-
-// 	for {
-// 		select {
-// 		case <-ctx.Done():
-// 			cm.logger.Info("主机状态检查任务被取消", zap.Int("processed", offset))
-// 			return ctx.Err()
-// 		default:
-// 		}
-
-// 		ecss, _, err := cm.ecsDao.ListEcsResources(ctx, &model.ListEcsResourcesReq{
-// 			ListReq: model.ListReq{
-// 				Page: offset/batchSize + 1,
-// 				Size: batchSize,
-// 			},
-// 		})
-// 		if err != nil {
-// 			cm.logger.Error("获取ecs主机失败", zap.Error(err), zap.Int("offset", offset))
-// 			return fmt.Errorf("获取ecs主机失败: %w", err)
-// 		}
-
-// 		if len(ecss) == 0 {
-// 			break
-// 		}
-
-// 		var wg sync.WaitGroup
-// 		errChan := make(chan error, len(ecss))
-
-// 		for _, ecs := range ecss {
-// 			select {
-// 			case <-ctx.Done():
-// 				return ctx.Err()
-// 			default:
-// 			}
-
-// 			wg.Add(1)
-// 			go func(ecs *model.ResourceEcs) {
-// 				defer wg.Done()
-// 				defer func() {
-// 					if r := recover(); r != nil {
-// 						cm.logger.Error("检查主机状态时发生 panic",
-// 							zap.Any("panic", r),
-// 							zap.String("hostname", ecs.HostName))
-// 						errChan <- fmt.Errorf("检查主机状态时发生 panic: %v", r)
-// 					}
-// 				}()
-
-// 				if ecs.IpAddr == "" {
-// 					cm.logger.Warn("目标ecs没有绑定公网ip",
-// 						zap.String("hostname", ecs.HostName),
-// 						zap.Int("id", ecs.ID))
-// 					return
-// 				}
-
-// 				status := "RUNNING"
-// 				if !utils.Ping(ecs.IpAddr) {
-// 					cm.logger.Debug("ping请求失败",
-// 						zap.String("ip", ecs.IpAddr),
-// 						zap.String("hostname", ecs.HostName))
-// 					status = "ERROR"
-// 				}
-
-// 				if err := cm.ecsDao.UpdateEcsStatus(ctx, strconv.Itoa(ecs.ID), status); err != nil {
-// 					cm.logger.Error("更新主机状态失败",
-// 						zap.Error(err),
-// 						zap.String("hostname", ecs.HostName),
-// 						zap.String("status", status))
-// 					errChan <- err
-// 				}
-// 			}(ecs)
-// 		}
-
-// 		wg.Wait()
-// 		close(errChan)
-
-// 		for err := range errChan {
-// 			cm.logger.Error("处理主机状态时发生错误", zap.Error(err), zap.Int("batch_offset", offset))
-// 		}
-
-// 		offset += len(ecss)
-
-// 		if len(ecss) < batchSize {
-// 			break
-// 		}
-// 	}
-
-// 	cm.logger.Info("完成ecs主机状态检查", zap.Int("total_processed", offset))
-// 	return nil
-// }
-
-// StartCheckK8sStatusManager 启动k8s状态检查任务
-func (cm *cronManager) StartCheckK8sStatusManager(ctx context.Context) error {
-	cm.logger.Info("启动k8s状态检查任务")
-
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				cm.logger.Error("k8s状态检查任务发生 panic，正在重启", zap.Any("panic", r))
-				// 重启任务
-				time.Sleep(RetryDelay)
-				go cm.StartCheckK8sStatusManager(ctx)
-			}
-		}()
-
-		wait.UntilWithContext(ctx, func(ctx context.Context) {
-			defer func() {
-				if r := recover(); r != nil {
-					cm.logger.Error("k8s状态检查任务执行时发生 panic", zap.Any("panic", r))
-				}
-			}()
-
-			// 添加重试机制
-			var lastErr error
-			for attempt := 1; attempt <= MaxRetries; attempt++ {
-				if err := cm.checkK8sStatusWithRetry(ctx); err != nil {
-					lastErr = err
-					if attempt < MaxRetries {
-						cm.logger.Warn("k8s状态检查任务执行失败，准备重试",
-							zap.Int("attempt", attempt),
-							zap.Int("maxRetries", MaxRetries),
-							zap.Error(err))
-						time.Sleep(RetryDelay)
-						continue
-					}
-				} else {
-					if attempt > 1 {
-						cm.logger.Info("k8s状态检查任务重试成功",
-							zap.Int("attempt", attempt))
-					}
-					return
-				}
-			}
-
-			if lastErr != nil {
-				cm.logger.Error("k8s状态检查任务重试失败，已达到最大重试次数",
-					zap.Int("maxRetries", MaxRetries),
-					zap.Error(lastErr))
-			}
-		}, K8sCheckInterval)
-	}()
-
-	<-ctx.Done()
-	cm.logger.Info("k8s状态检查任务已停止")
-	return nil
-}
-
 // checkK8sStatusWithRetry 带重试机制的k8s状态检查
-func (cm *cronManager) checkK8sStatusWithRetry(ctx context.Context) error {
+func (cm *unifiedCronManager) checkK8sStatusWithRetry(ctx context.Context) error {
 	cm.logger.Info("开始检查k8s状态")
 
 	// 使用GetClusterList获取所有集群，设置一个大的page size来获取所有集群
@@ -766,82 +814,49 @@ func (cm *cronManager) checkK8sStatusWithRetry(ctx context.Context) error {
 }
 
 // checkClusterStatus 检查单个集群状态
-func (cm *cronManager) checkClusterStatus(ctx context.Context, cluster *model.K8sCluster) error {
+func (cm *unifiedCronManager) checkClusterStatus(ctx context.Context, cluster *model.K8sCluster) error {
+	startTime := time.Now()
+	var newStatus model.ClusterStatus
+
 	if err := cm.clusterMgr.CheckClusterStatus(ctx, cluster.ID); err != nil {
-		cm.logger.Warn("集群连接检查失败",
-			zap.Error(err),
-			zap.String("cluster", cluster.Name))
-		cluster.Status = model.StatusError
+		// 分类处理不同类型的连接错误
+		if strings.Contains(err.Error(), "connection refused") {
+			cm.logger.Debug("集群连接被拒绝（可能是正常的离线状态）",
+				zap.String("cluster", cluster.Name),
+				zap.String("endpoint", "检测到连接被拒绝"))
+		} else if strings.Contains(err.Error(), "timeout") {
+			cm.logger.Warn("集群连接超时",
+				zap.Error(err),
+				zap.String("cluster", cluster.Name))
+		} else {
+			cm.logger.Warn("集群连接检查失败",
+				zap.Error(err),
+				zap.String("cluster", cluster.Name))
+		}
+		newStatus = model.StatusError
 	} else {
-		cluster.Status = model.StatusRunning
-	}
-
-	if err := cm.k8sDao.UpdateClusterStatus(ctx, cluster.ID, cluster.Status); err != nil {
-		cm.logger.Error("更新集群状态失败",
-			zap.Error(err),
+		newStatus = model.StatusRunning
+		cm.logger.Debug("集群状态检查成功",
 			zap.String("cluster", cluster.Name),
-			zap.Int8("status", int8(cluster.Status)))
-		return fmt.Errorf("更新集群[%s]状态失败: %w", cluster.Name, err)
+			zap.Duration("duration", time.Since(startTime)))
 	}
 
-	return nil
-}
+	// 只有状态发生变化时才更新数据库，减少不必要的写操作
+	if cluster.Status != newStatus {
+		if err := cm.k8sDao.UpdateClusterStatus(ctx, cluster.ID, newStatus); err != nil {
+			cm.logger.Error("更新集群状态失败",
+				zap.Error(err),
+				zap.String("cluster", cluster.Name),
+				zap.Int8("oldStatus", int8(cluster.Status)),
+				zap.Int8("newStatus", int8(newStatus)))
+			return fmt.Errorf("更新集群[%s]状态失败: %w", cluster.Name, err)
+		}
+		cm.logger.Info("集群状态已更新",
+			zap.String("cluster", cluster.Name),
+			zap.Int8("oldStatus", int8(cluster.Status)),
+			zap.Int8("newStatus", int8(newStatus)))
+	}
 
-// StartPrometheusConfigRefreshManager 启动Prometheus配置刷新任务
-func (cm *cronManager) StartPrometheusConfigRefreshManager(ctx context.Context) error {
-	cm.logger.Info("启动Prometheus配置刷新任务")
-
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				cm.logger.Error("Prometheus配置刷新任务发生 panic，正在重启", zap.Any("panic", r))
-				// 重启任务
-				time.Sleep(RetryDelay)
-				go cm.StartPrometheusConfigRefreshManager(ctx)
-			}
-		}()
-
-		wait.UntilWithContext(ctx, func(ctx context.Context) {
-			defer func() {
-				if r := recover(); r != nil {
-					cm.logger.Error("Prometheus配置刷新任务执行时发生 panic", zap.Any("panic", r))
-				}
-			}()
-
-			// 添加重试机制
-			var lastErr error
-			for attempt := 1; attempt <= MaxRetries; attempt++ {
-				if err := cm.promConfigCache.MonitorCacheManager(ctx); err != nil {
-					lastErr = err
-					if attempt < MaxRetries {
-						cm.logger.Warn("Prometheus配置定时刷新失败，准备重试",
-							zap.Int("attempt", attempt),
-							zap.Int("maxRetries", MaxRetries),
-							zap.Error(err))
-						time.Sleep(RetryDelay)
-						continue
-					}
-				} else {
-					if attempt > 1 {
-						cm.logger.Info("Prometheus配置定时刷新重试成功",
-							zap.Int("attempt", attempt))
-					} else {
-						cm.logger.Info("Prometheus配置定时刷新成功")
-					}
-					return
-				}
-			}
-
-			if lastErr != nil {
-				cm.logger.Error("Prometheus配置定时刷新重试失败，已达到最大重试次数",
-					zap.Int("maxRetries", MaxRetries),
-					zap.Error(lastErr))
-			}
-		}, cm.getPrometheusRefreshInterval())
-	}()
-
-	<-ctx.Done()
-	cm.logger.Info("Prometheus配置定时刷新任务已停止")
 	return nil
 }
 
@@ -849,7 +864,7 @@ func (cm *cronManager) StartPrometheusConfigRefreshManager(ctx context.Context) 
 // 1) "@every 15s"（与常见的 cron 语法一致，仅支持 @every 前缀）
 // 2) "15s"（直接 time.ParseDuration 支持的时长表示）
 // 解析失败时回退到 DefaultPrometheusConfigRefreshInterval。
-func (cm *cronManager) getPrometheusRefreshInterval() time.Duration {
+func (cm *unifiedCronManager) getPrometheusRefreshInterval() time.Duration {
 	spec := strings.TrimSpace(viper.GetString("prometheus.refresh_cron"))
 	if spec == "" {
 		return DefaultPrometheusConfigRefreshInterval

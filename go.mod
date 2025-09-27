@@ -59,7 +59,7 @@ require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/go-redis/redis/v8 v8.11.2 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/robfig/cron/v3 v3.0.1 // indirect
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 )
 

@@ -45,14 +45,14 @@ func NewK8sClusterRoleBindingHandler(clusterRoleBindingService service.ClusterRo
 func (k *K8sClusterRoleBindingHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		// Unify to /clusters/:cluster_id/clusterrolebindings style
-		k8sGroup.GET("/clusters/:cluster_id/clusterrolebindings", k.GetClusterRoleBindingList)
-		k8sGroup.GET("/clusters/:cluster_id/clusterrolebindings/:name", k.GetClusterRoleBindingDetails)
-		k8sGroup.POST("/clusters/:cluster_id/clusterrolebindings", k.CreateClusterRoleBinding)
-		k8sGroup.PUT("/clusters/:cluster_id/clusterrolebindings/:name", k.UpdateClusterRoleBinding)
-		k8sGroup.DELETE("/clusters/:cluster_id/clusterrolebindings/:name", k.DeleteClusterRoleBinding)
-		k8sGroup.GET("/clusters/:cluster_id/clusterrolebindings/:name/yaml", k.GetClusterRoleBindingYaml)
-		k8sGroup.PUT("/clusters/:cluster_id/clusterrolebindings/:name/yaml", k.UpdateClusterRoleBindingYaml)
+		k8sGroup.GET("/clusterrolebinding/:cluster_id/list", k.GetClusterRoleBindingList)
+		k8sGroup.GET("/clusterrolebinding/:cluster_id/:name/detail", k.GetClusterRoleBindingDetails)
+		k8sGroup.GET("/clusterrolebinding/:cluster_id/:name/detail/yaml", k.GetClusterRoleBindingYaml)
+		k8sGroup.POST("/clusterrolebinding/:cluster_id/create", k.CreateClusterRoleBinding)
+		k8sGroup.POST("/clusterrolebinding/:cluster_id/create/yaml", k.CreateClusterRoleBindingByYaml)
+		k8sGroup.PUT("/clusterrolebinding/:cluster_id/:name/update", k.UpdateClusterRoleBinding)
+		k8sGroup.PUT("/clusterrolebinding/:cluster_id/:name/update/yaml", k.UpdateClusterRoleBindingYaml)
+		k8sGroup.DELETE("/clusterrolebinding/:cluster_id/:name/delete", k.DeleteClusterRoleBinding)
 	}
 }
 
@@ -99,6 +99,23 @@ func (k *K8sClusterRoleBindingHandler) CreateClusterRoleBinding(ctx *gin.Context
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, k.clusterRoleBindingService.CreateClusterRoleBinding(ctx, &req)
+	})
+}
+
+// CreateClusterRoleBindingByYaml 通过YAML创建ClusterRoleBinding
+func (k *K8sClusterRoleBindingHandler) CreateClusterRoleBindingByYaml(ctx *gin.Context) {
+	var req model.CreateClusterRoleBindingByYamlReq
+
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.clusterRoleBindingService.CreateClusterRoleBindingByYaml(ctx, &req)
 	})
 }
 

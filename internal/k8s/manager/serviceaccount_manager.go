@@ -21,9 +21,6 @@ type ServiceAccountManager interface {
 	UpdateServiceAccount(ctx context.Context, clusterID int, namespace string, sa *corev1.ServiceAccount) error
 	DeleteServiceAccount(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error
 
-	// 批量操作
-	BatchDeleteServiceAccounts(ctx context.Context, clusterID int, namespace string, serviceAccountNames []string) error
-
 	// 高级功能
 	PatchServiceAccount(ctx context.Context, clusterID int, namespace, name string, data []byte, patchType string) (*corev1.ServiceAccount, error)
 
@@ -178,52 +175,6 @@ func (s *serviceAccountManager) DeleteServiceAccount(ctx context.Context, cluste
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", name))
-
-	return nil
-}
-
-// BatchDeleteServiceAccounts 批量删除ServiceAccount
-func (s *serviceAccountManager) BatchDeleteServiceAccounts(ctx context.Context, clusterID int, namespace string, serviceAccountNames []string) error {
-	kubeClient, err := s.client.GetKubeClient(clusterID)
-	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败",
-			zap.Int("clusterID", clusterID),
-			zap.Error(err))
-		return err
-	}
-
-	deleteOptions := metav1.DeleteOptions{}
-	var failedDeletions []string
-
-	for _, name := range serviceAccountNames {
-		err := kubeClient.CoreV1().ServiceAccounts(namespace).Delete(ctx, name, deleteOptions)
-		if err != nil {
-			s.logger.Error("删除ServiceAccount失败",
-				zap.Int("clusterID", clusterID),
-				zap.String("namespace", namespace),
-				zap.String("name", name),
-				zap.Error(err))
-			failedDeletions = append(failedDeletions, name)
-		} else {
-			s.logger.Info("成功删除ServiceAccount",
-				zap.Int("clusterID", clusterID),
-				zap.String("namespace", namespace),
-				zap.String("name", name))
-		}
-	}
-
-	if len(failedDeletions) > 0 {
-		s.logger.Warn("部分ServiceAccount删除失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.Strings("failedDeletions", failedDeletions))
-		return err // 返回最后一个错误
-	}
-
-	s.logger.Info("批量删除ServiceAccount完成",
-		zap.Int("clusterID", clusterID),
-		zap.String("namespace", namespace),
-		zap.Int("count", len(serviceAccountNames)))
 
 	return nil
 }
