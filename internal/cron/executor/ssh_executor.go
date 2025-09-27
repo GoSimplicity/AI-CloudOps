@@ -177,8 +177,8 @@ func (e *SSHExecutor) buildSSHCommand(job *model.CronJob) string {
 
 	// 设置环境变量
 	if len(job.SSHEnvironment) > 0 {
-		for key, value := range job.SSHEnvironment {
-			commandParts = append(commandParts, fmt.Sprintf("export %d=%s", key, value))
+		for _, kv := range job.SSHEnvironment {
+			commandParts = append(commandParts, fmt.Sprintf("export %s=%s", kv.Key, kv.Value))
 		}
 	}
 
@@ -187,74 +187,4 @@ func (e *SSHExecutor) buildSSHCommand(job *model.CronJob) string {
 
 	// 使用 && 连接所有命令，确保按顺序执行
 	return strings.Join(commandParts, " && ")
-}
-
-// ValidateSSHJob 验证SSH任务配置
-func (e *SSHExecutor) ValidateSSHJob(ctx context.Context, job *model.CronJob) error {
-	if job.JobType != model.CronJobTypeSSH {
-		return fmt.Errorf("任务类型不是SSH执行任务")
-	}
-
-	if job.SSHResourceID == nil || *job.SSHResourceID == 0 {
-		return fmt.Errorf("SSH资源ID不能为空")
-	}
-
-	if job.SSHCommand == "" {
-		return fmt.Errorf("SSH执行命令不能为空")
-	}
-
-	// 验证SSH资源是否存在且可用
-	resource, err := e.treeLocalDAO.GetByID(ctx, *job.SSHResourceID)
-	if err != nil {
-		return fmt.Errorf("获取SSH资源失败: %w", err)
-	}
-
-	if resource == nil {
-		return fmt.Errorf("SSH资源不存在: ID=%d", job.SSHResourceID)
-	}
-
-	return nil
-}
-
-// TestSSHConnection 测试SSH连接
-func (e *SSHExecutor) TestSSHConnection(ctx context.Context, resourceID int) error {
-	resource, err := e.treeLocalDAO.GetByID(ctx, resourceID)
-	if err != nil {
-		return fmt.Errorf("获取SSH资源失败: %w", err)
-	}
-
-	if resource == nil {
-		return fmt.Errorf("SSH资源不存在: ID=%d", resourceID)
-	}
-
-	sshClient := ssh.NewSSH(e.logger)
-	defer sshClient.Close()
-
-	var authMode int8
-	if resource.AuthMode == model.AuthModePassword {
-		authMode = 1
-	} else {
-		authMode = 2
-	}
-
-	err = sshClient.Connect(
-		resource.IpAddr,
-		resource.Port,
-		resource.Username,
-		resource.Password,
-		resource.Key,
-		authMode,
-		0,
-	)
-	if err != nil {
-		return fmt.Errorf("SSH连接测试失败: %w", err)
-	}
-
-	// 执行简单的测试命令
-	_, err = sshClient.Run("echo 'SSH连接测试成功'")
-	if err != nil {
-		return fmt.Errorf("SSH命令测试失败: %w", err)
-	}
-
-	return nil
 }

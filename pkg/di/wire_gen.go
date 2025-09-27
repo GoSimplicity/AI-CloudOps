@@ -48,9 +48,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	"github.com/hibiken/asynq"
-)
 
-import (
 	_ "github.com/google/wire"
 )
 
@@ -220,14 +218,14 @@ func ProvideCmd() *Cmd {
 	cronJobDAO := dao6.NewCronJobDAO(logger, db)
 	asynqScheduler := InitScheduler()
 	cronScheduler := scheduler.NewCronScheduler(logger, cronJobDAO, asynqScheduler, asynqClient)
-	cronService := service7.NewCronService(logger, cronJobDAO, asynqClient, cronScheduler)
+	cronService := service7.NewCronService(logger, cronJobDAO, userDAO, asynqClient, cronScheduler)
 	cronJobHandler := api8.NewCronJobHandler(logger, cronService)
 	engine := InitGinServer(v, userHandler, apiHandler, roleHandler, systemHandler, notAuthHandler, k8sClusterHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sSvcHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sDaemonSetHandler, k8sEventHandler, k8sStatefulSetHandler, k8sServiceAccountHandler, k8sRoleHandler, k8sClusterRoleHandler, k8sRoleBindingHandler, k8sClusterRoleBindingHandler, k8sConfigMapHandler, k8sSecretHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, monitorConfigHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, workorderProcessHandler, templateHandler, instanceHandler, instanceFlowHandler, instanceCommentHandler, categoryGroupHandler, instanceTimeLineHandler, treeNodeHandler, treeLocalHandler, notificationHandler, k8sIngressHandler, k8sPodHandler, k8sPVHandler, k8sPVCHandler, cronJobHandler)
 	applicationBootstrap := startup.NewApplicationBootstrap(clusterManager, logger)
 	builtinTaskManager := cron.NewBuiltinTaskManager(logger, cronJobDAO)
 	cronManager := cron.NewUnifiedCronManager(logger, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache, cronScheduler, builtinTaskManager)
 	server := InitAsynqServer()
-	cronHandlers := handler.NewCronHandlers(logger, cronJobDAO, treeLocalDAO)
+	cronHandlers := handler.NewCronHandlers(logger, cronJobDAO, treeLocalDAO, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache)
 	cmd := &Cmd{
 		Server:       engine,
 		Bootstrap:    applicationBootstrap,

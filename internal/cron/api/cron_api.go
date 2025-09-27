@@ -94,35 +94,27 @@ func (api *CronJobHandler) UpdateCronJob(ctx *gin.Context) {
 
 // DeleteCronJob 删除任务
 func (api *CronJobHandler) DeleteCronJob(ctx *gin.Context) {
-	var req model.DeleteCronJobReq
-
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	req.ID = id
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, api.cronService.DeleteCronJob(ctx, req.ID)
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return nil, api.cronService.DeleteCronJob(ctx, id)
 	})
 }
 
 // GetCronJob 获取任务详情
 func (api *CronJobHandler) GetCronJob(ctx *gin.Context) {
-	var req model.GetCronJobReq
-
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	req.ID = id
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return api.cronService.GetCronJob(ctx, req.ID)
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return api.cronService.GetCronJob(ctx, id)
 	})
 }
 
@@ -137,45 +129,39 @@ func (api *CronJobHandler) GetCronJobList(ctx *gin.Context) {
 
 // EnableCronJob 启用任务
 func (api *CronJobHandler) EnableCronJob(ctx *gin.Context) {
-	var req model.EnableCronJobReq
-
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, api.cronService.EnableCronJob(ctx, id)
 	})
 }
 
 // DisableCronJob 禁用任务
 func (api *CronJobHandler) DisableCronJob(ctx *gin.Context) {
-	var req model.DisableCronJobReq
-
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, api.cronService.DisableCronJob(ctx, id)
 	})
 }
 
 // TriggerCronJob 手动触发任务
 func (api *CronJobHandler) TriggerCronJob(ctx *gin.Context) {
-	var req model.TriggerCronJobReq
-
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, api.cronService.TriggerCronJob(ctx, id)
 	})
 }

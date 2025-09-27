@@ -35,6 +35,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/handler"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/scheduler"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"github.com/hibiken/asynq"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
@@ -55,19 +56,22 @@ type CronService interface {
 type cronService struct {
 	logger        *zap.Logger
 	cronDAO       dao.CronJobDAO
-	client        *asynq.Client            // Asynq客户端，用于手动触发任务
-	cronScheduler *scheduler.CronScheduler // Cron调度器，用于管理调度任务
+	userDAO       userDao.UserDAO
+	client        *asynq.Client
+	cronScheduler *scheduler.CronScheduler
 }
 
 func NewCronService(
 	logger *zap.Logger,
 	cronDAO dao.CronJobDAO,
+	userDAO userDao.UserDAO,
 	client *asynq.Client,
 	cronScheduler *scheduler.CronScheduler,
 ) CronService {
 	return &cronService{
 		logger:        logger,
 		cronDAO:       cronDAO,
+		userDAO:       userDAO,
 		client:        client,
 		cronScheduler: cronScheduler,
 	}
@@ -77,25 +81,35 @@ func NewCronService(
 func (s *cronService) CreateCronJob(ctx context.Context, req *model.CreateCronJobReq) error {
 	s.logger.Info("创建任务", zap.String("name", req.Name))
 
+	// 基本验证
+	if err := s.validateBasicJobConfig(req.JobType, req.Command, req.HTTPUrl, req.ScriptContent, req.SSHResourceID, req.SSHCommand); err != nil {
+		s.logger.Error("任务配置验证失败", zap.String("name", req.Name), zap.Error(err))
+		return err
+	}
+
 	job := &model.CronJob{
-		Name:          req.Name,
-		Description:   req.Description,
-		JobType:       req.JobType,
-		Schedule:      req.Schedule,
-		Command:       req.Command,
-		Args:          req.Args,
-		WorkDir:       req.WorkDir,
-		Environment:   req.Environment,
-		HTTPMethod:    req.HTTPMethod,
-		HTTPUrl:       req.HTTPUrl,
-		HTTPHeaders:   req.HTTPHeaders,
-		HTTPBody:      req.HTTPBody,
-		ScriptType:    req.ScriptType,
-		ScriptContent: req.ScriptContent,
-		Timeout:       req.Timeout,
-		MaxRetry:      req.MaxRetry,
-		CreatedBy:     req.CreatedBy,
-		CreatedByName: req.CreatedByName,
+		Name:           req.Name,
+		Description:    req.Description,
+		JobType:        req.JobType,
+		Schedule:       req.Schedule,
+		Command:        req.Command,
+		Args:           req.Args,
+		WorkDir:        req.WorkDir,
+		Environment:    req.Environment,
+		HTTPMethod:     req.HTTPMethod,
+		HTTPUrl:        req.HTTPUrl,
+		HTTPHeaders:    req.HTTPHeaders,
+		HTTPBody:       req.HTTPBody,
+		ScriptType:     req.ScriptType,
+		ScriptContent:  req.ScriptContent,
+		SSHResourceID:  req.SSHResourceID,
+		SSHCommand:     req.SSHCommand,
+		SSHWorkDir:     req.SSHWorkDir,
+		SSHEnvironment: req.SSHEnvironment,
+		Timeout:        req.Timeout,
+		MaxRetry:       req.MaxRetry,
+		CreatedBy:      req.CreatedBy,
+		CreatedByName:  req.CreatedByName,
 	}
 
 	if err := s.cronDAO.CreateCronJob(ctx, job); err != nil {
@@ -111,24 +125,34 @@ func (s *cronService) CreateCronJob(ctx context.Context, req *model.CreateCronJo
 func (s *cronService) UpdateCronJob(ctx context.Context, req *model.UpdateCronJobReq) error {
 	s.logger.Info("更新任务", zap.Int("id", req.ID), zap.String("name", req.Name))
 
+	// 基本验证
+	if err := s.validateBasicJobConfig(req.JobType, req.Command, req.HTTPUrl, req.ScriptContent, req.SSHResourceID, req.SSHCommand); err != nil {
+		s.logger.Error("任务配置验证失败", zap.Int("id", req.ID), zap.Error(err))
+		return err
+	}
+
 	job := &model.CronJob{
-		Model:         model.Model{ID: req.ID},
-		Name:          req.Name,
-		Description:   req.Description,
-		JobType:       req.JobType,
-		Schedule:      req.Schedule,
-		Command:       req.Command,
-		Args:          req.Args,
-		WorkDir:       req.WorkDir,
-		Environment:   req.Environment,
-		HTTPMethod:    req.HTTPMethod,
-		HTTPUrl:       req.HTTPUrl,
-		HTTPHeaders:   req.HTTPHeaders,
-		HTTPBody:      req.HTTPBody,
-		ScriptType:    req.ScriptType,
-		ScriptContent: req.ScriptContent,
-		Timeout:       req.Timeout,
-		MaxRetry:      req.MaxRetry,
+		Model:          model.Model{ID: req.ID},
+		Name:           req.Name,
+		Description:    req.Description,
+		JobType:        req.JobType,
+		Schedule:       req.Schedule,
+		Command:        req.Command,
+		Args:           req.Args,
+		WorkDir:        req.WorkDir,
+		Environment:    req.Environment,
+		HTTPMethod:     req.HTTPMethod,
+		HTTPUrl:        req.HTTPUrl,
+		HTTPHeaders:    req.HTTPHeaders,
+		HTTPBody:       req.HTTPBody,
+		ScriptType:     req.ScriptType,
+		ScriptContent:  req.ScriptContent,
+		SSHResourceID:  req.SSHResourceID,
+		SSHCommand:     req.SSHCommand,
+		SSHWorkDir:     req.SSHWorkDir,
+		SSHEnvironment: req.SSHEnvironment,
+		Timeout:        req.Timeout,
+		MaxRetry:       req.MaxRetry,
 	}
 
 	if err := s.cronDAO.UpdateCronJob(ctx, job); err != nil {
@@ -152,7 +176,7 @@ func (s *cronService) DeleteCronJob(ctx context.Context, id int) error {
 	}
 
 	// 检查是否为内置任务
-	if job.IsBuiltIn {
+	if job.IsBuiltIn == 1 {
 		s.logger.Warn("尝试删除内置任务被拒绝", zap.Int("id", id), zap.String("name", job.Name))
 		return fmt.Errorf("内置系统任务不能被删除")
 	}
@@ -196,6 +220,14 @@ func (s *cronService) GetCronJobList(ctx context.Context, req *model.GetCronJobL
 	if err != nil {
 		s.logger.Error("获取任务列表失败", zap.Error(err))
 		return model.ListResp[*model.CronJob]{}, err
+	}
+
+	for _, job := range jobs {
+		// 计算NextRunTime
+		s.fillNextRunTime(job)
+
+		// 填充CreatedByName
+		s.fillCreatedByName(ctx, job)
 	}
 
 	return model.ListResp[*model.CronJob]{
@@ -246,12 +278,12 @@ func (s *cronService) TriggerCronJob(ctx context.Context, id int) error {
 		return fmt.Errorf("任务未启用，无法手动触发")
 	}
 
-	// 系统内置任务不支持手动触发
+	// 记录系统内置任务的手动触发
 	if job.JobType == model.CronJobTypeSystem {
-		s.logger.Warn("系统内置任务不支持手动触发",
+		s.logger.Info("手动触发系统内置任务",
 			zap.Int("id", id),
-			zap.String("name", job.Name))
-		return fmt.Errorf("系统内置任务不支持手动触发")
+			zap.String("name", job.Name),
+			zap.String("taskType", job.Command))
 	}
 
 	// 创建任务载荷
@@ -304,13 +336,7 @@ func (s *cronService) ValidateSchedule(ctx context.Context, req *model.ValidateS
 	}
 
 	// 生成下次运行时间预览（接下来5次）
-	var nextRunTimes []string
-	now := time.Now()
-	for i := 0; i < 5; i++ {
-		next := schedule.Next(now)
-		nextRunTimes = append(nextRunTimes, next.Format("2006-01-02 15:04:05"))
-		now = next
-	}
+	nextRunTimes := s.generateNextRunTimes(schedule, 5)
 
 	resp := &model.ValidateScheduleResp{
 		Valid:        true,
@@ -319,4 +345,104 @@ func (s *cronService) ValidateSchedule(ctx context.Context, req *model.ValidateS
 
 	s.logger.Info("调度表达式验证成功", zap.String("schedule", req.Schedule))
 	return resp, nil
+}
+
+// fillNextRunTime 填充下次运行时间
+func (s *cronService) fillNextRunTime(job *model.CronJob) {
+	if job == nil || job.Schedule == "" {
+		return
+	}
+
+	// 如果任务已禁用，不计算下次运行时间
+	if job.Status != model.CronJobStatusEnabled {
+		return
+	}
+
+	// 解析cron表达式
+	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+	schedule, err := parser.Parse(job.Schedule)
+	if err != nil {
+		s.logger.Warn("解析调度表达式失败",
+			zap.Int("jobID", job.ID),
+			zap.String("schedule", job.Schedule),
+			zap.Error(err))
+		return
+	}
+
+	// 计算下次运行时间
+	now := time.Now()
+	nextTime := schedule.Next(now)
+	job.NextRunTime = &nextTime
+}
+
+// fillCreatedByName 填充创建者姓名
+func (s *cronService) fillCreatedByName(ctx context.Context, job *model.CronJob) {
+	if job == nil || job.CreatedBy <= 0 {
+		return
+	}
+
+	// 如果已经有创建者姓名，跳过
+	if job.CreatedByName != "" {
+		return
+	}
+
+	// 查询用户信息
+	user, err := s.userDAO.GetUserByID(ctx, job.CreatedBy)
+	if err != nil {
+		s.logger.Warn("查询创建者信息失败",
+			zap.Int("jobID", job.ID),
+			zap.Int("createdBy", job.CreatedBy),
+			zap.Error(err))
+		return
+	}
+
+	if user != nil {
+		job.CreatedByName = user.Username
+	}
+}
+
+// validateBasicJobConfig 验证任务配置的基本要求
+func (s *cronService) validateBasicJobConfig(jobType model.CronJobType, command, httpUrl, scriptContent string, sshResourceID *int, sshCommand string) error {
+	switch jobType {
+	case model.CronJobTypeCommand:
+		if command == "" {
+			return fmt.Errorf("命令行任务必须指定执行命令")
+		}
+	case model.CronJobTypeHTTP:
+		if httpUrl == "" {
+			return fmt.Errorf("HTTP任务必须指定请求URL")
+		}
+	case model.CronJobTypeScript:
+		if scriptContent == "" {
+			return fmt.Errorf("脚本任务必须提供脚本内容")
+		}
+	case model.CronJobTypeSSH:
+		if sshResourceID == nil || *sshResourceID == 0 {
+			return fmt.Errorf("SSH任务必须指定SSH资源ID")
+		}
+		if sshCommand == "" {
+			return fmt.Errorf("SSH任务必须指定执行命令")
+		}
+	case model.CronJobTypeSystem:
+		// 系统任务由内置任务管理器处理
+	default:
+		return fmt.Errorf("不支持的任务类型: %d", int8(jobType))
+	}
+	return nil
+}
+
+// generateNextRunTimes 生成接下来N次的运行时间
+func (s *cronService) generateNextRunTimes(schedule cron.Schedule, count int) model.StringList {
+	var nextRunTimes []string
+	now := time.Now()
+
+	// 确保时间格式化使用本地时区
+	for i := 0; i < count; i++ {
+		next := schedule.Next(now)
+		// 使用中国标准时间格式，更友好的显示
+		nextRunTimes = append(nextRunTimes, next.Format("2006-01-02 15:04:05 MST"))
+		now = next
+	}
+
+	return model.StringList(nextRunTimes)
 }

@@ -146,7 +146,7 @@ func (btm *BuiltinTaskManager) InitializeBuiltinTasks(ctx context.Context) error
 			Description: taskDef.Description,
 			JobType:     model.CronJobTypeSystem,
 			Status:      model.CronJobStatusEnabled,
-			IsBuiltIn:   true,
+			IsBuiltIn:   1,
 			Schedule:    taskDef.Schedule,
 			Timeout:     300,              // 5分钟超时
 			MaxRetry:    3,                // 最大重试3次
@@ -192,7 +192,7 @@ func (btm *BuiltinTaskManager) GetEnabledBuiltinTasks(ctx context.Context) ([]*m
 	// 过滤出内置任务
 	var builtinJobs []*model.CronJob
 	for _, job := range jobs {
-		if job.IsBuiltIn {
+		if job.IsBuiltIn == 1 {
 			builtinJobs = append(builtinJobs, job)
 		}
 	}
@@ -230,7 +230,7 @@ func (btm *BuiltinTaskManager) ForceInitializeBuiltinTasks(ctx context.Context) 
 			Description: taskDef.Description,
 			JobType:     model.CronJobTypeSystem,
 			Status:      model.CronJobStatusEnabled,
-			IsBuiltIn:   true,
+			IsBuiltIn:   1,
 			Schedule:    taskDef.Schedule,
 			Timeout:     300,              // 5分钟超时
 			MaxRetry:    3,                // 最大重试3次
@@ -263,35 +263,5 @@ func (btm *BuiltinTaskManager) ForceInitializeBuiltinTasks(ctx context.Context) 
 	if errorCount > 0 {
 		return fmt.Errorf("强制初始化过程中有 %d 个任务失败", errorCount)
 	}
-	return nil
-}
-
-// ValidateBuiltinTasks 验证内置任务完整性
-func (btm *BuiltinTaskManager) ValidateBuiltinTasks(ctx context.Context) error {
-	btm.logger.Info("开始验证内置任务完整性")
-
-	builtinTaskDefs := GetBuiltinTasks()
-	missingTasks := []string{}
-
-	for _, taskDef := range builtinTaskDefs {
-		_, err := btm.cronDAO.GetCronJobByName(ctx, taskDef.Name)
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				missingTasks = append(missingTasks, taskDef.Name)
-			} else {
-				btm.logger.Error("检查内置任务时发生错误",
-					zap.String("taskName", taskDef.Name),
-					zap.Error(err))
-			}
-		}
-	}
-
-	if len(missingTasks) > 0 {
-		btm.logger.Error("发现缺失的内置任务",
-			zap.Strings("missingTasks", missingTasks))
-		return fmt.Errorf("发现 %d 个缺失的内置任务: %v", len(missingTasks), missingTasks)
-	}
-
-	btm.logger.Info("内置任务完整性验证通过")
 	return nil
 }

@@ -122,24 +122,13 @@ func (cm *unifiedCronManager) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	cm.cancel = cancel
 
-	// 验证和初始化内置任务到数据库
-	if err := cm.builtinTaskMgr.ValidateBuiltinTasks(ctx); err != nil {
-		cm.logger.Warn("内置任务完整性验证失败，尝试重新初始化", zap.Error(err))
-		// 尝试正常初始化
-		if initErr := cm.builtinTaskMgr.InitializeBuiltinTasks(ctx); initErr != nil {
-			cm.logger.Error("正常初始化内置任务失败，尝试强制初始化", zap.Error(initErr))
-			// 如果正常初始化失败，尝试强制初始化
-			if forceErr := cm.builtinTaskMgr.ForceInitializeBuiltinTasks(ctx); forceErr != nil {
-				cm.logger.Error("强制初始化内置任务也失败", zap.Error(forceErr))
-				return forceErr
-			}
-		}
-	} else {
-		cm.logger.Info("内置任务完整性验证通过")
-		// 即使验证通过，也运行一次正常初始化以确保配置是最新的
-		if err := cm.builtinTaskMgr.InitializeBuiltinTasks(ctx); err != nil {
-			cm.logger.Error("更新内置任务配置失败", zap.Error(err))
-			return err
+	// 初始化内置任务到数据库
+	if err := cm.builtinTaskMgr.InitializeBuiltinTasks(ctx); err != nil {
+		cm.logger.Error("初始化内置任务失败，尝试强制初始化", zap.Error(err))
+		// 如果正常初始化失败，尝试强制初始化
+		if forceErr := cm.builtinTaskMgr.ForceInitializeBuiltinTasks(ctx); forceErr != nil {
+			cm.logger.Error("强制初始化内置任务也失败", zap.Error(forceErr))
+			return forceErr
 		}
 	}
 

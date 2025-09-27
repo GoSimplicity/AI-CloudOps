@@ -44,7 +44,7 @@ type CronJobDAO interface {
 	UpdateCronJob(ctx context.Context, job *model.CronJob) error
 	DeleteCronJob(ctx context.Context, id int) error
 	UpdateCronJobStatus(ctx context.Context, id int, status model.CronJobStatus) error
-	UpdateCronJobRunInfo(ctx context.Context, id int, lastRunTime *time.Time, status int8, duration int, errorMsg string) error
+	UpdateCronJobRunInfo(ctx context.Context, id int, lastRunTime *time.Time, status int8, duration int, output, errorMsg string) error
 	GetEnabledCronJobs(ctx context.Context) ([]*model.CronJob, error)
 	UpdateNextRunTime(ctx context.Context, id int, nextRunTime time.Time) error
 }
@@ -230,7 +230,7 @@ func (d *cronJobDAO) DeleteCronJob(ctx context.Context, id int) error {
 	}
 
 	// 检查是否为内置任务
-	if job.IsBuiltIn {
+	if job.IsBuiltIn == 1 {
 		return errors.New("内置系统任务不能被删除")
 	}
 
@@ -263,10 +263,11 @@ func (d *cronJobDAO) UpdateCronJobStatus(ctx context.Context, id int, status mod
 }
 
 // UpdateCronJobRunInfo 更新任务运行信息
-func (d *cronJobDAO) UpdateCronJobRunInfo(ctx context.Context, id int, lastRunTime *time.Time, status int8, duration int, errorMsg string) error {
+func (d *cronJobDAO) UpdateCronJobRunInfo(ctx context.Context, id int, lastRunTime *time.Time, status int8, duration int, output, errorMsg string) error {
 	updates := map[string]interface{}{
 		"last_run_status":   status,
 		"last_run_duration": duration,
+		"last_run_output":   output,
 		"last_run_error":    errorMsg,
 	}
 
