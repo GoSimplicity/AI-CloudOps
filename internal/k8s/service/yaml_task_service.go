@@ -40,16 +40,11 @@ const (
 )
 
 type YamlTaskService interface {
-	// GetYamlTaskList 获取 YAML 任务列表
-	GetYamlTaskList(ctx context.Context) ([]*model.K8sYamlTask, error)
-	// CreateYamlTask 创建 YAML 任务
-	CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
-	// UpdateYamlTask 更新 YAML 任务
-	UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
-	// DeleteYamlTask 删除 YAML 任务
-	DeleteYamlTask(ctx context.Context, id int) error
-	// ApplyYamlTask 应用 YAML 任务
-	ApplyYamlTask(ctx context.Context, id int) error
+	GetYamlTaskList(ctx context.Context, req *model.YamlTaskListReq) (model.ListResp[*model.K8sYamlTask], error)
+	CreateYamlTask(ctx context.Context, req *model.YamlTaskCreateReq) error
+	UpdateYamlTask(ctx context.Context, req *model.YamlTaskUpdateReq) error
+	DeleteYamlTask(ctx context.Context, req *model.YamlTaskDeleteReq) error
+	ApplyYamlTask(ctx context.Context, req *model.YamlTaskExecuteReq) error
 }
 
 type yamlTaskService struct {
@@ -65,26 +60,50 @@ func NewYamlTaskService(manager manager.YamlManager, logger *zap.Logger) YamlTas
 }
 
 // GetYamlTaskList 获取 YAML 任务列表
-func (y *yamlTaskService) GetYamlTaskList(ctx context.Context) ([]*model.K8sYamlTask, error) {
-	return y.manager.GetYamlTaskList(ctx)
+func (y *yamlTaskService) GetYamlTaskList(ctx context.Context, req *model.YamlTaskListReq) (model.ListResp[*model.K8sYamlTask], error) {
+	list, err := y.manager.GetYamlTaskList(ctx, req)
+	if err != nil {
+		return model.ListResp[*model.K8sYamlTask]{}, err
+	}
+	return model.ListResp[*model.K8sYamlTask]{
+		Items: list,
+		Total: int64(len(list)),
+	}, nil
 }
 
 // CreateYamlTask 创建 YAML 任务
-func (y *yamlTaskService) CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
+func (y *yamlTaskService) CreateYamlTask(ctx context.Context, req *model.YamlTaskCreateReq) error {
+	task := &model.K8sYamlTask{
+		Name:       req.Name,
+		UserID:     req.UserID,
+		TemplateID: req.TemplateID,
+		ClusterID:  req.ClusterID,
+		Variables:  req.Variables,
+		Status:     TaskPending,
+	}
 	return y.manager.CreateYamlTask(ctx, task)
 }
 
 // UpdateYamlTask 更新 YAML 任务
-func (y *yamlTaskService) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
+func (y *yamlTaskService) UpdateYamlTask(ctx context.Context, req *model.YamlTaskUpdateReq) error {
+	// 将请求转换为任务模型
+	task := &model.K8sYamlTask{
+		Model:      model.Model{ID: req.ID},
+		Name:       req.Name,
+		UserID:     req.UserID,
+		TemplateID: req.TemplateID,
+		ClusterID:  req.ClusterID,
+		Variables:  req.Variables,
+	}
 	return y.manager.UpdateYamlTask(ctx, task)
 }
 
 // DeleteYamlTask 删除 YAML 任务
-func (y *yamlTaskService) DeleteYamlTask(ctx context.Context, id int) error {
-	return y.manager.DeleteYamlTask(ctx, id)
+func (y *yamlTaskService) DeleteYamlTask(ctx context.Context, req *model.YamlTaskDeleteReq) error {
+	return y.manager.DeleteYamlTask(ctx, req.ID)
 }
 
 // ApplyYamlTask 应用 YAML 任务
-func (y *yamlTaskService) ApplyYamlTask(ctx context.Context, id int) error {
-	return y.manager.ApplyYamlTask(ctx, id)
+func (y *yamlTaskService) ApplyYamlTask(ctx context.Context, req *model.YamlTaskExecuteReq) error {
+	return y.manager.ApplyYamlTask(ctx, req.ID)
 }
