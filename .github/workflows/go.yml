@@ -1,23 +1,193 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
 
+env:
+  GO_VERSION: '1.24.2'
+
 jobs:
-  build:
+  # 代码质量检查和测试
+  test:
+    name: Test & Quality Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
-          cache: true          # 开启模块/构建缓存
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
-      - name: Build
-        run: go build -v ./...
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
-      - name: Generate
-        run: go generate ./...
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run go fmt check
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "The following files are not formatted:"
+            gofmt -s -l .
+            exit 1
+          fi
+
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Run staticcheck
+        run: staticcheck ./...
+
+      - name: Install gosec
+        run: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+
+      - name: Run gosec security scan
+        run: gosec ./...
+
+      - name: Run tests
+        run: |
+          go test -v -race -coverprofile=coverage.out ./... 2>&1 | tee test_results.txt
+          echo "TEST_EXIT_CODE=${PIPESTATUS[0]}" >> $GITHUB_ENV
+
+      - name: Test Summary
+        run: |
+          echo "### 🧪 测试结果摘要" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "$TEST_EXIT_CODE" -eq 0 ]; then
+            echo "✅ 所有测试通过" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ 部分测试失败" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          tail -20 test_results.txt >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Coverage Summary
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}')
+          echo "### 📊 代码覆盖率" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**覆盖率**: $COVERAGE" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### 📋 覆盖率详情" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          go tool cover -func=coverage.out | head -10 >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+  # 构建检查
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build verification
+        run: |
+          echo "🔨 验证代码构建..."
+          
+          # Build for current platform (Linux amd64 on GitHub Actions)
+          echo "构建验证 Linux amd64..."
+          go build -v -ldflags="-s -w" -o ai-cloudops-test main.go
+          
+          # Test cross-compilation for major platforms
+          echo "验证跨平台编译兼容性..."
+          
+          # Verify Linux arm64 compilation
+          echo "验证 Linux arm64 编译..."
+          GOOS=linux GOARCH=arm64 go build -v -ldflags="-s -w" -o /dev/null main.go
+          
+          # Verify macOS compilation
+          echo "验证 macOS 编译..."
+          GOOS=darwin GOARCH=amd64 go build -v -ldflags="-s -w" -o /dev/null main.go
+          
+          # Verify Windows compilation
+          echo "验证 Windows 编译..."
+          GOOS=windows GOARCH=amd64 go build -v -ldflags="-s -w" -o /dev/null main.go
+          
+          echo "✅ 所有平台编译验证通过"
+
+      - name: Build Summary
+        run: |
+          echo "### 🏗️ 构建验证结果" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 平台 | 架构 | 编译状态 | 用途 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|----------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Linux | amd64 | ✅ | 主要部署平台 |" >> $GITHUB_STEP_SUMMARY
+          echo "| Linux | arm64 | ✅ | ARM服务器支持 |" >> $GITHUB_STEP_SUMMARY
+          echo "| macOS | amd64 | ✅ | 开发环境支持 |" >> $GITHUB_STEP_SUMMARY
+          echo "| Windows | amd64 | ✅ | Windows兼容性 |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**💡 说明**: 构建验证确保源代码可以在各平台正常编译" >> $GITHUB_STEP_SUMMARY
+          echo "**📦 发布**: 源代码包将在打tag时自动创建Release" >> $GITHUB_STEP_SUMMARY
+          
+          # Clean up test binary
+          rm -f ai-cloudops-test
+
+  # 安全扫描
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # 依赖检查
+  dependencies:
+    name: Dependency Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Check for vulnerabilities
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...

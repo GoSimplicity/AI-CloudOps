@@ -1,0 +1,361 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  GO_VERSION: '1.24.2'
+
+jobs:
+  release:
+    name: Create Release & Source Packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Create multi-environment source packages
+        run: |
+          # 创建发布目录
+          mkdir -p dist
+          
+          # 定义环境列表
+          ENVIRONMENTS=("development" "production" "staging" "test")
+          
+          echo "🚀 创建多环境源代码包..."
+          
+          for env in "${ENVIRONMENTS[@]}"; do
+            echo "📦 准备 $env 环境包..."
+            
+            # 创建环境特定的目录
+            ENV_DIR="ai-cloudops-$env"
+            mkdir -p "dist/$ENV_DIR"
+            
+            # 复制所有源代码文件
+            rsync -av --exclude='.git' \
+                     --exclude='dist' \
+                     --exclude='bin' \
+                     --exclude='tmp' \
+                     --exclude='logs' \
+                     --exclude='data' \
+                     --exclude='.DS_Store' \
+                     --exclude='*.log' \
+                     --exclude='node_modules' \
+                     --exclude='.env' \
+                     . "dist/$ENV_DIR/"
+            
+            # 根据环境配置相应的配置文件
+            if [ -f "config/config.$env.yaml" ]; then
+              cp "config/config.$env.yaml" "dist/$ENV_DIR/config/config.yaml"
+              echo "✅ 使用 $env 环境配置文件"
+            else
+              # 如果没有特定环境配置，使用开发配置作为默认
+              if [ -f "config/config.development.yaml" ]; then
+                cp "config/config.development.yaml" "dist/$ENV_DIR/config/config.yaml"
+                echo "⚠️  使用开发环境配置作为 $env 环境默认配置"
+              fi
+            fi
+            
+            # 创建环境特定的README
+            cat > "dist/$ENV_DIR/ENVIRONMENT.md" << EOF
+          # AI-CloudOps - $env 环境
+
+          ## 🌍 环境信息
+          - **环境类型**: $env
+          - **版本**: ${{ github.ref_name }}
+          - **构建时间**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          - **Git提交**: ${{ github.sha }}
+
+          ## 🚀 快速启动
+
+          ### 1. 环境准备
+          \`\`\`bash
+          # 安装Go依赖
+          go mod download
+          \`\`\`
+
+          ### 2. 配置环境
+          \`\`\`bash
+          # 复制环境变量模板
+          cp env.example .env
+          
+          # 编辑环境变量
+          vim .env
+          \`\`\`
+
+          ### 3. 启动服务
+          \`\`\`bash
+          # 开发模式
+          go run main.go
+          
+          # 或使用Docker
+          docker-compose up -d
+          \`\`\`
+
+          ## 📋 环境特性
+
+          EOF
+            
+            # 根据环境添加特定说明
+            case $env in
+              "development")
+                echo "- 🔧 开发调试模式" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+                echo "- 📊 详细日志输出" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+                echo "- 🧪 热重载支持" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+                echo "- 🔍 调试工具集成" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+                ;;
+              "production")
+                echo "- 🚀 生产环境优化" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+                echo "- 🔒 安全配置强化" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+                echo "- 📈 性能监控" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+                echo "- 💾 数据持久化" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+                ;;
+              "staging")
+                echo "- 🎭 预发布环境" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+                echo "- 🧪 集成测试" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+                echo "- 📊 性能测试" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+                echo "- 🔍 质量验证" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+                ;;
+              "test")
+                echo "- 🧪 测试环境" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+                echo "- 🤖 自动化测试" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+                echo "- 📝 测试数据" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+                echo "- 🔄 持续集成" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+                ;;
+            esac
+            
+            echo "" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+            echo "## 📚 相关链接" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+            echo "- [项目主页](https://github.com/GoSimplicity/AI-CloudOps)" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+            echo "- [部署文档](https://github.com/GoSimplicity/AI-CloudOps#-快速开始-quick-start)" >> "dist/$ENV_DIR/ENVIRONMENT.md"
+          done
+
+      - name: Create compressed source packages
+        run: |
+          cd dist
+          echo "🗜️ 创建压缩包..."
+          
+          # 为每个环境创建zip包
+          for dir in ai-cloudops-*; do
+            if [ -d "$dir" ]; then
+              echo "压缩 $dir ..."
+              zip -r "${dir}.zip" "$dir" -x "*.DS_Store" "*/\.git/*"
+              echo "✅ 创建完成: ${dir}.zip"
+            fi
+          done
+          
+          # 创建完整源代码包
+          echo "📦 创建完整源代码包..."
+          cd ..
+          zip -r "dist/ai-cloudops-source-complete.zip" . \
+            -x ".git/*" "dist/*" "bin/*" "tmp/*" "logs/*" "data/*" \
+               ".DS_Store" "*.log" "node_modules/*" ".env"
+
+      - name: Generate package info
+        run: |
+          cd dist
+          echo "📊 生成包信息..."
+          
+          # 创建包信息文件
+          cat > packages-info.txt << EOF
+          AI-CloudOps ${{ github.ref_name }} - 源代码包信息
+          ===============================================
+          
+          构建时间: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          Git提交: ${{ github.sha }}
+          发布版本: ${{ github.ref_name }}
+          
+          📦 环境特定包:
+          EOF
+          
+          for zip in ai-cloudops-*.zip; do
+            if [ -f "$zip" ] && [ "$zip" != "ai-cloudops-source-complete.zip" ]; then
+              size=$(ls -lh "$zip" | awk '{print $5}')
+              env=$(echo "$zip" | sed 's/ai-cloudops-\(.*\)\.zip/\1/')
+              echo "  - $zip ($size) - $env 环境" >> packages-info.txt
+            fi
+          done
+          
+          echo "" >> packages-info.txt
+          echo "📦 完整源代码包:" >> packages-info.txt
+          if [ -f "ai-cloudops-source-complete.zip" ]; then
+            size=$(ls -lh "ai-cloudops-source-complete.zip" | awk '{print $5}')
+            echo "  - ai-cloudops-source-complete.zip ($size) - 完整源代码" >> packages-info.txt
+          fi
+          
+          echo "" >> packages-info.txt
+          echo "🔧 使用说明:" >> packages-info.txt
+          echo "1. 下载对应环境的源代码包" >> packages-info.txt
+          echo "2. 解压到目标目录" >> packages-info.txt
+          echo "3. 参考 ENVIRONMENT.md 进行环境配置" >> packages-info.txt
+          echo "4. 运行 'go mod download' 安装依赖" >> packages-info.txt
+          echo "5. 配置 .env 环境变量文件" >> packages-info.txt
+          echo "6. 运行 'go run main.go' 启动服务" >> packages-info.txt
+          
+          # 生成校验和
+          echo "" >> packages-info.txt
+          echo "🔐 文件校验和 (SHA256):" >> packages-info.txt
+          sha256sum *.zip >> packages-info.txt
+
+      - name: Extract tag info
+        id: tag_info
+        run: |
+          echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          echo "tag_version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # 获取上一个标签
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | head -2 | tail -1)
+          if [ -z "$PREVIOUS_TAG" ]; then
+            PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+          
+          # 生成变更日志
+          CHANGELOG=$(git log --pretty=format:"- %s (%h)" $PREVIOUS_TAG..HEAD)
+          
+          # 创建发布说明
+          cat > release_notes.md << EOF
+          ## 🚀 AI-CloudOps ${{ steps.tag_info.outputs.tag_name }} - 多环境源代码发布
+          
+          ### 📋 更新内容
+          $CHANGELOG
+          
+          ### 📦 源代码包说明
+          
+          本次发布包含针对不同环境优化的源代码包，请根据您的部署环境选择：
+          
+          #### 🌍 环境特定包
+          - **📦 ai-cloudops-development.zip**: 开发环境 - 包含调试配置和开发工具
+          - **📦 ai-cloudops-production.zip**: 生产环境 - 优化配置，安全强化
+          - **📦 ai-cloudops-staging.zip**: 预发布环境 - 适用于集成测试
+          - **📦 ai-cloudops-test.zip**: 测试环境 - 包含测试配置和数据
+          - **📦 ai-cloudops-source-complete.zip**: 完整源代码包 - 包含所有配置文件
+          
+          #### 🔧 快速部署
+          
+          1. **下载源代码包**
+             \`\`\`bash
+             # 下载对应环境的包
+             wget https://github.com/GoSimplicity/AI-CloudOps/releases/download/${{ steps.tag_info.outputs.tag_name }}/ai-cloudops-production.zip
+             \`\`\`
+          
+          2. **解压并配置**
+             \`\`\`bash
+             unzip ai-cloudops-production.zip
+             cd ai-cloudops-production
+             
+             # 查看环境说明
+             cat ENVIRONMENT.md
+             \`\`\`
+          
+          3. **安装依赖**
+             \`\`\`bash
+             go mod download
+             \`\`\`
+          
+          4. **配置环境变量**
+             \`\`\`bash
+             cp env.example .env
+             # 根据环境修改 .env 文件
+             \`\`\`
+          
+          5. **启动服务**
+             \`\`\`bash
+             # 直接运行
+             go run main.go
+             
+             # 或构建后运行
+             go build -o ai-cloudops main.go
+             ./ai-cloudops
+             
+             # 或使用Docker
+             docker-compose up -d
+             \`\`\`
+          
+          ### ✨ 环境特性对比
+          
+          | 环境 | 日志级别 | 性能优化 | 调试支持 | 监控集成 | 适用场景 |
+          |------|---------|---------|---------|---------|---------|
+          | Development | Debug | 关闭 | ✅ | 基础 | 本地开发 |
+          | Test | Info | 关闭 | ✅ | 完整 | 自动化测试 |
+          | Staging | Warn | 开启 | 部分 | 完整 | 集成测试 |
+          | Production | Error | 开启 | 关闭 | 完整 | 生产部署 |
+          
+          ### 📊 包信息
+          
+          每个环境包都包含：
+          - ✅ 完整源代码
+          - ✅ 环境特定配置文件
+          - ✅ 部署说明文档 (ENVIRONMENT.md)
+          - ✅ 依赖管理文件 (go.mod/go.sum)
+          - ✅ Docker 配置文件
+          
+          ### ✅ 文件校验
+          
+          下载 \`packages-info.txt\` 查看包详情和校验和信息。
+          
+          ### 📚 相关文档
+          
+          - [📖 项目主页](https://github.com/GoSimplicity/AI-CloudOps)
+          - [🚀 快速开始](https://github.com/GoSimplicity/AI-CloudOps#-快速开始-quick-start)
+          - [🏗️ 部署指南](https://github.com/GoSimplicity/AI-CloudOps/wiki)
+          - [❓ 问题反馈](https://github.com/GoSimplicity/AI-CloudOps/issues)
+          
+          ### 🔍 故障排查
+          
+          如遇到问题，请：
+          1. 查看对应环境的 ENVIRONMENT.md 文档
+          2. 检查 .env 环境变量配置
+          3. 确认 Go 版本 >= 1.24.2
+          4. 查看项目 Issues 或提交新问题
+          
+          ---
+          
+          💡 **提示**: 首次部署推荐使用 development 环境包进行测试，确认无误后再部署 production 环境包。
+          EOF
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag_info.outputs.tag_name }}
+          name: AI-CloudOps ${{ steps.tag_info.outputs.tag_name }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          files: |
+            dist/*.zip
+            dist/packages-info.txt
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release Summary
+        run: |
+          echo "🎉 Release ${{ steps.tag_info.outputs.tag_name }} 创建成功!"
+          echo ""
+          echo "📦 发布的源代码包:"
+          cd dist
+          for zip in *.zip; do
+            if [ -f "$zip" ]; then
+              size=$(ls -lh "$zip" | awk '{print $5}')
+              echo "  ✅ $zip ($size)"
+            fi
+          done
+          echo ""
+          echo "📊 包详情: packages-info.txt"
+          echo "🔗 发布页面: https://github.com/GoSimplicity/AI-CloudOps/releases/tag/${{ steps.tag_info.outputs.tag_name }}"
