@@ -58,31 +58,14 @@ jobs:
       - name: Generate version tag
         id: version
         run: |
-          # 获取最新tag，如果没有则从v1.0.0开始
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          echo "Latest tag: $LATEST_TAG"
+          # 基于时间戳和commit创建唯一版本号
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          SHORT_SHA=${GITHUB_SHA:0:7}
+          NEW_TAG="v1.0.${TIMESTAMP}"
           
-          # 提取版本号并递增
-          if [[ $LATEST_TAG =~ v([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
-            MAJOR=${BASH_REMATCH[1]}
-            MINOR=${BASH_REMATCH[2]}
-            PATCH=${BASH_REMATCH[3]}
-            NEW_PATCH=$((PATCH + 1))
-            NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
-          else
-            NEW_TAG="v1.0.0"
-          fi
-          
-          echo "New tag: $NEW_TAG"
+          echo "Generated tag: $NEW_TAG"
           echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
           echo "version=${NEW_TAG#v}" >> $GITHUB_OUTPUT
-
-      - name: Create and push tag
-        run: |
-          git config user.name "GitHub Action"
-          git config user.email "action@github.com"
-          git tag ${{ steps.version.outputs.tag }}
-          git push origin ${{ steps.version.outputs.tag }}
 
       - name: Build release binaries
         run: |
@@ -133,26 +116,22 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          echo "📝 Generating changelog..."
-          PREVIOUS_TAG=$(git tag --sort=-version:refname | head -2 | tail -1)
-          if [ -z "$PREVIOUS_TAG" ]; then
-            CHANGELOG="Initial release"
-          else
-            CHANGELOG=$(git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD)
-          fi
+          echo "📝 Generating changelog from recent commits..."
+          # 获取最近5个commit作为changelog
+          CHANGELOG=$(git log --oneline -5 --pretty=format:"- %s (%h)")
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: "AI-CloudOps ${{ steps.version.outputs.tag }}"
           body: |
             ## 🚀 AI-CloudOps ${{ steps.version.outputs.tag }} - 自动发布
             
-            ### 📋 更新内容
+            ### 📋 最近更新
             ${{ steps.changelog.outputs.changelog }}
             
             ### 📦 下载说明
@@ -174,15 +153,14 @@ jobs:
             2. 给文件执行权限：`chmod +x ai-cloudops-*`  
             3. 直接运行：`./ai-cloudops-linux-amd64`
             
-            或下载源码包进行自定义配置和构建。
-            
             ---
             
-            **构建时间**: ${{ github.event.head_commit.timestamp }}
+            **构建时间**: $(date -u)
             **提交**: ${{ github.sha }}
           draft: false
           prerelease: false
           files: |
             dist/*
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
