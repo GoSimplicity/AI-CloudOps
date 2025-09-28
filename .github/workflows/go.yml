@@ -71,51 +71,56 @@ jobs:
           echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
           echo "version=${NEW_TAG#v}" >> $GITHUB_OUTPUT
 
-      - name: Build release binaries
+      - name: Prepare release directory
         run: |
           mkdir -p dist
-          
-          # 构建不同平台的二进制文件
-          echo "🔨 Building for Linux AMD64..."
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/ai-cloudops-linux-amd64 main.go
-          
-          echo "🔨 Building for Linux ARM64..."
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/ai-cloudops-linux-arm64 main.go
-          
-          echo "🔨 Building for MacOS AMD64..."
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/ai-cloudops-darwin-amd64 main.go
-          
-          echo "🔨 Building for MacOS ARM64..."
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/ai-cloudops-darwin-arm64 main.go
-          
-          echo "🔨 Building for Windows AMD64..."
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dist/ai-cloudops-windows-amd64.exe main.go
+          echo "📦 Preparing source code packages..."
 
       - name: Create source packages
         run: |
           echo "📦 Creating source packages..."
           
-          # 创建完整源码包
+          # 1. 完整源码包（ZIP格式）- 包含所有开发文件
+          echo "Creating full source package (ZIP)..."
           zip -r "dist/ai-cloudops-${{ steps.version.outputs.version }}-source.zip" . \
             -x ".git/*" "dist/*" "*.log" "node_modules/*" ".DS_Store" \
-               "logs/*" "data/*" "tmp/*" ".env"
+               "logs/*" "data/*" "tmp/*" ".env" "bin/*"
           
-          # 创建生产环境包
-          mkdir -p ai-cloudops-production
-          rsync -av --exclude='.git' --exclude='dist' --exclude='logs' \
-                    --exclude='data' --exclude='tmp' --exclude='*.log' \
-                    --exclude='.DS_Store' --exclude='node_modules' \
-                    --exclude='.env' . ai-cloudops-production/
+          # 2. 完整源码包（TAR.GZ格式）- 兼容性更好
+          echo "Creating full source package (TAR.GZ)..."
+          tar --exclude='.git' --exclude='dist' --exclude='*.log' \
+              --exclude='node_modules' --exclude='.DS_Store' \
+              --exclude='logs' --exclude='data' --exclude='tmp' \
+              --exclude='.env' --exclude='bin' \
+              -czf "dist/ai-cloudops-${{ steps.version.outputs.version }}-source.tar.gz" .
           
-          # 使用生产配置
-          if [ -f "config/config.production.yaml" ]; then
-            cp config/config.production.yaml ai-cloudops-production/config/config.yaml
-          fi
+          # 3. 生产环境源码包（去除开发文件）
+          echo "Creating production source package..."
+          zip -r "dist/ai-cloudops-${{ steps.version.outputs.version }}-production.zip" . \
+            -x ".git/*" "dist/*" "*.log" "node_modules/*" ".DS_Store" \
+               "logs/*" "data/*" "tmp/*" ".env" "bin/*" \
+               "*.md" "examples/*" "docs/*" "image/*" \
+               ".github/*" "scripts/*" "mock/*" "tools/*" \
+               "LICENSE" ".gitignore"
           
-          zip -r "dist/ai-cloudops-${{ steps.version.outputs.version }}-production.zip" ai-cloudops-production
-          rm -rf ai-cloudops-production
+          # 4. 轻量级部署包（仅核心运行文件）
+          echo "Creating lightweight deployment package..."
+          tar --exclude='.git' --exclude='dist' --exclude='*.log' \
+              --exclude='node_modules' --exclude='.DS_Store' \
+              --exclude='logs' --exclude='data' --exclude='tmp' \
+              --exclude='.env' --exclude='bin' \
+              --exclude='*.md' --exclude='examples' --exclude='docs' \
+              --exclude='image' --exclude='.github' --exclude='scripts' \
+              --exclude='mock' --exclude='tools' --exclude='LICENSE' \
+              --exclude='.gitignore' \
+              -czf "dist/ai-cloudops-${{ steps.version.outputs.version }}-deploy.tar.gz" .
           
-          echo "✅ Packages created"
+          # 显示创建的包信息
+          echo "✅ Created packages:"
+          ls -lh dist/
+          
+          echo "📊 Package sizes:"
+          du -h dist/*
 
       - name: Generate changelog
         id: changelog
@@ -133,38 +138,70 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: "AI-CloudOps ${{ steps.version.outputs.tag }}"
           body: |
-            ## 🚀 AI-CloudOps ${{ steps.version.outputs.tag }} - 自动发布
+            ## 📦 AI-CloudOps ${{ steps.version.outputs.tag }} - 源码发布
             
             ### 📋 最近更新
             ${{ steps.changelog.outputs.changelog }}
             
-            ### 📦 下载说明
+            ### 📥 可用下载
             
-            **二进制文件：**
-            - `ai-cloudops-linux-amd64` - Linux x86_64
-            - `ai-cloudops-linux-arm64` - Linux ARM64  
-            - `ai-cloudops-darwin-amd64` - macOS Intel
-            - `ai-cloudops-darwin-arm64` - macOS Apple Silicon
-            - `ai-cloudops-windows-amd64.exe` - Windows x64
+            **源码包（推荐下载）：**
+            - `ai-cloudops-${{ steps.version.outputs.version }}-source.zip` - 完整源码包（ZIP格式，包含所有开发文件）
+            - `ai-cloudops-${{ steps.version.outputs.version }}-source.tar.gz` - 完整源码包（TAR.GZ格式，Linux/macOS推荐）
+            - `ai-cloudops-${{ steps.version.outputs.version }}-production.zip` - 生产环境源码包（去除开发文件，体积更小）
+            - `ai-cloudops-${{ steps.version.outputs.version }}-deploy.tar.gz` - 轻量级部署包（仅核心运行文件）
             
-            **源码包：**
-            - `ai-cloudops-${{ steps.version.outputs.version }}-source.zip` - 完整源码
-            - `ai-cloudops-${{ steps.version.outputs.version }}-production.zip` - 生产环境优化版
+            ### 🚀 快速开始
             
-            ### 🔧 快速使用
+            **方式一：从源码构建**
+            ```bash
+            # 下载完整源码包
+            wget https://github.com/GoSimplicity/AI-CloudOps/releases/download/${{ steps.version.outputs.tag }}/ai-cloudops-${{ steps.version.outputs.version }}-source.tar.gz
             
-            1. 下载对应平台的二进制文件
-            2. 给文件执行权限：`chmod +x ai-cloudops-*`  
-            3. 直接运行：`./ai-cloudops-linux-amd64`
+            # 解压并进入目录
+            tar -xzf ai-cloudops-${{ steps.version.outputs.version }}-source.tar.gz
+            cd AI-CloudOps-backend
+            
+            # 安装依赖并构建
+            go mod download
+            go build -ldflags="-s -w" -o ai-cloudops main.go
+            
+            # 启动服务
+            ./ai-cloudops
+            ```
+            
+            **方式二：Docker快速部署**
+            ```bash
+            # 解压源码后
+            docker build -t ai-cloudops:${{ steps.version.outputs.version }} .
+            docker-compose up -d
+            ```
+            
+            **方式三：Kubernetes部署**
+            ```bash
+            # 使用提供的K8s配置
+            kubectl apply -f deploy/kubernetes/
+            ```
+            
+            ### 📋 系统要求
+            - **Go**: 1.24.6 或更高版本
+            - **Docker**: 20.10+ （可选）
+            - **Kubernetes**: 1.20+ （生产环境）
+            
+            ### 🔧 配置文件
+            - 开发环境：`config/config.development.yaml`
+            - 生产环境：`config/config.production.yaml`
             
             ---
             
-            **构建时间**: $(date -u)
-            **提交**: ${{ github.sha }}
+            **⏰ 发布时间**: $(date -u)  
+            **🔗 提交**: ${{ github.sha }}  
+            **📊 Go版本**: ${{ env.GO_VERSION }}
           draft: false
           prerelease: false
           files: |
-            dist/*
+            dist/*.zip
+            dist/*.tar.gz
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
