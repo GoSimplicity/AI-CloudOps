@@ -35,7 +35,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/yaml"
 )
 
@@ -364,16 +363,3 @@ func getStatefulSetStatusString(status model.K8sStatefulSetStatus) string {
 }
 
 // GetStatefulSetResourceUsage 计算StatefulSet资源使用情况
-
-// parseIntOrPercent 解析整数或百分比字符串
-func parseIntOrPercent(value string) *intstr.IntOrString {
-	if strings.HasSuffix(value, "%") {
-		return &intstr.IntOrString{
-			Type:   intstr.String,
-			StrVal: value,
-		}
-	}
-
-	intVal := intstr.FromString(value)
-	return &intVal
-}

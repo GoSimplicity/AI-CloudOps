@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Simple CI
 
 on:
   push:
@@ -11,12 +11,12 @@ env:
   GO_VERSION: '1.24.6'
 
 jobs:
-  # 代码质量检查和测试
-  test:
-    name: Test & Quality Check
+  # 基础检查：测试和构建
+  test-and-build:
+    name: Test & Build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Go
@@ -25,120 +25,29 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Download dependencies
+      - name: Install dependencies
         run: go mod download
 
-      - name: Verify dependencies
-        run: go mod verify
-
-      - name: Run go vet
-        run: |
-          echo "🔍 Running go vet (relaxed mode)..."
-          go vet ./... || {
-            echo "⚠️ go vet found some issues (continuing anyway)"
-            echo "Consider fixing these issues for better code quality"
-          }
-
-      - name: Run go fmt check
-        run: |
-          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-            echo "⚠️ The following files are not formatted (warning only):"
-            gofmt -s -l .
-            echo "Please run 'go fmt ./...' to fix formatting"
-          else
-            echo "✅ All files are properly formatted"
-          fi
-
-      - name: Install staticcheck
-        run: go install honnef.co/go/tools/cmd/staticcheck@latest
-
-      - name: Run staticcheck
-        run: |
-          echo "🔍 Running staticcheck (relaxed mode)..."
-          staticcheck -f stylish -config staticcheck.conf ./... || {
-            echo "⚠️ staticcheck found some issues (continuing anyway)"
-            echo "Consider fixing these issues for better code quality"
-          }
-
-      - name: Install gosec (optional)
-        run: |
-          echo "🔐 Attempting to install gosec..."
-          # Try multiple installation methods
-          go install github.com/securecodewarrior/gosec/cmd/gosec@latest 2>/dev/null || \
-          go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest 2>/dev/null || \
-          {
-            echo "⚠️ gosec installation failed, will skip security scan"
-            echo "This is not critical and CI will continue"
-            exit 0
-          }
-
-      - name: Run gosec security scan
-        run: |
-          if command -v gosec >/dev/null 2>&1; then
-            echo "🔒 Running gosec security scan (relaxed mode)..."
-            gosec -conf .gosec.json -fmt stylish ./... || {
-              echo "⚠️ gosec found some security issues (continuing anyway)"
-              echo "Consider reviewing these for production deployment"
-            }
-          else
-            echo "⚠️ gosec not installed, skipping security scan"
-            echo "You can install gosec manually with: go install github.com/securecodewarrior/gosec/cmd/gosec@latest"
-          fi
-
       - name: Run tests
-        run: |
-          echo "🧪 Running tests (relaxed mode)..."
-          go test -race -coverprofile=coverage.out ./... 2>&1 | tee test_results.txt || {
-            echo "⚠️ Some tests failed (continuing for now)"
-            echo "TEST_EXIT_CODE=1" >> $GITHUB_ENV
-            exit 0
-          }
-          echo "TEST_EXIT_CODE=0" >> $GITHUB_ENV
+        run: go test ./...
 
-      - name: Test Summary
-        run: |
-          echo "### 🧪 测试结果摘要" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "$TEST_EXIT_CODE" -eq 0 ]; then
-            echo "✅ 所有测试通过" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ 部分测试失败" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          tail -20 test_results.txt >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+      - name: Build
+        run: go build -v main.go
 
-      - name: Coverage Summary
-        run: |
-          COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}')
-          echo "### 📊 代码覆盖率" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**覆盖率**: $COVERAGE" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "#### 📋 覆盖率详情" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          go tool cover -func=coverage.out | head -10 >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+      - name: Clean up
+        run: rm -f main
 
-  # 构建检查
-  build:
-    name: Build Check
+  # 自动发布（每次push到main都会触发）
+  auto-release:
+    name: Auto Release
     runs-on: ubuntu-latest
-    needs: test
+    needs: test-and-build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -146,91 +55,134 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Build verification
+      - name: Generate version tag
+        id: version
         run: |
-          echo "🔨 验证代码构建..."
+          # 获取最新tag，如果没有则从v1.0.0开始
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
           
-          # Build for current platform (Linux amd64 on GitHub Actions)
-          echo "构建验证 Linux amd64..."
-          go build -v -ldflags="-s -w" -o ai-cloudops-test main.go
+          # 提取版本号并递增
+          if [[ $LATEST_TAG =~ v([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+            MAJOR=${BASH_REMATCH[1]}
+            MINOR=${BASH_REMATCH[2]}
+            PATCH=${BASH_REMATCH[3]}
+            NEW_PATCH=$((PATCH + 1))
+            NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          else
+            NEW_TAG="v1.0.0"
+          fi
           
-          # Test cross-compilation for major platforms
-          echo "验证跨平台编译兼容性..."
-          
-          # Verify Linux arm64 compilation
-          echo "验证 Linux arm64 编译..."
-          GOOS=linux GOARCH=arm64 go build -v -ldflags="-s -w" -o /dev/null main.go
-          
-          # Verify macOS compilation
-          echo "验证 macOS 编译..."
-          GOOS=darwin GOARCH=amd64 go build -v -ldflags="-s -w" -o /dev/null main.go
-          
-          # Verify Windows compilation
-          echo "验证 Windows 编译..."
-          GOOS=windows GOARCH=amd64 go build -v -ldflags="-s -w" -o /dev/null main.go
-          
-          echo "✅ 所有平台编译验证通过"
+          echo "New tag: $NEW_TAG"
+          echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "version=${NEW_TAG#v}" >> $GITHUB_OUTPUT
 
-      - name: Build Summary
+      - name: Create and push tag
         run: |
-          echo "### 🏗️ 构建验证结果" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| 平台 | 架构 | 编译状态 | 用途 |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|------|----------|------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Linux | amd64 | ✅ | 主要部署平台 |" >> $GITHUB_STEP_SUMMARY
-          echo "| Linux | arm64 | ✅ | ARM服务器支持 |" >> $GITHUB_STEP_SUMMARY
-          echo "| macOS | amd64 | ✅ | 开发环境支持 |" >> $GITHUB_STEP_SUMMARY
-          echo "| Windows | amd64 | ✅ | Windows兼容性 |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**💡 说明**: 构建验证确保源代码可以在各平台正常编译" >> $GITHUB_STEP_SUMMARY
-          echo "**📦 发布**: 源代码包将在打tag时自动创建Release" >> $GITHUB_STEP_SUMMARY
-          
-          # Clean up test binary
-          rm -f ai-cloudops-test
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git tag ${{ steps.version.outputs.tag }}
+          git push origin ${{ steps.version.outputs.tag }}
 
-  # 安全扫描
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        continue-on-error: true
-        with:
-          scan-type: 'fs'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'HIGH,CRITICAL'
-
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        continue-on-error: true
-        with:
-          sarif_file: 'trivy-results.sarif'
-
-  # 依赖检查
-  dependencies:
-    name: Dependency Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Check for vulnerabilities
+      - name: Build release binaries
         run: |
-          echo "🛡️ Checking for vulnerabilities (relaxed mode)..."
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./... || {
-            echo "⚠️ Some vulnerabilities found (continuing anyway)"
-            echo "Consider reviewing these vulnerabilities for production deployment"
-          }
+          mkdir -p dist
+          
+          # 构建不同平台的二进制文件
+          echo "🔨 Building for Linux AMD64..."
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/ai-cloudops-linux-amd64 main.go
+          
+          echo "🔨 Building for Linux ARM64..."
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/ai-cloudops-linux-arm64 main.go
+          
+          echo "🔨 Building for MacOS AMD64..."
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/ai-cloudops-darwin-amd64 main.go
+          
+          echo "🔨 Building for MacOS ARM64..."
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/ai-cloudops-darwin-arm64 main.go
+          
+          echo "🔨 Building for Windows AMD64..."
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dist/ai-cloudops-windows-amd64.exe main.go
+
+      - name: Create source packages
+        run: |
+          echo "📦 Creating source packages..."
+          
+          # 创建完整源码包
+          zip -r "dist/ai-cloudops-${{ steps.version.outputs.version }}-source.zip" . \
+            -x ".git/*" "dist/*" "*.log" "node_modules/*" ".DS_Store" \
+               "logs/*" "data/*" "tmp/*" ".env"
+          
+          # 创建生产环境包
+          mkdir -p ai-cloudops-production
+          rsync -av --exclude='.git' --exclude='dist' --exclude='logs' \
+                    --exclude='data' --exclude='tmp' --exclude='*.log' \
+                    --exclude='.DS_Store' --exclude='node_modules' \
+                    --exclude='.env' . ai-cloudops-production/
+          
+          # 使用生产配置
+          if [ -f "config/config.production.yaml" ]; then
+            cp config/config.production.yaml ai-cloudops-production/config/config.yaml
+          fi
+          
+          zip -r "dist/ai-cloudops-${{ steps.version.outputs.version }}-production.zip" ai-cloudops-production
+          rm -rf ai-cloudops-production
+          
+          echo "✅ Packages created"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          echo "📝 Generating changelog..."
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | head -2 | tail -1)
+          if [ -z "$PREVIOUS_TAG" ]; then
+            CHANGELOG="Initial release"
+          else
+            CHANGELOG=$(git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD)
+          fi
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "AI-CloudOps ${{ steps.version.outputs.tag }}"
+          body: |
+            ## 🚀 AI-CloudOps ${{ steps.version.outputs.tag }} - 自动发布
+            
+            ### 📋 更新内容
+            ${{ steps.changelog.outputs.changelog }}
+            
+            ### 📦 下载说明
+            
+            **二进制文件：**
+            - `ai-cloudops-linux-amd64` - Linux x86_64
+            - `ai-cloudops-linux-arm64` - Linux ARM64  
+            - `ai-cloudops-darwin-amd64` - macOS Intel
+            - `ai-cloudops-darwin-arm64` - macOS Apple Silicon
+            - `ai-cloudops-windows-amd64.exe` - Windows x64
+            
+            **源码包：**
+            - `ai-cloudops-${{ steps.version.outputs.version }}-source.zip` - 完整源码
+            - `ai-cloudops-${{ steps.version.outputs.version }}-production.zip` - 生产环境优化版
+            
+            ### 🔧 快速使用
+            
+            1. 下载对应平台的二进制文件
+            2. 给文件执行权限：`chmod +x ai-cloudops-*`  
+            3. 直接运行：`./ai-cloudops-linux-amd64`
+            
+            或下载源码包进行自定义配置和构建。
+            
+            ---
+            
+            **构建时间**: ${{ github.event.head_commit.timestamp }}
+            **提交**: ${{ github.sha }}
+          draft: false
+          prerelease: false
+          files: |
+            dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

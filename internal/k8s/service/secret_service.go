@@ -74,7 +74,7 @@ func (s *secretService) GetSecretList(ctx context.Context, req *model.GetSecretL
 
 	// 构建标签选择器
 	labelSelector := ""
-	if req.Labels != nil && len(req.Labels) > 0 {
+	if len(req.Labels) > 0 {
 		var labels []string
 		for k, v := range req.Labels {
 			labels = append(labels, fmt.Sprintf("%s=%s", k, v))

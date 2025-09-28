@@ -71,7 +71,7 @@ func NewHandler(logger *zap.Logger) Handler {
 // Stream 启动SSE流式推送（基于Gin Context）
 func (h *handler) Stream(ctx *gin.Context, producer Producer, config ...*Config) error {
 	if ctx == nil {
-		return fmt.Errorf("Gin Context不能为空")
+		return fmt.Errorf("gin Context不能为空")
 	}
 	if producer == nil {
 		return fmt.Errorf("生产者函数不能为空")
@@ -136,7 +136,7 @@ func (h *handler) StreamWithContext(ctx context.Context, writer io.Writer, produ
 		return fmt.Errorf("上下文不能为空")
 	}
 	if writer == nil {
-		return fmt.Errorf("Writer不能为空")
+		return fmt.Errorf("writer不能为空")
 	}
 	if producer == nil {
 		return fmt.Errorf("生产者函数不能为空")

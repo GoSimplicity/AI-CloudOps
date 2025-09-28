@@ -275,7 +275,7 @@ func (p *Patcher) buildStrategicMergePatchFromOpenAPIV3(original, modified, curr
 		return nil, err
 	}
 	if gvSpec == nil || gvSpec.Components == nil {
-		return nil, fmt.Errorf("OpenAPI V3 Components is nil")
+		return nil, fmt.Errorf("openAPI V3 components is nil")
 	}
 	for _, c := range gvSpec.Components.Schemas {
 		if !gvkMatchesArray(p.Mapping.GroupVersionKind, c.Extensions) {

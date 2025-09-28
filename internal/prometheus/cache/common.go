@@ -136,16 +136,6 @@ func validateInstanceIPs(ips []string) error {
 	return nil
 }
 
-// cleanupInvalidIPs 清理无效的IP配置
-func cleanupInvalidIPs(configMap map[string]string, validIPs map[string]struct{}, logger *zap.Logger) {
-	for ip := range configMap {
-		if _, ok := validIPs[ip]; !ok {
-			delete(configMap, ip)
-			logger.Debug(LogModuleMonitor+"删除无效IP配置", zap.String("ip", ip))
-		}
-	}
-}
-
 // 以下为 Redis Key 构造的辅助函数，统一管理，避免各处硬编码
 
 func buildRedisKeyPrometheusMain(ip string) string {

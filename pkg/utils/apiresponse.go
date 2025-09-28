@@ -28,7 +28,7 @@ package utils
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -243,12 +243,12 @@ func PostWithJsonString(l *zap.Logger, funcName string, timeout int, url string,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body) // 忽略错误，记录原始响应体
+		bodyBytes, _ := io.ReadAll(resp.Body) // 忽略错误，记录原始响应体
 		l.Error(fmt.Sprintf("[PostWithJsonString.StatusCode.notOK][funcName:%s][url:%s][code:%d][resp_body:%s]", funcName, url, resp.StatusCode, string(bodyBytes)))
 		return nil, fmt.Errorf("server returned HTTP status %s", resp.Status)
 	}
 
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		l.Error(fmt.Sprintf("[PostWithJsonString.ReadBody.error][funcName:%s][url:%s][err:%v]", funcName, url, err))
 		return nil, err
@@ -288,12 +288,12 @@ func DeleteWithId(l *zap.Logger, funcName string, timeout int, url string, param
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		bodyBytes, _ := io.ReadAll(resp.Body)
 		l.Error(fmt.Sprintf("[DeleteWithId.StatusCode.not2xx.error][funcName:%+v][url:%v][code:%v][resp_body_text:%v]", funcName, url, resp.StatusCode, string(bodyBytes)))
 		return nil, fmt.Errorf("server returned HTTP status %s", resp.Status)
 	}
 
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		l.Error(fmt.Sprintf("[DeleteWithId.readbody.error][funcName:%+v][url:%v][err:%v]", funcName, url, err))
 		return nil, err

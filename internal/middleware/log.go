@@ -27,7 +27,7 @@ package middleware
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 
@@ -64,14 +64,14 @@ func (lm *LogMiddleware) Log() gin.HandlerFunc {
 		// 请求方法
 		method := c.Request.Method
 		// 读取请求体
-		bodyBytes, err := ioutil.ReadAll(c.Request.Body)
+		bodyBytes, err := io.ReadAll(c.Request.Body)
 		if err != nil {
 			lm.l.Error("请求体读取失败", zap.Error(err))
 			c.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}
 		// 由于读取请求体会消耗掉c.Request.Body，所以需要重新设置回上下文
-		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 		al := AccessLog{
 			Path:    path,
 			Method:  method,

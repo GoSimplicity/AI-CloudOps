@@ -84,7 +84,6 @@ func BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node, kubeClie
 		ExternalIP:       externalIP,
 		HostName:         hostname,
 		KubeletVersion:   node.Status.NodeInfo.KubeletVersion,
-		KubeProxyVersion: node.Status.NodeInfo.KubeProxyVersion,
 		ContainerRuntime: node.Status.NodeInfo.ContainerRuntimeVersion,
 		OperatingSystem:  node.Status.NodeInfo.OperatingSystem,
 		Architecture:     node.Status.NodeInfo.Architecture,

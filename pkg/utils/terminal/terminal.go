@@ -1042,9 +1042,7 @@ func buildShellFallbackList(preferredShell string) []string {
 
 	// 5. Alpine Linux 和精简容器特殊路径
 	alpineShells := []string{"/sbin/sh", "/system/bin/sh", "/usr/local/bin/sh"}
-	for _, shell := range alpineShells {
-		fallbackList = append(fallbackList, shell)
-	}
+	fallbackList = append(fallbackList, alpineShells...)
 
 	// 6. BusyBox特殊命令（针对极简容器）
 	busyboxCommands := []string{"busybox sh", "/bin/busybox sh", "/usr/bin/busybox sh"}

@@ -34,8 +34,6 @@ import (
 	"reflect"
 	"runtime"
 	"time"
-
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
 // MapToStringSlice 将 map 转换为 []string，要求偶数个元素，key和值依次排列
@@ -133,23 +131,6 @@ func GetLocalIPs() ([]string, error) {
 	}
 
 	return ips, nil
-}
-
-// buildTextResult 构建标准的文本返回结果
-func buildTextResult(text string) *mcp.CallToolResult {
-	// 检查空字符串
-	if text == "" {
-		text = "{}"
-	}
-
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{
-				Type: "text",
-				Text: text,
-			},
-		},
-	}
 }
 
 // ValidateUniqueResource 验证是否存在相同的资源

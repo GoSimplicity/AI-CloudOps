@@ -807,15 +807,6 @@ func (p *podService) PodFileDownload(ctx *gin.Context, req *model.PodFileDownloa
 	return nil
 }
 
-// buildPortsSpec 构建端口映射
-func (p *podService) buildPortsSpec(ports []model.PodPortForwardPort) []string {
-	specs := make([]string, len(ports))
-	for i, port := range ports {
-		specs[i] = fmt.Sprintf("%d:%d", port.LocalPort, port.RemotePort)
-	}
-	return specs
-}
-
 // CreatePodByYaml 通过YAML创建Pod
 func (p *podService) CreatePodByYaml(ctx context.Context, req *model.CreatePodByYamlReq) error {
 	if req == nil {

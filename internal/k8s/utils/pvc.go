@@ -581,11 +581,7 @@ func ComparePVCs(pvc1, pvc2 *corev1.PersistentVolumeClaim) bool {
 	// 比较存储请求
 	req1 := pvc1.Spec.Resources.Requests[corev1.ResourceStorage]
 	req2 := pvc2.Spec.Resources.Requests[corev1.ResourceStorage]
-	if !req1.Equal(req2) {
-		return false
-	}
-
-	return true
+	return req1.Equal(req2)
 }
 
 // IsPVCExpandable 判断PVC是否支持扩容
