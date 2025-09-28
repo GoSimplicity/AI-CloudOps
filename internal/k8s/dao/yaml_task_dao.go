@@ -35,17 +35,11 @@ import (
 )
 
 type YamlTaskDAO interface {
-	// ListAllYamlTasks 查询所有 YAML 任务
-	ListAllYamlTasks(ctx context.Context) ([]*model.K8sYamlTask, error)
-	// CreateYamlTask 创建 YAML 任务
+	ListAllYamlTasks(ctx context.Context, req *model.YamlTaskListReq) ([]*model.K8sYamlTask, error)
 	CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
-	// UpdateYamlTask 更新 YAML 任务
 	UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
-	// DeleteYamlTask 删除 YAML 任务
 	DeleteYamlTask(ctx context.Context, id int) error
-	// GetYamlTaskByID 根据 ID 查询 YAML 任务
 	GetYamlTaskByID(ctx context.Context, id int) (*model.K8sYamlTask, error)
-	// GetYamlTaskByTemplateID 根据模板 ID 查询 YAML 任务
 	GetYamlTaskByTemplateID(ctx context.Context, templateID int) ([]*model.K8sYamlTask, error)
 }
 
@@ -62,10 +56,41 @@ func NewYamlTaskDAO(db *gorm.DB, logger *zap.Logger) YamlTaskDAO {
 }
 
 // ListAllYamlTasks 查询所有 YAML 任务
-func (y *yamlTaskDAO) ListAllYamlTasks(ctx context.Context) ([]*model.K8sYamlTask, error) {
+func (y *yamlTaskDAO) ListAllYamlTasks(ctx context.Context, req *model.YamlTaskListReq) ([]*model.K8sYamlTask, error) {
 	var tasks []*model.K8sYamlTask
 
-	if err := y.db.WithContext(ctx).Find(&tasks).Error; err != nil {
+	query := y.db.WithContext(ctx)
+
+	// 根据集群ID过滤
+	if req.ClusterID > 0 {
+		query = query.Where("cluster_id = ?", req.ClusterID)
+	}
+
+	// 根据模板ID过滤
+	if req.TemplateID > 0 {
+		query = query.Where("template_id = ?", req.TemplateID)
+	}
+
+	// 根据状态过滤
+	if req.Status != "" {
+		query = query.Where("status = ?", req.Status)
+	}
+
+	// 根据任务名称过滤（模糊匹配）
+	if req.Name != "" {
+		query = query.Where("name LIKE ?", "%"+req.Name+"%")
+	}
+
+	// 分页处理
+	if req.Size > 0 {
+		offset := (req.Page - 1) * req.Size
+		query = query.Offset(offset).Limit(req.Size)
+	}
+
+	// 按创建时间倒序排列
+	query = query.Order("created_at DESC")
+
+	if err := query.Find(&tasks).Error; err != nil {
 		y.logger.Error("ListAllYamlTasks 查询所有Yaml任务失败", zap.Error(err))
 		return nil, err
 	}

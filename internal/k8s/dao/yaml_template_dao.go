@@ -35,7 +35,7 @@ import (
 )
 
 type YamlTemplateDAO interface {
-	ListAllYamlTemplates(ctx context.Context, clusterId int) ([]*model.K8sYamlTemplate, error)
+	ListAllYamlTemplates(ctx context.Context, req *model.YamlTemplateListReq) ([]*model.K8sYamlTemplate, error)
 	CreateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error
 	UpdateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error
 	DeleteYamlTemplate(ctx context.Context, id int, clusterId int) error
@@ -55,10 +55,31 @@ func NewYamlTemplateDAO(db *gorm.DB, l *zap.Logger) YamlTemplateDAO {
 }
 
 // ListAllYamlTemplates 查询所有 YAML 模板
-func (y *yamlTemplateDAO) ListAllYamlTemplates(ctx context.Context, clusterId int) ([]*model.K8sYamlTemplate, error) {
+func (y *yamlTemplateDAO) ListAllYamlTemplates(ctx context.Context, req *model.YamlTemplateListReq) ([]*model.K8sYamlTemplate, error) {
 	var yamls []*model.K8sYamlTemplate
 
-	if err := y.db.WithContext(ctx).Where("cluster_id = ?", clusterId).Find(&yamls).Error; err != nil {
+	query := y.db.WithContext(ctx)
+
+	// 根据集群ID过滤
+	if req.ClusterID > 0 {
+		query = query.Where("cluster_id = ?", req.ClusterID)
+	}
+
+	// 根据模板名称过滤（模糊匹配）
+	if req.Search != "" {
+		query = query.Where("name LIKE ?", "%"+req.Search+"%")
+	}
+
+	// 分页处理
+	if req.Size > 0 {
+		offset := (req.Page - 1) * req.Size
+		query = query.Offset(offset).Limit(req.Size)
+	}
+
+	// 按创建时间倒序排列
+	query = query.Order("created_at DESC")
+
+	if err := query.Find(&yamls).Error; err != nil {
 		y.l.Error("ListAllYamlTemplates 查询所有Yaml模板失败", zap.Error(err))
 		return nil, err
 	}

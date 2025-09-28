@@ -26,8 +26,6 @@
 package api
 
 import (
-	"strconv"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -47,31 +45,29 @@ func NewK8sYamlTemplateHandler(yamlTemplateService service.YamlTemplateService) 
 func (k *K8sYamlTemplateHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/yaml_templates/list", k.GetYamlTemplateList)         // 获取 YAML 模板列表
-		k8sGroup.POST("/yaml_templates/create", k.CreateYamlTemplate)       // 创建新的 YAML 模板
-		k8sGroup.POST("/yaml_templates/check", k.CheckYamlTemplate)         // 检查 YAML 模板是否可用
-		k8sGroup.POST("/yaml_templates/update", k.UpdateYamlTemplate)       // 更新指定 ID 的 YAML 模板
-		k8sGroup.DELETE("/yaml_templates/delete/:id", k.DeleteYamlTemplate) // 删除指定 ID 的 YAML 模板
-		k8sGroup.GET("/yaml_templates/:id/yaml", k.GetYamlTemplateDetail)
+		k8sGroup.GET("/yaml_template/:cluster_id/list", k.GetYamlTemplateList)         // 获取 YAML 模板列表
+		k8sGroup.POST("/yaml_template/:cluster_id/create", k.CreateYamlTemplate)       // 创建新的 YAML 模板
+		k8sGroup.POST("/yaml_template/:cluster_id/check", k.CheckYamlTemplate)         // 检查 YAML 模板是否可用
+		k8sGroup.POST("/yaml_template/:cluster_id/:id/update", k.UpdateYamlTemplate)   // 更新指定 ID 的 YAML 模板
+		k8sGroup.DELETE("/yaml_template/:cluster_id/:id/delete", k.DeleteYamlTemplate) // 删除指定 ID 的 YAML 模板
+		k8sGroup.GET("/yaml_template/:cluster_id/:id/yaml", k.GetYamlTemplateDetail)
 	}
 }
 
 // GetYamlTemplateList 获取 YAML 模板列表
 func (k *K8sYamlTemplateHandler) GetYamlTemplateList(ctx *gin.Context) {
-	clusterId := ctx.Query("cluster_id")
-	if clusterId == "" {
+	var req model.YamlTemplateListReq
+
+	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, "缺少 'cluster_id' 参数")
 		return
 	}
 
-	intClusterId, err := strconv.Atoi(clusterId)
-	if err != nil {
-		utils.BadRequestError(ctx, "'cluster_id' 参数必须为整数")
-		return
-	}
+	req.ClusterID = clusterId
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.yamlTemplateService.GetYamlTemplateList(ctx, intClusterId)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.yamlTemplateService.GetYamlTemplateList(ctx, &req)
 	})
 }
 
@@ -79,17 +75,18 @@ func (k *K8sYamlTemplateHandler) GetYamlTemplateList(ctx *gin.Context) {
 func (k *K8sYamlTemplateHandler) CreateYamlTemplate(ctx *gin.Context) {
 	var req model.YamlTemplateCreateReq
 
+	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, "缺少 'cluster_id' 参数")
+		return
+	}
 	uc := ctx.MustGet("user").(utils.UserClaims)
+
+	req.ClusterID = clusterId
 	req.UserID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		template := &model.K8sYamlTemplate{
-			Name:      req.Name,
-			UserID:    req.UserID,
-			Content:   req.Content,
-			ClusterID: req.ClusterID,
-		}
-		return nil, k.yamlTemplateService.CreateYamlTemplate(ctx, template)
+		return nil, k.yamlTemplateService.CreateYamlTemplate(ctx, &req)
 	})
 }
 
@@ -97,43 +94,49 @@ func (k *K8sYamlTemplateHandler) CreateYamlTemplate(ctx *gin.Context) {
 func (k *K8sYamlTemplateHandler) UpdateYamlTemplate(ctx *gin.Context) {
 	var req model.YamlTemplateUpdateReq
 
+	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, "缺少 'cluster_id' 参数")
+		return
+	}
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.BadRequestError(ctx, "缺少 'id' 参数")
+		return
+	}
 	uc := ctx.MustGet("user").(utils.UserClaims)
+
+	req.ClusterID = clusterId
 	req.UserID = uc.Uid
+	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		template := &model.K8sYamlTemplate{
-			Model:     model.Model{ID: req.ID},
-			Name:      req.Name,
-			UserID:    req.UserID,
-			Content:   req.Content,
-			ClusterID: req.ClusterID,
-		}
-		return nil, k.yamlTemplateService.UpdateYamlTemplate(ctx, template)
+		return nil, k.yamlTemplateService.UpdateYamlTemplate(ctx, &req)
 	})
 }
 
 // DeleteYamlTemplate 删除指定 ID 的 YAML 模板
 func (k *K8sYamlTemplateHandler) DeleteYamlTemplate(ctx *gin.Context) {
+	var req model.YamlTemplateDeleteReq
+
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.BadRequestError(ctx, "缺少 'id' 参数")
 		return
 	}
 
-	clusterId := ctx.Query("cluster_id")
-	if clusterId == "" {
+	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, "缺少 'cluster_id' 参数")
 		return
 	}
 
-	intClusterId, err := strconv.Atoi(clusterId)
-	if err != nil {
-		utils.BadRequestError(ctx, "'cluster_id' 参数必须为整数")
-		return
-	}
+	req.ID = id
+	req.ClusterID = clusterId
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, k.yamlTemplateService.DeleteYamlTemplate(ctx, id, intClusterId)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, k.yamlTemplateService.DeleteYamlTemplate(ctx, &req)
 	})
 }
 
@@ -141,37 +144,39 @@ func (k *K8sYamlTemplateHandler) DeleteYamlTemplate(ctx *gin.Context) {
 func (k *K8sYamlTemplateHandler) CheckYamlTemplate(ctx *gin.Context) {
 	var req model.YamlTemplateCheckReq
 
+	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, "缺少 'cluster_id' 参数")
+		return
+	}
+
+	req.ClusterID = clusterId
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		template := &model.K8sYamlTemplate{
-			Name:      req.Name,
-			Content:   req.Content,
-			ClusterID: req.ClusterID,
-		}
-		return nil, k.yamlTemplateService.CheckYamlTemplate(ctx, template)
+		return nil, k.yamlTemplateService.CheckYamlTemplate(ctx, &req)
 	})
 }
 
 // GetYamlTemplateDetail 获取 YAML 模板详情
 func (k *K8sYamlTemplateHandler) GetYamlTemplateDetail(ctx *gin.Context) {
+	var req model.YamlTemplateDetailReq
+
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.BadRequestError(ctx, "缺少 'id' 参数")
 		return
 	}
 
-	clusterId := ctx.Query("cluster_id")
-	if clusterId == "" {
+	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
 		utils.BadRequestError(ctx, "缺少 'cluster_id' 参数")
 		return
 	}
 
-	intClusterId, err := strconv.Atoi(clusterId)
-	if err != nil {
-		utils.BadRequestError(ctx, "'cluster_id' 参数必须为整数")
-		return
-	}
+	req.ID = id
+	req.ClusterID = clusterId
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return k.yamlTemplateService.GetYamlTemplateDetail(ctx, id, intClusterId)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return k.yamlTemplateService.GetYamlTemplateDetail(ctx, &req)
 	})
 }

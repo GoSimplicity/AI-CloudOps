@@ -56,24 +56,24 @@ func (r *K8sYamlTemplate) TableName() string {
 
 // CreateResourceByYamlReq 通过YAML创建K8s资源的通用请求
 type CreateResourceByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
-	YAML      string `json:"yaml" binding:"required" comment:"YAML内容"`     // YAML内容
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	YAML      string `json:"yaml" binding:"required" comment:"YAML内容"`                       // YAML内容
+	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`                    // 命名空间
 }
 
 // UpdateResourceByYamlReq 通过YAML更新K8s资源的通用请求
 type UpdateResourceByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
-	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`  // 命名空间
-	Name      string `json:"name" binding:"required" comment:"资源名称"`       // 资源名称
-	YAML      string `json:"yaml" binding:"required" comment:"YAML内容"`     // YAML内容
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Namespace string `json:"namespace" binding:"required" comment:"命名空间"`                    // 命名空间
+	Name      string `json:"name" binding:"required" comment:"资源名称"`                         // 资源名称
+	YAML      string `json:"yaml" binding:"required" comment:"YAML内容"`                       // YAML内容
 }
 
 // ApplyResourceByYamlReq 应用YAML到K8s集群的请求
 type ApplyResourceByYamlReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
-	YAML      string `json:"yaml" binding:"required" comment:"YAML内容"`     // YAML内容
-	DryRun    bool   `json:"dry_run" comment:"是否为试运行"`                     // 是否为试运行
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	YAML      string `json:"yaml" binding:"required" comment:"YAML内容"`                       // YAML内容
+	DryRun    bool   `json:"dry_run" comment:"是否为试运行"`                                       // 是否为试运行
 }
 
 // ValidateYamlReq 验证YAML格式的请求
@@ -83,70 +83,71 @@ type ValidateYamlReq struct {
 
 // ConvertToYamlReq 将资源配置转换为YAML的请求
 type ConvertToYamlReq struct {
-	ClusterID int         `json:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
-	Config    interface{} `json:"config" binding:"required" comment:"资源配置信息"`   // 资源配置信息
+	ClusterID int         `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Config    interface{} `json:"config" binding:"required" comment:"资源配置信息"`                     // 资源配置信息
 }
 
 // YamlTemplateCreateReq 创建YAML模板请求
 type YamlTemplateCreateReq struct {
-	Name      string `json:"name" binding:"required,min=1,max=50" comment:"模板名称"` // 模板名称
-	UserID    int    `json:"user_id" comment:"创建者用户ID"`                           // 创建者用户ID（从token中获取）
-	Content   string `json:"content" binding:"required" comment:"YAML模板内容"`       // YAML模板内容
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`        // 集群ID
+	Name      string `json:"name" binding:"required,min=1,max=50" comment:"模板名称"`            // 模板名称
+	UserID    int    `json:"user_id" comment:"创建者用户ID"`                                      // 创建者用户ID（从token中获取）
+	Content   string `json:"content" binding:"required" comment:"YAML模板内容"`                  // YAML模板内容
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
 }
 
 // YamlTemplateUpdateReq 更新YAML模板请求
 type YamlTemplateUpdateReq struct {
-	ID        int    `json:"id" binding:"required" comment:"模板ID"`                // 模板ID
-	Name      string `json:"name" binding:"required,min=1,max=50" comment:"模板名称"` // 模板名称
-	UserID    int    `json:"user_id" comment:"创建者用户ID"`                           // 创建者用户ID（从token中获取）
-	Content   string `json:"content" binding:"required" comment:"YAML模板内容"`       // YAML模板内容
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`        // 集群ID
+	ID        int    `json:"id" binding:"required" comment:"模板ID"`                           // 模板ID
+	Name      string `json:"name" binding:"required,min=1,max=50" comment:"模板名称"`            // 模板名称
+	UserID    int    `json:"user_id" comment:"创建者用户ID"`                                      // 创建者用户ID（从token中获取）
+	Content   string `json:"content" binding:"required" comment:"YAML模板内容"`                  // YAML模板内容
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
 }
 
 // YamlTemplateCheckReq 检查YAML模板请求
 type YamlTemplateCheckReq struct {
-	Name      string `json:"name" binding:"required,min=1,max=50" comment:"模板名称"` // 模板名称
-	Content   string `json:"content" binding:"required" comment:"YAML模板内容"`       // YAML模板内容
-	ClusterID int    `json:"cluster_id" binding:"required" comment:"集群ID"`        // 集群ID
+	Name      string `json:"name" binding:"required,min=1,max=50" comment:"模板名称"`            // 模板名称
+	Content   string `json:"content" binding:"required" comment:"YAML模板内容"`                  // YAML模板内容
+	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
 }
 
 // YamlTemplateListReq 获取YAML模板列表请求
 type YamlTemplateListReq struct {
 	ListReq
-	ClusterID int    `json:"cluster_id" form:"cluster_id" comment:"集群ID"` // 集群ID
-	Name      string `json:"name" form:"name" comment:"模板名称"`             // 模板名称过滤
+	ClusterID int `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
 }
 
 // YamlTemplateDeleteReq 删除YAML模板请求
 type YamlTemplateDeleteReq struct {
-	ID     int `json:"id" binding:"required" comment:"模板ID"` // 模板ID
-	UserID int `json:"user_id" comment:"用户ID"`               // 用户ID
+	ID        int `json:"id" binding:"required" comment:"模板ID"`                           // 模板ID
+	ClusterID int `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	UserID    int `json:"user_id" comment:"用户ID"`                                         // 用户ID
 }
 
 // YamlTaskCreateReq 创建YAML任务请求
 type YamlTaskCreateReq struct {
-	Name       string     `json:"name" binding:"required,min=1,max=50" comment:"任务名称"` // 任务名称
-	UserID     int        `json:"user_id" comment:"创建者用户ID"`                           // 创建者用户ID
-	TemplateID int        `json:"template_id" binding:"required" comment:"模板ID"`       // 模板ID
-	ClusterID  int        `json:"cluster_id" binding:"required" comment:"集群ID"`        // 集群ID
-	Variables  StringList `json:"variables" comment:"YAML变量"`                          // YAML变量
+	Name       string     `json:"name" binding:"required,min=1,max=50" comment:"任务名称"`            // 任务名称
+	UserID     int        `json:"user_id" comment:"创建者用户ID"`                                      // 创建者用户ID
+	TemplateID int        `json:"template_id" binding:"required" comment:"模板ID"`                  // 模板ID
+	ClusterID  int        `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Variables  StringList `json:"variables" comment:"YAML变量"`                                     // YAML变量
 }
 
 // YamlTaskListReq 获取YAML任务列表请求
 type YamlTaskListReq struct {
 	ListReq
-	ClusterID  int    `json:"cluster_id" form:"cluster_id" comment:"集群ID"`   // 集群ID
-	TemplateID int    `json:"template_id" form:"template_id" comment:"模板ID"` // 模板ID
-	Status     string `json:"status" form:"status" comment:"任务状态"`           // 任务状态
-	Name       string `json:"name" form:"name" comment:"任务名称"`               // 任务名称过滤
+	ClusterID  int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	TemplateID int    `json:"template_id" form:"template_id" comment:"模板ID"`                  // 模板ID
+	Status     string `json:"status" form:"status" comment:"任务状态"`                            // 任务状态
+	Name       string `json:"name" form:"name" comment:"任务名称"`                                // 任务名称过滤
 }
 
 // YamlTaskExecuteReq 执行YAML任务请求
 type YamlTaskExecuteReq struct {
-	ID     int  `json:"id" binding:"required" comment:"任务ID"` // 任务ID
-	DryRun bool `json:"dry_run" comment:"是否为试运行"`             // 是否为试运行
-	UserID int  `json:"user_id" comment:"用户ID"`               // 用户ID
+	ID        int  `json:"id" binding:"required" comment:"任务ID"`                           // 任务ID
+	DryRun    bool `json:"dry_run" comment:"是否为试运行"`                                       // 是否为试运行
+	UserID    int  `json:"user_id" comment:"用户ID"`                                         // 用户ID
+	ClusterID int  `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
 }
 
 // YamlTaskUpdateReq 更新YAML任务请求
@@ -155,6 +156,18 @@ type YamlTaskUpdateReq struct {
 	Name       string     `json:"name" binding:"required,min=1,max=255" comment:"YAML任务名称"`
 	UserID     int        `json:"user_id" comment:"创建者用户ID"`
 	TemplateID int        `json:"template_id" comment:"关联的模板ID"`
-	ClusterID  int        `json:"cluster_id" comment:"集群ID"`
+	ClusterID  int        `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
 	Variables  StringList `json:"variables" comment:"yaml变量，格式k=v,k=v"`
+}
+
+// YamlTaskDeleteReq 删除YAML任务请求
+type YamlTaskDeleteReq struct {
+	ID        int `json:"id" binding:"required" comment:"任务ID"`                           // 任务ID
+	ClusterID int `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+}
+
+// YamlTemplateDetailReq 获取YAML模板详情请求
+type YamlTemplateDetailReq struct {
+	ID        int `json:"id" binding:"required" comment:"模板ID"`                           // 模板ID
+	ClusterID int `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
 }

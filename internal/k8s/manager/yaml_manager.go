@@ -32,15 +32,9 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/yaml"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/restmapper"
 )
 
 const (
@@ -51,19 +45,17 @@ const (
 
 // YamlManager YAML模板和任务管理
 type YamlManager interface {
-	GetYamlTemplateList(ctx context.Context, clusterID int) ([]*model.K8sYamlTemplate, error)
+	GetYamlTemplateList(ctx context.Context, req *model.YamlTemplateListReq) ([]*model.K8sYamlTemplate, error)
 	CreateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error
 	CheckYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error
 	UpdateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error
 	DeleteYamlTemplate(ctx context.Context, templateID int, clusterID int) error
-	GetYamlTemplateDetail(ctx context.Context, templateID int, clusterID int) (string, error)
-	GetYamlTaskList(ctx context.Context) ([]*model.K8sYamlTask, error)
+	GetYamlTemplateDetail(ctx context.Context, templateID int, clusterID int) (*model.K8sYamlTemplate, error)
+	GetYamlTaskList(ctx context.Context, req *model.YamlTaskListReq) ([]*model.K8sYamlTask, error)
 	CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
 	UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
 	DeleteYamlTask(ctx context.Context, taskID int) error
 	ApplyYamlTask(ctx context.Context, taskID int) error
-	ValidateYamlContent(ctx context.Context, content string) error
-	ParseYamlTemplate(ctx context.Context, templateContent string, variables []string) (string, error)
 }
 
 type yamlManager struct {
@@ -92,11 +84,11 @@ func NewYamlManager(
 }
 
 // GetYamlTemplateList 获取模板列表
-func (ym *yamlManager) GetYamlTemplateList(ctx context.Context, clusterID int) ([]*model.K8sYamlTemplate, error) {
-	templates, err := ym.yamlTemplateDao.ListAllYamlTemplates(ctx, clusterID)
+func (ym *yamlManager) GetYamlTemplateList(ctx context.Context, req *model.YamlTemplateListReq) ([]*model.K8sYamlTemplate, error) {
+	templates, err := ym.yamlTemplateDao.ListAllYamlTemplates(ctx, req)
 	if err != nil {
 		ym.logger.Error("获取 YAML 模板列表失败",
-			zap.Int("clusterID", clusterID),
+			zap.Int("clusterID", req.ClusterID),
 			zap.Error(err))
 		return nil, fmt.Errorf("获取 YAML 模板列表失败: %w", err)
 	}
@@ -107,7 +99,7 @@ func (ym *yamlManager) GetYamlTemplateList(ctx context.Context, clusterID int) (
 // CreateYamlTemplate 创建模板
 func (ym *yamlManager) CreateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error {
 	// 校验 YAML 格式
-	if err := ym.ValidateYamlContent(ctx, template.Content); err != nil {
+	if err := utils.ValidateYamlContent(template.Content); err != nil {
 		return fmt.Errorf("YAML 格式错误: %w", err)
 	}
 
@@ -139,76 +131,25 @@ func (ym *yamlManager) CheckYamlTemplate(ctx context.Context, template *model.K8
 		return fmt.Errorf("模板内容不能为空")
 	}
 
-	// YAML 格式验证
-	jsonData, err := yaml.ToJSON([]byte(template.Content))
-	if err != nil {
-		return fmt.Errorf("YAML 格式错误: %w", err)
-	}
-
-	// 解析为 Unstructured 对象
-	var obj unstructured.Unstructured
-	if err := obj.UnmarshalJSON(jsonData); err != nil {
-		return fmt.Errorf("JSON 解析错误: %w", err)
-	}
-
-	// 检查必要字段
-	gvk := obj.GroupVersionKind()
-	if gvk.Kind == "" || gvk.Version == "" {
-		return fmt.Errorf("YAML 内容缺少必要的 apiVersion 或 kind 字段")
-	}
-
 	// 获取 Kubernetes 客户端进行验证
 	discoveryClient, err := ym.client.GetDiscoveryClient(template.ClusterID)
 	if err != nil {
 		return fmt.Errorf("获取 discovery client 失败: %w", err)
 	}
 
-	// 构建 REST mapper
-	apiGroupResources, err := restmapper.GetAPIGroupResources(discoveryClient)
-	if err != nil {
-		return fmt.Errorf("获取 API 组资源失败: %w", err)
-	}
-
-	restMapper := restmapper.NewDiscoveryRESTMapper(apiGroupResources)
-
-	// 获取资源映射
-	mapping, err := restMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-	if err != nil {
-		return fmt.Errorf("无法找到对应的资源: %w", err)
-	}
-
-	// 获取动态客户端
 	dynamicClient, err := ym.client.GetDynamicClient(template.ClusterID)
 	if err != nil {
 		return fmt.Errorf("获取动态客户端失败: %w", err)
 	}
 
-	// 构建资源接口
-	var dr dynamic.ResourceInterface
-	if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
-		if obj.GetNamespace() == "" {
-			return fmt.Errorf("命名空间资源缺少 namespace 字段")
-		}
-		dr = dynamicClient.Resource(mapping.Resource).Namespace(obj.GetNamespace())
-	} else {
-		dr = dynamicClient.Resource(mapping.Resource)
-	}
-
-	// 执行 Dry-Run 验证
-	_, err = dr.Create(ctx, &obj, metav1.CreateOptions{
-		DryRun: []string{metav1.DryRunAll},
-	})
-	if err != nil {
-		return fmt.Errorf("YAML 校验失败: %w", err)
-	}
-
-	return nil
+	// 使用工具方法验证YAML
+	return utils.ValidateYamlWithCluster(ctx, discoveryClient, dynamicClient, template.Content)
 }
 
 // UpdateYamlTemplate 更新模板
 func (ym *yamlManager) UpdateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error {
 	// 校验 YAML 格式
-	if err := ym.ValidateYamlContent(ctx, template.Content); err != nil {
+	if err := utils.ValidateYamlContent(template.Content); err != nil {
 		return fmt.Errorf("YAML 格式错误: %w", err)
 	}
 
@@ -263,22 +204,22 @@ func (ym *yamlManager) DeleteYamlTemplate(ctx context.Context, templateID int, c
 }
 
 // GetYamlTemplateDetail 获取模板详情
-func (ym *yamlManager) GetYamlTemplateDetail(ctx context.Context, templateID int, clusterID int) (string, error) {
+func (ym *yamlManager) GetYamlTemplateDetail(ctx context.Context, templateID int, clusterID int) (*model.K8sYamlTemplate, error) {
 	template, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, templateID, clusterID)
 	if err != nil {
 		ym.logger.Error("获取 YAML 模板详情失败",
 			zap.Int("templateID", templateID),
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
-		return "", fmt.Errorf("获取 YAML 模板详情失败: %w", err)
+		return nil, fmt.Errorf("获取 YAML 模板详情失败: %w", err)
 	}
 
-	return template.Content, nil
+	return template, nil
 }
 
 // GetYamlTaskList 获取任务列表
-func (ym *yamlManager) GetYamlTaskList(ctx context.Context) ([]*model.K8sYamlTask, error) {
-	tasks, err := ym.yamlTaskDao.ListAllYamlTasks(ctx)
+func (ym *yamlManager) GetYamlTaskList(ctx context.Context, req *model.YamlTaskListReq) ([]*model.K8sYamlTask, error) {
+	tasks, err := ym.yamlTaskDao.ListAllYamlTasks(ctx, req)
 	if err != nil {
 		ym.logger.Error("获取 YAML 任务列表失败", zap.Error(err))
 		return nil, fmt.Errorf("获取 YAML 任务列表失败: %w", err)
@@ -389,7 +330,7 @@ func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int) error {
 	}
 
 	// 解析模板并替换变量
-	yamlContent, err := ym.ParseYamlTemplate(ctx, template.Content, task.Variables)
+	yamlContent, err := utils.ParseYamlTemplate(template.Content, task.Variables)
 	if err != nil {
 		ym.logger.Error("解析 YAML 模板失败",
 			zap.Int("taskID", taskID),
@@ -400,8 +341,33 @@ func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int) error {
 		return fmt.Errorf("解析 YAML 模板失败: %w", err)
 	}
 
+	// 获取Kubernetes客户端
+	discoveryClient, err := ym.client.GetDiscoveryClient(task.ClusterID)
+	if err != nil {
+		ym.logger.Error("获取 discovery client 失败",
+			zap.Int("taskID", taskID),
+			zap.Int("clusterID", task.ClusterID),
+			zap.Error(err))
+		task.Status = TaskFailed
+		task.ApplyResult = fmt.Sprintf("获取客户端失败: %v", err)
+		ym.yamlTaskDao.UpdateYamlTask(ctx, task)
+		return fmt.Errorf("获取 discovery client 失败: %w", err)
+	}
+
+	dynamicClient, err := ym.client.GetDynamicClient(task.ClusterID)
+	if err != nil {
+		ym.logger.Error("获取 dynamic client 失败",
+			zap.Int("taskID", taskID),
+			zap.Int("clusterID", task.ClusterID),
+			zap.Error(err))
+		task.Status = TaskFailed
+		task.ApplyResult = fmt.Sprintf("获取客户端失败: %v", err)
+		ym.yamlTaskDao.UpdateYamlTask(ctx, task)
+		return fmt.Errorf("获取 dynamic client 失败: %w", err)
+	}
+
 	// 应用 YAML 到集群
-	if err := ym.applyYamlToCluster(ctx, task.ClusterID, yamlContent); err != nil {
+	if err := utils.ApplyYamlToCluster(ctx, discoveryClient, dynamicClient, yamlContent); err != nil {
 		ym.logger.Error("应用 YAML 到集群失败",
 			zap.Int("taskID", taskID),
 			zap.Int("clusterID", task.ClusterID),
@@ -424,91 +390,5 @@ func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int) error {
 	ym.logger.Info("应用 YAML 任务成功",
 		zap.Int("taskID", taskID),
 		zap.String("taskName", task.Name))
-	return nil
-}
-
-// ValidateYamlContent 验证YAML格式
-func (ym *yamlManager) ValidateYamlContent(ctx context.Context, content string) error {
-	if strings.TrimSpace(content) == "" {
-		return fmt.Errorf("YAML 内容不能为空")
-	}
-
-	// 验证 YAML 格式
-	_, err := yaml.ToJSON([]byte(content))
-	if err != nil {
-		return fmt.Errorf("YAML 格式错误: %w", err)
-	}
-
-	return nil
-}
-
-// ParseYamlTemplate 解析模板变量
-func (ym *yamlManager) ParseYamlTemplate(ctx context.Context, templateContent string, variables []string) (string, error) {
-	yamlContent := templateContent
-
-	// 变量替换处理
-	for _, variable := range variables {
-		parts := strings.SplitN(variable, "=", 2)
-		if len(parts) == 2 {
-			key := parts[0]
-			value := parts[1]
-			yamlContent = strings.ReplaceAll(yamlContent, fmt.Sprintf("${%s}", key), value)
-		}
-	}
-
-	return yamlContent, nil
-}
-
-// applyYamlToCluster 应用YAML到集群
-func (ym *yamlManager) applyYamlToCluster(ctx context.Context, clusterID int, yamlContent string) error {
-	// 转换 YAML 为 JSON
-	jsonData, err := yaml.ToJSON([]byte(yamlContent))
-	if err != nil {
-		return fmt.Errorf("YAML 转换 JSON 失败: %w", err)
-	}
-
-	// 解析为 Unstructured 对象
-	obj := &unstructured.Unstructured{}
-	if _, _, err = unstructured.UnstructuredJSONScheme.Decode(jsonData, nil, obj); err != nil {
-		return fmt.Errorf("解析 JSON 失败: %w", err)
-	}
-
-	// 设置默认命名空间
-	if obj.GetNamespace() == "" {
-		obj.SetNamespace("default")
-	}
-
-	// 获取 GVR (GroupVersionResource)
-	gvk := obj.GetObjectKind().GroupVersionKind()
-	gvr := schema.GroupVersionResource{
-		Group:    gvk.Group,
-		Version:  gvk.Version,
-		Resource: strings.ToLower(gvk.Kind) + "s", // 简单的复数化，实际应该更复杂
-	}
-
-	// 获取动态客户端
-	dynamicClient, err := ym.client.GetDynamicClient(clusterID)
-	if err != nil {
-		return fmt.Errorf("获取动态客户端失败: %w", err)
-	}
-
-	// 应用资源到集群
-	var dr dynamic.ResourceInterface
-	if obj.GetNamespace() != "" {
-		dr = dynamicClient.Resource(gvr).Namespace(obj.GetNamespace())
-	} else {
-		dr = dynamicClient.Resource(gvr)
-	}
-
-	// 尝试创建资源
-	_, err = dr.Create(ctx, obj, metav1.CreateOptions{})
-	if err != nil {
-		// 如果创建失败，尝试更新
-		_, updateErr := dr.Update(ctx, obj, metav1.UpdateOptions{})
-		if updateErr != nil {
-			return fmt.Errorf("创建或更新资源失败: create error: %v, update error: %v", err, updateErr)
-		}
-	}
-
 	return nil
 }
