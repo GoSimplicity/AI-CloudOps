@@ -15,7 +15,6 @@ permissions:
   pull-requests: read
 
 jobs:
-  # 基础检查：测试和构建
   test-and-build:
     name: Test & Build
     runs-on: ubuntu-latest
@@ -41,7 +40,6 @@ jobs:
       - name: Clean up
         run: rm -f main
 
-  # 自动发布（每次push到main都会触发）
   auto-release:
     name: Auto Release
     runs-on: ubuntu-latest
@@ -62,98 +60,55 @@ jobs:
       - name: Generate version tag
         id: version
         run: |
-          # 获取最新的标签
           LATEST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
           
           if [ -z "$LATEST_TAG" ]; then
-            # 如果没有标签，从v0.0.1开始
             NEW_TAG="v0.0.1"
-            echo "No existing tags found, starting with $NEW_TAG"
           else
-            echo "Latest tag found: $LATEST_TAG"
-            
-            # 解析版本号
             VERSION_NUMBER=$(echo $LATEST_TAG | sed 's/^v//')
             MAJOR=$(echo $VERSION_NUMBER | cut -d. -f1)
             MINOR=$(echo $VERSION_NUMBER | cut -d. -f2)
             PATCH=$(echo $VERSION_NUMBER | cut -d. -f3)
-            
-            # 递增补丁版本号
             NEW_PATCH=$((PATCH + 1))
             NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
-            
-            echo "Incremented to: $NEW_TAG"
           fi
           
-          echo "Generated tag: $NEW_TAG"
           echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
           echo "version=${NEW_TAG#v}" >> $GITHUB_OUTPUT
 
       - name: Create and push new tag
         run: |
-          echo "Creating and pushing tag: ${{ steps.version.outputs.tag }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ steps.version.outputs.tag }}" -m "Auto-generated release ${{ steps.version.outputs.tag }}"
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
           git push origin "${{ steps.version.outputs.tag }}"
-          echo "✅ Tag ${{ steps.version.outputs.tag }} created and pushed successfully"
 
       - name: Prepare release directory
         run: |
           mkdir -p dist
-          echo "📦 Preparing source code packages..."
 
       - name: Create source packages
         run: |
-          echo "📦 Creating source packages..."
-          
-          # 1. 完整源码包（ZIP格式）- 包含所有开发文件
-          echo "Creating full source package (ZIP)..."
           zip -r "dist/ai-cloudops-${{ steps.version.outputs.version }}-source.zip" . \
             -x ".git/*" "dist/*" "*.log" "node_modules/*" ".DS_Store" \
                "logs/*" "data/*" "tmp/*" ".env" "bin/*"
           
-          # 2. 完整源码包（TAR.GZ格式）- 兼容性更好
-          echo "Creating full source package (TAR.GZ)..."
           tar --exclude='.git' --exclude='dist' --exclude='*.log' \
               --exclude='node_modules' --exclude='.DS_Store' \
               --exclude='logs' --exclude='data' --exclude='tmp' \
               --exclude='.env' --exclude='bin' \
               -czf "dist/ai-cloudops-${{ steps.version.outputs.version }}-source.tar.gz" .
           
-          # 3. 生产环境源码包（去除开发文件）
-          echo "Creating production source package..."
           zip -r "dist/ai-cloudops-${{ steps.version.outputs.version }}-production.zip" . \
             -x ".git/*" "dist/*" "*.log" "node_modules/*" ".DS_Store" \
                "logs/*" "data/*" "tmp/*" ".env" "bin/*" \
                "*.md" "examples/*" "docs/*" "image/*" \
                ".github/*" "scripts/*" "mock/*" "tools/*" \
                "LICENSE" ".gitignore"
-          
-          # 4. 轻量级部署包（仅核心运行文件）
-          echo "Creating lightweight deployment package..."
-          tar --exclude='.git' --exclude='dist' --exclude='*.log' \
-              --exclude='node_modules' --exclude='.DS_Store' \
-              --exclude='logs' --exclude='data' --exclude='tmp' \
-              --exclude='.env' --exclude='bin' \
-              --exclude='*.md' --exclude='examples' --exclude='docs' \
-              --exclude='image' --exclude='.github' --exclude='scripts' \
-              --exclude='mock' --exclude='tools' --exclude='LICENSE' \
-              --exclude='.gitignore' \
-              -czf "dist/ai-cloudops-${{ steps.version.outputs.version }}-deploy.tar.gz" .
-          
-          # 显示创建的包信息
-          echo "✅ Created packages:"
-          ls -lh dist/
-          
-          echo "📊 Package sizes:"
-          du -h dist/*
 
       - name: Generate changelog
         id: changelog
         run: |
-          echo "📝 Generating changelog from recent commits..."
-          # 获取最近5个commit作为changelog
           CHANGELOG=$(git log --oneline -5 --pretty=format:"- %s (%h)")
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
@@ -165,65 +120,32 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: "AI-CloudOps ${{ steps.version.outputs.tag }}"
           body: |
-            ## 📦 AI-CloudOps ${{ steps.version.outputs.tag }} - 源码发布
+            ## AI-CloudOps ${{ steps.version.outputs.tag }}
             
-            ### 📋 最近更新
+            ### Recent Changes
             ${{ steps.changelog.outputs.changelog }}
             
-            ### 📥 可用下载
+            ### Downloads
+            - `ai-cloudops-${{ steps.version.outputs.version }}-source.zip` - Full source code (ZIP)
+            - `ai-cloudops-${{ steps.version.outputs.version }}-source.tar.gz` - Full source code (TAR.GZ)
+            - `ai-cloudops-${{ steps.version.outputs.version }}-production.zip` - Production ready package
             
-            **源码包（推荐下载）：**
-            - `ai-cloudops-${{ steps.version.outputs.version }}-source.zip` - 完整源码包（ZIP格式，包含所有开发文件）
-            - `ai-cloudops-${{ steps.version.outputs.version }}-source.tar.gz` - 完整源码包（TAR.GZ格式，Linux/macOS推荐）
-            - `ai-cloudops-${{ steps.version.outputs.version }}-production.zip` - 生产环境源码包（去除开发文件，体积更小）
-            - `ai-cloudops-${{ steps.version.outputs.version }}-deploy.tar.gz` - 轻量级部署包（仅核心运行文件）
-            
-            ### 🚀 快速开始
-            
-            **方式一：从源码构建**
+            ### Quick Start
             ```bash
-            # 下载完整源码包
             wget https://github.com/GoSimplicity/AI-CloudOps/releases/download/${{ steps.version.outputs.tag }}/ai-cloudops-${{ steps.version.outputs.version }}-source.tar.gz
-            
-            # 解压并进入目录
             tar -xzf ai-cloudops-${{ steps.version.outputs.version }}-source.tar.gz
             cd AI-CloudOps-backend
-            
-            # 安装依赖并构建
             go mod download
-            go build -ldflags="-s -w" -o ai-cloudops main.go
-            
-            # 启动服务
+            go build -o ai-cloudops main.go
             ./ai-cloudops
             ```
             
-            **方式二：Docker快速部署**
-            ```bash
-            # 解压源码后
-            docker build -t ai-cloudops:${{ steps.version.outputs.version }} .
-            docker-compose up -d
-            ```
-            
-            **方式三：Kubernetes部署**
-            ```bash
-            # 使用提供的K8s配置
-            kubectl apply -f deploy/kubernetes/
-            ```
-            
-            ### 📋 系统要求
-            - **Go**: 1.24.6 或更高版本
-            - **Docker**: 20.10+ （可选）
-            - **Kubernetes**: 1.20+ （生产环境）
-            
-            ### 🔧 配置文件
-            - 开发环境：`config/config.development.yaml`
-            - 生产环境：`config/config.production.yaml`
+            ### Requirements
+            - Go 1.24.6+
+            - Docker 20.10+ (optional)
             
             ---
-            
-            **⏰ 发布时间**: $(date -u)  
-            **🔗 提交**: ${{ github.sha }}  
-            **📊 Go版本**: ${{ env.GO_VERSION }}
+            Build: ${{ github.sha }} | Go: ${{ env.GO_VERSION }}
           draft: false
           prerelease: false
           files: |
