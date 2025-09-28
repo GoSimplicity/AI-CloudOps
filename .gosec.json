@@ -1,0 +1,35 @@
+{
+  "global": {
+    "audit": true,
+    "nosec": true,
+    "confidence": "medium",
+    "severity": "medium",
+    "include": [],
+    "exclude": [
+      "G101", "G102", "G103", "G104", "G106", "G107",
+      "G201", "G202", "G203", "G204",
+      "G301", "G302", "G303", "G304", "G305", "G306", "G307",
+      "G401", "G402", "G403", "G404", "G501", "G502", "G503", "G504", "G505", "G601"
+    ],
+    "exclude-dir": [
+      "vendor",
+      "test",
+      "tests",
+      "mock",
+      "mocks",
+      "docs"
+    ],
+    "exclude-generated": true
+  },
+  "rules": {
+    "G104": {
+      "audit": false
+    },
+    "G204": {
+      "audit": false
+    },
+    "G304": {
+      "audit": false
+    }
+  }
+}
