@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 env:
-  GO_VERSION: '1.24.2'
+  GO_VERSION: '1.24.6'
 
 jobs:
   release:
@@ -321,7 +321,7 @@ jobs:
           如遇到问题，请：
           1. 查看对应环境的 ENVIRONMENT.md 文档
           2. 检查 .env 环境变量配置
-          3. 确认 Go 版本 >= 1.24.2
+          3. 确认 Go 版本 >= 1.24.6
           4. 查看项目 Issues 或提交新问题
           
           ---

@@ -8,7 +8,7 @@ on:
     branches: [main]
 
 env:
-  GO_VERSION: '1.24.2'
+  GO_VERSION: '1.24.6'
 
 jobs:
   # 代码质量检查和测试

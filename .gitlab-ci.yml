@@ -42,7 +42,7 @@ build-frontend:
 
 build-backend:
   stage: build-backend
-  image: golang:1.20-alpine
+  image: golang:1.24.6-alpine
   tags:
     - docker
   cache:
