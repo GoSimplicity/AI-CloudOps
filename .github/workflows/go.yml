@@ -10,6 +10,10 @@ on:
 env:
   GO_VERSION: '1.24.6'
 
+permissions:
+  contents: write
+  pull-requests: read
+
 jobs:
   # 基础检查：测试和构建
   test-and-build:
@@ -164,3 +168,4 @@ jobs:
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+ 
