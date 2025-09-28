@@ -62,14 +62,41 @@ jobs:
       - name: Generate version tag
         id: version
         run: |
-          # 基于时间戳和commit创建唯一版本号
-          TIMESTAMP=$(date +%Y%m%d%H%M%S)
-          SHORT_SHA=${GITHUB_SHA:0:7}
-          NEW_TAG="v1.0.${TIMESTAMP}"
+          # 获取最新的标签
+          LATEST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          
+          if [ -z "$LATEST_TAG" ]; then
+            # 如果没有标签，从v0.0.1开始
+            NEW_TAG="v0.0.1"
+            echo "No existing tags found, starting with $NEW_TAG"
+          else
+            echo "Latest tag found: $LATEST_TAG"
+            
+            # 解析版本号
+            VERSION_NUMBER=$(echo $LATEST_TAG | sed 's/^v//')
+            MAJOR=$(echo $VERSION_NUMBER | cut -d. -f1)
+            MINOR=$(echo $VERSION_NUMBER | cut -d. -f2)
+            PATCH=$(echo $VERSION_NUMBER | cut -d. -f3)
+            
+            # 递增补丁版本号
+            NEW_PATCH=$((PATCH + 1))
+            NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+            
+            echo "Incremented to: $NEW_TAG"
+          fi
           
           echo "Generated tag: $NEW_TAG"
           echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
           echo "version=${NEW_TAG#v}" >> $GITHUB_OUTPUT
+
+      - name: Create and push new tag
+        run: |
+          echo "Creating and pushing tag: ${{ steps.version.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Auto-generated release ${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+          echo "✅ Tag ${{ steps.version.outputs.tag }} created and pushed successfully"
 
       - name: Prepare release directory
         run: |
