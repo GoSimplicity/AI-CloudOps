@@ -1,8 +1,6 @@
 module github.com/GoSimplicity/AI-CloudOps
 
-go 1.24.0
-
-toolchain go1.24.2
+go 1.24.6
 
 require (
 	github.com/casbin/casbin/v2 v2.93.0

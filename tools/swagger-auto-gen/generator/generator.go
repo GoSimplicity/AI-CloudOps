@@ -140,7 +140,6 @@ func (g *SwaggerGenerator) buildPaths(doc *SwaggerDoc) {
 
 		endpoint := g.buildEndpoint(route)
 		doc.Paths[path][method] = endpoint
-
 	}
 }
 
@@ -251,19 +250,19 @@ func (g *SwaggerGenerator) generateParameters(route RouteInfo) []Parameter {
 	bindingInfo := g.analyzeParameterBindings(route.HandlerInfo.FuncDecl.Body)
 
 	// 1. 处理路径参数（URI绑定）
-	for structName, _ := range bindingInfo.URIBindings {
+	for structName := range bindingInfo.URIBindings {
 		uriParams := g.extractURIParametersFromStruct(structName)
 		parameters = append(parameters, uriParams...)
 	}
 
 	// 2. 处理查询参数（Query绑定）
-	for structName, _ := range bindingInfo.QueryBindings {
+	for structName := range bindingInfo.QueryBindings {
 		queryParams := g.extractQueryParametersFromStruct(structName)
 		parameters = append(parameters, queryParams...)
 	}
 
 	// 3. 处理请求体参数（Body绑定）
-	for structName, _ := range bindingInfo.BodyBindings {
+	for structName := range bindingInfo.BodyBindings {
 		parameters = append(parameters, Parameter{
 			Name:        "body",
 			In:          "body",
@@ -602,7 +601,6 @@ func (g *SwaggerGenerator) buildDefinitions(doc *SwaggerDoc) {
 			definition := g.buildDefinition(structInfo)
 			shortName := g.getShortName(name)
 			doc.Definitions[shortName] = definition
-
 		}
 	}
 }
