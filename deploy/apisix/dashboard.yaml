@@ -1,0 +1,39 @@
+# APISIX Dashboard 配置文件
+
+conf:
+  listen:
+    host: 0.0.0.0
+    port: 9000
+  
+  # 允许访问的IP列表 (生产环境应限制)
+  allow_list:
+    - 127.0.0.1
+    - ::1
+    - 172.30.0.0/16  # Docker 网络
+  
+  etcd:
+    endpoints:
+      - http://etcd:2379
+    mtls:
+      key_file: ""
+      cert_file: ""
+      ca_file: ""
+    prefix: /apisix
+    timeout: 30s
+    
+  log:
+    error_log:
+      level: warn
+      file_path: /tmp/logs/error.log
+    access_log:
+      file_path: /tmp/logs/access.log
+      
+  max_cpu: 0
+
+authentication:
+  secret: 
+    secret: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l"  # 使用与项目相同的密钥
+  expire_time: 3600    # Token 过期时间 (秒)
+  users:               # 管理员用户
+    - username: admin
+      password: $2a$10$ohrPF4KAXjAzqVR0FdARDO8hnLqghLgvDvhJwOJ7lV7QO2YlMi5XS  # 密码: admin123 的bcrypt hash

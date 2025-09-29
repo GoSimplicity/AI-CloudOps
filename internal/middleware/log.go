@@ -54,7 +54,6 @@ func NewLogMiddleware(l *zap.Logger) *LogMiddleware {
 	}
 }
 
-// Log 日志中间件
 func (lm *LogMiddleware) Log() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 开始时间

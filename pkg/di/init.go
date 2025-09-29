@@ -29,6 +29,8 @@ import (
 	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/grpc_client"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -82,4 +84,16 @@ func InitTables(db *gorm.DB) error {
 		// 定时任务系统
 		&model.CronJob{},
 	)
+}
+
+// InitGrpcManager 初始化gRPC客户端管理器
+func InitGrpcManager(logger *zap.Logger) *grpc_client.ClientManager {
+	manager, err := grpc_client.NewClientManager(logger)
+	if err != nil {
+		logger.Fatal("Failed to initialize gRPC client manager", zap.Error(err))
+		return nil
+	}
+
+	logger.Info("gRPC client manager initialized successfully")
+	return manager
 }

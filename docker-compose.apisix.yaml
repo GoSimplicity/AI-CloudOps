@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  # APISIX API Gateway
+  apisix:
+    container_name: apisix
+    image: apache/apisix:3.8.0-debian
+    restart: always
+    volumes:
+      - ./deploy/apisix/apisix.yaml:/usr/local/apisix/conf/apisix.yaml:ro
+      - ./deploy/apisix/routes.yaml:/usr/local/apisix/conf/routes.yaml:ro
+      - ./logs/apisix:/var/log/apisix
+    ports:
+      - "80:9080"     # HTTP 端口
+      - "9091:9091"   # Prometheus 指标端口
+      - "9443:9443"   # HTTPS 端口
+    environment:
+      - APISIX_STAND_ALONE=true
+      - TZ=Asia/Shanghai
+    networks:
+      - cloudops_net
+
+networks:
+  cloudops_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16

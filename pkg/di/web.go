@@ -26,6 +26,7 @@
 package di
 
 import (
+	aiopsApi "github.com/GoSimplicity/AI-CloudOps/internal/aiops/api"
 	cronApi "github.com/GoSimplicity/AI-CloudOps/internal/cron/api"
 	k8sApi "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	notAuthHandler "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
@@ -40,6 +41,7 @@ import (
 // InitGinServer 初始化web服务
 func InitGinServer(
 	m []gin.HandlerFunc,
+	aiopsHdl *aiopsApi.AIOpsHandler,
 	userHdl *userApi.UserHandler,
 	authApiHdl *systemApi.ApiHandler,
 	authRoleHdl *systemApi.RoleHandler,
@@ -91,6 +93,7 @@ func InitGinServer(
 ) *gin.Engine {
 	server := gin.Default()
 	server.Use(m...)
+	aiopsHdl.RegisterRoutes(server)
 	userHdl.RegisterRoutes(server)
 	authApiHdl.RegisterRouters(server)
 	authRoleHdl.RegisterRouters(server)

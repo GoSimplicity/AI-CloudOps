@@ -48,6 +48,29 @@ type Handler interface {
 	setRefreshToken(ctx *gin.Context, uid int, username string, ssid string, accountType int8) (string, error)
 }
 
+// ExtractTokenFromContext 从Gin上下文中提取JWT token (用于gRPC调用)
+func ExtractTokenFromContext(ctx *gin.Context) string {
+	// 优先从Authorization header获取
+	if authHeader := ctx.GetHeader("Authorization"); authHeader != "" {
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			return strings.TrimPrefix(authHeader, "Bearer ")
+		}
+		return authHeader
+	}
+
+	// 从query参数获取
+	if token := ctx.Query("token"); token != "" {
+		return token
+	}
+
+	// 从cookie获取
+	if cookie, err := ctx.Cookie("jwt-token"); err == nil && cookie != "" {
+		return cookie
+	}
+
+	return ""
+}
+
 type UserClaims struct {
 	jwt.RegisteredClaims
 	Uid         int

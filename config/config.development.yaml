@@ -51,3 +51,27 @@ notification:
     max_retries: 3
     retry_interval: "5m"
     timeout: "10s"
+
+# gRPC客户端配置
+grpc:
+  aiops:
+    enabled: true
+    address: "localhost:9000"  # AI服务的gRPC端口
+    max_retries: 3
+    retry_interval: "2s"
+    connection_timeout: "10s"
+    request_timeout: "2m"
+    keepalive_time: "30s"
+    keepalive_timeout: "5s"
+    max_message_size: 4194304
+    enable_load_balancing: true
+    pool:
+      min_connections: 1
+      max_connections: 5
+      max_idle_time: "15m"
+      health_check_period: "1m"
+
+# 网关配置
+gateway:
+  enabled: true           # 是否启用网关模式
+  verify_session: true    # 是否验证会话

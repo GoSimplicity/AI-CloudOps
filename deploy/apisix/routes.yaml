@@ -1,0 +1,240 @@
+routes:
+  # ========================================
+  # 静态资源和前端路由
+  # ========================================
+  - id: "frontend"
+    uri: "/*"
+    priority: 1
+    upstream:
+      type: roundrobin
+      nodes:
+        cloudops-web:80: 1
+    plugins:
+      proxy-rewrite:
+        headers:
+          X-Real-IP: "$remote_addr"
+          X-Forwarded-For: "$proxy_add_x_forwarded_for"
+          X-Forwarded-Proto: "$scheme"
+
+  # ========================================
+  # Go 后端 API 路由
+  # ========================================
+  - id: "backend-api"
+    uri: "/api/*"
+    priority: 10
+    upstream:
+      type: roundrobin
+      nodes:
+        cloudops-backend:8889: 1
+      timeout:
+        connect: 30
+        send: 30
+        read: 30
+    plugins:
+      # 自定义网关认证处理
+      serverless-pre-function:
+        phase: "access"
+        functions:
+          - |
+            local core = require("apisix.core")
+            
+            -- 跳过认证的路径
+            local skip_auth_paths = {
+              "/api/user/login",
+              "/api/user/logout", 
+              "/api/user/refresh_token",
+              "/api/user/signup",
+              "/api/not_auth/getBindIps",
+              "/api/not_auth/getTreeNodeBindIps",
+              "/api/v1/health"
+            }
+            
+            local uri = ngx.var.uri
+            for _, path in ipairs(skip_auth_paths) do
+              if uri == path then
+                return
+              end
+            end
+            
+            -- 提取JWT token
+            local auth_header = core.request.header(ctx, "Authorization")
+            local token = ""
+            if auth_header then
+              token = string.match(auth_header, "Bearer%s+(.+)") or auth_header
+            elseif core.request.get_uri_args(ctx)["token"] then
+              token = core.request.get_uri_args(ctx)["token"]
+            end
+            
+            -- 如果有token，通过网关认证头传递给后端
+            if token and token ~= "" then
+              core.request.set_header(ctx, "X-Gateway-Auth", token)
+            end
+            
+      # 请求重写
+      proxy-rewrite:
+        headers:
+          Host: "$host"
+          X-Real-IP: "$remote_addr"
+          X-Forwarded-For: "$proxy_add_x_forwarded_for"
+          X-Forwarded-Proto: "$scheme"
+          
+      # CORS 支持
+      cors:
+        allow_origins: "*"
+        allow_methods: "GET,POST,PUT,DELETE,OPTIONS"
+        allow_headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+        expose_headers: "Content-Length,Content-Range"
+        
+      # 限流配置
+      limit-req:
+        rate: 100
+        burst: 200
+        rejected_code: 429
+
+  - id: "aiops-api"
+    uri: "/api/v1/aiops/*"
+    priority: 15
+    upstream:
+      type: roundrobin
+      nodes:
+        cloudops-backend:8889: 1
+      timeout:
+        connect: 30
+        send: 60
+        read: 120
+    plugins:
+      # JWT 认证
+      jwt-auth:
+        header: "Authorization"
+        query: "token"
+        hide_credentials: false
+        
+      # 请求重写
+      proxy-rewrite:
+        headers:
+          Host: "$host"
+          X-Real-IP: "$remote_addr"
+          X-Forwarded-For: "$proxy_add_x_forwarded_for"
+          X-Forwarded-Proto: "$scheme"
+          
+      # 限流配置 (AI 服务可能需要更宽松的限制)
+      limit-req:
+        rate: 30
+        burst: 60
+        rejected_code: 429
+
+  # ========================================
+  # WebSocket 连接路由
+  # ========================================
+  - id: "websocket-terminal"
+    uri: "/api/tree/local/terminal*"
+    priority: 15
+    upstream:
+      type: roundrobin
+      nodes:
+        cloudops-backend:8889: 1
+    plugins:
+      # WebSocket 支持
+      proxy-rewrite:
+        headers:
+          Host: "$host"
+          X-Real-IP: "$remote_addr"
+          X-Forwarded-For: "$proxy_add_x_forwarded_for"
+          X-Forwarded-Proto: "$scheme"
+          Connection: "Upgrade"
+          Upgrade: "websocket"
+
+  # ========================================
+  # Prometheus 监控路由
+  # ========================================
+  - id: "prometheus-config"
+    uri: "/api/monitor/prometheus_configs/*"
+    priority: 12
+    upstream:
+      type: roundrobin
+      nodes:
+        cloudops-backend:8889: 1
+    plugins:
+      # 基础认证或IP白名单
+      ip-restriction:
+        whitelist: 
+          - "127.0.0.1"
+          - "172.30.0.0/16"  # Docker 内网
+
+  # ========================================
+  # Swagger 文档路由
+  # ========================================
+  - id: "swagger"
+    uri: "/swagger/*"
+    priority: 5
+    upstream:
+      type: roundrobin
+      nodes:
+        cloudops-backend:8889: 1
+    plugins:
+      # 开发环境允许访问
+      ip-restriction:
+        whitelist: 
+          - "127.0.0.1"
+          - "172.30.0.0/16"
+
+# ========================================
+# 上游服务配置
+# ========================================
+upstreams:
+  - id: "cloudops-backend"
+    type: "roundrobin"
+    hash_on: "vars"
+    scheme: "http"
+    nodes:
+      - host: "cloudops-backend"
+        port: 8889
+        weight: 1
+    timeout:
+      connect: 30
+      send: 30
+      read: 30
+    
+  - id: "cloudops-aiops"
+    type: "roundrobin" 
+    hash_on: "vars"
+    scheme: "http"
+    nodes:
+      - host: "cloudops-aiops"
+        port: 8080
+        weight: 1
+    timeout:
+      connect: 60
+      send: 60
+      read: 120
+      
+  - id: "cloudops-web"
+    type: "roundrobin"
+    hash_on: "vars" 
+    scheme: "http"
+    nodes:
+      - host: "cloudops-web"
+        port: 80
+        weight: 1
+    timeout:
+      connect: 30
+      send: 30
+      read: 30
+
+# ========================================
+# 全局规则配置
+# ========================================
+global_rules:
+  - id: "global-cors"
+    plugins:
+      cors:
+        allow_origins: "*"
+        allow_methods: "GET,POST,PUT,DELETE,OPTIONS,PATCH"
+        allow_headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+        expose_headers: "Content-Length,Content-Range"
+        max_age: 3600
+        
+  - id: "global-prometheus"
+    plugins:
+      prometheus:
+        prefer_name: true

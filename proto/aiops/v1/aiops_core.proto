@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package aiops.v1;
+
+option go_package = "github.com/GoSimplicity/AI-CloudOps/proto/aiops/v1;aiopsv1";
+
+import "google/protobuf/timestamp.proto";
+
+service AIOpsService {
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc Chat(ChatRequest) returns (stream ChatResponse);
+  rpc PredictLoad(LoadPredictionRequest) returns (LoadPredictionResponse);
+}
+
+message HealthCheckRequest {
+  string service = 1; // 可选的服务名称
+}
+
+message HealthCheckResponse {
+  string status = 1;  // "healthy", "unhealthy", "degraded"
+  string version = 2; // 版本信息
+  google.protobuf.Timestamp timestamp = 3; // 检查时间
+}
+
+message ChatRequest {
+  string question = 1;   // 用户问题
+  string mode = 2;       // 模式: "rag" 或 "mcp"
+  string session_id = 3; // 会话ID
+  string user_id = 4;    // 用户ID
+}
+
+message ChatResponse {
+  string answer = 1;        // AI回答
+  string session_id = 2;    // 会话ID
+  string status = 3;        // 状态: "success", "error", "partial"
+  string error_message = 4; // 错误信息(如果有)
+  float processing_time = 5; // 处理时间(秒)
+}
+
+message LoadPredictionRequest {
+  string service_name = 1; // 服务名称
+  float current_load = 2;  // 当前负载
+  int32 hours = 3;         // 预测时间窗口(小时)
+}
+
+message LoadPredictionResponse {
+  repeated LoadPrediction predictions = 1; // 预测结果
+  string recommendation = 2;               // 简单建议文本
+}
+
+message LoadPrediction {
+  int32 hour = 1;           // 小时
+  float predicted_load = 2; // 预测负载
+  float confidence = 3;     // 置信度 0-1
+}

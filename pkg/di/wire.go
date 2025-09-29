@@ -28,6 +28,8 @@
 package di
 
 import (
+	aiopsHandler "github.com/GoSimplicity/AI-CloudOps/internal/aiops/api"
+	aiopsService "github.com/GoSimplicity/AI-CloudOps/internal/aiops/service"
 	cron "github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	cronApi "github.com/GoSimplicity/AI-CloudOps/internal/cron/api"
 	cronDao "github.com/GoSimplicity/AI-CloudOps/internal/cron/dao"
@@ -62,6 +64,7 @@ import (
 	workorderHandler "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
 	workorderDao "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	workorderService "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/grpc_client"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/sse"
 	pkgSSH "github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
@@ -80,13 +83,16 @@ type Cmd struct {
 	AsynqClient  *asynq.Client
 	Scheduler    *asynq.Scheduler
 	CronHandlers *cronHandler.CronHandlers
+	GrpcManager  *grpc_client.ClientManager
 }
 
 var HandlerSet = wire.NewSet(
+	aiopsHandler.NewAIOpsHandler,
 	authHandler.NewRoleHandler,
 	authHandler.NewApiHandler,
 	authHandler.NewAuditHandler,
 	authHandler.NewSystemHandler,
+	authHandler.NewInternalHandler,
 	userHandler.NewUserHandler,
 	notAuthHandler.NewNotAuthHandler,
 	k8sHandler.NewK8sNodeHandler,
@@ -136,6 +142,7 @@ var HandlerSet = wire.NewSet(
 )
 
 var ServiceSet = wire.NewSet(
+	aiopsService.NewAIOpsService,
 	k8sService.NewClusterService,
 	k8sService.NewDeploymentService,
 	k8sService.NewNamespaceService,
@@ -297,6 +304,10 @@ var NotificationSet = wire.NewSet(
 	InitNotificationManager,
 )
 
+var GrpcSet = wire.NewSet(
+	InitGrpcManager,
+)
+
 func ProvideCmd() *Cmd {
 	wire.Build(
 		Injector,
@@ -311,6 +322,7 @@ func ProvideCmd() *Cmd {
 		ClientSet,
 		AsynqSet,
 		NotificationSet,
+		GrpcSet,
 	)
 	return &Cmd{}
 }

@@ -1,22 +1,29 @@
 services:
   cloudops-aiops:
     container_name: cloudops-aiops
-    image: crpi-2pkkgf63kx4jzw5d.cn-hangzhou.personal.cr.aliyuncs.com/ai_cloudops/cloudops-aiops:v0.0.4
+    build:
+      context: ./python
+      dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "8080:8080"   # HTTP端口
+      - "9000:9000"   # gRPC端口
     volumes:
-      - ./logs:/app/logs
+      - ./python/logs:/app/logs
+      - ./python/data:/app/data
       - ./deploy/kubernetes/config:/app/deploy/kubernetes/config
     env_file:
-      - .env
+      - python/.env
+    environment:
+      - GRPC_PORT=9000
+      - HTTP_PORT=8080
+      - ENVIRONMENT=docker
     networks:
       - cloudops_net
     restart: always
     depends_on:
-      prometheus:
-        condition: service_started
       redis:
         condition: service_started
+    command: ["python", "/app/start_grpc_server.py"]
 
   cloudops-mcp:
     container_name: cloudops-mcp
@@ -111,16 +118,23 @@ services:
       retries: 5
       start_period: 30s
 
-  nginx:
-    container_name: nginx
-    image: nginx:1.25
-    ports:
-      - "80:80"
+  # APISIX API Gateway
+  apisix:
+    container_name: apisix
+    image: apache/apisix:3.8.0-debian
+    restart: always
     volumes:
-      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/apisix/apisix.yaml:/usr/local/apisix/conf/apisix.yaml:ro
+      - ./deploy/apisix/routes.yaml:/usr/local/apisix/conf/routes.yaml:ro
+      - ./logs/apisix:/var/log/apisix
+    ports:
+      - "80:9080"     # HTTP 端口
+      - "9091:9091"   # Prometheus 指标端口
+      - "9443:9443"   # HTTPS 端口
+    environment:
+      - APISIX_STAND_ALONE=true
     networks:
       - cloudops_net
-    restart: always
     depends_on:
       cloudops-web:
         condition: service_started

@@ -1,0 +1,79 @@
+# APISIX 配置文件
+apisix:
+  node_listen: 9080             # APISIX监听端口
+  enable_ipv6: false           # 是否启用IPv6
+  
+  router:
+    http: radixtree_uri        # HTTP 路由匹配算法
+    ssl: radixtree_sni         # SSL 路由匹配算法
+
+nginx_config:                  # Nginx 配置
+  error_log: "/var/log/apisix/error.log"
+  access_log: "/var/log/apisix/access.log"
+  worker_processes: auto
+  worker_connections: 1024
+
+# 独立模式下不需要etcd配置
+
+plugins:                       # 可用插件列表
+  # 基础插件
+  - real-ip                    # 真实IP获取
+  - client-control             # 客户端控制
+  - proxy-control              # 代理控制
+  - request-id                 # 请求ID
+  - zipkin                     # 链路追踪
+  
+  # 安全插件
+  - key-auth                   # API Key 认证
+  - jwt-auth                   # JWT 认证
+  - basic-auth                 # 基础认证
+  - authz-keycloak            # Keycloak 认证
+  - wolf-rbac                  # 基于角色的访问控制
+  - cors                       # 跨域资源共享
+  
+  # 流量管理
+  - limit-req                  # 请求限流
+  - limit-conn                 # 连接限制
+  - limit-count               # 计数限制
+  
+  # 负载均衡
+  - proxy-cache                # 代理缓存
+  - grpc-transcode            # gRPC转码
+  - serverless-pre-function   # 无服务器预处理函数
+  - serverless-post-function  # 无服务器后处理函数
+  - openid-connect            # OpenID Connect
+  
+  # 可观测性
+  - prometheus                 # Prometheus 指标
+  - node-status               # 节点状态
+  - public-api                # 公共API
+  
+  # 协议转换
+  - grpc-transcode            # gRPC 转码
+  - fault-injection           # 故障注入
+  
+  # 响应处理
+  - response-rewrite          # 响应重写
+  - proxy-rewrite             # 代理重写
+
+# 流数据处理
+stream_plugins:
+  - mqtt-proxy                # MQTT 代理
+  - ip-restriction            # IP 限制
+  - limit-conn                # 连接限制
+
+plugin_attr:
+  prometheus:
+    export_addr:
+      ip: "0.0.0.0"
+      port: 9091
+
+# 使用独立模式，不依赖ETCD
+deployment:
+  role: data_plane
+  role_data_plane:
+    config_provider: yaml
+
+xrpc:
+  protocols:
+    - name: redis

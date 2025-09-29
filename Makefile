@@ -1,6 +1,12 @@
 generate:
 	go generate ./...
 
+# 生成 Protocol Buffer 代码
+gen-proto:
+	@echo "🚀 正在生成 Protocol Buffer 代码..."
+	@bash scripts/gen-proto.sh
+	@echo "✅ Protocol Buffer 代码生成完成！"
+
 # 生成 Swagger API 文档 (传统方式，需要手动注释)
 swagger-manual:
 	@echo "正在生成API文档（传统方式）..."

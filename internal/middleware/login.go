@@ -46,7 +46,6 @@ func NewJWTMiddleware(hdl ijwt.Handler) *JWTMiddleware {
 	}
 }
 
-// CheckLogin 校验JWT
 func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		path := ctx.Request.URL.Path

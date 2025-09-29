@@ -84,6 +84,20 @@ func run() error {
 		}
 	}
 
+	// 启动gRPC客户端管理器
+	if cmd.GrpcManager != nil {
+		if err := cmd.GrpcManager.Start(context.Background()); err != nil {
+			log.Printf("gRPC客户端管理器启动失败: %v", err)
+		} else {
+			log.Printf("gRPC客户端管理器启动成功")
+
+			// 预热连接池
+			if err := cmd.GrpcManager.WarmUp(context.Background()); err != nil {
+				log.Printf("gRPC连接池预热失败: %v", err)
+			}
+		}
+	}
+
 	// 中间件 (依赖注入系统已经配置了CORS，这里只添加gzip)
 	cmd.Server.Use(gzip.Gzip(gzip.BestCompression))
 
@@ -214,6 +228,14 @@ func run() error {
 		// 停止Asynq服务
 		cmd.AsynqServer.Shutdown()
 		cmd.Scheduler.Shutdown()
+	}
+
+	// 停止gRPC客户端管理器
+	if cmd.GrpcManager != nil {
+		log.Println("正在关闭gRPC客户端管理器...")
+		if err := cmd.GrpcManager.Stop(); err != nil {
+			log.Printf("gRPC客户端管理器停止失败: %v", err)
+		}
 	}
 
 	cancel()
