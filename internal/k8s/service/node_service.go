@@ -161,13 +161,12 @@ func (s *nodeService) AddOrUpdateNodeLabel(ctx context.Context, req *model.AddLa
 	}
 
 	// 使用 NodeManager 添加或更新节点标签
-	err := s.nodeManager.AddOrUpdateNodeLabels(ctx, req.ClusterID, req.NodeName, req.Labels, req.Overwrite)
+	err := s.nodeManager.AddOrUpdateNodeLabels(ctx, req.ClusterID, req.NodeName, req.Labels)
 	if err != nil {
 		s.logger.Error("AddOrUpdateNodeLabel: 添加节点标签失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Any("labels", req.Labels))
 		return fmt.Errorf("添加节点标签失败: %w", err)
 	}
 
-	s.logger.Info("AddOrUpdateNodeLabel: 成功添加节点标签", zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Any("labels", req.Labels), zap.Bool("overwrite", req.Overwrite == 1))
 	return nil
 }
 

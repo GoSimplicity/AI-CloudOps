@@ -44,7 +44,7 @@ type NodeManager interface {
 	DrainNode(ctx context.Context, clusterID int, nodeName string, options *utils.DrainOptions) error
 	CordonNode(ctx context.Context, clusterID int, nodeName string) error
 	UncordonNode(ctx context.Context, clusterID int, nodeName string) error
-	AddOrUpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string, overwrite int8) error
+	AddOrUpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string) error
 	DeleteNodeLabels(ctx context.Context, clusterID int, nodeName string, labelKeys []string) error
 	GetNodeTaints(ctx context.Context, clusterID int, nodeName string) ([]*model.NodeTaint, int64, error)
 }
@@ -205,7 +205,8 @@ func (m *nodeManager) UncordonNode(ctx context.Context, clusterID int, nodeName 
 	return nil
 }
 
-func (m *nodeManager) AddOrUpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string, overwrite int8) error {
+// AddOrUpdateNodeLabels 添加或更新节点标签
+func (m *nodeManager) AddOrUpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string) error {
 	if err := utils.ValidateNodeName(nodeName); err != nil {
 		return err
 	}
@@ -225,15 +226,9 @@ func (m *nodeManager) AddOrUpdateNodeLabels(ctx context.Context, clusterID int, 
 		return fmt.Errorf("获取节点失败: %w", err)
 	}
 
-	if node.Labels == nil {
-		node.Labels = make(map[string]string)
-	}
-
+	// 以传入的 labels 为主，完全覆盖原有标签
+	node.Labels = make(map[string]string)
 	for key, value := range labels {
-		// 如果标签存在且不允许覆盖，则跳过
-		if _, exists := node.Labels[key]; exists && overwrite == 0 {
-			continue
-		}
 		node.Labels[key] = value
 	}
 
@@ -243,7 +238,7 @@ func (m *nodeManager) AddOrUpdateNodeLabels(ctx context.Context, clusterID int, 
 		return fmt.Errorf("更新节点标签失败: %w", err)
 	}
 
-	m.logger.Info("节点标签更新成功", zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
+	m.logger.Info("节点标签已添加或更新", zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
 	return nil
 }
 

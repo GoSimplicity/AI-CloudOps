@@ -92,10 +92,9 @@ type GetNodeDetailReq struct {
 
 // AddLabelNodesReq 添加节点标签请求
 type AddLabelNodesReq struct {
-	ClusterID int               `json:"cluster_id" binding:"required"`          // 集群ID
-	NodeName  string            `json:"node_name" binding:"required"`           // 节点名称
-	Labels    map[string]string `json:"labels" binding:"required"`              // 要添加的标签
-	Overwrite int8              `json:"overwrite" binding:"required,oneof=1 2"` // 是否覆盖已存在的标签
+	ClusterID int               `json:"cluster_id" binding:"required"` // 集群ID
+	NodeName  string            `json:"node_name" binding:"required"`  // 节点名称
+	Labels    map[string]string `json:"labels" binding:"required"`     // 要添加的标签
 }
 
 // DeleteLabelNodesReq 删除节点标签请求
