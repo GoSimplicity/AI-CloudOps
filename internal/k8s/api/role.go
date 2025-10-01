@@ -42,21 +42,21 @@ func NewK8sRoleHandler(roleService service.RoleService) *K8sRoleHandler {
 	}
 }
 
-func (k *K8sRoleHandler) RegisterRouters(server *gin.Engine) {
+func (h *K8sRoleHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/role/:cluster_id/list", k.GetRoleList)
-		k8sGroup.GET("/role/:cluster_id/:namespace/:name/detail", k.GetRoleDetails)
-		k8sGroup.GET("/role/:cluster_id/:namespace/:name/detail/yaml", k.GetRoleYaml)
-		k8sGroup.POST("/role/:cluster_id/create", k.CreateRole)
-		k8sGroup.POST("/role/:cluster_id/create/yaml", k.CreateRoleByYaml)
-		k8sGroup.PUT("/role/:cluster_id/:namespace/:name/update", k.UpdateRole)
-		k8sGroup.PUT("/role/:cluster_id/:namespace/:name/update/yaml", k.UpdateRoleByYaml)
-		k8sGroup.DELETE("/role/:cluster_id/:namespace/:name/delete", k.DeleteRole)
+		k8sGroup.GET("/role/:cluster_id/list", h.GetRoleList)
+		k8sGroup.GET("/role/:cluster_id/:namespace/:name/detail", h.GetRoleDetails)
+		k8sGroup.GET("/role/:cluster_id/:namespace/:name/detail/yaml", h.GetRoleYaml)
+		k8sGroup.POST("/role/:cluster_id/create", h.CreateRole)
+		k8sGroup.POST("/role/:cluster_id/create/yaml", h.CreateRoleByYaml)
+		k8sGroup.PUT("/role/:cluster_id/:namespace/:name/update", h.UpdateRole)
+		k8sGroup.PUT("/role/:cluster_id/:namespace/:name/update/yaml", h.UpdateRoleByYaml)
+		k8sGroup.DELETE("/role/:cluster_id/:namespace/:name/delete", h.DeleteRole)
 	}
 }
 
-func (k *K8sRoleHandler) GetRoleList(ctx *gin.Context) {
+func (h *K8sRoleHandler) GetRoleList(ctx *gin.Context) {
 	var req model.GetRoleListReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -68,11 +68,11 @@ func (k *K8sRoleHandler) GetRoleList(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.roleService.GetRoleList(ctx, &req)
+		return h.roleService.GetRoleList(ctx, &req)
 	})
 }
 
-func (k *K8sRoleHandler) GetRoleDetails(ctx *gin.Context) {
+func (h *K8sRoleHandler) GetRoleDetails(ctx *gin.Context) {
 	var req model.GetRoleDetailsReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -98,11 +98,11 @@ func (k *K8sRoleHandler) GetRoleDetails(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.roleService.GetRoleDetails(ctx, &req)
+		return h.roleService.GetRoleDetails(ctx, &req)
 	})
 }
 
-func (k *K8sRoleHandler) GetRoleYaml(ctx *gin.Context) {
+func (h *K8sRoleHandler) GetRoleYaml(ctx *gin.Context) {
 	var req model.GetRoleYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -128,11 +128,11 @@ func (k *K8sRoleHandler) GetRoleYaml(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.roleService.GetRoleYaml(ctx, &req)
+		return h.roleService.GetRoleYaml(ctx, &req)
 	})
 }
 
-func (k *K8sRoleHandler) CreateRole(ctx *gin.Context) {
+func (h *K8sRoleHandler) CreateRole(ctx *gin.Context) {
 	var req model.CreateRoleReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -144,11 +144,11 @@ func (k *K8sRoleHandler) CreateRole(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.roleService.CreateRole(ctx, &req)
+		return nil, h.roleService.CreateRole(ctx, &req)
 	})
 }
 
-func (k *K8sRoleHandler) CreateRoleByYaml(ctx *gin.Context) {
+func (h *K8sRoleHandler) CreateRoleByYaml(ctx *gin.Context) {
 	var req model.CreateRoleByYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -160,11 +160,11 @@ func (k *K8sRoleHandler) CreateRoleByYaml(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.roleService.CreateRoleByYaml(ctx, &req)
+		return nil, h.roleService.CreateRoleByYaml(ctx, &req)
 	})
 }
 
-func (k *K8sRoleHandler) UpdateRole(ctx *gin.Context) {
+func (h *K8sRoleHandler) UpdateRole(ctx *gin.Context) {
 	var req model.UpdateRoleReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -190,11 +190,11 @@ func (k *K8sRoleHandler) UpdateRole(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.roleService.UpdateRole(ctx, &req)
+		return nil, h.roleService.UpdateRole(ctx, &req)
 	})
 }
 
-func (k *K8sRoleHandler) UpdateRoleByYaml(ctx *gin.Context) {
+func (h *K8sRoleHandler) UpdateRoleByYaml(ctx *gin.Context) {
 	var req model.UpdateRoleByYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -220,11 +220,11 @@ func (k *K8sRoleHandler) UpdateRoleByYaml(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.roleService.UpdateRoleYaml(ctx, &req)
+		return nil, h.roleService.UpdateRoleYaml(ctx, &req)
 	})
 }
 
-func (k *K8sRoleHandler) DeleteRole(ctx *gin.Context) {
+func (h *K8sRoleHandler) DeleteRole(ctx *gin.Context) {
 	var req model.DeleteRoleReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -250,6 +250,6 @@ func (k *K8sRoleHandler) DeleteRole(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.roleService.DeleteRole(ctx, &req)
+		return nil, h.roleService.DeleteRole(ctx, &req)
 	})
 }

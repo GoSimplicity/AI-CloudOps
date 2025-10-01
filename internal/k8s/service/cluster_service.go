@@ -66,14 +66,14 @@ func NewClusterService(dao dao.ClusterDAO, client client.K8sClient, clusterMgr m
 }
 
 // ListClusters 获取集群列表
-func (c *clusterService) ListClusters(ctx context.Context, req *model.ListClustersReq) (model.ListResp[*model.K8sCluster], error) {
+func (s *clusterService) ListClusters(ctx context.Context, req *model.ListClustersReq) (model.ListResp[*model.K8sCluster], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sCluster]{}, fmt.Errorf("获取集群列表请求参数不能为空")
 	}
 
-	list, total, err := c.dao.GetClusterList(ctx, req)
+	list, total, err := s.dao.GetClusterList(ctx, req)
 	if err != nil {
-		c.logger.Error("ListClusters: 查询所有集群失败", zap.Error(err))
+		s.logger.Error("ListClusters: 查询所有集群失败", zap.Error(err))
 		return model.ListResp[*model.K8sCluster]{}, fmt.Errorf("查询所有集群失败: %w", err)
 	}
 
@@ -87,7 +87,7 @@ func (c *clusterService) ListClusters(ctx context.Context, req *model.ListCluste
 }
 
 // GetClusterByID 根据ID获取集群
-func (c *clusterService) GetClusterByID(ctx context.Context, req *model.GetClusterReq) (*model.K8sCluster, error) {
+func (s *clusterService) GetClusterByID(ctx context.Context, req *model.GetClusterReq) (*model.K8sCluster, error) {
 	if req == nil {
 		return nil, fmt.Errorf("获取集群请求参数不能为空")
 	}
@@ -97,9 +97,9 @@ func (c *clusterService) GetClusterByID(ctx context.Context, req *model.GetClust
 		return nil, err
 	}
 
-	cluster, err := c.dao.GetClusterByID(ctx, req.ID)
+	cluster, err := s.dao.GetClusterByID(ctx, req.ID)
 	if err != nil {
-		c.logger.Error("GetClusterByID: 查询集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
+		s.logger.Error("GetClusterByID: 查询集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
 		return nil, fmt.Errorf("查询集群失败: %w", err)
 	}
 
@@ -112,7 +112,7 @@ func (c *clusterService) GetClusterByID(ctx context.Context, req *model.GetClust
 }
 
 // CreateCluster 创建集群
-func (c *clusterService) CreateCluster(ctx context.Context, req *model.CreateClusterReq) error {
+func (s *clusterService) CreateCluster(ctx context.Context, req *model.CreateClusterReq) error {
 	if req == nil {
 		return fmt.Errorf("创建集群请求参数不能为空")
 	}
@@ -123,9 +123,9 @@ func (c *clusterService) CreateCluster(ctx context.Context, req *model.CreateClu
 	}
 
 	// 检查集群名称是否已存在
-	existingCluster, err := c.dao.GetClusterByName(ctx, req.Name)
+	existingCluster, err := s.dao.GetClusterByName(ctx, req.Name)
 	if err != nil && err != gorm.ErrRecordNotFound {
-		c.logger.Error("CreateCluster: 查询集群失败", zap.Error(err))
+		s.logger.Error("CreateCluster: 查询集群失败", zap.Error(err))
 		return fmt.Errorf("查询集群失败: %w", err)
 	}
 
@@ -157,17 +157,17 @@ func (c *clusterService) CreateCluster(ctx context.Context, req *model.CreateClu
 	}
 
 	// 创建集群记录
-	if err := c.dao.CreateCluster(ctx, cluster); err != nil {
-		c.logger.Error("CreateCluster: 创建集群记录失败", zap.Error(err))
+	if err := s.dao.CreateCluster(ctx, cluster); err != nil {
+		s.logger.Error("CreateCluster: 创建集群记录失败", zap.Error(err))
 		return fmt.Errorf("创建集群记录失败: %w", err)
 	}
 
 	// 使用集群管理器创建集群
-	if err := c.clusterMgr.CreateCluster(ctx, cluster); err != nil {
-		c.logger.Error("CreateCluster: 创建集群失败", zap.Error(err))
+	if err := s.clusterMgr.CreateCluster(ctx, cluster); err != nil {
+		s.logger.Error("CreateCluster: 创建集群失败", zap.Error(err))
 		// 回滚数据库记录
-		if rollbackErr := c.dao.DeleteCluster(ctx, cluster.ID); rollbackErr != nil {
-			c.logger.Error("CreateCluster: 回滚失败", zap.Error(rollbackErr))
+		if rollbackErr := s.dao.DeleteCluster(ctx, cluster.ID); rollbackErr != nil {
+			s.logger.Error("CreateCluster: 回滚失败", zap.Error(rollbackErr))
 		}
 		return fmt.Errorf("创建集群失败: %w", err)
 	}
@@ -176,7 +176,7 @@ func (c *clusterService) CreateCluster(ctx context.Context, req *model.CreateClu
 }
 
 // UpdateCluster 更新集群
-func (c *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClusterReq) error {
+func (s *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClusterReq) error {
 	if req == nil {
 		return fmt.Errorf("更新集群请求参数不能为空")
 	}
@@ -187,21 +187,21 @@ func (c *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClu
 	}
 
 	// 检查集群是否存在
-	existingCluster, err := c.dao.GetClusterByID(ctx, req.ID)
+	existingCluster, err := s.dao.GetClusterByID(ctx, req.ID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return fmt.Errorf("集群不存在，ID: %d", req.ID)
 		}
 
-		c.logger.Error("UpdateCluster: 查询集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
+		s.logger.Error("UpdateCluster: 查询集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
 		return fmt.Errorf("查询集群失败: %w", err)
 	}
 
 	// 检查集群名称是否冲突
 	if req.Name != "" && req.Name != existingCluster.Name {
-		conflictCluster, err := c.dao.GetClusterByName(ctx, req.Name)
+		conflictCluster, err := s.dao.GetClusterByName(ctx, req.Name)
 		if err != nil && err != gorm.ErrRecordNotFound {
-			c.logger.Error("UpdateCluster: 查询集群名称冲突失败", zap.Error(err))
+			s.logger.Error("UpdateCluster: 查询集群名称冲突失败", zap.Error(err))
 			return fmt.Errorf("查询集群名称冲突失败: %w", err)
 		}
 		if conflictCluster != nil {
@@ -233,14 +233,14 @@ func (c *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClu
 	}
 
 	// 更新集群记录
-	if err := c.dao.UpdateCluster(ctx, cluster); err != nil {
-		c.logger.Error("UpdateCluster: 更新集群失败", zap.Error(err), zap.Int("clusterID", cluster.ID))
+	if err := s.dao.UpdateCluster(ctx, cluster); err != nil {
+		s.logger.Error("UpdateCluster: 更新集群失败", zap.Error(err), zap.Int("clusterID", cluster.ID))
 		return fmt.Errorf("更新集群失败: %w", err)
 	}
 
 	// 使用集群管理器更新集群
-	if err := c.clusterMgr.UpdateCluster(ctx, cluster); err != nil {
-		c.logger.Error("UpdateCluster: 更新集群客户端失败", zap.Error(err))
+	if err := s.clusterMgr.UpdateCluster(ctx, cluster); err != nil {
+		s.logger.Error("UpdateCluster: 更新集群客户端失败", zap.Error(err))
 		return fmt.Errorf("更新集群客户端失败: %w", err)
 	}
 
@@ -248,7 +248,7 @@ func (c *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClu
 }
 
 // DeleteCluster 删除集群
-func (c *clusterService) DeleteCluster(ctx context.Context, req *model.DeleteClusterReq) error {
+func (s *clusterService) DeleteCluster(ctx context.Context, req *model.DeleteClusterReq) error {
 	if req == nil {
 		return fmt.Errorf("删除集群请求参数不能为空")
 	}
@@ -259,22 +259,22 @@ func (c *clusterService) DeleteCluster(ctx context.Context, req *model.DeleteClu
 	}
 
 	// 检查集群是否存在
-	_, err := c.dao.GetClusterByID(ctx, req.ID)
+	_, err := s.dao.GetClusterByID(ctx, req.ID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return fmt.Errorf("集群不存在，ID: %d", req.ID)
 		}
 
-		c.logger.Error("DeleteCluster: 查询集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
+		s.logger.Error("DeleteCluster: 查询集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
 		return fmt.Errorf("查询集群失败: %w", err)
 	}
 
 	// 删除集群客户端
-	c.client.RemoveCluster(req.ID)
+	s.client.RemoveCluster(req.ID)
 
 	// 删除集群记录
-	if err := c.dao.DeleteCluster(ctx, req.ID); err != nil {
-		c.logger.Error("DeleteCluster: 删除集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
+	if err := s.dao.DeleteCluster(ctx, req.ID); err != nil {
+		s.logger.Error("DeleteCluster: 删除集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
 		return fmt.Errorf("删除集群失败: %w", err)
 	}
 
@@ -282,7 +282,7 @@ func (c *clusterService) DeleteCluster(ctx context.Context, req *model.DeleteClu
 }
 
 // RefreshClusterStatus 刷新集群状态
-func (c *clusterService) RefreshClusterStatus(ctx context.Context, req *model.RefreshClusterReq) error {
+func (s *clusterService) RefreshClusterStatus(ctx context.Context, req *model.RefreshClusterReq) error {
 	if req == nil {
 		return fmt.Errorf("刷新集群状态请求参数不能为空")
 	}
@@ -293,19 +293,19 @@ func (c *clusterService) RefreshClusterStatus(ctx context.Context, req *model.Re
 	}
 
 	// 检查集群是否存在
-	_, err := c.dao.GetClusterByID(ctx, req.ID)
+	_, err := s.dao.GetClusterByID(ctx, req.ID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return fmt.Errorf("集群不存在，ID: %d", req.ID)
 		}
 
-		c.logger.Error("RefreshClusterStatus: 查询集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
+		s.logger.Error("RefreshClusterStatus: 查询集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
 		return fmt.Errorf("查询集群失败: %w", err)
 	}
 
 	// 使用集群管理器刷新集群状态
-	if err := c.clusterMgr.RefreshCluster(ctx, req.ID); err != nil {
-		c.logger.Error("RefreshClusterStatus: 刷新集群状态失败", zap.Error(err))
+	if err := s.clusterMgr.RefreshCluster(ctx, req.ID); err != nil {
+		s.logger.Error("RefreshClusterStatus: 刷新集群状态失败", zap.Error(err))
 		return fmt.Errorf("刷新集群状态失败: %w", err)
 	}
 

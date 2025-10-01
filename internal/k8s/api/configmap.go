@@ -71,7 +71,7 @@ func (h *K8sConfigMapHandler) GetConfigMapList(ctx *gin.Context) {
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.configMapService.GetConfigMapList(ctx, &req)
 	})
 }
@@ -107,7 +107,7 @@ func (h *K8sConfigMapHandler) GetConfigMap(ctx *gin.Context) {
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.configMapService.GetConfigMap(ctx, &req)
 	})
 }
@@ -186,7 +186,7 @@ func (h *K8sConfigMapHandler) DeleteConfigMap(ctx *gin.Context) {
 	req.Namespace = ns
 	req.Name = name
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.configMapService.DeleteConfigMap(ctx, &req)
 	})
 }
@@ -217,7 +217,7 @@ func (h *K8sConfigMapHandler) GetConfigMapYAML(ctx *gin.Context) {
 	req.Namespace = ns
 	req.Name = name
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.configMapService.GetConfigMapYAML(ctx, &req)
 	})
 }

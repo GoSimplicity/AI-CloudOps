@@ -54,25 +54,25 @@ func (h *ApiHandler) RegisterRouters(server *gin.Engine) {
 }
 
 // ListApis 获取API列表
-func (a *ApiHandler) ListApis(ctx *gin.Context) {
+func (h *ApiHandler) ListApis(ctx *gin.Context) {
 	var req model.ListApisRequest
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return a.svc.ListApis(ctx, &req)
+		return h.svc.ListApis(ctx, &req)
 	})
 }
 
 // CreateAPI 创建新的API
-func (a *ApiHandler) CreateAPI(ctx *gin.Context) {
+func (h *ApiHandler) CreateAPI(ctx *gin.Context) {
 	var req model.CreateApiRequest
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.svc.CreateApi(ctx, &req)
+		return nil, h.svc.CreateApi(ctx, &req)
 	})
 }
 
 // UpdateAPI 更新API信息
-func (a *ApiHandler) UpdateAPI(ctx *gin.Context) {
+func (h *ApiHandler) UpdateAPI(ctx *gin.Context) {
 	var req model.UpdateApiRequest
 
 	id, err := utils.GetParamID(ctx)
@@ -84,12 +84,12 @@ func (a *ApiHandler) UpdateAPI(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.svc.UpdateApi(ctx, &req)
+		return nil, h.svc.UpdateApi(ctx, &req)
 	})
 }
 
 // DeleteAPI 删除API
-func (a *ApiHandler) DeleteAPI(ctx *gin.Context) {
+func (h *ApiHandler) DeleteAPI(ctx *gin.Context) {
 	var req model.DeleteApiRequest
 
 	id, err := utils.GetParamID(ctx)
@@ -101,12 +101,12 @@ func (a *ApiHandler) DeleteAPI(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.svc.DeleteApi(ctx, req.ID)
+		return nil, h.svc.DeleteApi(ctx, req.ID)
 	})
 }
 
 // DetailAPI 获取API详情
-func (a *ApiHandler) DetailAPI(ctx *gin.Context) {
+func (h *ApiHandler) DetailAPI(ctx *gin.Context) {
 	var req model.GetApiRequest
 
 	id, err := utils.GetParamID(ctx)
@@ -118,13 +118,13 @@ func (a *ApiHandler) DetailAPI(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return a.svc.GetApiById(ctx, id)
+		return h.svc.GetApiById(ctx, id)
 	})
 }
 
 // GetApiStatistics 获取API统计
-func (a *ApiHandler) GetApiStatistics(ctx *gin.Context) {
+func (h *ApiHandler) GetApiStatistics(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return a.svc.GetApiStatistics(ctx)
+		return h.svc.GetApiStatistics(ctx)
 	})
 }

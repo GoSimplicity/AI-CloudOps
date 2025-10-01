@@ -67,11 +67,11 @@ func NewEventService(eventManager manager.EventManager, logger *zap.Logger) Even
 }
 
 // GetEventList 获取Event列表
-func (e *eventService) GetEventList(ctx context.Context, req *model.GetEventListReq) (model.ListResp[*model.K8sEvent], error) {
+func (s *eventService) GetEventList(ctx context.Context, req *model.GetEventListReq) (model.ListResp[*model.K8sEvent], error) {
 	// 使用 EventManager 获取 Event 列表和总数
-	eventList, total, err := e.eventManager.ListEventsWithTotal(ctx, req.ClusterID, req.Namespace)
+	eventList, total, err := s.eventManager.ListEventsWithTotal(ctx, req.ClusterID, req.Namespace)
 	if err != nil {
-		e.logger.Error("获取Event列表失败",
+		s.logger.Error("获取Event列表失败",
 			zap.String("Namespace", req.Namespace),
 			zap.Error(err))
 		return model.ListResp[*model.K8sEvent]{}, fmt.Errorf("获取Event列表失败: %w", err)
@@ -79,7 +79,7 @@ func (e *eventService) GetEventList(ctx context.Context, req *model.GetEventList
 
 	events := make([]*model.K8sEvent, 0, len(eventList.Items))
 	for _, event := range eventList.Items {
-		eventEntity := e.eventManager.ConvertEventToK8sEvent(&event, req.ClusterID)
+		eventEntity := s.eventManager.ConvertEventToK8sEvent(&event, req.ClusterID)
 
 		// 根据请求参数进行过滤
 		if req.EventType != "" && event.Type != req.EventType {
@@ -125,22 +125,22 @@ func (e *eventService) GetEventList(ctx context.Context, req *model.GetEventList
 }
 
 // GetEvent 获取单个Event详情
-func (e *eventService) GetEvent(ctx context.Context, req *model.GetEventDetailReq) (*model.K8sEvent, error) {
+func (s *eventService) GetEvent(ctx context.Context, req *model.GetEventDetailReq) (*model.K8sEvent, error) {
 	// 使用 EventManager 获取单个 Event
-	event, err := e.eventManager.GetEvent(ctx, req.ClusterID, req.Namespace, req.Name)
+	event, err := s.eventManager.GetEvent(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		e.logger.Error("获取Event详情失败",
+		s.logger.Error("获取Event详情失败",
 			zap.String("Namespace", req.Namespace),
 			zap.String("Name", req.Name),
 			zap.Error(err))
 		return nil, fmt.Errorf("获取Event详情失败: %w", err)
 	}
 
-	return e.eventManager.ConvertEventToK8sEvent(event, req.ClusterID), nil
+	return s.eventManager.ConvertEventToK8sEvent(event, req.ClusterID), nil
 }
 
 // GetEventsByObject 根据对象获取相关事件
-func (e *eventService) GetEventsByObject(ctx context.Context, clusterID int, namespace, objectKind, objectName, objectUID string, limitDays int) (model.ListResp[*model.K8sEvent], error) {
+func (s *eventService) GetEventsByObject(ctx context.Context, clusterID int, namespace, objectKind, objectName, objectUID string, limitDays int) (model.ListResp[*model.K8sEvent], error) {
 	fieldSelector := "involvedObject.name=" + objectName + ",involvedObject.kind=" + objectKind
 	if objectUID != "" {
 		fieldSelector += ",involvedObject.uid=" + objectUID
@@ -153,60 +153,60 @@ func (e *eventService) GetEventsByObject(ctx context.Context, clusterID int, nam
 		LimitDays:     limitDays,
 	}
 
-	return e.GetEventList(ctx, eventReq)
+	return s.GetEventList(ctx, eventReq)
 }
 
 // GetEventsByPod 获取Pod相关事件
-func (e *eventService) GetEventsByPod(ctx context.Context, req *model.GetEventsByPodReq) (model.ListResp[*model.K8sEvent], error) {
-	return e.GetEventsByObject(ctx, req.ClusterID, req.Namespace, "Pod", req.PodName, "", 7)
+func (s *eventService) GetEventsByPod(ctx context.Context, req *model.GetEventsByPodReq) (model.ListResp[*model.K8sEvent], error) {
+	return s.GetEventsByObject(ctx, req.ClusterID, req.Namespace, "Pod", req.PodName, "", 7)
 }
 
 // GetEventsByDeployment 获取Deployment相关事件
-func (e *eventService) GetEventsByDeployment(ctx context.Context, req *model.GetEventsByDeploymentReq) (model.ListResp[*model.K8sEvent], error) {
-	return e.GetEventsByObject(ctx, req.ClusterID, req.Namespace, "Deployment", req.DeploymentName, "", 7)
+func (s *eventService) GetEventsByDeployment(ctx context.Context, req *model.GetEventsByDeploymentReq) (model.ListResp[*model.K8sEvent], error) {
+	return s.GetEventsByObject(ctx, req.ClusterID, req.Namespace, "Deployment", req.DeploymentName, "", 7)
 }
 
 // GetEventsByService 获取Service相关事件
-func (e *eventService) GetEventsByService(ctx context.Context, req *model.GetEventsByServiceReq) (model.ListResp[*model.K8sEvent], error) {
-	return e.GetEventsByObject(ctx, req.ClusterID, req.Namespace, "Service", req.ServiceName, "", 7)
+func (s *eventService) GetEventsByService(ctx context.Context, req *model.GetEventsByServiceReq) (model.ListResp[*model.K8sEvent], error) {
+	return s.GetEventsByObject(ctx, req.ClusterID, req.Namespace, "Service", req.ServiceName, "", 7)
 }
 
 // GetEventsByNode 获取Node相关事件
-func (e *eventService) GetEventsByNode(ctx context.Context, req *model.GetEventsByNodeReq) (model.ListResp[*model.K8sEvent], error) {
-	return e.GetEventsByObject(ctx, req.ClusterID, "", "Node", req.NodeName, "", 7)
+func (s *eventService) GetEventsByNode(ctx context.Context, req *model.GetEventsByNodeReq) (model.ListResp[*model.K8sEvent], error) {
+	return s.GetEventsByObject(ctx, req.ClusterID, "", "Node", req.NodeName, "", 7)
 }
 
 // GetEventStatistics 获取事件统计
-func (e *eventService) GetEventStatistics(ctx context.Context, req *model.GetEventStatisticsReq) (*model.EventStatistics, error) {
+func (s *eventService) GetEventStatistics(ctx context.Context, req *model.GetEventStatisticsReq) (*model.EventStatistics, error) {
 	// 参数验证
 	if req.ClusterID <= 0 {
 		return nil, fmt.Errorf("无效的集群ID: %d", req.ClusterID)
 	}
 
 	// 调用EventManager的方法
-	return e.eventManager.GetEventStatistics(ctx, req.ClusterID, req.Namespace, req.StartTime, req.EndTime)
+	return s.eventManager.GetEventStatistics(ctx, req.ClusterID, req.Namespace, req.StartTime, req.EndTime)
 }
 
 // GetEventSummary 获取事件汇总
-func (e *eventService) GetEventSummary(ctx context.Context, req *model.GetEventSummaryReq) (*model.EventSummary, error) {
+func (s *eventService) GetEventSummary(ctx context.Context, req *model.GetEventSummaryReq) (*model.EventSummary, error) {
 	// 参数验证
 	if req.ClusterID <= 0 {
 		return nil, fmt.Errorf("无效的集群ID: %d", req.ClusterID)
 	}
 
 	// 调用EventManager的方法
-	return e.eventManager.GetEventSummary(ctx, req.ClusterID, req.Namespace, req.StartTime, req.EndTime)
+	return s.eventManager.GetEventSummary(ctx, req.ClusterID, req.Namespace, req.StartTime, req.EndTime)
 }
 
 // GetEventTimeline 获取事件时间线
-func (e *eventService) GetEventTimeline(ctx context.Context, req *model.GetEventTimelineReq) (model.ListResp[*model.EventTimelineItem], error) {
+func (s *eventService) GetEventTimeline(ctx context.Context, req *model.GetEventTimelineReq) (model.ListResp[*model.EventTimelineItem], error) {
 	// 参数验证
 	if req.ClusterID <= 0 {
 		return model.ListResp[*model.EventTimelineItem]{}, fmt.Errorf("无效的集群ID: %d", req.ClusterID)
 	}
 
 	// 调用EventManager的方法
-	timelineItems, err := e.eventManager.GetEventTimeline(ctx, req.ClusterID, req.Namespace, req.ObjectKind, req.ObjectName)
+	timelineItems, err := s.eventManager.GetEventTimeline(ctx, req.ClusterID, req.Namespace, req.ObjectKind, req.ObjectName)
 	if err != nil {
 		return model.ListResp[*model.EventTimelineItem]{}, err
 	}
@@ -215,14 +215,14 @@ func (e *eventService) GetEventTimeline(ctx context.Context, req *model.GetEvent
 }
 
 // GetEventTrends 获取事件趋势
-func (e *eventService) GetEventTrends(ctx context.Context, req *model.GetEventTrendsReq) (model.ListResp[*model.EventTrend], error) {
+func (s *eventService) GetEventTrends(ctx context.Context, req *model.GetEventTrendsReq) (model.ListResp[*model.EventTrend], error) {
 	// 参数验证
 	if req.ClusterID <= 0 {
 		return model.ListResp[*model.EventTrend]{}, fmt.Errorf("无效的集群ID: %d", req.ClusterID)
 	}
 
 	// 调用EventManager的方法
-	trends, err := e.eventManager.GetEventTrends(ctx, req.ClusterID, req.Namespace, req.EventType, req.Interval, req.StartTime, req.EndTime)
+	trends, err := s.eventManager.GetEventTrends(ctx, req.ClusterID, req.Namespace, req.EventType, req.Interval, req.StartTime, req.EndTime)
 	if err != nil {
 		return model.ListResp[*model.EventTrend]{}, err
 	}
@@ -231,14 +231,14 @@ func (e *eventService) GetEventTrends(ctx context.Context, req *model.GetEventTr
 }
 
 // GetEventGroupData 获取事件分组数据
-func (e *eventService) GetEventGroupData(ctx context.Context, req *model.GetEventGroupDataReq) (model.ListResp[*model.EventGroupData], error) {
+func (s *eventService) GetEventGroupData(ctx context.Context, req *model.GetEventGroupDataReq) (model.ListResp[*model.EventGroupData], error) {
 	// 参数验证
 	if req.ClusterID <= 0 {
 		return model.ListResp[*model.EventGroupData]{}, fmt.Errorf("无效的集群ID: %d", req.ClusterID)
 	}
 
 	// 调用EventManager的方法
-	groupData, err := e.eventManager.GetEventGroupData(ctx, req.ClusterID, req.Namespace, req.GroupBy, req.StartTime, req.EndTime, req.Limit)
+	groupData, err := s.eventManager.GetEventGroupData(ctx, req.ClusterID, req.Namespace, req.GroupBy, req.StartTime, req.EndTime, req.Limit)
 	if err != nil {
 		return model.ListResp[*model.EventGroupData]{}, err
 	}
@@ -247,12 +247,12 @@ func (e *eventService) GetEventGroupData(ctx context.Context, req *model.GetEven
 }
 
 // DeleteEvent 删除事件
-func (e *eventService) DeleteEvent(ctx context.Context, req *model.DeleteEventReq) error {
-	return e.eventManager.DeleteEvent(ctx, req.ClusterID, req.Namespace, req.Name, metav1.DeleteOptions{})
+func (s *eventService) DeleteEvent(ctx context.Context, req *model.DeleteEventReq) error {
+	return s.eventManager.DeleteEvent(ctx, req.ClusterID, req.Namespace, req.Name, metav1.DeleteOptions{})
 }
 
 // CleanupOldEvents 清理旧事件
-func (e *eventService) CleanupOldEvents(ctx context.Context, req *model.CleanupOldEventsReq) error {
+func (s *eventService) CleanupOldEvents(ctx context.Context, req *model.CleanupOldEventsReq) error {
 	// 参数验证
 	if req.ClusterID <= 0 {
 		return fmt.Errorf("无效的集群ID: %d", req.ClusterID)
@@ -262,5 +262,5 @@ func (e *eventService) CleanupOldEvents(ctx context.Context, req *model.CleanupO
 	}
 
 	// 调用EventManager的方法
-	return e.eventManager.CleanupOldEvents(ctx, req.ClusterID, req.Namespace, req.BeforeTime)
+	return s.eventManager.CleanupOldEvents(ctx, req.ClusterID, req.Namespace, req.BeforeTime)
 }

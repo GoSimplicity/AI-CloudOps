@@ -61,9 +61,9 @@ func NewAlertManagerSendDAO(db *gorm.DB, l *zap.Logger) AlertManagerSendDAO {
 }
 
 // GetMonitorSendGroupByPoolID 通过 poolID 获取 MonitorSendGroup
-func (a *alertManagerSendDAO) GetMonitorSendGroupByPoolID(ctx context.Context, poolID int) ([]*model.MonitorSendGroup, int64, error) {
+func (d *alertManagerSendDAO) GetMonitorSendGroupByPoolID(ctx context.Context, poolID int) ([]*model.MonitorSendGroup, int64, error) {
 	if poolID <= 0 {
-		a.l.Error("GetMonitorSendGroupByPoolID 失败: 无效的 poolID", zap.Int("poolID", poolID))
+		d.l.Error("GetMonitorSendGroupByPoolID 失败: 无效的 poolID", zap.Int("poolID", poolID))
 		return nil, 0, fmt.Errorf("无效的 poolID: %d", poolID)
 	}
 
@@ -71,18 +71,18 @@ func (a *alertManagerSendDAO) GetMonitorSendGroupByPoolID(ctx context.Context, p
 	var count int64
 
 	// 先获取总数
-	if err := a.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Model(&model.MonitorSendGroup{}).
 		Where("pool_id = ?", poolID).
 		Count(&count).Error; err != nil {
-		a.l.Error("获取 MonitorSendGroup 总数失败", zap.Error(err), zap.Int("poolID", poolID))
+		d.l.Error("获取 MonitorSendGroup 总数失败", zap.Error(err), zap.Int("poolID", poolID))
 		return nil, 0, err
 	}
 
-	if err := a.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Where("pool_id = ?", poolID).
 		Find(&sendGroups).Error; err != nil {
-		a.l.Error("获取 MonitorSendGroup 失败", zap.Error(err), zap.Int("poolID", poolID))
+		d.l.Error("获取 MonitorSendGroup 失败", zap.Error(err), zap.Int("poolID", poolID))
 		return nil, 0, err
 	}
 
@@ -90,9 +90,9 @@ func (a *alertManagerSendDAO) GetMonitorSendGroupByPoolID(ctx context.Context, p
 }
 
 // GetMonitorSendGroupByOnDutyGroupID 通过 onDutyGroupID 获取 MonitorSendGroup
-func (a *alertManagerSendDAO) GetMonitorSendGroupByOnDutyGroupID(ctx context.Context, onDutyGroupID int) ([]*model.MonitorSendGroup, int64, error) {
+func (d *alertManagerSendDAO) GetMonitorSendGroupByOnDutyGroupID(ctx context.Context, onDutyGroupID int) ([]*model.MonitorSendGroup, int64, error) {
 	if onDutyGroupID <= 0 {
-		a.l.Error("GetMonitorSendGroupByOnDutyGroupID 失败: 无效的 onDutyGroupID", zap.Int("onDutyGroupID", onDutyGroupID))
+		d.l.Error("GetMonitorSendGroupByOnDutyGroupID 失败: 无效的 onDutyGroupID", zap.Int("onDutyGroupID", onDutyGroupID))
 		return nil, 0, fmt.Errorf("无效的 onDutyGroupID: %d", onDutyGroupID)
 	}
 
@@ -100,18 +100,18 @@ func (a *alertManagerSendDAO) GetMonitorSendGroupByOnDutyGroupID(ctx context.Con
 	var count int64
 
 	// 先获取总数
-	if err := a.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Model(&model.MonitorSendGroup{}).
 		Where("on_duty_group_id = ?", onDutyGroupID).
 		Count(&count).Error; err != nil {
-		a.l.Error("获取 MonitorSendGroup 总数失败", zap.Error(err), zap.Int("onDutyGroupID", onDutyGroupID))
+		d.l.Error("获取 MonitorSendGroup 总数失败", zap.Error(err), zap.Int("onDutyGroupID", onDutyGroupID))
 		return nil, 0, err
 	}
 
-	if err := a.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Where("on_duty_group_id = ?", onDutyGroupID).
 		Find(&sendGroups).Error; err != nil {
-		a.l.Error("获取 MonitorSendGroup 失败", zap.Error(err), zap.Int("onDutyGroupID", onDutyGroupID))
+		d.l.Error("获取 MonitorSendGroup 失败", zap.Error(err), zap.Int("onDutyGroupID", onDutyGroupID))
 		return nil, 0, err
 	}
 
@@ -119,11 +119,11 @@ func (a *alertManagerSendDAO) GetMonitorSendGroupByOnDutyGroupID(ctx context.Con
 }
 
 // GetMonitorSendGroupList 获取所有 MonitorSendGroup
-func (a *alertManagerSendDAO) GetMonitorSendGroupList(ctx context.Context, req *model.GetMonitorSendGroupListReq) ([]*model.MonitorSendGroup, int64, error) {
+func (d *alertManagerSendDAO) GetMonitorSendGroupList(ctx context.Context, req *model.GetMonitorSendGroupListReq) ([]*model.MonitorSendGroup, int64, error) {
 	var sendGroups []*model.MonitorSendGroup
 	var count int64
 
-	query := a.db.WithContext(ctx).Model(&model.MonitorSendGroup{})
+	query := d.db.WithContext(ctx).Model(&model.MonitorSendGroup{})
 
 	// 添加筛选条件
 	if req.Search != "" {
@@ -144,7 +144,7 @@ func (a *alertManagerSendDAO) GetMonitorSendGroupList(ctx context.Context, req *
 
 	// 先获取总数
 	if err := query.Count(&count).Error; err != nil {
-		a.l.Error("获取 MonitorSendGroup 总数失败", zap.Error(err))
+		d.l.Error("获取 MonitorSendGroup 总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
@@ -158,7 +158,7 @@ func (a *alertManagerSendDAO) GetMonitorSendGroupList(ctx context.Context, req *
 		Offset(offset).
 		Limit(limit).
 		Find(&sendGroups).Error; err != nil {
-		a.l.Error("获取所有 MonitorSendGroup 失败", zap.Error(err))
+		d.l.Error("获取所有 MonitorSendGroup 失败", zap.Error(err))
 		return nil, 0, err
 	}
 
@@ -166,15 +166,15 @@ func (a *alertManagerSendDAO) GetMonitorSendGroupList(ctx context.Context, req *
 }
 
 // GetMonitorSendGroupByID 通过 ID 获取 MonitorSendGroup
-func (a *alertManagerSendDAO) GetMonitorSendGroupByID(ctx context.Context, id int) (*model.MonitorSendGroup, error) {
+func (d *alertManagerSendDAO) GetMonitorSendGroupByID(ctx context.Context, id int) (*model.MonitorSendGroup, error) {
 	if id <= 0 {
-		a.l.Error("GetMonitorSendGroupByID 失败: 无效的 ID", zap.Int("id", id))
+		d.l.Error("GetMonitorSendGroupByID 失败: 无效的 ID", zap.Int("id", id))
 		return nil, fmt.Errorf("无效的 ID: %d", id)
 	}
 
 	var sendGroup model.MonitorSendGroup
 
-	if err := a.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Where("id = ?", id).
 		Preload("StaticReceiveUsers").
 		Preload("FirstUpgradeUsers").
@@ -183,7 +183,7 @@ func (a *alertManagerSendDAO) GetMonitorSendGroupByID(ctx context.Context, id in
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("未找到 ID 为 %d 的记录", id)
 		}
-		a.l.Error("获取 MonitorSendGroup 失败", zap.Error(err), zap.Int("id", id))
+		d.l.Error("获取 MonitorSendGroup 失败", zap.Error(err), zap.Int("id", id))
 		return nil, err
 	}
 
@@ -191,18 +191,18 @@ func (a *alertManagerSendDAO) GetMonitorSendGroupByID(ctx context.Context, id in
 }
 
 // CreateMonitorSendGroup 创建 MonitorSendGroup
-func (a *alertManagerSendDAO) CreateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error {
+func (d *alertManagerSendDAO) CreateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error {
 	// 开启事务
-	tx := a.db.WithContext(ctx).Begin()
+	tx := d.db.WithContext(ctx).Begin()
 	if tx.Error != nil {
-		a.l.Error("开启事务失败", zap.Error(tx.Error))
+		d.l.Error("开启事务失败", zap.Error(tx.Error))
 		return tx.Error
 	}
 
 	// 创建发送组基本信息
 	if err := tx.Create(monitorSendGroup).Error; err != nil {
 		tx.Rollback()
-		a.l.Error("创建 MonitorSendGroup 失败", zap.Error(err))
+		d.l.Error("创建 MonitorSendGroup 失败", zap.Error(err))
 		return err
 	}
 
@@ -210,7 +210,7 @@ func (a *alertManagerSendDAO) CreateMonitorSendGroup(ctx context.Context, monito
 	if len(monitorSendGroup.StaticReceiveUsers) > 0 {
 		if err := tx.Model(monitorSendGroup).Association("StaticReceiveUsers").Replace(monitorSendGroup.StaticReceiveUsers); err != nil {
 			tx.Rollback()
-			a.l.Error("关联静态接收用户失败", zap.Error(err))
+			d.l.Error("关联静态接收用户失败", zap.Error(err))
 			return err
 		}
 	}
@@ -219,7 +219,7 @@ func (a *alertManagerSendDAO) CreateMonitorSendGroup(ctx context.Context, monito
 	if len(monitorSendGroup.FirstUpgradeUsers) > 0 {
 		if err := tx.Model(monitorSendGroup).Association("FirstUpgradeUsers").Replace(monitorSendGroup.FirstUpgradeUsers); err != nil {
 			tx.Rollback()
-			a.l.Error("关联第一级升级用户失败", zap.Error(err))
+			d.l.Error("关联第一级升级用户失败", zap.Error(err))
 			return err
 		}
 	}
@@ -228,7 +228,7 @@ func (a *alertManagerSendDAO) CreateMonitorSendGroup(ctx context.Context, monito
 	if len(monitorSendGroup.SecondUpgradeUsers) > 0 {
 		if err := tx.Model(monitorSendGroup).Association("SecondUpgradeUsers").Replace(monitorSendGroup.SecondUpgradeUsers); err != nil {
 			tx.Rollback()
-			a.l.Error("关联第二级升级用户失败", zap.Error(err))
+			d.l.Error("关联第二级升级用户失败", zap.Error(err))
 			return err
 		}
 	}
@@ -236,7 +236,7 @@ func (a *alertManagerSendDAO) CreateMonitorSendGroup(ctx context.Context, monito
 	// 提交事务
 	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
-		a.l.Error("提交事务失败", zap.Error(err))
+		d.l.Error("提交事务失败", zap.Error(err))
 		return err
 	}
 
@@ -244,16 +244,16 @@ func (a *alertManagerSendDAO) CreateMonitorSendGroup(ctx context.Context, monito
 }
 
 // DeleteMonitorSendGroup 删除 MonitorSendGroup
-func (a *alertManagerSendDAO) DeleteMonitorSendGroup(ctx context.Context, id int) error {
+func (d *alertManagerSendDAO) DeleteMonitorSendGroup(ctx context.Context, id int) error {
 	if id <= 0 {
-		a.l.Error("DeleteMonitorSendGroup 失败: 无效的 ID", zap.Int("id", id))
+		d.l.Error("DeleteMonitorSendGroup 失败: 无效的 ID", zap.Int("id", id))
 		return fmt.Errorf("无效的 ID: %d", id)
 	}
 
 	// 开启事务
-	tx := a.db.WithContext(ctx).Begin()
+	tx := d.db.WithContext(ctx).Begin()
 	if tx.Error != nil {
-		a.l.Error("开启事务失败", zap.Error(tx.Error))
+		d.l.Error("开启事务失败", zap.Error(tx.Error))
 		return tx.Error
 	}
 
@@ -264,42 +264,42 @@ func (a *alertManagerSendDAO) DeleteMonitorSendGroup(ctx context.Context, id int
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("未找到 ID 为 %d 的记录", id)
 		}
-		a.l.Error("查找 MonitorSendGroup 失败", zap.Error(err), zap.Int("id", id))
+		d.l.Error("查找 MonitorSendGroup 失败", zap.Error(err), zap.Int("id", id))
 		return err
 	}
 
 	// 清除关联的静态接收用户
 	if err := tx.Model(sendGroup).Association("StaticReceiveUsers").Clear(); err != nil {
 		tx.Rollback()
-		a.l.Error("清除静态接收用户关联失败", zap.Error(err), zap.Int("id", id))
+		d.l.Error("清除静态接收用户关联失败", zap.Error(err), zap.Int("id", id))
 		return err
 	}
 
 	// 清除关联的第一级升级用户
 	if err := tx.Model(sendGroup).Association("FirstUpgradeUsers").Clear(); err != nil {
 		tx.Rollback()
-		a.l.Error("清除第一级升级用户关联失败", zap.Error(err), zap.Int("id", id))
+		d.l.Error("清除第一级升级用户关联失败", zap.Error(err), zap.Int("id", id))
 		return err
 	}
 
 	// 清除关联的第二级升级用户
 	if err := tx.Model(sendGroup).Association("SecondUpgradeUsers").Clear(); err != nil {
 		tx.Rollback()
-		a.l.Error("清除第二级升级用户关联失败", zap.Error(err), zap.Int("id", id))
+		d.l.Error("清除第二级升级用户关联失败", zap.Error(err), zap.Int("id", id))
 		return err
 	}
 
 	// 删除发送组
 	if err := tx.Delete(&model.MonitorSendGroup{}, id).Error; err != nil {
 		tx.Rollback()
-		a.l.Error("删除 MonitorSendGroup 失败", zap.Error(err), zap.Int("id", id))
+		d.l.Error("删除 MonitorSendGroup 失败", zap.Error(err), zap.Int("id", id))
 		return fmt.Errorf("删除 ID 为 %d 的 MonitorSendGroup 失败: %w", id, err)
 	}
 
 	// 提交事务
 	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
-		a.l.Error("提交事务失败", zap.Error(err))
+		d.l.Error("提交事务失败", zap.Error(err))
 		return err
 	}
 
@@ -307,18 +307,18 @@ func (a *alertManagerSendDAO) DeleteMonitorSendGroup(ctx context.Context, id int
 }
 
 // CheckMonitorSendGroupExists 检查 MonitorSendGroup 是否存在
-func (a *alertManagerSendDAO) CheckMonitorSendGroupExists(ctx context.Context, sendGroup *model.MonitorSendGroup) (bool, error) {
+func (d *alertManagerSendDAO) CheckMonitorSendGroupExists(ctx context.Context, sendGroup *model.MonitorSendGroup) (bool, error) {
 	if sendGroup == nil || sendGroup.ID <= 0 {
 		return false, fmt.Errorf("无效的 sendGroup 或 ID")
 	}
 
 	var count int64
 
-	if err := a.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Model(&model.MonitorSendGroup{}).
 		Where("id = ?", sendGroup.ID).
 		Count(&count).Error; err != nil {
-		a.l.Error("检查 MonitorSendGroup 是否存在失败", zap.Error(err))
+		d.l.Error("检查 MonitorSendGroup 是否存在失败", zap.Error(err))
 		return false, err
 	}
 
@@ -326,13 +326,13 @@ func (a *alertManagerSendDAO) CheckMonitorSendGroupExists(ctx context.Context, s
 }
 
 // CheckMonitorSendGroupNameExists 检查 MonitorSendGroup 名称是否存在
-func (a *alertManagerSendDAO) CheckMonitorSendGroupNameExists(ctx context.Context, sendGroup *model.MonitorSendGroup) (bool, error) {
+func (d *alertManagerSendDAO) CheckMonitorSendGroupNameExists(ctx context.Context, sendGroup *model.MonitorSendGroup) (bool, error) {
 	if sendGroup == nil || sendGroup.Name == "" {
 		return false, fmt.Errorf("无效的 sendGroup 或名称为空")
 	}
 
 	var count int64
-	query := a.db.WithContext(ctx).
+	query := d.db.WithContext(ctx).
 		Model(&model.MonitorSendGroup{}).
 		Where("name = ?", sendGroup.Name)
 
@@ -342,7 +342,7 @@ func (a *alertManagerSendDAO) CheckMonitorSendGroupNameExists(ctx context.Contex
 	}
 
 	if err := query.Count(&count).Error; err != nil {
-		a.l.Error("检查 MonitorSendGroup 名称是否存在失败", zap.Error(err))
+		d.l.Error("检查 MonitorSendGroup 名称是否存在失败", zap.Error(err))
 		return false, err
 	}
 
@@ -350,50 +350,50 @@ func (a *alertManagerSendDAO) CheckMonitorSendGroupNameExists(ctx context.Contex
 }
 
 // UpdateMonitorSendGroup 更新 MonitorSendGroup
-func (a *alertManagerSendDAO) UpdateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error {
+func (d *alertManagerSendDAO) UpdateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error {
 	if monitorSendGroup == nil || monitorSendGroup.ID <= 0 {
 		return fmt.Errorf("无效的 monitorSendGroup 或 ID")
 	}
 
 	// 开启事务
-	tx := a.db.WithContext(ctx).Begin()
+	tx := d.db.WithContext(ctx).Begin()
 	if tx.Error != nil {
-		a.l.Error("开启事务失败", zap.Error(tx.Error))
+		d.l.Error("开启事务失败", zap.Error(tx.Error))
 		return tx.Error
 	}
 
 	// 更新发送组基本信息
 	if err := tx.Model(monitorSendGroup).Updates(monitorSendGroup).Error; err != nil {
 		tx.Rollback()
-		a.l.Error("更新 MonitorSendGroup 失败", zap.Error(err))
+		d.l.Error("更新 MonitorSendGroup 失败", zap.Error(err))
 		return err
 	}
 
 	// 处理静态接收用户关联
 	if err := tx.Model(monitorSendGroup).Association("StaticReceiveUsers").Replace(monitorSendGroup.StaticReceiveUsers); err != nil {
 		tx.Rollback()
-		a.l.Error("更新静态接收用户关联失败", zap.Error(err))
+		d.l.Error("更新静态接收用户关联失败", zap.Error(err))
 		return err
 	}
 
 	// 处理第一级升级用户关联
 	if err := tx.Model(monitorSendGroup).Association("FirstUpgradeUsers").Replace(monitorSendGroup.FirstUpgradeUsers); err != nil {
 		tx.Rollback()
-		a.l.Error("更新第一级升级用户关联失败", zap.Error(err))
+		d.l.Error("更新第一级升级用户关联失败", zap.Error(err))
 		return err
 	}
 
 	// 处理第二级升级用户关联
 	if err := tx.Model(monitorSendGroup).Association("SecondUpgradeUsers").Replace(monitorSendGroup.SecondUpgradeUsers); err != nil {
 		tx.Rollback()
-		a.l.Error("更新第二级升级用户关联失败", zap.Error(err))
+		d.l.Error("更新第二级升级用户关联失败", zap.Error(err))
 		return err
 	}
 
 	// 提交事务
 	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
-		a.l.Error("提交事务失败", zap.Error(err))
+		d.l.Error("提交事务失败", zap.Error(err))
 		return err
 	}
 
@@ -401,24 +401,24 @@ func (a *alertManagerSendDAO) UpdateMonitorSendGroup(ctx context.Context, monito
 }
 
 // GetMonitorSendGroups 获取所有发送组
-func (a *alertManagerSendDAO) GetMonitorSendGroups(ctx context.Context) ([]*model.MonitorSendGroup, int64, error) {
+func (d *alertManagerSendDAO) GetMonitorSendGroups(ctx context.Context) ([]*model.MonitorSendGroup, int64, error) {
 	var sendGroups []*model.MonitorSendGroup
 	var count int64
 
 	// 先获取总数
-	if err := a.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Model(&model.MonitorSendGroup{}).
 		Count(&count).Error; err != nil {
-		a.l.Error("获取发送组总数失败", zap.Error(err))
+		d.l.Error("获取发送组总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
-	if err := a.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Preload("StaticReceiveUsers").
 		Preload("FirstUpgradeUsers").
 		Preload("SecondUpgradeUsers").
 		Find(&sendGroups).Error; err != nil {
-		a.l.Error("获取所有发送组失败", zap.Error(err))
+		d.l.Error("获取所有发送组失败", zap.Error(err))
 		return nil, 0, err
 	}
 

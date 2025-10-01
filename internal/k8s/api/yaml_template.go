@@ -42,20 +42,20 @@ func NewK8sYamlTemplateHandler(yamlTemplateService service.YamlTemplateService) 
 	}
 }
 
-func (k *K8sYamlTemplateHandler) RegisterRouters(server *gin.Engine) {
+func (h *K8sYamlTemplateHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/yaml_template/:cluster_id/list", k.GetYamlTemplateList)         // 获取 YAML 模板列表
-		k8sGroup.POST("/yaml_template/:cluster_id/create", k.CreateYamlTemplate)       // 创建新的 YAML 模板
-		k8sGroup.POST("/yaml_template/:cluster_id/check", k.CheckYamlTemplate)         // 检查 YAML 模板是否可用
-		k8sGroup.POST("/yaml_template/:cluster_id/:id/update", k.UpdateYamlTemplate)   // 更新指定 ID 的 YAML 模板
-		k8sGroup.DELETE("/yaml_template/:cluster_id/:id/delete", k.DeleteYamlTemplate) // 删除指定 ID 的 YAML 模板
-		k8sGroup.GET("/yaml_template/:cluster_id/:id/yaml", k.GetYamlTemplateDetail)
+		k8sGroup.GET("/yaml_template/:cluster_id/list", h.GetYamlTemplateList)         // 获取 YAML 模板列表
+		k8sGroup.POST("/yaml_template/:cluster_id/create", h.CreateYamlTemplate)       // 创建新的 YAML 模板
+		k8sGroup.POST("/yaml_template/:cluster_id/check", h.CheckYamlTemplate)         // 检查 YAML 模板是否可用
+		k8sGroup.POST("/yaml_template/:cluster_id/:id/update", h.UpdateYamlTemplate)   // 更新指定 ID 的 YAML 模板
+		k8sGroup.DELETE("/yaml_template/:cluster_id/:id/delete", h.DeleteYamlTemplate) // 删除指定 ID 的 YAML 模板
+		k8sGroup.GET("/yaml_template/:cluster_id/:id/yaml", h.GetYamlTemplateDetail)
 	}
 }
 
 // GetYamlTemplateList 获取 YAML 模板列表
-func (k *K8sYamlTemplateHandler) GetYamlTemplateList(ctx *gin.Context) {
+func (h *K8sYamlTemplateHandler) GetYamlTemplateList(ctx *gin.Context) {
 	var req model.YamlTemplateListReq
 
 	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -67,12 +67,12 @@ func (k *K8sYamlTemplateHandler) GetYamlTemplateList(ctx *gin.Context) {
 	req.ClusterID = clusterId
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.yamlTemplateService.GetYamlTemplateList(ctx, &req)
+		return h.yamlTemplateService.GetYamlTemplateList(ctx, &req)
 	})
 }
 
 // CreateYamlTemplate 创建新的 YAML 模板
-func (k *K8sYamlTemplateHandler) CreateYamlTemplate(ctx *gin.Context) {
+func (h *K8sYamlTemplateHandler) CreateYamlTemplate(ctx *gin.Context) {
 	var req model.YamlTemplateCreateReq
 
 	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -86,12 +86,12 @@ func (k *K8sYamlTemplateHandler) CreateYamlTemplate(ctx *gin.Context) {
 	req.UserID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.yamlTemplateService.CreateYamlTemplate(ctx, &req)
+		return nil, h.yamlTemplateService.CreateYamlTemplate(ctx, &req)
 	})
 }
 
 // UpdateYamlTemplate 更新指定 ID 的 YAML 模板
-func (k *K8sYamlTemplateHandler) UpdateYamlTemplate(ctx *gin.Context) {
+func (h *K8sYamlTemplateHandler) UpdateYamlTemplate(ctx *gin.Context) {
 	var req model.YamlTemplateUpdateReq
 
 	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -112,12 +112,12 @@ func (k *K8sYamlTemplateHandler) UpdateYamlTemplate(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.yamlTemplateService.UpdateYamlTemplate(ctx, &req)
+		return nil, h.yamlTemplateService.UpdateYamlTemplate(ctx, &req)
 	})
 }
 
 // DeleteYamlTemplate 删除指定 ID 的 YAML 模板
-func (k *K8sYamlTemplateHandler) DeleteYamlTemplate(ctx *gin.Context) {
+func (h *K8sYamlTemplateHandler) DeleteYamlTemplate(ctx *gin.Context) {
 	var req model.YamlTemplateDeleteReq
 
 	id, err := utils.GetParamID(ctx)
@@ -136,12 +136,12 @@ func (k *K8sYamlTemplateHandler) DeleteYamlTemplate(ctx *gin.Context) {
 	req.ClusterID = clusterId
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.yamlTemplateService.DeleteYamlTemplate(ctx, &req)
+		return nil, h.yamlTemplateService.DeleteYamlTemplate(ctx, &req)
 	})
 }
 
 // CheckYamlTemplate 检查 YAML 模板
-func (k *K8sYamlTemplateHandler) CheckYamlTemplate(ctx *gin.Context) {
+func (h *K8sYamlTemplateHandler) CheckYamlTemplate(ctx *gin.Context) {
 	var req model.YamlTemplateCheckReq
 
 	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -153,12 +153,12 @@ func (k *K8sYamlTemplateHandler) CheckYamlTemplate(ctx *gin.Context) {
 	req.ClusterID = clusterId
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.yamlTemplateService.CheckYamlTemplate(ctx, &req)
+		return nil, h.yamlTemplateService.CheckYamlTemplate(ctx, &req)
 	})
 }
 
 // GetYamlTemplateDetail 获取 YAML 模板详情
-func (k *K8sYamlTemplateHandler) GetYamlTemplateDetail(ctx *gin.Context) {
+func (h *K8sYamlTemplateHandler) GetYamlTemplateDetail(ctx *gin.Context) {
 	var req model.YamlTemplateDetailReq
 
 	id, err := utils.GetParamID(ctx)
@@ -177,6 +177,6 @@ func (k *K8sYamlTemplateHandler) GetYamlTemplateDetail(ctx *gin.Context) {
 	req.ClusterID = clusterId
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.yamlTemplateService.GetYamlTemplateDetail(ctx, &req)
+		return h.yamlTemplateService.GetYamlTemplateDetail(ctx, &req)
 	})
 }

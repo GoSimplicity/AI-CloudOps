@@ -61,36 +61,36 @@ func NewClusterRoleManager(client client.K8sClient, logger *zap.Logger) ClusterR
 }
 
 // CreateClusterRole 创建ClusterRole
-func (c *clusterRoleManager) CreateClusterRole(ctx context.Context, clusterID int, clusterRole *rbacv1.ClusterRole) error {
-	clientset, err := c.client.GetKubeClient(clusterID)
+func (m *clusterRoleManager) CreateClusterRole(ctx context.Context, clusterID int, clusterRole *rbacv1.ClusterRole) error {
+	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		c.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
 		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
 	_, err = clientset.RbacV1().ClusterRoles().Create(ctx, clusterRole, metav1.CreateOptions{})
 	if err != nil {
-		c.logger.Error("创建ClusterRole失败", zap.Error(err),
+		m.logger.Error("创建ClusterRole失败", zap.Error(err),
 			zap.Int("cluster_id", clusterID), zap.String("name", clusterRole.Name))
 		return fmt.Errorf("创建ClusterRole %s 失败: %w", clusterRole.Name, err)
 	}
 
-	c.logger.Info("成功创建ClusterRole",
+	m.logger.Info("成功创建ClusterRole",
 		zap.Int("cluster_id", clusterID), zap.String("name", clusterRole.Name))
 	return nil
 }
 
 // GetClusterRole 获取单个ClusterRole
-func (c *clusterRoleManager) GetClusterRole(ctx context.Context, clusterID int, name string) (*rbacv1.ClusterRole, error) {
-	clientset, err := c.client.GetKubeClient(clusterID)
+func (m *clusterRoleManager) GetClusterRole(ctx context.Context, clusterID int, name string) (*rbacv1.ClusterRole, error) {
+	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		c.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
 		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
 	clusterRole, err := clientset.RbacV1().ClusterRoles().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		c.logger.Error("获取ClusterRole失败", zap.Error(err),
+		m.logger.Error("获取ClusterRole失败", zap.Error(err),
 			zap.Int("cluster_id", clusterID), zap.String("name", name))
 		return nil, fmt.Errorf("获取ClusterRole %s 失败: %w", name, err)
 	}
@@ -99,16 +99,16 @@ func (c *clusterRoleManager) GetClusterRole(ctx context.Context, clusterID int, 
 }
 
 // GetClusterRoleList 获取ClusterRole列表
-func (c *clusterRoleManager) GetClusterRoleList(ctx context.Context, clusterID int, listOptions metav1.ListOptions) ([]*model.K8sClusterRole, error) {
-	clientset, err := c.client.GetKubeClient(clusterID)
+func (m *clusterRoleManager) GetClusterRoleList(ctx context.Context, clusterID int, listOptions metav1.ListOptions) ([]*model.K8sClusterRole, error) {
+	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		c.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
 		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
 	clusterRoles, err := clientset.RbacV1().ClusterRoles().List(ctx, listOptions)
 	if err != nil {
-		c.logger.Error("获取ClusterRole列表失败", zap.Error(err), zap.Int("cluster_id", clusterID))
+		m.logger.Error("获取ClusterRole列表失败", zap.Error(err), zap.Int("cluster_id", clusterID))
 		return nil, fmt.Errorf("获取ClusterRole列表失败: %w", err)
 	}
 
@@ -128,48 +128,48 @@ func (c *clusterRoleManager) GetClusterRoleList(ctx context.Context, clusterID i
 		k8sClusterRoles = append(k8sClusterRoles, k8sClusterRole)
 	}
 
-	c.logger.Debug("成功获取ClusterRole列表",
+	m.logger.Debug("成功获取ClusterRole列表",
 		zap.Int("cluster_id", clusterID), zap.Int("count", len(clusterRoles.Items)))
 
 	return k8sClusterRoles, nil
 }
 
 // UpdateClusterRole 更新ClusterRole
-func (c *clusterRoleManager) UpdateClusterRole(ctx context.Context, clusterID int, clusterRole *rbacv1.ClusterRole) error {
-	clientset, err := c.client.GetKubeClient(clusterID)
+func (m *clusterRoleManager) UpdateClusterRole(ctx context.Context, clusterID int, clusterRole *rbacv1.ClusterRole) error {
+	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		c.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
 		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
 	_, err = clientset.RbacV1().ClusterRoles().Update(ctx, clusterRole, metav1.UpdateOptions{})
 	if err != nil {
-		c.logger.Error("更新ClusterRole失败", zap.Error(err),
+		m.logger.Error("更新ClusterRole失败", zap.Error(err),
 			zap.Int("cluster_id", clusterID), zap.String("name", clusterRole.Name))
 		return fmt.Errorf("更新ClusterRole %s 失败: %w", clusterRole.Name, err)
 	}
 
-	c.logger.Info("成功更新ClusterRole",
+	m.logger.Info("成功更新ClusterRole",
 		zap.Int("cluster_id", clusterID), zap.String("name", clusterRole.Name))
 	return nil
 }
 
 // DeleteClusterRole 删除ClusterRole
-func (c *clusterRoleManager) DeleteClusterRole(ctx context.Context, clusterID int, name string, deleteOptions metav1.DeleteOptions) error {
-	clientset, err := c.client.GetKubeClient(clusterID)
+func (m *clusterRoleManager) DeleteClusterRole(ctx context.Context, clusterID int, name string, deleteOptions metav1.DeleteOptions) error {
+	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		c.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
 		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
 	err = clientset.RbacV1().ClusterRoles().Delete(ctx, name, deleteOptions)
 	if err != nil {
-		c.logger.Error("删除ClusterRole失败", zap.Error(err),
+		m.logger.Error("删除ClusterRole失败", zap.Error(err),
 			zap.Int("cluster_id", clusterID), zap.String("name", name))
 		return fmt.Errorf("删除ClusterRole %s 失败: %w", name, err)
 	}
 
-	c.logger.Info("成功删除ClusterRole",
+	m.logger.Info("成功删除ClusterRole",
 		zap.Int("cluster_id", clusterID), zap.String("name", name))
 	return nil
 }

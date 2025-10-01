@@ -63,7 +63,7 @@ func NewTreeLocalService(logger *zap.Logger, dao dao.TreeLocalDAO) TreeLocalServ
 }
 
 // GetTreeLocalList 获取本地主机列表
-func (t *treeLocalService) GetTreeLocalList(ctx context.Context, req *model.GetTreeLocalResourceListReq) (model.ListResp[*model.TreeLocalResource], error) {
+func (s *treeLocalService) GetTreeLocalList(ctx context.Context, req *model.GetTreeLocalResourceListReq) (model.ListResp[*model.TreeLocalResource], error) {
 	// 兜底分页参数，避免offset为负或size为0
 	if req.Page <= 0 {
 		req.Page = 1
@@ -71,9 +71,9 @@ func (t *treeLocalService) GetTreeLocalList(ctx context.Context, req *model.GetT
 	if req.Size <= 0 {
 		req.Size = 10
 	}
-	locals, total, err := t.dao.GetList(ctx, req)
+	locals, total, err := s.dao.GetList(ctx, req)
 	if err != nil {
-		t.logger.Error("获取本地主机列表失败", zap.Error(err))
+		s.logger.Error("获取本地主机列表失败", zap.Error(err))
 		return model.ListResp[*model.TreeLocalResource]{}, err
 	}
 
@@ -84,17 +84,17 @@ func (t *treeLocalService) GetTreeLocalList(ctx context.Context, req *model.GetT
 }
 
 // GetTreeLocalDetail 获取本地主机详情
-func (t *treeLocalService) GetTreeLocalDetail(ctx context.Context, req *model.GetTreeLocalResourceDetailReq) (*model.TreeLocalResource, error) {
+func (s *treeLocalService) GetTreeLocalDetail(ctx context.Context, req *model.GetTreeLocalResourceDetailReq) (*model.TreeLocalResource, error) {
 	if req.ID <= 0 {
 		return nil, errors.New("无效的主机ID")
 	}
 
-	local, err := t.dao.GetByID(ctx, req.ID)
+	local, err := s.dao.GetByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("本地主机不存在")
 		}
-		t.logger.Error("获取本地主机详情失败", zap.Int("id", req.ID), zap.Error(err))
+		s.logger.Error("获取本地主机详情失败", zap.Int("id", req.ID), zap.Error(err))
 		return nil, err
 	}
 
@@ -102,25 +102,25 @@ func (t *treeLocalService) GetTreeLocalDetail(ctx context.Context, req *model.Ge
 }
 
 // GetTreeLocalForConnection 获取用于连接的本地主机详情(包含解密后的密码)
-func (t *treeLocalService) GetTreeLocalForConnection(ctx context.Context, req *model.GetTreeLocalResourceDetailReq) (*model.TreeLocalResource, error) {
+func (s *treeLocalService) GetTreeLocalForConnection(ctx context.Context, req *model.GetTreeLocalResourceDetailReq) (*model.TreeLocalResource, error) {
 	if req.ID <= 0 {
 		return nil, errors.New("无效的主机ID")
 	}
 
-	local, err := t.dao.GetByID(ctx, req.ID)
+	local, err := s.dao.GetByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("本地主机不存在")
 		}
-		t.logger.Error("获取本地主机详情失败", zap.Int("id", req.ID), zap.Error(err))
+		s.logger.Error("获取本地主机详情失败", zap.Int("id", req.ID), zap.Error(err))
 		return nil, err
 	}
 
 	// 解密密码以供连接使用
 	if local.AuthMode == model.AuthModePassword && local.Password != "" {
-		plainPassword, err := t.decryptPassword(local.Password)
+		plainPassword, err := s.decryptPassword(local.Password)
 		if err != nil {
-			t.logger.Error("密码解密失败", zap.Int("id", req.ID), zap.Error(err))
+			s.logger.Error("密码解密失败", zap.Int("id", req.ID), zap.Error(err))
 			return nil, fmt.Errorf("密码解密失败: %w", err)
 		}
 		local.Password = plainPassword
@@ -129,9 +129,9 @@ func (t *treeLocalService) GetTreeLocalForConnection(ctx context.Context, req *m
 	return local, nil
 }
 
-func (t *treeLocalService) CreateTreeLocal(ctx context.Context, req *model.CreateTreeLocalResourceReq) error {
+func (s *treeLocalService) CreateTreeLocal(ctx context.Context, req *model.CreateTreeLocalResourceReq) error {
 	// 检查IP地址是否已存在
-	existing, err := t.dao.GetByIP(ctx, req.IpAddr)
+	existing, err := s.dao.GetByIP(ctx, req.IpAddr)
 	if err == nil && existing != nil {
 		return fmt.Errorf("IP地址 %s 已存在", req.IpAddr)
 	}
@@ -166,41 +166,41 @@ func (t *treeLocalService) CreateTreeLocal(ctx context.Context, req *model.Creat
 
 	// 加密
 	if local.AuthMode == model.AuthModePassword && req.Password != "" {
-		encryptedPassword, err := t.encryptPassword(req.Password)
+		encryptedPassword, err := s.encryptPassword(req.Password)
 		if err != nil {
-			t.logger.Error("密码加密失败", zap.Error(err))
+			s.logger.Error("密码加密失败", zap.Error(err))
 			return fmt.Errorf("密码加密失败: %w", err)
 		}
 		local.Password = encryptedPassword
 	}
 
-	if err := t.dao.Create(ctx, local); err != nil {
-		t.logger.Error("创建本地主机失败", zap.Error(err))
+	if err := s.dao.Create(ctx, local); err != nil {
+		s.logger.Error("创建本地主机失败", zap.Error(err))
 		return err
 	}
 
 	return nil
 }
 
-func (t *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.UpdateTreeLocalResourceReq) error {
+func (s *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.UpdateTreeLocalResourceReq) error {
 	if req.ID <= 0 {
 		return errors.New("无效的主机ID")
 	}
 
 	// 检查是否存在
-	host, err := t.dao.GetByID(ctx, req.ID)
+	host, err := s.dao.GetByID(ctx, req.ID)
 	switch {
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		return errors.New("本地主机不存在")
 	case err != nil:
-		t.logger.Error("获取本地主机失败", zap.Int("id", req.ID), zap.Error(err))
+		s.logger.Error("获取本地主机失败", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}
 
 	// 检查 IP 冲突
 	if req.IpAddr != "" && req.IpAddr != host.IpAddr {
-		if h, _ := t.dao.GetByIP(ctx, req.IpAddr); h != nil && h.ID != req.ID {
-			t.logger.Error("IP 已被占用", zap.String("ip", req.IpAddr), zap.Int("existing_id", h.ID))
+		if h, _ := s.dao.GetByIP(ctx, req.IpAddr); h != nil && h.ID != req.ID {
+			s.logger.Error("IP 已被占用", zap.String("ip", req.IpAddr), zap.Int("existing_id", h.ID))
 			return fmt.Errorf("IP %s 已被其他主机使用", req.IpAddr)
 		}
 	}
@@ -224,9 +224,9 @@ func (t *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.Updat
 
 	// 加密密码
 	if req.AuthMode == model.AuthModePassword && req.Password != "" {
-		pwd, err := t.encryptPassword(req.Password)
+		pwd, err := s.encryptPassword(req.Password)
 		if err != nil {
-			t.logger.Error("密码加密失败", zap.Error(err))
+			s.logger.Error("密码加密失败", zap.Error(err))
 			return fmt.Errorf("密码加密失败: %w", err)
 		}
 		local.Password = pwd
@@ -242,8 +242,8 @@ func (t *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.Updat
 		return fmt.Errorf("合并字段失败: %w", err)
 	}
 
-	if err := t.dao.Update(ctx, host); err != nil {
-		t.logger.Error("更新本地主机失败", zap.Int("id", req.ID), zap.Error(err))
+	if err := s.dao.Update(ctx, host); err != nil {
+		s.logger.Error("更新本地主机失败", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}
 
@@ -251,42 +251,42 @@ func (t *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.Updat
 }
 
 // DeleteTreeLocal 删除本地主机
-func (t *treeLocalService) DeleteTreeLocal(ctx context.Context, req *model.DeleteTreeLocalResourceReq) error {
+func (s *treeLocalService) DeleteTreeLocal(ctx context.Context, req *model.DeleteTreeLocalResourceReq) error {
 	if req.ID <= 0 {
 		return errors.New("无效的主机ID")
 	}
 
-	if err := t.dao.Delete(ctx, req.ID); err != nil {
+	if err := s.dao.Delete(ctx, req.ID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("本地主机不存在")
 		}
-		t.logger.Error("删除本地主机失败", zap.Int("id", req.ID), zap.Error(err))
+		s.logger.Error("删除本地主机失败", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}
 
 	return nil
 }
 
-func (t *treeLocalService) BindTreeLocal(ctx context.Context, req *model.BindTreeLocalResourceReq) error {
+func (s *treeLocalService) BindTreeLocal(ctx context.Context, req *model.BindTreeLocalResourceReq) error {
 	if req.ID <= 0 {
 		return errors.New("无效的主机ID")
 	}
 
-	if err := t.dao.BindTreeNodes(ctx, req.ID, req.TreeNodeIDs); err != nil {
-		t.logger.Error("绑定主机失败", zap.Int("id", req.ID), zap.Error(err))
+	if err := s.dao.BindTreeNodes(ctx, req.ID, req.TreeNodeIDs); err != nil {
+		s.logger.Error("绑定主机失败", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}
 
 	return nil
 }
 
-func (t *treeLocalService) UnBindLocalResource(ctx context.Context, req *model.UnBindTreeLocalResourceReq) error {
+func (s *treeLocalService) UnBindLocalResource(ctx context.Context, req *model.UnBindTreeLocalResourceReq) error {
 	if req.ID <= 0 {
 		return errors.New("无效的主机ID")
 	}
 
-	if err := t.dao.UnBindTreeNodes(ctx, req.ID, req.TreeNodeIDs); err != nil {
-		t.logger.Error("解绑主机失败", zap.Int("id", req.ID), zap.Error(err))
+	if err := s.dao.UnBindTreeNodes(ctx, req.ID, req.TreeNodeIDs); err != nil {
+		s.logger.Error("解绑主机失败", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}
 
@@ -294,7 +294,7 @@ func (t *treeLocalService) UnBindLocalResource(ctx context.Context, req *model.U
 }
 
 // encryptPassword 加密密码
-func (t *treeLocalService) encryptPassword(password string) (string, error) {
+func (s *treeLocalService) encryptPassword(password string) (string, error) {
 	if password == "" {
 		return "", nil
 	}
@@ -311,7 +311,7 @@ func (t *treeLocalService) encryptPassword(password string) (string, error) {
 }
 
 // decryptPassword 解密密码
-func (t *treeLocalService) decryptPassword(encryptedPassword string) (string, error) {
+func (s *treeLocalService) decryptPassword(encryptedPassword string) (string, error) {
 	if encryptedPassword == "" {
 		return "", nil
 	}

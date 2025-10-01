@@ -42,22 +42,22 @@ func NewK8sClusterRoleHandler(clusterRoleService service.ClusterRoleService) *K8
 	}
 }
 
-func (k *K8sClusterRoleHandler) RegisterRouters(server *gin.Engine) {
+func (h *K8sClusterRoleHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/clusterrole/:cluster_id/list", k.GetClusterRoleList)
-		k8sGroup.GET("/clusterrole/:cluster_id/:name/detail", k.GetClusterRoleDetails)
-		k8sGroup.GET("/clusterrole/:cluster_id/:name/detail/yaml", k.GetClusterRoleYaml)
-		k8sGroup.POST("/clusterrole/:cluster_id/create", k.CreateClusterRole)
-		k8sGroup.POST("/clusterrole/:cluster_id/create/yaml", k.CreateClusterRoleByYaml)
-		k8sGroup.PUT("/clusterrole/:cluster_id/:name/update", k.UpdateClusterRole)
-		k8sGroup.PUT("/clusterrole/:cluster_id/:name/update/yaml", k.UpdateClusterRoleByYaml)
-		k8sGroup.DELETE("/clusterrole/:cluster_id/:name/delete", k.DeleteClusterRole)
+		k8sGroup.GET("/clusterrole/:cluster_id/list", h.GetClusterRoleList)
+		k8sGroup.GET("/clusterrole/:cluster_id/:name/detail", h.GetClusterRoleDetails)
+		k8sGroup.GET("/clusterrole/:cluster_id/:name/detail/yaml", h.GetClusterRoleYaml)
+		k8sGroup.POST("/clusterrole/:cluster_id/create", h.CreateClusterRole)
+		k8sGroup.POST("/clusterrole/:cluster_id/create/yaml", h.CreateClusterRoleByYaml)
+		k8sGroup.PUT("/clusterrole/:cluster_id/:name/update", h.UpdateClusterRole)
+		k8sGroup.PUT("/clusterrole/:cluster_id/:name/update/yaml", h.UpdateClusterRoleByYaml)
+		k8sGroup.DELETE("/clusterrole/:cluster_id/:name/delete", h.DeleteClusterRole)
 	}
 }
 
 // GetClusterRoleList 获取ClusterRole列表
-func (k *K8sClusterRoleHandler) GetClusterRoleList(ctx *gin.Context) {
+func (h *K8sClusterRoleHandler) GetClusterRoleList(ctx *gin.Context) {
 	var req model.GetClusterRoleListReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -69,12 +69,12 @@ func (k *K8sClusterRoleHandler) GetClusterRoleList(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.clusterRoleService.GetClusterRoleList(ctx, &req)
+		return h.clusterRoleService.GetClusterRoleList(ctx, &req)
 	})
 }
 
 // GetClusterRoleDetails 获取ClusterRole详情
-func (k *K8sClusterRoleHandler) GetClusterRoleDetails(ctx *gin.Context) {
+func (h *K8sClusterRoleHandler) GetClusterRoleDetails(ctx *gin.Context) {
 	var req model.GetClusterRoleDetailsReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -93,12 +93,12 @@ func (k *K8sClusterRoleHandler) GetClusterRoleDetails(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.clusterRoleService.GetClusterRoleDetails(ctx, &req)
+		return h.clusterRoleService.GetClusterRoleDetails(ctx, &req)
 	})
 }
 
 // GetClusterRoleYaml 获取ClusterRole的YAML配置
-func (k *K8sClusterRoleHandler) GetClusterRoleYaml(ctx *gin.Context) {
+func (h *K8sClusterRoleHandler) GetClusterRoleYaml(ctx *gin.Context) {
 	var req model.GetClusterRoleYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -117,12 +117,12 @@ func (k *K8sClusterRoleHandler) GetClusterRoleYaml(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.clusterRoleService.GetClusterRoleYaml(ctx, &req)
+		return h.clusterRoleService.GetClusterRoleYaml(ctx, &req)
 	})
 }
 
 // CreateClusterRole 创建ClusterRole
-func (k *K8sClusterRoleHandler) CreateClusterRole(ctx *gin.Context) {
+func (h *K8sClusterRoleHandler) CreateClusterRole(ctx *gin.Context) {
 	var req model.CreateClusterRoleReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -134,12 +134,12 @@ func (k *K8sClusterRoleHandler) CreateClusterRole(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.clusterRoleService.CreateClusterRole(ctx, &req)
+		return nil, h.clusterRoleService.CreateClusterRole(ctx, &req)
 	})
 }
 
 // CreateClusterRoleByYaml 通过YAML创建ClusterRole
-func (k *K8sClusterRoleHandler) CreateClusterRoleByYaml(ctx *gin.Context) {
+func (h *K8sClusterRoleHandler) CreateClusterRoleByYaml(ctx *gin.Context) {
 	var req model.CreateClusterRoleByYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -151,12 +151,12 @@ func (k *K8sClusterRoleHandler) CreateClusterRoleByYaml(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.clusterRoleService.CreateClusterRoleByYaml(ctx, &req)
+		return nil, h.clusterRoleService.CreateClusterRoleByYaml(ctx, &req)
 	})
 }
 
 // UpdateClusterRole 更新ClusterRole
-func (k *K8sClusterRoleHandler) UpdateClusterRole(ctx *gin.Context) {
+func (h *K8sClusterRoleHandler) UpdateClusterRole(ctx *gin.Context) {
 	var req model.UpdateClusterRoleReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -175,12 +175,12 @@ func (k *K8sClusterRoleHandler) UpdateClusterRole(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.clusterRoleService.UpdateClusterRole(ctx, &req)
+		return nil, h.clusterRoleService.UpdateClusterRole(ctx, &req)
 	})
 }
 
 // UpdateClusterRoleYaml 通过YAML更新ClusterRole
-func (k *K8sClusterRoleHandler) UpdateClusterRoleByYaml(ctx *gin.Context) {
+func (h *K8sClusterRoleHandler) UpdateClusterRoleByYaml(ctx *gin.Context) {
 	var req model.UpdateClusterRoleByYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -199,12 +199,12 @@ func (k *K8sClusterRoleHandler) UpdateClusterRoleByYaml(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.clusterRoleService.UpdateClusterRoleYaml(ctx, &req)
+		return nil, h.clusterRoleService.UpdateClusterRoleYaml(ctx, &req)
 	})
 }
 
 // DeleteClusterRole 删除ClusterRole
-func (k *K8sClusterRoleHandler) DeleteClusterRole(ctx *gin.Context) {
+func (h *K8sClusterRoleHandler) DeleteClusterRole(ctx *gin.Context) {
 	var req model.DeleteClusterRoleReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -223,6 +223,6 @@ func (k *K8sClusterRoleHandler) DeleteClusterRole(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.clusterRoleService.DeleteClusterRole(ctx, &req)
+		return nil, h.clusterRoleService.DeleteClusterRole(ctx, &req)
 	})
 }

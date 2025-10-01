@@ -44,28 +44,28 @@ func NewScrapeJobHandler(scrapeJobService scrapeJobService.ScrapeJobService) *Sc
 	}
 }
 
-func (s *ScrapeJobHandler) RegisterRouters(server *gin.Engine) {
+func (h *ScrapeJobHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
 	{
-		monitorGroup.GET("/scrape_jobs/list", s.GetMonitorScrapeJobList)
-		monitorGroup.GET("/scrape_jobs/detail/:id", s.GetMonitorScrapeJobDetail)
-		monitorGroup.POST("/scrape_jobs/create", s.CreateMonitorScrapeJob)
-		monitorGroup.PUT("/scrape_jobs/update/:id", s.UpdateMonitorScrapeJob)
-		monitorGroup.DELETE("/scrape_jobs/delete/:id", s.DeleteMonitorScrapeJob)
+		monitorGroup.GET("/scrape_jobs/list", h.GetMonitorScrapeJobList)
+		monitorGroup.GET("/scrape_jobs/detail/:id", h.GetMonitorScrapeJobDetail)
+		monitorGroup.POST("/scrape_jobs/create", h.CreateMonitorScrapeJob)
+		monitorGroup.PUT("/scrape_jobs/update/:id", h.UpdateMonitorScrapeJob)
+		monitorGroup.DELETE("/scrape_jobs/delete/:id", h.DeleteMonitorScrapeJob)
 	}
 }
 
 // GetMonitorScrapeJobList 获取监控采集 Job 列表
-func (s *ScrapeJobHandler) GetMonitorScrapeJobList(ctx *gin.Context) {
+func (h *ScrapeJobHandler) GetMonitorScrapeJobList(ctx *gin.Context) {
 	var req model.GetMonitorScrapeJobListReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return s.scrapeJobService.GetMonitorScrapeJobList(ctx, &req)
+		return h.scrapeJobService.GetMonitorScrapeJobList(ctx, &req)
 	})
 }
 
 // CreateMonitorScrapeJob 创建监控采集 Job
-func (s *ScrapeJobHandler) CreateMonitorScrapeJob(ctx *gin.Context) {
+func (h *ScrapeJobHandler) CreateMonitorScrapeJob(ctx *gin.Context) {
 	var req model.CreateMonitorScrapeJobReq
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
@@ -73,12 +73,12 @@ func (s *ScrapeJobHandler) CreateMonitorScrapeJob(ctx *gin.Context) {
 	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, s.scrapeJobService.CreateMonitorScrapeJob(ctx, &req)
+		return nil, h.scrapeJobService.CreateMonitorScrapeJob(ctx, &req)
 	})
 }
 
 // UpdateMonitorScrapeJob 更新监控采集 Job
-func (s *ScrapeJobHandler) UpdateMonitorScrapeJob(ctx *gin.Context) {
+func (h *ScrapeJobHandler) UpdateMonitorScrapeJob(ctx *gin.Context) {
 	var req model.UpdateMonitorScrapeJobReq
 
 	id, err := utils.GetParamID(ctx)
@@ -90,12 +90,12 @@ func (s *ScrapeJobHandler) UpdateMonitorScrapeJob(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, s.scrapeJobService.UpdateMonitorScrapeJob(ctx, &req)
+		return nil, h.scrapeJobService.UpdateMonitorScrapeJob(ctx, &req)
 	})
 }
 
 // DeleteMonitorScrapeJob 删除监控采集 Job
-func (s *ScrapeJobHandler) DeleteMonitorScrapeJob(ctx *gin.Context) {
+func (h *ScrapeJobHandler) DeleteMonitorScrapeJob(ctx *gin.Context) {
 	var req model.DeleteMonitorScrapeJobReq
 
 	id, err := utils.GetParamID(ctx)
@@ -107,12 +107,12 @@ func (s *ScrapeJobHandler) DeleteMonitorScrapeJob(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, s.scrapeJobService.DeleteMonitorScrapeJob(ctx, req.ID)
+		return nil, h.scrapeJobService.DeleteMonitorScrapeJob(ctx, req.ID)
 	})
 }
 
 // GetMonitorScrapeJobDetail 获取监控采集 Job 详情
-func (s *ScrapeJobHandler) GetMonitorScrapeJobDetail(ctx *gin.Context) {
+func (h *ScrapeJobHandler) GetMonitorScrapeJobDetail(ctx *gin.Context) {
 	var req model.GetMonitorScrapeJobDetailReq
 
 	id, err := utils.GetParamID(ctx)
@@ -124,6 +124,6 @@ func (s *ScrapeJobHandler) GetMonitorScrapeJobDetail(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return s.scrapeJobService.GetMonitorScrapeJobDetail(ctx, &req)
+		return h.scrapeJobService.GetMonitorScrapeJobDetail(ctx, &req)
 	})
 }

@@ -42,28 +42,28 @@ func NewAlertPoolHandler(svc alertEventService.AlertManagerPoolService) *AlertPo
 	}
 }
 
-func (a *AlertPoolHandler) RegisterRouters(server *gin.Engine) {
+func (h *AlertPoolHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
 	{
-		monitorGroup.GET("/alert_manager_pools/list", a.GetMonitorAlertManagerPoolList)
-		monitorGroup.POST("/alert_manager_pools/create", a.CreateMonitorAlertManagerPool)
-		monitorGroup.PUT("/alert_manager_pools/update/:id", a.UpdateMonitorAlertManagerPool)
-		monitorGroup.DELETE("/alert_manager_pools/delete/:id", a.DeleteMonitorAlertManagerPool)
-		monitorGroup.GET("/alert_manager_pools/detail/:id", a.GetMonitorAlertManagerPool)
+		monitorGroup.GET("/alert_manager_pools/list", h.GetMonitorAlertManagerPoolList)
+		monitorGroup.POST("/alert_manager_pools/create", h.CreateMonitorAlertManagerPool)
+		monitorGroup.PUT("/alert_manager_pools/update/:id", h.UpdateMonitorAlertManagerPool)
+		monitorGroup.DELETE("/alert_manager_pools/delete/:id", h.DeleteMonitorAlertManagerPool)
+		monitorGroup.GET("/alert_manager_pools/detail/:id", h.GetMonitorAlertManagerPool)
 	}
 }
 
 // GetMonitorAlertManagerPoolList 获取 AlertManager 集群池列表
-func (a *AlertPoolHandler) GetMonitorAlertManagerPoolList(ctx *gin.Context) {
+func (h *AlertPoolHandler) GetMonitorAlertManagerPoolList(ctx *gin.Context) {
 	var req model.GetMonitorAlertManagerPoolListReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return a.svc.GetMonitorAlertManagerPoolList(ctx, &req)
+		return h.svc.GetMonitorAlertManagerPoolList(ctx, &req)
 	})
 }
 
 // CreateMonitorAlertManagerPool 创建新的 AlertManager 集群池
-func (a *AlertPoolHandler) CreateMonitorAlertManagerPool(ctx *gin.Context) {
+func (h *AlertPoolHandler) CreateMonitorAlertManagerPool(ctx *gin.Context) {
 	var req model.CreateMonitorAlertManagerPoolReq
 
 	uc := ctx.MustGet("user").(utils.UserClaims)
@@ -71,21 +71,21 @@ func (a *AlertPoolHandler) CreateMonitorAlertManagerPool(ctx *gin.Context) {
 	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.svc.CreateMonitorAlertManagerPool(ctx, &req)
+		return nil, h.svc.CreateMonitorAlertManagerPool(ctx, &req)
 	})
 }
 
 // UpdateMonitorAlertManagerPool 更新现有的 AlertManager 集群池
-func (a *AlertPoolHandler) UpdateMonitorAlertManagerPool(ctx *gin.Context) {
+func (h *AlertPoolHandler) UpdateMonitorAlertManagerPool(ctx *gin.Context) {
 	var req model.UpdateMonitorAlertManagerPoolReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.svc.UpdateMonitorAlertManagerPool(ctx, &req)
+		return nil, h.svc.UpdateMonitorAlertManagerPool(ctx, &req)
 	})
 }
 
 // DeleteMonitorAlertManagerPool 删除指定的 AlertManager 集群池
-func (a *AlertPoolHandler) DeleteMonitorAlertManagerPool(ctx *gin.Context) {
+func (h *AlertPoolHandler) DeleteMonitorAlertManagerPool(ctx *gin.Context) {
 	var req model.DeleteMonitorAlertManagerPoolReq
 
 	id, err := utils.GetParamID(ctx)
@@ -97,12 +97,12 @@ func (a *AlertPoolHandler) DeleteMonitorAlertManagerPool(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.svc.DeleteMonitorAlertManagerPool(ctx, &req)
+		return nil, h.svc.DeleteMonitorAlertManagerPool(ctx, &req)
 	})
 }
 
 // GetMonitorAlertManagerPool 获取指定的AlertManager集群池详情
-func (a *AlertPoolHandler) GetMonitorAlertManagerPool(ctx *gin.Context) {
+func (h *AlertPoolHandler) GetMonitorAlertManagerPool(ctx *gin.Context) {
 	var req model.GetMonitorAlertManagerPoolReq
 
 	id, err := utils.GetParamID(ctx)
@@ -114,6 +114,6 @@ func (a *AlertPoolHandler) GetMonitorAlertManagerPool(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return a.svc.GetMonitorAlertManagerPool(ctx, &req)
+		return h.svc.GetMonitorAlertManagerPool(ctx, &req)
 	})
 }

@@ -67,7 +67,7 @@ func NewRBACService(
 }
 
 // AnalyzeRBACPermissions 分析用户的有效权限
-func (r *rbacService) AnalyzeRBACPermissions(ctx context.Context, req *model.AnalyzeRBACPermissionsReq) (*model.EffectivePermissions, error) {
+func (s *rbacService) AnalyzeRBACPermissions(ctx context.Context, req *model.AnalyzeRBACPermissionsReq) (*model.EffectivePermissions, error) {
 	if req == nil {
 		return nil, fmt.Errorf("分析RBAC权限请求不能为空")
 	}
@@ -79,7 +79,7 @@ func (r *rbacService) AnalyzeRBACPermissions(ctx context.Context, req *model.Ana
 		Sources:     []model.PermissionSource{},
 	}
 
-	r.logger.Info("开始分析RBAC权限",
+	s.logger.Info("开始分析RBAC权限",
 		zap.Int("cluster_id", req.ClusterID),
 		zap.String("subject_kind", req.Subject.Kind),
 		zap.String("subject_name", req.Subject.Name))
@@ -90,12 +90,12 @@ func (r *rbacService) AnalyzeRBACPermissions(ctx context.Context, req *model.Ana
 	// 3. 分析对应的Role和ClusterRole权限
 	// 4. 汇总有效权限
 
-	r.logger.Info("RBAC权限分析完成", zap.Int("cluster_id", req.ClusterID))
+	s.logger.Info("RBAC权限分析完成", zap.Int("cluster_id", req.ClusterID))
 	return result, nil
 }
 
 // CheckRBACPermission 检查特定权限
-func (r *rbacService) CheckRBACPermission(ctx context.Context, req *model.CheckRBACPermissionReq) (*model.PermissionCheckResult, error) {
+func (s *rbacService) CheckRBACPermission(ctx context.Context, req *model.CheckRBACPermissionReq) (*model.PermissionCheckResult, error) {
 	if req == nil {
 		return nil, fmt.Errorf("检查RBAC权限请求不能为空")
 	}
@@ -104,7 +104,7 @@ func (r *rbacService) CheckRBACPermission(ctx context.Context, req *model.CheckR
 		Allowed: false,
 	}
 
-	r.logger.Debug("检查RBAC权限",
+	s.logger.Debug("检查RBAC权限",
 		zap.Int("cluster_id", req.ClusterID),
 		zap.String("subject", fmt.Sprintf("%s/%s", req.Subject.Kind, req.Subject.Name)),
 		zap.String("resource", req.Resource),

@@ -55,8 +55,8 @@ func NewYamlTemplateService(manager manager.YamlManager, logger *zap.Logger) Yam
 }
 
 // GetYamlTemplateList 获取 YAML 模板列表
-func (y *yamlTemplateService) GetYamlTemplateList(ctx context.Context, req *model.YamlTemplateListReq) (model.ListResp[*model.K8sYamlTemplate], error) {
-	list, err := y.manager.GetYamlTemplateList(ctx, req)
+func (s *yamlTemplateService) GetYamlTemplateList(ctx context.Context, req *model.YamlTemplateListReq) (model.ListResp[*model.K8sYamlTemplate], error) {
+	list, err := s.manager.GetYamlTemplateList(ctx, req)
 	if err != nil {
 		return model.ListResp[*model.K8sYamlTemplate]{}, err
 	}
@@ -67,28 +67,28 @@ func (y *yamlTemplateService) GetYamlTemplateList(ctx context.Context, req *mode
 }
 
 // CreateYamlTemplate 创建 YAML 模板
-func (y *yamlTemplateService) CreateYamlTemplate(ctx context.Context, req *model.YamlTemplateCreateReq) error {
+func (s *yamlTemplateService) CreateYamlTemplate(ctx context.Context, req *model.YamlTemplateCreateReq) error {
 	template := &model.K8sYamlTemplate{
 		Name:      req.Name,
 		UserID:    req.UserID,
 		Content:   req.Content,
 		ClusterID: req.ClusterID,
 	}
-	return y.manager.CreateYamlTemplate(ctx, template)
+	return s.manager.CreateYamlTemplate(ctx, template)
 }
 
 // CheckYamlTemplate 检查 YAML 模板是否正确
-func (y *yamlTemplateService) CheckYamlTemplate(ctx context.Context, req *model.YamlTemplateCheckReq) error {
+func (s *yamlTemplateService) CheckYamlTemplate(ctx context.Context, req *model.YamlTemplateCheckReq) error {
 	template := &model.K8sYamlTemplate{
 		Name:      req.Name,
 		Content:   req.Content,
 		ClusterID: req.ClusterID,
 	}
-	return y.manager.CheckYamlTemplate(ctx, template)
+	return s.manager.CheckYamlTemplate(ctx, template)
 }
 
 // UpdateYamlTemplate 更新 YAML 模板
-func (y *yamlTemplateService) UpdateYamlTemplate(ctx context.Context, req *model.YamlTemplateUpdateReq) error {
+func (s *yamlTemplateService) UpdateYamlTemplate(ctx context.Context, req *model.YamlTemplateUpdateReq) error {
 	template := &model.K8sYamlTemplate{
 		Model:     model.Model{ID: req.ID},
 		Name:      req.Name,
@@ -96,14 +96,14 @@ func (y *yamlTemplateService) UpdateYamlTemplate(ctx context.Context, req *model
 		Content:   req.Content,
 		ClusterID: req.ClusterID,
 	}
-	return y.manager.UpdateYamlTemplate(ctx, template)
+	return s.manager.UpdateYamlTemplate(ctx, template)
 }
 
 // DeleteYamlTemplate 删除 YAML 模板
-func (y *yamlTemplateService) DeleteYamlTemplate(ctx context.Context, req *model.YamlTemplateDeleteReq) error {
-	return y.manager.DeleteYamlTemplate(ctx, req.ID, req.ClusterID)
+func (s *yamlTemplateService) DeleteYamlTemplate(ctx context.Context, req *model.YamlTemplateDeleteReq) error {
+	return s.manager.DeleteYamlTemplate(ctx, req.ID, req.ClusterID)
 }
 
-func (y *yamlTemplateService) GetYamlTemplateDetail(ctx context.Context, req *model.YamlTemplateDetailReq) (*model.K8sYamlTemplate, error) {
-	return y.manager.GetYamlTemplateDetail(ctx, req.ID, req.ClusterID)
+func (s *yamlTemplateService) GetYamlTemplateDetail(ctx context.Context, req *model.YamlTemplateDetailReq) (*model.K8sYamlTemplate, error) {
+	return s.manager.GetYamlTemplateDetail(ctx, req.ID, req.ClusterID)
 }

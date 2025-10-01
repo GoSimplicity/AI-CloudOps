@@ -48,10 +48,10 @@ func NewPVCManager(logger *zap.Logger, client client.K8sClient) PVCManager {
 }
 
 // CreatePVC 创建PersistentVolumeClaim
-func (p *pvcManager) CreatePVC(ctx context.Context, clusterID int, namespace string, pvc *corev1.PersistentVolumeClaim) error {
-	kubeClient, err := p.client.GetKubeClient(clusterID)
+func (m *pvcManager) CreatePVC(ctx context.Context, clusterID int, namespace string, pvc *corev1.PersistentVolumeClaim) error {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return err
@@ -59,7 +59,7 @@ func (p *pvcManager) CreatePVC(ctx context.Context, clusterID int, namespace str
 
 	_, err = kubeClient.CoreV1().PersistentVolumeClaims(namespace).Create(ctx, pvc, metav1.CreateOptions{})
 	if err != nil {
-		p.logger.Error("创建PersistentVolumeClaim失败",
+		m.logger.Error("创建PersistentVolumeClaim失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", pvc.Name),
@@ -67,7 +67,7 @@ func (p *pvcManager) CreatePVC(ctx context.Context, clusterID int, namespace str
 		return err
 	}
 
-	p.logger.Info("成功创建PersistentVolumeClaim",
+	m.logger.Info("成功创建PersistentVolumeClaim",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", pvc.Name))
@@ -76,10 +76,10 @@ func (p *pvcManager) CreatePVC(ctx context.Context, clusterID int, namespace str
 }
 
 // GetPVC 获取指定PersistentVolumeClaim
-func (p *pvcManager) GetPVC(ctx context.Context, clusterID int, namespace, name string) (*corev1.PersistentVolumeClaim, error) {
-	kubeClient, err := p.client.GetKubeClient(clusterID)
+func (m *pvcManager) GetPVC(ctx context.Context, clusterID int, namespace, name string) (*corev1.PersistentVolumeClaim, error) {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return nil, err
@@ -87,7 +87,7 @@ func (p *pvcManager) GetPVC(ctx context.Context, clusterID int, namespace, name 
 
 	pvc, err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		p.logger.Error("获取PersistentVolumeClaim失败",
+		m.logger.Error("获取PersistentVolumeClaim失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
@@ -99,10 +99,10 @@ func (p *pvcManager) GetPVC(ctx context.Context, clusterID int, namespace, name 
 }
 
 // GetPVCList 获取PersistentVolumeClaim列表
-func (p *pvcManager) GetPVCList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*corev1.PersistentVolumeClaimList, error) {
-	kubeClient, err := p.client.GetKubeClient(clusterID)
+func (m *pvcManager) GetPVCList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*corev1.PersistentVolumeClaimList, error) {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return nil, err
@@ -110,14 +110,14 @@ func (p *pvcManager) GetPVCList(ctx context.Context, clusterID int, namespace st
 
 	pvcList, err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).List(ctx, listOptions)
 	if err != nil {
-		p.logger.Error("获取PersistentVolumeClaim列表失败",
+		m.logger.Error("获取PersistentVolumeClaim列表失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.Error(err))
 		return nil, err
 	}
 
-	p.logger.Debug("成功获取PersistentVolumeClaim列表",
+	m.logger.Debug("成功获取PersistentVolumeClaim列表",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.Int("count", len(pvcList.Items)))
@@ -126,10 +126,10 @@ func (p *pvcManager) GetPVCList(ctx context.Context, clusterID int, namespace st
 }
 
 // UpdatePVC 更新PersistentVolumeClaim
-func (p *pvcManager) UpdatePVC(ctx context.Context, clusterID int, namespace string, pvc *corev1.PersistentVolumeClaim) error {
-	kubeClient, err := p.client.GetKubeClient(clusterID)
+func (m *pvcManager) UpdatePVC(ctx context.Context, clusterID int, namespace string, pvc *corev1.PersistentVolumeClaim) error {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return err
@@ -137,7 +137,7 @@ func (p *pvcManager) UpdatePVC(ctx context.Context, clusterID int, namespace str
 
 	_, err = kubeClient.CoreV1().PersistentVolumeClaims(namespace).Update(ctx, pvc, metav1.UpdateOptions{})
 	if err != nil {
-		p.logger.Error("更新PersistentVolumeClaim失败",
+		m.logger.Error("更新PersistentVolumeClaim失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", pvc.Name),
@@ -145,7 +145,7 @@ func (p *pvcManager) UpdatePVC(ctx context.Context, clusterID int, namespace str
 		return err
 	}
 
-	p.logger.Info("成功更新PersistentVolumeClaim",
+	m.logger.Info("成功更新PersistentVolumeClaim",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", pvc.Name))
@@ -154,10 +154,10 @@ func (p *pvcManager) UpdatePVC(ctx context.Context, clusterID int, namespace str
 }
 
 // DeletePVC 删除PersistentVolumeClaim
-func (p *pvcManager) DeletePVC(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
-	kubeClient, err := p.client.GetKubeClient(clusterID)
+func (m *pvcManager) DeletePVC(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return err
@@ -165,7 +165,7 @@ func (p *pvcManager) DeletePVC(ctx context.Context, clusterID int, namespace, na
 
 	err = kubeClient.CoreV1().PersistentVolumeClaims(namespace).Delete(ctx, name, deleteOptions)
 	if err != nil {
-		p.logger.Error("删除PersistentVolumeClaim失败",
+		m.logger.Error("删除PersistentVolumeClaim失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
@@ -173,7 +173,7 @@ func (p *pvcManager) DeletePVC(ctx context.Context, clusterID int, namespace, na
 		return err
 	}
 
-	p.logger.Info("成功删除PersistentVolumeClaim",
+	m.logger.Info("成功删除PersistentVolumeClaim",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", name))
@@ -182,10 +182,10 @@ func (p *pvcManager) DeletePVC(ctx context.Context, clusterID int, namespace, na
 }
 
 // BatchDeletePVCs 批量删除PersistentVolumeClaim
-func (p *pvcManager) BatchDeletePVCs(ctx context.Context, clusterID int, namespace string, pvcNames []string) error {
-	kubeClient, err := p.client.GetKubeClient(clusterID)
+func (m *pvcManager) BatchDeletePVCs(ctx context.Context, clusterID int, namespace string, pvcNames []string) error {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return err
@@ -197,14 +197,14 @@ func (p *pvcManager) BatchDeletePVCs(ctx context.Context, clusterID int, namespa
 	for _, name := range pvcNames {
 		err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).Delete(ctx, name, deleteOptions)
 		if err != nil {
-			p.logger.Error("删除PersistentVolumeClaim失败",
+			m.logger.Error("删除PersistentVolumeClaim失败",
 				zap.Int("clusterID", clusterID),
 				zap.String("namespace", namespace),
 				zap.String("name", name),
 				zap.Error(err))
 			failedDeletions = append(failedDeletions, name)
 		} else {
-			p.logger.Info("成功删除PersistentVolumeClaim",
+			m.logger.Info("成功删除PersistentVolumeClaim",
 				zap.Int("clusterID", clusterID),
 				zap.String("namespace", namespace),
 				zap.String("name", name))
@@ -212,14 +212,14 @@ func (p *pvcManager) BatchDeletePVCs(ctx context.Context, clusterID int, namespa
 	}
 
 	if len(failedDeletions) > 0 {
-		p.logger.Warn("部分PersistentVolumeClaim删除失败",
+		m.logger.Warn("部分PersistentVolumeClaim删除失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.Strings("failedDeletions", failedDeletions))
 		return err // 返回最后一个错误
 	}
 
-	p.logger.Info("批量删除PersistentVolumeClaim完成",
+	m.logger.Info("批量删除PersistentVolumeClaim完成",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.Int("count", len(pvcNames)))
@@ -228,10 +228,10 @@ func (p *pvcManager) BatchDeletePVCs(ctx context.Context, clusterID int, namespa
 }
 
 // PatchPVC 部分更新PersistentVolumeClaim
-func (p *pvcManager) PatchPVC(ctx context.Context, clusterID int, namespace, name string, data []byte, patchType string) (*corev1.PersistentVolumeClaim, error) {
-	kubeClient, err := p.client.GetKubeClient(clusterID)
+func (m *pvcManager) PatchPVC(ctx context.Context, clusterID int, namespace, name string, data []byte, patchType string) (*corev1.PersistentVolumeClaim, error) {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return nil, err
@@ -241,7 +241,7 @@ func (p *pvcManager) PatchPVC(ctx context.Context, clusterID int, namespace, nam
 	pt := types.PatchType(patchType)
 	pvc, err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).Patch(ctx, name, pt, data, metav1.PatchOptions{})
 	if err != nil {
-		p.logger.Error("Patch PersistentVolumeClaim失败",
+		m.logger.Error("Patch PersistentVolumeClaim失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
@@ -250,7 +250,7 @@ func (p *pvcManager) PatchPVC(ctx context.Context, clusterID int, namespace, nam
 		return nil, err
 	}
 
-	p.logger.Info("成功Patch PersistentVolumeClaim",
+	m.logger.Info("成功Patch PersistentVolumeClaim",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", name))
@@ -259,10 +259,10 @@ func (p *pvcManager) PatchPVC(ctx context.Context, clusterID int, namespace, nam
 }
 
 // UpdatePVCStatus 更新PersistentVolumeClaim状态
-func (p *pvcManager) UpdatePVCStatus(ctx context.Context, clusterID int, namespace string, pvc *corev1.PersistentVolumeClaim) error {
-	kubeClient, err := p.client.GetKubeClient(clusterID)
+func (m *pvcManager) UpdatePVCStatus(ctx context.Context, clusterID int, namespace string, pvc *corev1.PersistentVolumeClaim) error {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return err
@@ -270,7 +270,7 @@ func (p *pvcManager) UpdatePVCStatus(ctx context.Context, clusterID int, namespa
 
 	_, err = kubeClient.CoreV1().PersistentVolumeClaims(namespace).UpdateStatus(ctx, pvc, metav1.UpdateOptions{})
 	if err != nil {
-		p.logger.Error("更新PersistentVolumeClaim状态失败",
+		m.logger.Error("更新PersistentVolumeClaim状态失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", pvc.Name),
@@ -278,7 +278,7 @@ func (p *pvcManager) UpdatePVCStatus(ctx context.Context, clusterID int, namespa
 		return err
 	}
 
-	p.logger.Info("成功更新PersistentVolumeClaim状态",
+	m.logger.Info("成功更新PersistentVolumeClaim状态",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", pvc.Name))
@@ -287,8 +287,8 @@ func (p *pvcManager) UpdatePVCStatus(ctx context.Context, clusterID int, namespa
 }
 
 // GetPVCsByStorageClass 根据存储类获取PersistentVolumeClaim
-func (p *pvcManager) GetPVCsByStorageClass(ctx context.Context, clusterID int, namespace, storageClass string) (*corev1.PersistentVolumeClaimList, error) {
-	pvcList, err := p.GetPVCList(ctx, clusterID, namespace, metav1.ListOptions{})
+func (m *pvcManager) GetPVCsByStorageClass(ctx context.Context, clusterID int, namespace, storageClass string) (*corev1.PersistentVolumeClaimList, error) {
+	pvcList, err := m.GetPVCList(ctx, clusterID, namespace, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +307,7 @@ func (p *pvcManager) GetPVCsByStorageClass(ctx context.Context, clusterID int, n
 		Items:    filteredPVCs,
 	}
 
-	p.logger.Debug("根据存储类过滤PVC",
+	m.logger.Debug("根据存储类过滤PVC",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("storageClass", storageClass),
@@ -317,27 +317,27 @@ func (p *pvcManager) GetPVCsByStorageClass(ctx context.Context, clusterID int, n
 }
 
 // GetPendingPVCs 获取Pending状态的PersistentVolumeClaim
-func (p *pvcManager) GetPendingPVCs(ctx context.Context, clusterID int, namespace string) (*corev1.PersistentVolumeClaimList, error) {
+func (m *pvcManager) GetPendingPVCs(ctx context.Context, clusterID int, namespace string) (*corev1.PersistentVolumeClaimList, error) {
 	listOptions := metav1.ListOptions{
 		FieldSelector: "status.phase=Pending",
 	}
 
-	return p.GetPVCList(ctx, clusterID, namespace, listOptions)
+	return m.GetPVCList(ctx, clusterID, namespace, listOptions)
 }
 
 // GetBoundPVCs 获取Bound状态的PersistentVolumeClaim
-func (p *pvcManager) GetBoundPVCs(ctx context.Context, clusterID int, namespace string) (*corev1.PersistentVolumeClaimList, error) {
+func (m *pvcManager) GetBoundPVCs(ctx context.Context, clusterID int, namespace string) (*corev1.PersistentVolumeClaimList, error) {
 	listOptions := metav1.ListOptions{
 		FieldSelector: "status.phase=Bound",
 	}
 
-	return p.GetPVCList(ctx, clusterID, namespace, listOptions)
+	return m.GetPVCList(ctx, clusterID, namespace, listOptions)
 }
 
 // ExpandPVC 扩容PersistentVolumeClaim
-func (p *pvcManager) ExpandPVC(ctx context.Context, clusterID int, namespace, name, newSize string) error {
+func (m *pvcManager) ExpandPVC(ctx context.Context, clusterID int, namespace, name, newSize string) error {
 	// 获取PVC
-	pvc, err := p.GetPVC(ctx, clusterID, namespace, name)
+	pvc, err := m.GetPVC(ctx, clusterID, namespace, name)
 	if err != nil {
 		return err
 	}
@@ -345,7 +345,7 @@ func (p *pvcManager) ExpandPVC(ctx context.Context, clusterID int, namespace, na
 	// 解析新的存储大小
 	newQuantity, err := resource.ParseQuantity(newSize)
 	if err != nil {
-		p.logger.Error("解析存储大小失败",
+		m.logger.Error("解析存储大小失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
@@ -361,9 +361,9 @@ func (p *pvcManager) ExpandPVC(ctx context.Context, clusterID int, namespace, na
 	pvc.Spec.Resources.Requests[corev1.ResourceStorage] = newQuantity
 
 	// 更新PVC
-	err = p.UpdatePVC(ctx, clusterID, namespace, pvc)
+	err = m.UpdatePVC(ctx, clusterID, namespace, pvc)
 	if err != nil {
-		p.logger.Error("扩容PersistentVolumeClaim失败",
+		m.logger.Error("扩容PersistentVolumeClaim失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
@@ -372,7 +372,7 @@ func (p *pvcManager) ExpandPVC(ctx context.Context, clusterID int, namespace, na
 		return err
 	}
 
-	p.logger.Info("成功扩容PersistentVolumeClaim",
+	m.logger.Info("成功扩容PersistentVolumeClaim",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", name),

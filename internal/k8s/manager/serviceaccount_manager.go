@@ -46,10 +46,10 @@ func NewServiceAccountManager(logger *zap.Logger, client client.K8sClient) Servi
 }
 
 // CreateServiceAccount 创建ServiceAccount
-func (s *serviceAccountManager) CreateServiceAccount(ctx context.Context, clusterID int, namespace string, sa *corev1.ServiceAccount) error {
-	kubeClient, err := s.client.GetKubeClient(clusterID)
+func (m *serviceAccountManager) CreateServiceAccount(ctx context.Context, clusterID int, namespace string, sa *corev1.ServiceAccount) error {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return err
@@ -57,7 +57,7 @@ func (s *serviceAccountManager) CreateServiceAccount(ctx context.Context, cluste
 
 	_, err = kubeClient.CoreV1().ServiceAccounts(namespace).Create(ctx, sa, metav1.CreateOptions{})
 	if err != nil {
-		s.logger.Error("创建ServiceAccount失败",
+		m.logger.Error("创建ServiceAccount失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", sa.Name),
@@ -65,7 +65,7 @@ func (s *serviceAccountManager) CreateServiceAccount(ctx context.Context, cluste
 		return err
 	}
 
-	s.logger.Info("成功创建ServiceAccount",
+	m.logger.Info("成功创建ServiceAccount",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", sa.Name))
@@ -74,10 +74,10 @@ func (s *serviceAccountManager) CreateServiceAccount(ctx context.Context, cluste
 }
 
 // GetServiceAccount 获取指定ServiceAccount
-func (s *serviceAccountManager) GetServiceAccount(ctx context.Context, clusterID int, namespace, name string) (*corev1.ServiceAccount, error) {
-	kubeClient, err := s.client.GetKubeClient(clusterID)
+func (m *serviceAccountManager) GetServiceAccount(ctx context.Context, clusterID int, namespace, name string) (*corev1.ServiceAccount, error) {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return nil, err
@@ -85,7 +85,7 @@ func (s *serviceAccountManager) GetServiceAccount(ctx context.Context, clusterID
 
 	sa, err := kubeClient.CoreV1().ServiceAccounts(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		s.logger.Error("获取ServiceAccount失败",
+		m.logger.Error("获取ServiceAccount失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
@@ -97,10 +97,10 @@ func (s *serviceAccountManager) GetServiceAccount(ctx context.Context, clusterID
 }
 
 // GetServiceAccountList 获取ServiceAccount列表
-func (s *serviceAccountManager) GetServiceAccountList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*corev1.ServiceAccountList, error) {
-	kubeClient, err := s.client.GetKubeClient(clusterID)
+func (m *serviceAccountManager) GetServiceAccountList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*corev1.ServiceAccountList, error) {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return nil, err
@@ -108,14 +108,14 @@ func (s *serviceAccountManager) GetServiceAccountList(ctx context.Context, clust
 
 	saList, err := kubeClient.CoreV1().ServiceAccounts(namespace).List(ctx, listOptions)
 	if err != nil {
-		s.logger.Error("获取ServiceAccount列表失败",
+		m.logger.Error("获取ServiceAccount列表失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.Error(err))
 		return nil, err
 	}
 
-	s.logger.Debug("成功获取ServiceAccount列表",
+	m.logger.Debug("成功获取ServiceAccount列表",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.Int("count", len(saList.Items)))
@@ -124,10 +124,10 @@ func (s *serviceAccountManager) GetServiceAccountList(ctx context.Context, clust
 }
 
 // UpdateServiceAccount 更新ServiceAccount
-func (s *serviceAccountManager) UpdateServiceAccount(ctx context.Context, clusterID int, namespace string, sa *corev1.ServiceAccount) error {
-	kubeClient, err := s.client.GetKubeClient(clusterID)
+func (m *serviceAccountManager) UpdateServiceAccount(ctx context.Context, clusterID int, namespace string, sa *corev1.ServiceAccount) error {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return err
@@ -135,7 +135,7 @@ func (s *serviceAccountManager) UpdateServiceAccount(ctx context.Context, cluste
 
 	_, err = kubeClient.CoreV1().ServiceAccounts(namespace).Update(ctx, sa, metav1.UpdateOptions{})
 	if err != nil {
-		s.logger.Error("更新ServiceAccount失败",
+		m.logger.Error("更新ServiceAccount失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", sa.Name),
@@ -143,7 +143,7 @@ func (s *serviceAccountManager) UpdateServiceAccount(ctx context.Context, cluste
 		return err
 	}
 
-	s.logger.Info("成功更新ServiceAccount",
+	m.logger.Info("成功更新ServiceAccount",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", sa.Name))
@@ -152,10 +152,10 @@ func (s *serviceAccountManager) UpdateServiceAccount(ctx context.Context, cluste
 }
 
 // DeleteServiceAccount 删除ServiceAccount
-func (s *serviceAccountManager) DeleteServiceAccount(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
-	kubeClient, err := s.client.GetKubeClient(clusterID)
+func (m *serviceAccountManager) DeleteServiceAccount(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return err
@@ -163,7 +163,7 @@ func (s *serviceAccountManager) DeleteServiceAccount(ctx context.Context, cluste
 
 	err = kubeClient.CoreV1().ServiceAccounts(namespace).Delete(ctx, name, deleteOptions)
 	if err != nil {
-		s.logger.Error("删除ServiceAccount失败",
+		m.logger.Error("删除ServiceAccount失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
@@ -171,7 +171,7 @@ func (s *serviceAccountManager) DeleteServiceAccount(ctx context.Context, cluste
 		return err
 	}
 
-	s.logger.Info("成功删除ServiceAccount",
+	m.logger.Info("成功删除ServiceAccount",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", name))
@@ -180,10 +180,10 @@ func (s *serviceAccountManager) DeleteServiceAccount(ctx context.Context, cluste
 }
 
 // PatchServiceAccount 部分更新ServiceAccount
-func (s *serviceAccountManager) PatchServiceAccount(ctx context.Context, clusterID int, namespace, name string, data []byte, patchType string) (*corev1.ServiceAccount, error) {
-	kubeClient, err := s.client.GetKubeClient(clusterID)
+func (m *serviceAccountManager) PatchServiceAccount(ctx context.Context, clusterID int, namespace, name string, data []byte, patchType string) (*corev1.ServiceAccount, error) {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return nil, err
@@ -193,7 +193,7 @@ func (s *serviceAccountManager) PatchServiceAccount(ctx context.Context, cluster
 	pt := types.PatchType(patchType)
 	sa, err := kubeClient.CoreV1().ServiceAccounts(namespace).Patch(ctx, name, pt, data, metav1.PatchOptions{})
 	if err != nil {
-		s.logger.Error("Patch ServiceAccount失败",
+		m.logger.Error("Patch ServiceAccount失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
@@ -202,7 +202,7 @@ func (s *serviceAccountManager) PatchServiceAccount(ctx context.Context, cluster
 		return nil, err
 	}
 
-	s.logger.Info("成功Patch ServiceAccount",
+	m.logger.Info("成功Patch ServiceAccount",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", name))
@@ -211,15 +211,15 @@ func (s *serviceAccountManager) PatchServiceAccount(ctx context.Context, cluster
 }
 
 // GetServiceAccountSecrets 获取ServiceAccount关联的Secrets
-func (s *serviceAccountManager) GetServiceAccountSecrets(ctx context.Context, clusterID int, namespace, name string) ([]corev1.Secret, error) {
-	sa, err := s.GetServiceAccount(ctx, clusterID, namespace, name)
+func (m *serviceAccountManager) GetServiceAccountSecrets(ctx context.Context, clusterID int, namespace, name string) ([]corev1.Secret, error) {
+	sa, err := m.GetServiceAccount(ctx, clusterID, namespace, name)
 	if err != nil {
 		return nil, err
 	}
 
-	kubeClient, err := s.client.GetKubeClient(clusterID)
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return nil, err
@@ -229,7 +229,7 @@ func (s *serviceAccountManager) GetServiceAccountSecrets(ctx context.Context, cl
 	for _, secretRef := range sa.Secrets {
 		secret, err := kubeClient.CoreV1().Secrets(namespace).Get(ctx, secretRef.Name, metav1.GetOptions{})
 		if err != nil {
-			s.logger.Warn("获取ServiceAccount关联的Secret失败",
+			m.logger.Warn("获取ServiceAccount关联的Secret失败",
 				zap.Int("clusterID", clusterID),
 				zap.String("namespace", namespace),
 				zap.String("secretName", secretRef.Name),
@@ -239,7 +239,7 @@ func (s *serviceAccountManager) GetServiceAccountSecrets(ctx context.Context, cl
 		secrets = append(secrets, *secret)
 	}
 
-	s.logger.Debug("获取ServiceAccount关联的Secrets",
+	m.logger.Debug("获取ServiceAccount关联的Secrets",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("serviceAccountName", name),
@@ -249,8 +249,8 @@ func (s *serviceAccountManager) GetServiceAccountSecrets(ctx context.Context, cl
 }
 
 // GetServiceAccountTokens 获取ServiceAccount的Token
-func (s *serviceAccountManager) GetServiceAccountTokens(ctx context.Context, clusterID int, namespace, name string) ([]string, error) {
-	secrets, err := s.GetServiceAccountSecrets(ctx, clusterID, namespace, name)
+func (m *serviceAccountManager) GetServiceAccountTokens(ctx context.Context, clusterID int, namespace, name string) ([]string, error) {
+	secrets, err := m.GetServiceAccountSecrets(ctx, clusterID, namespace, name)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +264,7 @@ func (s *serviceAccountManager) GetServiceAccountTokens(ctx context.Context, clu
 		}
 	}
 
-	s.logger.Debug("获取ServiceAccount的Token",
+	m.logger.Debug("获取ServiceAccount的Token",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("serviceAccountName", name),
@@ -274,10 +274,10 @@ func (s *serviceAccountManager) GetServiceAccountTokens(ctx context.Context, clu
 }
 
 // CreateServiceAccountToken 为ServiceAccount创建Token
-func (s *serviceAccountManager) CreateServiceAccountToken(ctx context.Context, clusterID int, namespace, name string, tokenRequest *authv1.TokenRequest) (*authv1.TokenRequest, error) {
-	kubeClient, err := s.client.GetKubeClient(clusterID)
+func (m *serviceAccountManager) CreateServiceAccountToken(ctx context.Context, clusterID int, namespace, name string, tokenRequest *authv1.TokenRequest) (*authv1.TokenRequest, error) {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return nil, err
@@ -285,7 +285,7 @@ func (s *serviceAccountManager) CreateServiceAccountToken(ctx context.Context, c
 
 	token, err := kubeClient.CoreV1().ServiceAccounts(namespace).CreateToken(ctx, name, tokenRequest, metav1.CreateOptions{})
 	if err != nil {
-		s.logger.Error("创建ServiceAccount Token失败",
+		m.logger.Error("创建ServiceAccount Token失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
@@ -293,7 +293,7 @@ func (s *serviceAccountManager) CreateServiceAccountToken(ctx context.Context, c
 		return nil, err
 	}
 
-	s.logger.Info("成功创建ServiceAccount Token",
+	m.logger.Info("成功创建ServiceAccount Token",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", name))
@@ -302,10 +302,10 @@ func (s *serviceAccountManager) CreateServiceAccountToken(ctx context.Context, c
 }
 
 // BindServiceAccountToRole 绑定ServiceAccount到Role
-func (s *serviceAccountManager) BindServiceAccountToRole(ctx context.Context, clusterID int, namespace, saName, roleName string) error {
-	kubeClient, err := s.client.GetKubeClient(clusterID)
+func (m *serviceAccountManager) BindServiceAccountToRole(ctx context.Context, clusterID int, namespace, saName, roleName string) error {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return err
@@ -333,7 +333,7 @@ func (s *serviceAccountManager) BindServiceAccountToRole(ctx context.Context, cl
 
 	_, err = kubeClient.RbacV1().RoleBindings(namespace).Create(ctx, roleBinding, metav1.CreateOptions{})
 	if err != nil {
-		s.logger.Error("绑定ServiceAccount到Role失败",
+		m.logger.Error("绑定ServiceAccount到Role失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("serviceAccount", saName),
@@ -342,7 +342,7 @@ func (s *serviceAccountManager) BindServiceAccountToRole(ctx context.Context, cl
 		return err
 	}
 
-	s.logger.Info("成功绑定ServiceAccount到Role",
+	m.logger.Info("成功绑定ServiceAccount到Role",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("serviceAccount", saName),
@@ -352,10 +352,10 @@ func (s *serviceAccountManager) BindServiceAccountToRole(ctx context.Context, cl
 }
 
 // BindServiceAccountToClusterRole 绑定ServiceAccount到ClusterRole
-func (s *serviceAccountManager) BindServiceAccountToClusterRole(ctx context.Context, clusterID int, namespace, saName, clusterRoleName string) error {
-	kubeClient, err := s.client.GetKubeClient(clusterID)
+func (m *serviceAccountManager) BindServiceAccountToClusterRole(ctx context.Context, clusterID int, namespace, saName, clusterRoleName string) error {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return err
@@ -382,7 +382,7 @@ func (s *serviceAccountManager) BindServiceAccountToClusterRole(ctx context.Cont
 
 	_, err = kubeClient.RbacV1().ClusterRoleBindings().Create(ctx, clusterRoleBinding, metav1.CreateOptions{})
 	if err != nil {
-		s.logger.Error("绑定ServiceAccount到ClusterRole失败",
+		m.logger.Error("绑定ServiceAccount到ClusterRole失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("serviceAccount", saName),
@@ -391,7 +391,7 @@ func (s *serviceAccountManager) BindServiceAccountToClusterRole(ctx context.Cont
 		return err
 	}
 
-	s.logger.Info("成功绑定ServiceAccount到ClusterRole",
+	m.logger.Info("成功绑定ServiceAccount到ClusterRole",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("serviceAccount", saName),

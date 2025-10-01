@@ -42,71 +42,71 @@ func NewRoleHandler(svc service.RoleService) *RoleHandler {
 	}
 }
 
-func (r *RoleHandler) RegisterRouters(server *gin.Engine) {
+func (h *RoleHandler) RegisterRouters(server *gin.Engine) {
 	roleGroup := server.Group("/api/role")
 	{
 		// 角色管理
-		roleGroup.GET("/list", r.ListRoles)
-		roleGroup.POST("/create", r.CreateRole)
-		roleGroup.PUT("/update/:id", r.UpdateRole)
-		roleGroup.DELETE("/delete/:id", r.DeleteRole)
-		roleGroup.GET("/detail/:id", r.GetRoleDetail)
+		roleGroup.GET("/list", h.ListRoles)
+		roleGroup.POST("/create", h.CreateRole)
+		roleGroup.PUT("/update/:id", h.UpdateRole)
+		roleGroup.DELETE("/delete/:id", h.DeleteRole)
+		roleGroup.GET("/detail/:id", h.GetRoleDetail)
 
 		// 角色权限管理
-		roleGroup.POST("/assign-apis", r.AssignApisToRole)
-		roleGroup.POST("/revoke-apis", r.RevokeApisFromRole)
-		roleGroup.GET("/apis/:id", r.GetRoleApis)
+		roleGroup.POST("/assign-apis", h.AssignApisToRole)
+		roleGroup.POST("/revoke-apis", h.RevokeApisFromRole)
+		roleGroup.GET("/apis/:id", h.GetRoleApis)
 
 		// 用户角色管理
-		roleGroup.POST("/assign_users", r.AssignRolesToUser)
-		roleGroup.POST("/revoke_users", r.RevokeRolesFromUser)
-		roleGroup.GET("/users/:id", r.GetRoleUsers)
-		roleGroup.GET("/user_roles/:id", r.GetUserRoles)
+		roleGroup.POST("/assign_users", h.AssignRolesToUser)
+		roleGroup.POST("/revoke_users", h.RevokeRolesFromUser)
+		roleGroup.GET("/users/:id", h.GetRoleUsers)
+		roleGroup.GET("/user_roles/:id", h.GetUserRoles)
 
 		// 权限检查
-		roleGroup.POST("/check_permission", r.CheckUserPermission)
-		roleGroup.GET("/user_permissions/:id", r.GetUserPermissions)
+		roleGroup.POST("/check_permission", h.CheckUserPermission)
+		roleGroup.GET("/user_permissions/:id", h.GetUserPermissions)
 	}
 }
 
 // ListRoles 获取角色列表
-func (r *RoleHandler) ListRoles(ctx *gin.Context) {
+func (h *RoleHandler) ListRoles(ctx *gin.Context) {
 	var req model.ListRolesRequest
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return r.svc.ListRoles(ctx, &req)
+		return h.svc.ListRoles(ctx, &req)
 	})
 }
 
 // CreateRole 创建角色
-func (r *RoleHandler) CreateRole(ctx *gin.Context) {
+func (h *RoleHandler) CreateRole(ctx *gin.Context) {
 	var req model.CreateRoleRequest
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return r.svc.CreateRole(ctx, &req)
+		return h.svc.CreateRole(ctx, &req)
 	})
 }
 
 // UpdateRole 更新角色
-func (r *RoleHandler) UpdateRole(ctx *gin.Context) {
+func (h *RoleHandler) UpdateRole(ctx *gin.Context) {
 	var req model.UpdateRoleRequest
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return r.svc.UpdateRole(ctx, &req)
+		return h.svc.UpdateRole(ctx, &req)
 	})
 }
 
 // DeleteRole 删除角色
-func (r *RoleHandler) DeleteRole(ctx *gin.Context) {
+func (h *RoleHandler) DeleteRole(ctx *gin.Context) {
 	var req model.DeleteRoleRequest
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, r.svc.DeleteRole(ctx, req.ID)
+		return nil, h.svc.DeleteRole(ctx, req.ID)
 	})
 }
 
 // GetRoleDetail 获取角色详情
-func (r *RoleHandler) GetRoleDetail(ctx *gin.Context) {
+func (h *RoleHandler) GetRoleDetail(ctx *gin.Context) {
 	var req model.GetRoleRequest
 
 	id, err := utils.GetParamID(ctx)
@@ -116,30 +116,30 @@ func (r *RoleHandler) GetRoleDetail(ctx *gin.Context) {
 	}
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return r.svc.GetRoleByID(ctx, id)
+		return h.svc.GetRoleByID(ctx, id)
 	})
 }
 
 // AssignApisToRole 为角色分配API权限
-func (r *RoleHandler) AssignApisToRole(ctx *gin.Context) {
+func (h *RoleHandler) AssignApisToRole(ctx *gin.Context) {
 	var req model.AssignRoleApiRequest
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, r.svc.AssignApisToRole(ctx, req.RoleID, req.ApiIds)
+		return nil, h.svc.AssignApisToRole(ctx, req.RoleID, req.ApiIds)
 	})
 }
 
 // RevokeApisFromRole 撤销角色的API权限
-func (r *RoleHandler) RevokeApisFromRole(ctx *gin.Context) {
+func (h *RoleHandler) RevokeApisFromRole(ctx *gin.Context) {
 	var req model.RevokeRoleApiRequest
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, r.svc.RevokeApisFromRole(ctx, req.RoleID, req.ApiIds)
+		return nil, h.svc.RevokeApisFromRole(ctx, req.RoleID, req.ApiIds)
 	})
 }
 
 // GetRoleApis 获取角色的API权限列表
-func (r *RoleHandler) GetRoleApis(ctx *gin.Context) {
+func (h *RoleHandler) GetRoleApis(ctx *gin.Context) {
 	var req model.GetRoleApiRequest
 
 	id, err := utils.GetParamID(ctx)
@@ -149,12 +149,12 @@ func (r *RoleHandler) GetRoleApis(ctx *gin.Context) {
 	}
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return r.svc.GetRoleApis(ctx, id)
+		return h.svc.GetRoleApis(ctx, id)
 	})
 }
 
 // AssignRolesToUser 为用户分配角色
-func (r *RoleHandler) AssignRolesToUser(ctx *gin.Context) {
+func (h *RoleHandler) AssignRolesToUser(ctx *gin.Context) {
 	var req model.AssignRolesToUserRequest
 
 	user := ctx.MustGet("user").(utils.UserClaims)
@@ -162,12 +162,12 @@ func (r *RoleHandler) AssignRolesToUser(ctx *gin.Context) {
 	req.UserID = user.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, r.svc.AssignRolesToUser(ctx, req.UserID, req.RoleIds, 0)
+		return nil, h.svc.AssignRolesToUser(ctx, req.UserID, req.RoleIds, 0)
 	})
 }
 
 // RevokeRolesFromUser 撤销用户角色
-func (r *RoleHandler) RevokeRolesFromUser(ctx *gin.Context) {
+func (h *RoleHandler) RevokeRolesFromUser(ctx *gin.Context) {
 	var req model.RevokeRolesFromUserRequest
 
 	user := ctx.MustGet("user").(utils.UserClaims)
@@ -175,12 +175,12 @@ func (r *RoleHandler) RevokeRolesFromUser(ctx *gin.Context) {
 	req.UserID = user.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, r.svc.RevokeRolesFromUser(ctx, req.UserID, req.RoleIds)
+		return nil, h.svc.RevokeRolesFromUser(ctx, req.UserID, req.RoleIds)
 	})
 }
 
 // GetRoleUsers 获取角色下的用户列表
-func (r *RoleHandler) GetRoleUsers(ctx *gin.Context) {
+func (h *RoleHandler) GetRoleUsers(ctx *gin.Context) {
 	var req model.GetRoleUsersRequest
 
 	id, err := utils.GetParamID(ctx)
@@ -190,12 +190,12 @@ func (r *RoleHandler) GetRoleUsers(ctx *gin.Context) {
 	}
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return r.svc.GetRoleUsers(ctx, id)
+		return h.svc.GetRoleUsers(ctx, id)
 	})
 }
 
 // GetUserRoles 获取用户的角色列表
-func (r *RoleHandler) GetUserRoles(ctx *gin.Context) {
+func (h *RoleHandler) GetUserRoles(ctx *gin.Context) {
 	var req model.GetUserRolesRequest
 
 	id, err := utils.GetParamID(ctx)
@@ -207,24 +207,24 @@ func (r *RoleHandler) GetUserRoles(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return r.svc.GetUserRoles(ctx, req.ID)
+		return h.svc.GetUserRoles(ctx, req.ID)
 	})
 }
 
 // CheckUserPermission 检查用户权限
-func (r *RoleHandler) CheckUserPermission(ctx *gin.Context) {
+func (h *RoleHandler) CheckUserPermission(ctx *gin.Context) {
 	var req model.CheckUserPermissionRequest
 
 	user := ctx.MustGet("user").(utils.UserClaims)
 	req.UserID = user.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return r.svc.CheckUserPermission(ctx, req.UserID, req.Method, req.Path)
+		return h.svc.CheckUserPermission(ctx, req.UserID, req.Method, req.Path)
 	})
 }
 
 // GetUserPermissions 获取用户的所有权限
-func (r *RoleHandler) GetUserPermissions(ctx *gin.Context) {
+func (h *RoleHandler) GetUserPermissions(ctx *gin.Context) {
 	var req model.GetUserPermissionsRequest
 
 	id, err := utils.GetParamID(ctx)
@@ -236,6 +236,6 @@ func (r *RoleHandler) GetUserPermissions(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return r.svc.GetUserPermissions(ctx, req.ID)
+		return h.svc.GetUserPermissions(ctx, req.ID)
 	})
 }

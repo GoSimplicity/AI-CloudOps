@@ -62,9 +62,9 @@ func NewWorkorderFormDesignDAO(db *gorm.DB, logger *zap.Logger) WorkorderFormDes
 }
 
 // CreateFormDesign 创建表单设计
-func (f *workorderFormDesignDAO) CreateFormDesign(ctx context.Context, formDesign *model.WorkorderFormDesign) error {
-	if err := f.db.WithContext(ctx).Create(formDesign).Error; err != nil {
-		f.logger.Error("创建表单设计失败", zap.Error(err), zap.String("name", formDesign.Name))
+func (d *workorderFormDesignDAO) CreateFormDesign(ctx context.Context, formDesign *model.WorkorderFormDesign) error {
+	if err := d.db.WithContext(ctx).Create(formDesign).Error; err != nil {
+		d.logger.Error("创建表单设计失败", zap.Error(err), zap.String("name", formDesign.Name))
 		return fmt.Errorf("创建表单设计失败: %w", err)
 	}
 
@@ -72,7 +72,7 @@ func (f *workorderFormDesignDAO) CreateFormDesign(ctx context.Context, formDesig
 }
 
 // UpdateFormDesign 更新表单设计
-func (f *workorderFormDesignDAO) UpdateFormDesign(ctx context.Context, formDesign *model.WorkorderFormDesign) error {
+func (d *workorderFormDesignDAO) UpdateFormDesign(ctx context.Context, formDesign *model.WorkorderFormDesign) error {
 	updateData := map[string]any{
 		"name":        formDesign.Name,
 		"description": formDesign.Description,
@@ -82,18 +82,18 @@ func (f *workorderFormDesignDAO) UpdateFormDesign(ctx context.Context, formDesig
 		"tags":        formDesign.Tags,
 		"is_template": formDesign.IsTemplate,
 	}
-	result := f.db.WithContext(ctx).
+	result := d.db.WithContext(ctx).
 		Model(&model.WorkorderFormDesign{}).
 		Where("id = ?", formDesign.ID).
 		Updates(updateData)
 
 	if result.Error != nil {
-		f.logger.Error("更新表单设计失败", zap.Error(result.Error), zap.Int("id", int(formDesign.ID)))
+		d.logger.Error("更新表单设计失败", zap.Error(result.Error), zap.Int("id", int(formDesign.ID)))
 		return fmt.Errorf("更新表单设计失败: %w", result.Error)
 	}
 
 	if result.RowsAffected == 0 {
-		f.logger.Warn("表单设计不存在", zap.Int("id", int(formDesign.ID)))
+		d.logger.Warn("表单设计不存在", zap.Int("id", int(formDesign.ID)))
 		return ErrFormDesignNotFound
 	}
 
@@ -101,15 +101,15 @@ func (f *workorderFormDesignDAO) UpdateFormDesign(ctx context.Context, formDesig
 }
 
 // DeleteFormDesign 删除表单设计（软删除）
-func (f *workorderFormDesignDAO) DeleteFormDesign(ctx context.Context, id int) error {
-	result := f.db.WithContext(ctx).Delete(&model.WorkorderFormDesign{}, id)
+func (d *workorderFormDesignDAO) DeleteFormDesign(ctx context.Context, id int) error {
+	result := d.db.WithContext(ctx).Delete(&model.WorkorderFormDesign{}, id)
 	if result.Error != nil {
-		f.logger.Error("删除表单设计失败", zap.Error(result.Error), zap.Int("id", id))
+		d.logger.Error("删除表单设计失败", zap.Error(result.Error), zap.Int("id", id))
 		return fmt.Errorf("删除表单设计失败: %w", result.Error)
 	}
 
 	if result.RowsAffected == 0 {
-		f.logger.Warn("表单设计不存在", zap.Int("id", id))
+		d.logger.Warn("表单设计不存在", zap.Int("id", id))
 		return ErrFormDesignNotFound
 	}
 
@@ -117,33 +117,33 @@ func (f *workorderFormDesignDAO) DeleteFormDesign(ctx context.Context, id int) e
 }
 
 // GetFormDesign 获取表单设计
-func (f *workorderFormDesignDAO) GetFormDesign(ctx context.Context, id int) (*model.WorkorderFormDesign, error) {
+func (d *workorderFormDesignDAO) GetFormDesign(ctx context.Context, id int) (*model.WorkorderFormDesign, error) {
 	var formDesign model.WorkorderFormDesign
 
-	err := f.db.WithContext(ctx).Preload("Category").Where("id = ?", id).First(&formDesign).Error
+	err := d.db.WithContext(ctx).Preload("Category").Where("id = ?", id).First(&formDesign).Error
 
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			f.logger.Warn("表单设计不存在", zap.Int("id", id))
+			d.logger.Warn("表单设计不存在", zap.Int("id", id))
 			return nil, ErrFormDesignNotFound
 		}
-		f.logger.Error("获取表单设计失败", zap.Error(err), zap.Int("id", id))
+		d.logger.Error("获取表单设计失败", zap.Error(err), zap.Int("id", id))
 		return nil, fmt.Errorf("获取表单设计失败: %w", err)
 	}
 
 	return &formDesign, nil
 }
 
-func (f *workorderFormDesignDAO) GetFormDesignByName(ctx context.Context, name string) (*model.WorkorderFormDesign, error) {
+func (d *workorderFormDesignDAO) GetFormDesignByName(ctx context.Context, name string) (*model.WorkorderFormDesign, error) {
 	var formDesign model.WorkorderFormDesign
 
-	err := f.db.WithContext(ctx).Where("name = ?", name).First(&formDesign).Error
+	err := d.db.WithContext(ctx).Where("name = ?", name).First(&formDesign).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			f.logger.Warn("表单设计不存在", zap.String("name", name))
+			d.logger.Warn("表单设计不存在", zap.String("name", name))
 			return nil, ErrFormDesignNotFound
 		}
-		f.logger.Error("获取表单设计失败", zap.Error(err), zap.String("name", name))
+		d.logger.Error("获取表单设计失败", zap.Error(err), zap.String("name", name))
 		return nil, err
 	}
 
@@ -151,18 +151,18 @@ func (f *workorderFormDesignDAO) GetFormDesignByName(ctx context.Context, name s
 }
 
 // ListFormDesign 获取表单设计列表
-func (f *workorderFormDesignDAO) ListFormDesign(ctx context.Context, req *model.ListWorkorderFormDesignReq) ([]*model.WorkorderFormDesign, int64, error) {
+func (d *workorderFormDesignDAO) ListFormDesign(ctx context.Context, req *model.ListWorkorderFormDesignReq) ([]*model.WorkorderFormDesign, int64, error) {
 	var formDesigns []*model.WorkorderFormDesign
 	var total int64
 
-	db := f.db.WithContext(ctx).Model(&model.WorkorderFormDesign{})
+	db := d.db.WithContext(ctx).Model(&model.WorkorderFormDesign{})
 
 	// 构建查询条件
-	db = f.buildListQuery(db, req)
+	db = d.buildListQuery(db, req)
 
 	// 获取总数
 	if err := db.Count(&total).Error; err != nil {
-		f.logger.Error("获取表单设计总数失败", zap.Error(err))
+		d.logger.Error("获取表单设计总数失败", zap.Error(err))
 		return nil, 0, fmt.Errorf("获取表单设计总数失败: %w", err)
 	}
 
@@ -175,7 +175,7 @@ func (f *workorderFormDesignDAO) ListFormDesign(ctx context.Context, req *model.
 		Find(&formDesigns).Error
 
 	if err != nil {
-		f.logger.Error("获取表单设计列表失败", zap.Error(err))
+		d.logger.Error("获取表单设计列表失败", zap.Error(err))
 		return nil, 0, fmt.Errorf("获取表单设计列表失败: %w", err)
 	}
 
@@ -183,20 +183,20 @@ func (f *workorderFormDesignDAO) ListFormDesign(ctx context.Context, req *model.
 }
 
 // CheckFormDesignNameExists 检查表单设计名称是否存在
-func (f *workorderFormDesignDAO) CheckFormDesignNameExists(ctx context.Context, name string, excludeID ...int) (bool, error) {
+func (d *workorderFormDesignDAO) CheckFormDesignNameExists(ctx context.Context, name string, excludeID ...int) (bool, error) {
 	if name == "" {
 		return false, fmt.Errorf("表单设计名称不能为空")
 	}
 
 	var count int64
-	db := f.db.WithContext(ctx).Model(&model.WorkorderFormDesign{}).Where("name = ?", name)
+	db := d.db.WithContext(ctx).Model(&model.WorkorderFormDesign{}).Where("name = ?", name)
 
 	if len(excludeID) > 0 && excludeID[0] > 0 {
 		db = db.Where("id != ?", excludeID[0])
 	}
 
 	if err := db.Count(&count).Error; err != nil {
-		f.logger.Error("检查表单设计名称是否存在失败", zap.Error(err), zap.String("name", name))
+		d.logger.Error("检查表单设计名称是否存在失败", zap.Error(err), zap.String("name", name))
 		return false, fmt.Errorf("检查表单设计名称是否存在失败: %w", err)
 	}
 
@@ -204,7 +204,7 @@ func (f *workorderFormDesignDAO) CheckFormDesignNameExists(ctx context.Context, 
 }
 
 // buildListQuery 构建列表查询条件
-func (f *workorderFormDesignDAO) buildListQuery(db *gorm.DB, req *model.ListWorkorderFormDesignReq) *gorm.DB {
+func (d *workorderFormDesignDAO) buildListQuery(db *gorm.DB, req *model.ListWorkorderFormDesignReq) *gorm.DB {
 	if req.Search != "" {
 		searchTerm := sanitizeSearchInput(req.Search)
 		db = db.Where("name LIKE ? OR description LIKE ?", "%"+searchTerm+"%", "%"+searchTerm+"%")

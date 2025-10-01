@@ -69,11 +69,11 @@ func NewRoleDAO(db *gorm.DB) RoleDAO {
 }
 
 // ListRoles 获取角色列表
-func (r *roleDAO) ListRoles(ctx context.Context, req *model.ListRolesRequest) ([]*model.Role, int64, error) {
+func (d *roleDAO) ListRoles(ctx context.Context, req *model.ListRolesRequest) ([]*model.Role, int64, error) {
 	var roles []*model.Role
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.Role{})
+	query := d.db.WithContext(ctx).Model(&model.Role{})
 
 	// 状态筛选
 	if req.Status != nil {
@@ -102,8 +102,8 @@ func (r *roleDAO) ListRoles(ctx context.Context, req *model.ListRolesRequest) ([
 }
 
 // CreateRole 创建角色
-func (r *roleDAO) CreateRole(ctx context.Context, role *model.Role, apiIds []int) (*model.Role, error) {
-	tx := r.db.WithContext(ctx).Begin()
+func (d *roleDAO) CreateRole(ctx context.Context, role *model.Role, apiIds []int) (*model.Role, error) {
+	tx := d.db.WithContext(ctx).Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -136,12 +136,12 @@ func (r *roleDAO) CreateRole(ctx context.Context, role *model.Role, apiIds []int
 	}
 
 	// 重新加载角色数据
-	return r.GetRoleByID(ctx, role.ID)
+	return d.GetRoleByID(ctx, role.ID)
 }
 
 // UpdateRole 更新角色
-func (r *roleDAO) UpdateRole(ctx context.Context, role *model.Role, apiIds []int) (*model.Role, error) {
-	tx := r.db.WithContext(ctx).Begin()
+func (d *roleDAO) UpdateRole(ctx context.Context, role *model.Role, apiIds []int) (*model.Role, error) {
+	tx := d.db.WithContext(ctx).Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -185,12 +185,12 @@ func (r *roleDAO) UpdateRole(ctx context.Context, role *model.Role, apiIds []int
 	}
 
 	// 重新加载角色数据
-	return r.GetRoleByID(ctx, role.ID)
+	return d.GetRoleByID(ctx, role.ID)
 }
 
 // DeleteRole 删除角色
-func (r *roleDAO) DeleteRole(ctx context.Context, id int) error {
-	tx := r.db.WithContext(ctx).Begin()
+func (d *roleDAO) DeleteRole(ctx context.Context, id int) error {
+	tx := d.db.WithContext(ctx).Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -219,9 +219,9 @@ func (r *roleDAO) DeleteRole(ctx context.Context, id int) error {
 }
 
 // GetRoleByID 根据ID获取角色
-func (r *roleDAO) GetRoleByID(ctx context.Context, id int) (*model.Role, error) {
+func (d *roleDAO) GetRoleByID(ctx context.Context, id int) (*model.Role, error) {
 	var role model.Role
-	if err := r.db.WithContext(ctx).Preload("Apis").Preload("Users").
+	if err := d.db.WithContext(ctx).Preload("Apis").Preload("Users").
 		First(&role, id).Error; err != nil {
 		return nil, err
 	}
@@ -229,9 +229,9 @@ func (r *roleDAO) GetRoleByID(ctx context.Context, id int) (*model.Role, error) 
 }
 
 // CheckRoleExists 检查角色名称或编码是否已存在
-func (r *roleDAO) CheckRoleExists(ctx context.Context, name, code string, excludeID int) (bool, error) {
+func (d *roleDAO) CheckRoleExists(ctx context.Context, name, code string, excludeID int) (bool, error) {
 	var count int64
-	query := r.db.WithContext(ctx).Model(&model.Role{}).
+	query := d.db.WithContext(ctx).Model(&model.Role{}).
 		Where("(name = ? OR code = ?)", name, code)
 
 	if excludeID > 0 {
@@ -246,9 +246,9 @@ func (r *roleDAO) CheckRoleExists(ctx context.Context, name, code string, exclud
 }
 
 // CheckRoleHasUsers 检查角色是否有关联用户
-func (r *roleDAO) CheckRoleHasUsers(ctx context.Context, roleID int) (bool, error) {
+func (d *roleDAO) CheckRoleHasUsers(ctx context.Context, roleID int) (bool, error) {
 	var count int64
-	if err := r.db.WithContext(ctx).Model(&model.UserRole{}).
+	if err := d.db.WithContext(ctx).Model(&model.UserRole{}).
 		Where("role_id = ?", roleID).Count(&count).Error; err != nil {
 		return false, err
 	}
@@ -257,8 +257,8 @@ func (r *roleDAO) CheckRoleHasUsers(ctx context.Context, roleID int) (bool, erro
 }
 
 // AssignApisToRole 为角色分配API权限
-func (r *roleDAO) AssignApisToRole(ctx context.Context, roleID int, apiIds []int) error {
-	tx := r.db.WithContext(ctx).Begin()
+func (d *roleDAO) AssignApisToRole(ctx context.Context, roleID int, apiIds []int) error {
+	tx := d.db.WithContext(ctx).Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -290,15 +290,15 @@ func (r *roleDAO) AssignApisToRole(ctx context.Context, roleID int, apiIds []int
 }
 
 // RevokeApisFromRole 撤销角色的API权限
-func (r *roleDAO) RevokeApisFromRole(ctx context.Context, roleID int, apiIds []int) error {
-	return r.db.WithContext(ctx).Where("role_id = ? AND api_id IN ?", roleID, apiIds).
+func (d *roleDAO) RevokeApisFromRole(ctx context.Context, roleID int, apiIds []int) error {
+	return d.db.WithContext(ctx).Where("role_id = ? AND api_id IN ?", roleID, apiIds).
 		Delete(&model.RoleApi{}).Error
 }
 
 // GetRoleApis 获取角色的API权限列表
-func (r *roleDAO) GetRoleApis(ctx context.Context, roleID int) ([]*model.Api, error) {
+func (d *roleDAO) GetRoleApis(ctx context.Context, roleID int) ([]*model.Api, error) {
 	var apis []*model.Api
-	if err := r.db.WithContext(ctx).Model(&model.Api{}).
+	if err := d.db.WithContext(ctx).Model(&model.Api{}).
 		Joins("JOIN cl_system_role_apis ON cl_system_apis.id = cl_system_role_apis.api_id").
 		Where("cl_system_role_apis.role_id = ?", roleID).
 		Find(&apis).Error; err != nil {
@@ -309,8 +309,8 @@ func (r *roleDAO) GetRoleApis(ctx context.Context, roleID int) ([]*model.Api, er
 }
 
 // AssignRolesToUser 为用户分配角色
-func (r *roleDAO) AssignRolesToUser(ctx context.Context, userID int, roleIds []int, grantedBy int) error {
-	tx := r.db.WithContext(ctx).Begin()
+func (d *roleDAO) AssignRolesToUser(ctx context.Context, userID int, roleIds []int, grantedBy int) error {
+	tx := d.db.WithContext(ctx).Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -342,15 +342,15 @@ func (r *roleDAO) AssignRolesToUser(ctx context.Context, userID int, roleIds []i
 }
 
 // RevokeRolesFromUser 撤销用户角色
-func (r *roleDAO) RevokeRolesFromUser(ctx context.Context, userID int, roleIds []int) error {
-	return r.db.WithContext(ctx).Where("user_id = ? AND role_id IN ?", userID, roleIds).
+func (d *roleDAO) RevokeRolesFromUser(ctx context.Context, userID int, roleIds []int) error {
+	return d.db.WithContext(ctx).Where("user_id = ? AND role_id IN ?", userID, roleIds).
 		Delete(&model.UserRole{}).Error
 }
 
 // GetRoleUsers 获取角色下的用户列表
-func (r *roleDAO) GetRoleUsers(ctx context.Context, roleID int) ([]*model.User, error) {
+func (d *roleDAO) GetRoleUsers(ctx context.Context, roleID int) ([]*model.User, error) {
 	var users []*model.User
-	if err := r.db.WithContext(ctx).Model(&model.User{}).
+	if err := d.db.WithContext(ctx).Model(&model.User{}).
 		Joins("JOIN cl_system_user_roles ON cl_system_users.id = cl_system_user_roles.user_id").
 		Where("cl_system_user_roles.role_id = ?", roleID).
 		Find(&users).Error; err != nil {
@@ -361,9 +361,9 @@ func (r *roleDAO) GetRoleUsers(ctx context.Context, roleID int) ([]*model.User, 
 }
 
 // GetUserRoles 获取用户的角色列表
-func (r *roleDAO) GetUserRoles(ctx context.Context, userID int) ([]*model.Role, error) {
+func (d *roleDAO) GetUserRoles(ctx context.Context, userID int) ([]*model.Role, error) {
 	var roles []*model.Role
-	if err := r.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Preload("Apis").
 		Model(&model.Role{}).
 		Joins("JOIN cl_system_user_roles ON cl_system_roles.id = cl_system_user_roles.role_id").
@@ -376,7 +376,7 @@ func (r *roleDAO) GetUserRoles(ctx context.Context, userID int) ([]*model.Role, 
 }
 
 // CheckUserPermission 检查用户权限
-func (r *roleDAO) CheckUserPermission(ctx context.Context, userID int, method, path string) (bool, error) {
+func (d *roleDAO) CheckUserPermission(ctx context.Context, userID int, method, path string) (bool, error) {
 	var count int64
 
 	// 通过用户角色查询是否有对应的API权限
@@ -385,14 +385,14 @@ func (r *roleDAO) CheckUserPermission(ctx context.Context, userID int, method, p
 		 FROM cl_system_apis a
 		 JOIN cl_system_role_apis ra ON a.id = ra.api_id
 		 JOIN cl_system_user_roles ur ON ra.role_id = ur.role_id
-		 JOIN cl_system_roles r ON ur.role_id = r.id
+		 JOIN cl_system_roles r ON ur.role_id = d.id
 		 WHERE cl_system_user_roles.user_id = ? 
-		 AND r.status = 1 
+		 AND d.status = 1 
 		 AND a.method = ? 
 		 AND a.path = ?
 	 `
 
-	if err := r.db.WithContext(ctx).Raw(query, userID, method, path).Count(&count).Error; err != nil {
+	if err := d.db.WithContext(ctx).Raw(query, userID, method, path).Count(&count).Error; err != nil {
 		return false, err
 	}
 
@@ -400,7 +400,7 @@ func (r *roleDAO) CheckUserPermission(ctx context.Context, userID int, method, p
 }
 
 // GetUserPermissions 获取用户的所有权限
-func (r *roleDAO) GetUserPermissions(ctx context.Context, userID int) ([]*model.Api, error) {
+func (d *roleDAO) GetUserPermissions(ctx context.Context, userID int) ([]*model.Api, error) {
 	var apis []*model.Api
 
 	query := `
@@ -408,12 +408,12 @@ func (r *roleDAO) GetUserPermissions(ctx context.Context, userID int) ([]*model.
 		 FROM cl_system_apis a
 		 JOIN cl_system_role_apis ra ON a.id = ra.api_id
 		 JOIN cl_system_user_roles ur ON ra.role_id = ur.role_id
-		 JOIN cl_system_roles r ON ur.role_id = r.id
-		 WHERE ur.user_id = ? AND r.status = 1
+		 JOIN cl_system_roles r ON ur.role_id = d.id
+		 WHERE ur.user_id = ? AND d.status = 1
 		 ORDER BY a.created_at DESC
 	 `
 
-	if err := r.db.WithContext(ctx).Raw(query, userID).Scan(&apis).Error; err != nil {
+	if err := d.db.WithContext(ctx).Raw(query, userID).Scan(&apis).Error; err != nil {
 		return nil, err
 	}
 

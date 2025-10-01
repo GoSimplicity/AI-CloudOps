@@ -45,17 +45,17 @@ func NewK8sRBACHandler(rbacService service.RBACService) *K8sRBACHandler {
 }
 
 // RegisterRouters 注册路由
-func (r *K8sRBACHandler) RegisterRouters(server *gin.Engine) {
+func (h *K8sRBACHandler) RegisterRouters(server *gin.Engine) {
 	rbacGroup := server.Group("/api/k8s")
 	{
 		// RBAC权限分析
-		rbacGroup.POST("/rbac/:cluster_id/analyze", r.AnalyzeRBACPermissions)
-		rbacGroup.POST("/rbac/:cluster_id/check-permission", r.CheckRBACPermission)
+		rbacGroup.POST("/rbac/:cluster_id/analyze", h.AnalyzeRBACPermissions)
+		rbacGroup.POST("/rbac/:cluster_id/check-permission", h.CheckRBACPermission)
 	}
 }
 
 // AnalyzeRBACPermissions 分析RBAC权限
-func (r *K8sRBACHandler) AnalyzeRBACPermissions(ctx *gin.Context) {
+func (h *K8sRBACHandler) AnalyzeRBACPermissions(ctx *gin.Context) {
 	var req model.AnalyzeRBACPermissionsReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -67,12 +67,12 @@ func (r *K8sRBACHandler) AnalyzeRBACPermissions(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return r.rbacService.AnalyzeRBACPermissions(ctx, &req)
+		return h.rbacService.AnalyzeRBACPermissions(ctx, &req)
 	})
 }
 
 // CheckRBACPermission 检查RBAC权限
-func (r *K8sRBACHandler) CheckRBACPermission(ctx *gin.Context) {
+func (h *K8sRBACHandler) CheckRBACPermission(ctx *gin.Context) {
 	var req model.CheckRBACPermissionReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -84,6 +84,6 @@ func (r *K8sRBACHandler) CheckRBACPermission(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return r.rbacService.CheckRBACPermission(ctx, &req)
+		return h.rbacService.CheckRBACPermission(ctx, &req)
 	})
 }

@@ -85,10 +85,10 @@ func NewPodManager(clientFactory client.K8sClient, logger *zap.Logger) PodManage
 }
 
 // getKubeClient 获取Kubernetes客户端
-func (p *podManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
-	kubeClient, err := p.clientFactory.GetKubeClient(clusterID)
+func (m *podManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
+	kubeClient, err := m.clientFactory.GetKubeClient(clusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
@@ -97,15 +97,15 @@ func (p *podManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error)
 }
 
 // GetPod 获取单个 Pod
-func (p *podManager) GetPod(ctx context.Context, clusterID int, namespace, name string) (*corev1.Pod, error) {
-	kubeClient, err := p.getKubeClient(clusterID)
+func (m *podManager) GetPod(ctx context.Context, clusterID int, namespace, name string) (*corev1.Pod, error) {
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
 
 	pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		p.logger.Error("获取 Pod 失败",
+		m.logger.Error("获取 Pod 失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
@@ -113,7 +113,7 @@ func (p *podManager) GetPod(ctx context.Context, clusterID int, namespace, name 
 		return nil, fmt.Errorf("获取 Pod 失败: %w", err)
 	}
 
-	p.logger.Debug("成功获取 Pod",
+	m.logger.Debug("成功获取 Pod",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", name))
@@ -121,15 +121,15 @@ func (p *podManager) GetPod(ctx context.Context, clusterID int, namespace, name 
 }
 
 // GetPodList 获取Pod列表
-func (p *podManager) GetPodList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sPod, error) {
-	kubeClient, err := p.getKubeClient(clusterID)
+func (m *podManager) GetPodList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sPod, error) {
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
 
 	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, listOptions)
 	if err != nil {
-		p.logger.Error("获取Pod列表失败",
+		m.logger.Error("获取Pod列表失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.Error(err))
@@ -146,7 +146,7 @@ func (p *podManager) GetPodList(ctx context.Context, clusterID int, namespace st
 		}
 	}
 
-	p.logger.Debug("成功获取Pod列表",
+	m.logger.Debug("成功获取Pod列表",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.Int("count", len(k8sPods)))
@@ -154,8 +154,8 @@ func (p *podManager) GetPodList(ctx context.Context, clusterID int, namespace st
 }
 
 // GetPodsByNodeName 获取指定节点上的Pod列表
-func (p *podManager) GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) ([]*model.K8sPod, error) {
-	kubeClient, err := p.getKubeClient(clusterID)
+func (m *podManager) GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) ([]*model.K8sPod, error) {
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func (p *podManager) GetPodsByNodeName(ctx context.Context, clusterID int, nodeN
 
 	pods, err := kubeClient.CoreV1().Pods("").List(ctx, listOptions)
 	if err != nil {
-		p.logger.Error("获取节点Pod列表失败",
+		m.logger.Error("获取节点Pod列表失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("nodeName", nodeName),
 			zap.Error(err))
@@ -183,7 +183,7 @@ func (p *podManager) GetPodsByNodeName(ctx context.Context, clusterID int, nodeN
 		}
 	}
 
-	p.logger.Debug("成功获取节点Pod列表",
+	m.logger.Debug("成功获取节点Pod列表",
 		zap.Int("clusterID", clusterID),
 		zap.String("nodeName", nodeName),
 		zap.Int("count", len(k8sPods)))
@@ -191,15 +191,15 @@ func (p *podManager) GetPodsByNodeName(ctx context.Context, clusterID int, nodeN
 }
 
 // DeletePod 删除 Pod
-func (p *podManager) DeletePod(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
-	kubeClient, err := p.getKubeClient(clusterID)
+func (m *podManager) DeletePod(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
 	err = kubeClient.CoreV1().Pods(namespace).Delete(ctx, name, deleteOptions)
 	if err != nil {
-		p.logger.Error("删除 Pod 失败",
+		m.logger.Error("删除 Pod 失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
@@ -207,7 +207,7 @@ func (p *podManager) DeletePod(ctx context.Context, clusterID int, namespace, na
 		return fmt.Errorf("删除 Pod 失败: %w", err)
 	}
 
-	p.logger.Info("成功删除 Pod",
+	m.logger.Info("成功删除 Pod",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", name))
@@ -215,8 +215,8 @@ func (p *podManager) DeletePod(ctx context.Context, clusterID int, namespace, na
 }
 
 // GetPodLogs 获取 Pod 日志
-func (p *podManager) GetPodLogs(ctx context.Context, clusterID int, namespace, name string, logOptions *corev1.PodLogOptions) (io.ReadCloser, error) {
-	kubeClient, err := p.getKubeClient(clusterID)
+func (m *podManager) GetPodLogs(ctx context.Context, clusterID int, namespace, name string, logOptions *corev1.PodLogOptions) (io.ReadCloser, error) {
+	kubeClient, err := m.getKubeClient(clusterID)
 
 	if err != nil {
 		return nil, err
@@ -226,7 +226,7 @@ func (p *podManager) GetPodLogs(ctx context.Context, clusterID int, namespace, n
 
 	stream, err := podLogRequest.Stream(ctx)
 	if err != nil {
-		p.logger.Error("获取 Pod 日志流失败",
+		m.logger.Error("获取 Pod 日志流失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
@@ -237,8 +237,8 @@ func (p *podManager) GetPodLogs(ctx context.Context, clusterID int, namespace, n
 }
 
 // BatchDeletePods 批量删除 Pod
-func (p *podManager) BatchDeletePods(ctx context.Context, clusterID int, namespace string, podNames []string, deleteOpts metav1.DeleteOptions) error {
-	kubeClient, err := p.getKubeClient(clusterID)
+func (m *podManager) BatchDeletePods(ctx context.Context, clusterID int, namespace string, podNames []string, deleteOpts metav1.DeleteOptions) error {
+	kubeClient, err := m.getKubeClient(clusterID)
 
 	if err != nil {
 		return err
@@ -252,7 +252,7 @@ func (p *podManager) BatchDeletePods(ctx context.Context, clusterID int, namespa
 
 			Task: func(ctx context.Context) error {
 				if err := kubeClient.CoreV1().Pods(namespace).Delete(ctx, name, deleteOpts); err != nil {
-					p.logger.Error("删除Pod失败", zap.Error(err),
+					m.logger.Error("删除Pod失败", zap.Error(err),
 						zap.Int("cluster_id", clusterID),
 						zap.String("namespace", namespace),
 						zap.String("name", name))
@@ -269,7 +269,7 @@ func (p *podManager) BatchDeletePods(ctx context.Context, clusterID int, namespa
 	}
 	err = retry.RunRetryWithConcurrency(ctx, 3, tasks)
 	if err != nil {
-		p.logger.Warn("批量删除Pod失败",
+		m.logger.Warn("批量删除Pod失败",
 			zap.Error(err))
 
 		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, "批量删除Pod失败")
@@ -277,21 +277,21 @@ func (p *podManager) BatchDeletePods(ctx context.Context, clusterID int, namespa
 	return nil
 }
 
-func (p *podManager) PodTerminalSession(
+func (m *podManager) PodTerminalSession(
 	ctx context.Context,
 	clusterID int,
 	namespace, pod, container, shell string,
 	conn *websocket.Conn,
 ) error {
 
-	kubeClient, err := p.clientFactory.GetKubeClient(clusterID)
+	kubeClient, err := m.clientFactory.GetKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	restConfig, err := p.clientFactory.GetRestConfig(clusterID)
+	restConfig, err := m.clientFactory.GetRestConfig(clusterID)
 	if err != nil {
-		p.logger.Error("获取集群配置失败", zap.Int("clusterID", clusterID), zap.Error(err))
+		m.logger.Error("获取集群配置失败", zap.Int("clusterID", clusterID), zap.Error(err))
 		return fmt.Errorf("获取集群配置失败: %w", err)
 	}
 
@@ -299,12 +299,12 @@ func (p *podManager) PodTerminalSession(
 		shell = "sh"
 	}
 
-	terminal.NewTerminalHandler(kubeClient, restConfig, p.logger).
+	terminal.NewTerminalHandler(kubeClient, restConfig, m.logger).
 		HandleSession(ctx, shell, namespace, pod, container, conn)
 	return nil
 }
 
-func (p *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace, pod, container, filePath string) error {
+func (m *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace, pod, container, filePath string) error {
 	// 参数验证
 	if namespace == "" {
 		return fmt.Errorf("命名空间不能为空")
@@ -316,21 +316,21 @@ func (p *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace,
 		return fmt.Errorf("容器名称不能为空")
 	}
 
-	kubeClient, err := p.getKubeClient(clusterID)
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	restConfig, err := p.clientFactory.GetRestConfig(clusterID)
+	restConfig, err := m.clientFactory.GetRestConfig(clusterID)
 	if err != nil {
-		p.logger.Error("获取集群配置失败", zap.Int("clusterID", clusterID), zap.Error(err))
+		m.logger.Error("获取集群配置失败", zap.Int("clusterID", clusterID), zap.Error(err))
 		return fmt.Errorf("获取集群配置失败: %w", err)
 	}
 
 	// 验证Pod是否存在并且正在运行
 	podObj, err := kubeClient.CoreV1().Pods(namespace).Get(ctx.Request.Context(), pod, metav1.GetOptions{})
 	if err != nil {
-		p.logger.Error("获取Pod信息失败",
+		m.logger.Error("获取Pod信息失败",
 			zap.Error(err),
 			zap.String("namespace", namespace),
 			zap.String("pod", pod))
@@ -361,7 +361,7 @@ func (p *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace,
 	// 解析上传的文件
 	files, err := parseMultipartFiles(ctx)
 	if err != nil {
-		p.logger.Error("解析上传文件失败", zap.Error(err))
+		m.logger.Error("解析上传文件失败", zap.Error(err))
 		return fmt.Errorf("解析上传文件失败: %w", err)
 	}
 
@@ -369,7 +369,7 @@ func (p *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace,
 		return fmt.Errorf("没有找到要上传的文件")
 	}
 
-	p.logger.Info("开始上传文件到Pod",
+	m.logger.Info("开始上传文件到Pod",
 		zap.String("namespace", namespace),
 		zap.String("pod", pod),
 		zap.String("container", container),
@@ -382,7 +382,7 @@ func (p *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace,
 	go func() {
 		defer writer.Close()
 		if tarErr = writeFilesToTar(files, writer); tarErr != nil {
-			p.logger.Error("打包文件成 tar 失败", zap.Error(tarErr))
+			m.logger.Error("打包文件成 tar 失败", zap.Error(tarErr))
 			_ = writer.CloseWithError(tarErr)
 		}
 	}()
@@ -414,7 +414,7 @@ func (p *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace,
 		Stderr: &stderr,
 	})
 	if err != nil {
-		p.logger.Warn("创建目录失败，可能目录已存在",
+		m.logger.Warn("创建目录失败，可能目录已存在",
 			zap.Error(err),
 			zap.String("stdout", stdout.String()),
 			zap.String("stderr", stderr.String()))
@@ -449,7 +449,7 @@ func (p *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace,
 	})
 
 	if err != nil {
-		p.logger.Error("执行上传失败",
+		m.logger.Error("执行上传失败",
 			zap.Error(err),
 			zap.String("stderr", uploadStderr.String()))
 		return fmt.Errorf("执行上传失败: %w, stderr: %s", err, uploadStderr.String())
@@ -459,7 +459,7 @@ func (p *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace,
 		return fmt.Errorf("打包tar文件失败: %w", tarErr)
 	}
 
-	p.logger.Info("成功上传文件到Pod",
+	m.logger.Info("成功上传文件到Pod",
 		zap.String("namespace", namespace),
 		zap.String("pod", pod),
 		zap.String("container", container),
@@ -469,7 +469,7 @@ func (p *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace,
 	return nil
 }
 
-func (p *podManager) PortForward(ctx context.Context, ports []string, dialer httpstream.Dialer) error {
+func (m *podManager) PortForward(ctx context.Context, ports []string, dialer httpstream.Dialer) error {
 
 	// 创建 PortForwarder
 	stopChan := make(chan struct{}, 1)
@@ -489,7 +489,7 @@ func (p *podManager) PortForward(ctx context.Context, ports []string, dialer htt
 	// 异步开启转发
 	go func() {
 		if err := forwarder.ForwardPorts(); err != nil {
-			p.logger.Error("创建端口转发失败",
+			m.logger.Error("创建端口转发失败",
 				zap.Error(err),
 				zap.Strings("ports", ports),
 			)
@@ -502,23 +502,23 @@ func (p *podManager) PortForward(ctx context.Context, ports []string, dialer htt
 }
 
 // PodPortForward Pod端口转发
-func (p *podManager) PodPortForward(ctx context.Context, clusterID int, namespace, podName string, ports []model.PodPortForwardPort) error {
+func (m *podManager) PodPortForward(ctx context.Context, clusterID int, namespace, podName string, ports []model.PodPortForwardPort) error {
 	if len(ports) == 0 {
 		return fmt.Errorf("端口转发配置不能为空")
 	}
 
 	// 获取Kubernetes客户端和配置
-	kubeClient, err := p.getKubeClient(clusterID)
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Error(err),
 			zap.Int("clusterID", clusterID))
 		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
-	restConfig, err := p.clientFactory.GetRestConfig(clusterID)
+	restConfig, err := m.clientFactory.GetRestConfig(clusterID)
 	if err != nil {
-		p.logger.Error("获取集群配置失败",
+		m.logger.Error("获取集群配置失败",
 			zap.Error(err),
 			zap.Int("clusterID", clusterID))
 		return fmt.Errorf("获取集群配置失败: %w", err)
@@ -527,7 +527,7 @@ func (p *podManager) PodPortForward(ctx context.Context, clusterID int, namespac
 	// 验证Pod是否存在
 	pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
-		p.logger.Error("获取Pod失败",
+		m.logger.Error("获取Pod失败",
 			zap.Error(err),
 			zap.String("namespace", namespace),
 			zap.String("podName", podName))
@@ -548,7 +548,7 @@ func (p *podManager) PodPortForward(ctx context.Context, clusterID int, namespac
 	// 创建SPDY升级器和拨号器
 	transport, upgrader, err := spdy.RoundTripperFor(restConfig)
 	if err != nil {
-		p.logger.Error("创建SPDY升级器失败",
+		m.logger.Error("创建SPDY升级器失败",
 			zap.Error(err))
 		return fmt.Errorf("创建SPDY升级器失败: %w", err)
 	}
@@ -561,22 +561,22 @@ func (p *podManager) PodPortForward(ctx context.Context, clusterID int, namespac
 		portSpecs[i] = fmt.Sprintf("%d:%d", port.LocalPort, port.RemotePort)
 	}
 
-	p.logger.Info("开始端口转发",
+	m.logger.Info("开始端口转发",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("podName", podName),
 		zap.Strings("ports", portSpecs))
 
 	// 调用底层端口转发方法
-	err = p.PortForward(ctx, portSpecs, dialer)
+	err = m.PortForward(ctx, portSpecs, dialer)
 	if err != nil {
-		p.logger.Error("端口转发失败",
+		m.logger.Error("端口转发失败",
 			zap.Error(err),
 			zap.Strings("ports", portSpecs))
 		return fmt.Errorf("端口转发失败: %w", err)
 	}
 
-	p.logger.Info("端口转发成功建立",
+	m.logger.Info("端口转发成功建立",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("podName", podName),
@@ -585,7 +585,7 @@ func (p *podManager) PodPortForward(ctx context.Context, clusterID int, namespac
 	return nil
 }
 
-func (p *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespace, pod, container, filePath string) (*k8sutils.PodFileStreamPipe, error) {
+func (m *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespace, pod, container, filePath string) (*k8sutils.PodFileStreamPipe, error) {
 	// 参数验证
 	if namespace == "" {
 		return nil, fmt.Errorf("命名空间不能为空")
@@ -600,21 +600,21 @@ func (p *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespa
 		return nil, fmt.Errorf("文件路径不能为空")
 	}
 
-	kubeClient, err := p.getKubeClient(clusterID)
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
 
-	restConfig, err := p.clientFactory.GetRestConfig(clusterID)
+	restConfig, err := m.clientFactory.GetRestConfig(clusterID)
 	if err != nil {
-		p.logger.Error("获取集群配置失败", zap.Int("clusterID", clusterID), zap.Error(err))
+		m.logger.Error("获取集群配置失败", zap.Int("clusterID", clusterID), zap.Error(err))
 		return nil, fmt.Errorf("获取集群配置失败: %w", err)
 	}
 
 	// 验证Pod是否存在并且正在运行
 	podObj, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, pod, metav1.GetOptions{})
 	if err != nil {
-		p.logger.Error("获取Pod信息失败",
+		m.logger.Error("获取Pod信息失败",
 			zap.Error(err),
 			zap.String("namespace", namespace),
 			zap.String("pod", pod))
@@ -637,7 +637,7 @@ func (p *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespa
 		return nil, fmt.Errorf("容器 %s 在Pod中不存在", container)
 	}
 
-	p.logger.Info("开始下载Pod文件",
+	m.logger.Info("开始下载Pod文件",
 		zap.String("namespace", namespace),
 		zap.String("pod", pod),
 		zap.String("container", container),
@@ -647,7 +647,7 @@ func (p *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespa
 		ctx, restConfig, kubeClient, namespace, pod, container, filePath)
 
 	if err != nil {
-		p.logger.Error("创建Pod文件流失败",
+		m.logger.Error("创建Pod文件流失败",
 			zap.Error(err),
 			zap.String("namespace", namespace),
 			zap.String("podName", pod),
@@ -656,7 +656,7 @@ func (p *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespa
 		return nil, fmt.Errorf("创建Pod文件流失败: %w", err)
 	}
 
-	p.logger.Info("成功创建Pod文件流",
+	m.logger.Info("成功创建Pod文件流",
 		zap.String("namespace", namespace),
 		zap.String("pod", pod),
 		zap.String("container", container),
@@ -666,12 +666,12 @@ func (p *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespa
 }
 
 // CreatePod 创建Pod
-func (p *podManager) CreatePod(ctx context.Context, clusterID int, namespace string, pod *corev1.Pod) (*corev1.Pod, error) {
+func (m *podManager) CreatePod(ctx context.Context, clusterID int, namespace string, pod *corev1.Pod) (*corev1.Pod, error) {
 	if pod == nil {
 		return nil, fmt.Errorf("pod不能为空")
 	}
 
-	kubeClient, err := p.getKubeClient(clusterID)
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -685,7 +685,7 @@ func (p *podManager) CreatePod(ctx context.Context, clusterID int, namespace str
 
 	createdPod, err := kubeClient.CoreV1().Pods(targetNamespace).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
-		p.logger.Error("创建Pod失败",
+		m.logger.Error("创建Pod失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", targetNamespace),
 			zap.String("name", pod.Name),
@@ -693,7 +693,7 @@ func (p *podManager) CreatePod(ctx context.Context, clusterID int, namespace str
 		return nil, fmt.Errorf("创建Pod失败: %w", err)
 	}
 
-	p.logger.Info("成功创建Pod",
+	m.logger.Info("成功创建Pod",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", targetNamespace),
 		zap.String("name", pod.Name))
@@ -701,19 +701,19 @@ func (p *podManager) CreatePod(ctx context.Context, clusterID int, namespace str
 }
 
 // UpdatePod 更新Pod
-func (p *podManager) UpdatePod(ctx context.Context, clusterID int, namespace string, pod *corev1.Pod) (*corev1.Pod, error) {
+func (m *podManager) UpdatePod(ctx context.Context, clusterID int, namespace string, pod *corev1.Pod) (*corev1.Pod, error) {
 	if pod == nil {
 		return nil, fmt.Errorf("pod不能为空")
 	}
 
-	kubeClient, err := p.getKubeClient(clusterID)
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
 
 	updatedPod, err := kubeClient.CoreV1().Pods(namespace).Update(ctx, pod, metav1.UpdateOptions{})
 	if err != nil {
-		p.logger.Error("更新Pod失败",
+		m.logger.Error("更新Pod失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", pod.Name),
@@ -721,7 +721,7 @@ func (p *podManager) UpdatePod(ctx context.Context, clusterID int, namespace str
 		return nil, fmt.Errorf("更新Pod失败: %w", err)
 	}
 
-	p.logger.Info("成功更新Pod",
+	m.logger.Info("成功更新Pod",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", pod.Name))

@@ -58,9 +58,9 @@ func NewClusterDAO(db *gorm.DB, l *zap.Logger) ClusterDAO {
 }
 
 // GetClusterList 获取集群列表
-func (c *clusterDAO) GetClusterList(ctx context.Context, req *model.ListClustersReq) ([]*model.K8sCluster, int64, error) {
+func (d *clusterDAO) GetClusterList(ctx context.Context, req *model.ListClustersReq) ([]*model.K8sCluster, int64, error) {
 	if req == nil {
-		c.l.Error("GetClusterList: 请求参数不能为空")
+		d.l.Error("GetClusterList: 请求参数不能为空")
 		return nil, 0, errors.New("请求参数不能为空")
 	}
 
@@ -68,7 +68,7 @@ func (c *clusterDAO) GetClusterList(ctx context.Context, req *model.ListClusters
 	var total int64
 
 	// 构建基础查询
-	query := c.db.WithContext(ctx).Model(&model.K8sCluster{})
+	query := d.db.WithContext(ctx).Model(&model.K8sCluster{})
 
 	// 应用过滤条件
 	if req.Status != "" {
@@ -86,7 +86,7 @@ func (c *clusterDAO) GetClusterList(ctx context.Context, req *model.ListClusters
 
 	// 获取总数
 	if err := query.Count(&total).Error; err != nil {
-		c.l.Error("GetClusterList: 统计集群总数失败",
+		d.l.Error("GetClusterList: 统计集群总数失败",
 			zap.String("status", req.Status),
 			zap.String("env", req.Env),
 			zap.String("search", req.Search),
@@ -107,7 +107,7 @@ func (c *clusterDAO) GetClusterList(ctx context.Context, req *model.ListClusters
 
 	// 执行查询并排序
 	if err := query.Order("updated_at DESC, id DESC").Find(&clusters).Error; err != nil {
-		c.l.Error("GetClusterList: 查询集群列表失败",
+		d.l.Error("GetClusterList: 查询集群列表失败",
 			zap.Int("page", req.Page),
 			zap.Int("size", req.Size),
 			zap.Error(err))
@@ -118,19 +118,19 @@ func (c *clusterDAO) GetClusterList(ctx context.Context, req *model.ListClusters
 }
 
 // CreateCluster 创建集群
-func (c *clusterDAO) CreateCluster(ctx context.Context, cluster *model.K8sCluster) error {
+func (d *clusterDAO) CreateCluster(ctx context.Context, cluster *model.K8sCluster) error {
 	if cluster == nil {
-		c.l.Error("CreateCluster: 集群信息不能为空")
+		d.l.Error("CreateCluster: 集群信息不能为空")
 		return errors.New("集群信息不能为空")
 	}
 
 	if cluster.Name == "" {
-		c.l.Error("CreateCluster: 集群名称不能为空")
+		d.l.Error("CreateCluster: 集群名称不能为空")
 		return errors.New("集群名称不能为空")
 	}
 
-	if err := c.db.WithContext(ctx).Create(cluster).Error; err != nil {
-		c.l.Error("CreateCluster: 创建集群失败",
+	if err := d.db.WithContext(ctx).Create(cluster).Error; err != nil {
+		d.l.Error("CreateCluster: 创建集群失败",
 			zap.String("name", cluster.Name),
 			zap.String("api_server", cluster.ApiServerAddr),
 			zap.Error(err))
@@ -141,26 +141,26 @@ func (c *clusterDAO) CreateCluster(ctx context.Context, cluster *model.K8sCluste
 }
 
 // UpdateCluster 更新集群
-func (c *clusterDAO) UpdateCluster(ctx context.Context, cluster *model.K8sCluster) error {
+func (d *clusterDAO) UpdateCluster(ctx context.Context, cluster *model.K8sCluster) error {
 	if cluster == nil {
-		c.l.Error("UpdateCluster: 集群信息不能为空")
+		d.l.Error("UpdateCluster: 集群信息不能为空")
 		return errors.New("集群信息不能为空")
 	}
 
 	if cluster.ID <= 0 {
-		c.l.Error("UpdateCluster: 集群ID不有效", zap.Int("id", cluster.ID))
+		d.l.Error("UpdateCluster: 集群ID不有效", zap.Int("id", cluster.ID))
 		return errors.New("集群ID不有效")
 	}
 
 	if cluster.Name == "" {
-		c.l.Error("UpdateCluster: 集群名称不能为空")
+		d.l.Error("UpdateCluster: 集群名称不能为空")
 		return errors.New("集群名称不能为空")
 	}
 
 	// 使用普通更新而非事务，除非必要
-	result := c.db.WithContext(ctx).Model(cluster).Where("id = ?", cluster.ID).Updates(cluster)
+	result := d.db.WithContext(ctx).Model(cluster).Where("id = ?", cluster.ID).Updates(cluster)
 	if result.Error != nil {
-		c.l.Error("UpdateCluster: 更新集群失败",
+		d.l.Error("UpdateCluster: 更新集群失败",
 			zap.Int("id", cluster.ID),
 			zap.String("name", cluster.Name),
 			zap.Error(result.Error))
@@ -168,7 +168,7 @@ func (c *clusterDAO) UpdateCluster(ctx context.Context, cluster *model.K8sCluste
 	}
 
 	if result.RowsAffected == 0 {
-		c.l.Warn("UpdateCluster: 未找到要更新的集群", zap.Int("id", cluster.ID))
+		d.l.Warn("UpdateCluster: 未找到要更新的集群", zap.Int("id", cluster.ID))
 		return fmt.Errorf("集群不存在，ID: %d", cluster.ID)
 	}
 
@@ -176,23 +176,23 @@ func (c *clusterDAO) UpdateCluster(ctx context.Context, cluster *model.K8sCluste
 }
 
 // UpdateClusterStatus 更新集群状态
-func (c *clusterDAO) UpdateClusterStatus(ctx context.Context, id int, status model.ClusterStatus) error {
+func (d *clusterDAO) UpdateClusterStatus(ctx context.Context, id int, status model.ClusterStatus) error {
 	if id <= 0 {
-		c.l.Error("UpdateClusterStatus: 集群ID不有效", zap.Int("id", id))
+		d.l.Error("UpdateClusterStatus: 集群ID不有效", zap.Int("id", id))
 		return errors.New("集群ID不有效")
 	}
 
 	if status <= 0 {
-		c.l.Error("UpdateClusterStatus: 状态值无效", zap.Int8("status", int8(status)))
+		d.l.Error("UpdateClusterStatus: 状态值无效", zap.Int8("status", int8(status)))
 		return errors.New("状态值无效")
 	}
 
-	result := c.db.WithContext(ctx).Model(&model.K8sCluster{}).Where("id = ?", id).Updates(map[string]interface{}{
+	result := d.db.WithContext(ctx).Model(&model.K8sCluster{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status": int8(status),
 	})
 
 	if result.Error != nil {
-		c.l.Error("UpdateClusterStatus: 更新集群状态失败",
+		d.l.Error("UpdateClusterStatus: 更新集群状态失败",
 			zap.Int("id", id),
 			zap.Int8("status", int8(status)),
 			zap.Error(result.Error))
@@ -200,7 +200,7 @@ func (c *clusterDAO) UpdateClusterStatus(ctx context.Context, id int, status mod
 	}
 
 	if result.RowsAffected == 0 {
-		c.l.Warn("UpdateClusterStatus: 未找到要更新的集群", zap.Int("id", id))
+		d.l.Warn("UpdateClusterStatus: 未找到要更新的集群", zap.Int("id", id))
 		return fmt.Errorf("集群不存在，ID: %d", id)
 	}
 
@@ -208,22 +208,22 @@ func (c *clusterDAO) UpdateClusterStatus(ctx context.Context, id int, status mod
 }
 
 // DeleteCluster 删除集群
-func (c *clusterDAO) DeleteCluster(ctx context.Context, id int) error {
+func (d *clusterDAO) DeleteCluster(ctx context.Context, id int) error {
 	if id <= 0 {
-		c.l.Error("DeleteCluster: 集群ID不有效", zap.Int("id", id))
+		d.l.Error("DeleteCluster: 集群ID不有效", zap.Int("id", id))
 		return errors.New("集群ID不有效")
 	}
 
-	result := c.db.WithContext(ctx).Where("id = ?", id).Delete(&model.K8sCluster{})
+	result := d.db.WithContext(ctx).Where("id = ?", id).Delete(&model.K8sCluster{})
 	if result.Error != nil {
-		c.l.Error("DeleteCluster: 删除集群失败",
+		d.l.Error("DeleteCluster: 删除集群失败",
 			zap.Int("id", id),
 			zap.Error(result.Error))
 		return fmt.Errorf("删除集群失败: %w", result.Error)
 	}
 
 	if result.RowsAffected == 0 {
-		c.l.Warn("DeleteCluster: 未找到要删除的集群", zap.Int("id", id))
+		d.l.Warn("DeleteCluster: 未找到要删除的集群", zap.Int("id", id))
 		return fmt.Errorf("集群不存在，ID: %d", id)
 	}
 
@@ -231,19 +231,19 @@ func (c *clusterDAO) DeleteCluster(ctx context.Context, id int) error {
 }
 
 // GetClusterByID 根据ID获取集群
-func (c *clusterDAO) GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error) {
+func (d *clusterDAO) GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error) {
 	if id <= 0 {
-		c.l.Error("GetClusterByID: 集群ID不有效", zap.Int("id", id))
+		d.l.Error("GetClusterByID: 集群ID不有效", zap.Int("id", id))
 		return nil, errors.New("集群ID不有效")
 	}
 
 	var cluster model.K8sCluster
-	if err := c.db.WithContext(ctx).Where("id = ?", id).First(&cluster).Error; err != nil {
+	if err := d.db.WithContext(ctx).Where("id = ?", id).First(&cluster).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.l.Debug("GetClusterByID: 集群不存在", zap.Int("id", id))
+			d.l.Debug("GetClusterByID: 集群不存在", zap.Int("id", id))
 			return nil, err
 		}
-		c.l.Error("GetClusterByID: 查询集群失败",
+		d.l.Error("GetClusterByID: 查询集群失败",
 			zap.Int("id", id),
 			zap.Error(err))
 		return nil, fmt.Errorf("查询集群失败: %w", err)
@@ -253,19 +253,19 @@ func (c *clusterDAO) GetClusterByID(ctx context.Context, id int) (*model.K8sClus
 }
 
 // GetClusterByName 根据名称获取集群
-func (c *clusterDAO) GetClusterByName(ctx context.Context, name string) (*model.K8sCluster, error) {
+func (d *clusterDAO) GetClusterByName(ctx context.Context, name string) (*model.K8sCluster, error) {
 	if name == "" {
-		c.l.Error("GetClusterByName: 集群名称不能为空")
+		d.l.Error("GetClusterByName: 集群名称不能为空")
 		return nil, errors.New("集群名称不能为空")
 	}
 
 	var cluster model.K8sCluster
-	if err := c.db.WithContext(ctx).Where("name = ?", name).First(&cluster).Error; err != nil {
+	if err := d.db.WithContext(ctx).Where("name = ?", name).First(&cluster).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.l.Debug("GetClusterByName: 集群不存在", zap.String("name", name))
+			d.l.Debug("GetClusterByName: 集群不存在", zap.String("name", name))
 			return nil, err
 		}
-		c.l.Error("GetClusterByName: 查询集群失败",
+		d.l.Error("GetClusterByName: 查询集群失败",
 			zap.String("name", name),
 			zap.Error(err))
 		return nil, fmt.Errorf("查询集群失败: %w", err)

@@ -84,9 +84,9 @@ package service
 // // GetResourceOverview 获取集群资源概览
 // func (r *resourceService) GetResourceOverview(ctx context.Context, clusterID int) (*model.ResourceOverview, error) {
 // 	// 获取集群信息
-// 	cluster, err := r.dao.GetClusterByID(ctx, clusterID)
+// 	cluster, err := s.dao.GetClusterByID(ctx, clusterID)
 // 	if err != nil {
-// 		r.logger.Error("获取集群信息失败", zap.Int("clusterID", clusterID), zap.Error(err))
+// 		s.logger.Error("获取集群信息失败", zap.Int("clusterID", clusterID), zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrInvalidParam, "集群不存在")
 // 	}
 
@@ -95,9 +95,9 @@ package service
 // 	}
 
 // 	// 获取k8s客户端
-// 	kubeClient, err := r.client.GetKubeClient(clusterID)
+// 	kubeClient, err := s.client.GetKubeClient(clusterID)
 // 	if err != nil {
-// 		r.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
+// 		s.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 // 	}
 
@@ -144,7 +144,7 @@ package service
 // 	}
 
 // 	if len(errors) > 0 {
-// 		r.logger.Warn("部分统计信息收集失败", zap.Int("errorCount", len(errors)))
+// 		s.logger.Warn("部分统计信息收集失败", zap.Int("errorCount", len(errors)))
 // 		// 不返回错误，使用部分数据
 // 	}
 
@@ -188,18 +188,18 @@ package service
 // 			},
 // 		},
 // 		HealthStatus: model.ClusterHealth{
-// 			OverallStatus: r.calculateOverallHealthStatus(stats),
-// 			Score:         r.calculateHealthScore(stats).Score,
+// 			OverallStatus: s.calculateOverallHealthStatus(stats),
+// 			Score:         s.calculateHealthScore(stats).Score,
 // 		},
 // 	}
 
 // 	// 获取Top命名空间
-// 	overview.TopNamespaces = r.buildTopNamespaces(stats.NamespaceStats.TopNamespaces, stats)
+// 	overview.TopNamespaces = s.buildTopNamespaces(stats.NamespaceStats.TopNamespaces, stats)
 
 // 	// 获取最近事件
-// 	overview.RecentEvents = r.buildRecentEvents(ctx, kubeClient, 10)
+// 	overview.RecentEvents = s.buildRecentEvents(ctx, kubeClient, 10)
 
-// 	r.logger.Info("成功获取集群资源概览",
+// 	s.logger.Info("成功获取集群资源概览",
 // 		zap.Int("clusterID", clusterID),
 // 		zap.String("clusterName", cluster.Name))
 
@@ -209,16 +209,16 @@ package service
 // // GetResourceStatistics 获取资源统计信息
 // func (r *resourceService) GetResourceStatistics(ctx context.Context, clusterID int) (*model.ClusterStats, error) {
 // 	// 获取集群信息
-// 	cluster, err := r.dao.GetClusterByID(ctx, clusterID)
+// 	cluster, err := s.dao.GetClusterByID(ctx, clusterID)
 // 	if err != nil || cluster == nil {
-// 		r.logger.Error("获取集群信息失败", zap.Int("clusterID", clusterID), zap.Error(err))
+// 		s.logger.Error("获取集群信息失败", zap.Int("clusterID", clusterID), zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrInvalidParam, "集群不存在")
 // 	}
 
 // 	// 获取k8s客户端
-// 	kubeClient, err := r.client.GetKubeClient(clusterID)
+// 	kubeClient, err := s.client.GetKubeClient(clusterID)
 // 	if err != nil {
-// 		r.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
+// 		s.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 // 	}
 
@@ -269,16 +269,16 @@ package service
 // 	for i := 0; i < 8; i++ {
 // 		if err := <-errChan; err != nil {
 // 			errors = append(errors, err)
-// 			r.logger.Warn("统计信息收集出错", zap.Error(err))
+// 			s.logger.Warn("统计信息收集出错", zap.Error(err))
 // 		}
 // 	}
 
 // 	if len(errors) > 0 {
-// 		r.logger.Warn("部分统计信息收集失败", zap.Int("errorCount", len(errors)))
+// 		s.logger.Warn("部分统计信息收集失败", zap.Int("errorCount", len(errors)))
 // 		// 继续返回部分数据
 // 	}
 
-// 	r.logger.Info("成功获取集群资源统计",
+// 	s.logger.Info("成功获取集群资源统计",
 // 		zap.Int("clusterID", clusterID),
 // 		zap.String("clusterName", cluster.Name))
 
@@ -288,9 +288,9 @@ package service
 // // GetResourceDistribution 获取资源分布信息
 // func (r *resourceService) GetResourceDistribution(ctx context.Context, clusterID int) (*model.ResourceDistribution, error) {
 // 	// 获取k8s客户端
-// 	kubeClient, err := r.client.GetKubeClient(clusterID)
+// 	kubeClient, err := s.client.GetKubeClient(clusterID)
 // 	if err != nil {
-// 		r.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
+// 		s.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 // 	}
 
@@ -299,33 +299,33 @@ package service
 // 	}
 
 // 	// 获取节点分布
-// 	nodeDistrib, err := r.getNodeDistribution(ctx, kubeClient)
+// 	nodeDistrib, err := s.getNodeDistribution(ctx, kubeClient)
 // 	if err != nil {
-// 		r.logger.Warn("获取节点分布失败", zap.Error(err))
+// 		s.logger.Warn("获取节点分布失败", zap.Error(err))
 // 	} else {
 // 		distribution.NodeDistribution = nodeDistrib
 // 	}
 
 // 	// 获取命名空间分布
-// 	nsDistrib, err := r.getNamespaceDistribution(ctx, kubeClient)
+// 	nsDistrib, err := s.getNamespaceDistribution(ctx, kubeClient)
 // 	if err != nil {
-// 		r.logger.Warn("获取命名空间分布失败", zap.Error(err))
+// 		s.logger.Warn("获取命名空间分布失败", zap.Error(err))
 // 	} else {
 // 		distribution.NSDistribution = nsDistrib
 // 	}
 
 // 	// 获取工作负载分布
-// 	workloadDistrib, err := r.getDetailedWorkloadDistribution(ctx, kubeClient)
+// 	workloadDistrib, err := s.getDetailedWorkloadDistribution(ctx, kubeClient)
 // 	if err != nil {
-// 		r.logger.Warn("获取工作负载分布失败", zap.Error(err))
+// 		s.logger.Warn("获取工作负载分布失败", zap.Error(err))
 // 	} else {
 // 		distribution.WorkloadDistrib = *workloadDistrib
 // 	}
 
 // 	// 生成资源分配图表
-// 	distribution.ResourceAllocation = r.generateResourceAllocationChart(nodeDistrib, nsDistrib)
+// 	distribution.ResourceAllocation = s.generateResourceAllocationChart(nodeDistrib, nsDistrib)
 
-// 	r.logger.Info("成功获取资源分布信息", zap.Int("clusterID", clusterID))
+// 	s.logger.Info("成功获取资源分布信息", zap.Int("clusterID", clusterID))
 // 	return distribution, nil
 // }
 
@@ -337,15 +337,15 @@ package service
 // 	}
 
 // 	// 解析时间周期
-// 	duration, err := r.parsePeriod(req.Period)
+// 	duration, err := s.parsePeriod(req.Period)
 // 	if err != nil {
 // 		return nil, pkg.NewBusinessError(constants.ErrInvalidParam, "无效的时间周期参数")
 // 	}
 
 // 	// 获取k8s客户端验证集群存在
-// 	_, err = r.client.GetKubeClient(req.ClusterID)
+// 	_, err = s.client.GetKubeClient(req.ClusterID)
 // 	if err != nil {
-// 		r.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", req.ClusterID), zap.Error(err))
+// 		s.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", req.ClusterID), zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 // 	}
 
@@ -357,25 +357,25 @@ package service
 // 			Start: time.Now().Add(-duration),
 // 			End:   time.Now(),
 // 		},
-// 		CPUTrend:    r.generateMockTrendData("CPU", duration),
-// 		MemoryTrend: r.generateMockTrendData("Memory", duration),
-// 		PodTrend:    r.generateMockTrendData("Pod", duration),
-// 		NodeTrend:   r.generateMockTrendData("Node", duration),
+// 		CPUTrend:    s.generateMockTrendData("CPU", duration),
+// 		MemoryTrend: s.generateMockTrendData("Memory", duration),
+// 		PodTrend:    s.generateMockTrendData("Pod", duration),
+// 		NodeTrend:   s.generateMockTrendData("Node", duration),
 // 	}
 
 // 	// 生成预测数据
-// 	trend.Predictions = r.generateResourcePredictions()
+// 	trend.Predictions = s.generateResourcePredictions()
 
-// 	r.logger.Info("成功获取资源趋势", zap.Int("clusterID", req.ClusterID), zap.String("period", req.Period))
+// 	s.logger.Info("成功获取资源趋势", zap.Int("clusterID", req.ClusterID), zap.String("period", req.Period))
 // 	return trend, nil
 // }
 
 // // GetResourceUtilization 获取资源利用率
 // func (r *resourceService) GetResourceUtilization(ctx context.Context, clusterID int) (*model.ResourceUtilization, error) {
 // 	// 获取k8s客户端
-// 	kubeClient, err := r.client.GetKubeClient(clusterID)
+// 	kubeClient, err := s.client.GetKubeClient(clusterID)
 // 	if err != nil {
-// 		r.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
+// 		s.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 // 	}
 
@@ -399,37 +399,37 @@ package service
 // 	}
 
 // 	// 获取节点利用率
-// 	nodeUtils, err := r.getNodeUtilizations(ctx, kubeClient)
+// 	nodeUtils, err := s.getNodeUtilizations(ctx, kubeClient)
 // 	if err != nil {
-// 		r.logger.Warn("获取节点利用率失败", zap.Error(err))
+// 		s.logger.Warn("获取节点利用率失败", zap.Error(err))
 // 	} else {
 // 		utilization.NodeUtils = nodeUtils
 // 	}
 
 // 	// 获取命名空间利用率
-// 	nsUtils, err := r.getNamespaceUtilizations(ctx, kubeClient)
+// 	nsUtils, err := s.getNamespaceUtilizations(ctx, kubeClient)
 // 	if err != nil {
-// 		r.logger.Warn("获取命名空间利用率失败", zap.Error(err))
+// 		s.logger.Warn("获取命名空间利用率失败", zap.Error(err))
 // 	} else {
 // 		utilization.NSUtils = nsUtils
 // 	}
 
 // 	// 生成利用率图表
-// 	utilization.UtilChart = r.generateUtilizationChart(nodeUtils, nsUtils)
+// 	utilization.UtilChart = s.generateUtilizationChart(nodeUtils, nsUtils)
 
 // 	// 生成优化建议
-// 	utilization.Recommendations = r.generateUtilizationAdvice(utilization.OverallUtil, nodeUtils)
+// 	utilization.Recommendations = s.generateUtilizationAdvice(utilization.OverallUtil, nodeUtils)
 
-// 	r.logger.Info("成功获取资源利用率", zap.Int("clusterID", clusterID))
+// 	s.logger.Info("成功获取资源利用率", zap.Int("clusterID", clusterID))
 // 	return utilization, nil
 // }
 
 // // GetResourceHealth 获取资源健康状态
 // func (r *resourceService) GetResourceHealth(ctx context.Context, clusterID int) (*model.ResourceHealth, error) {
 // 	// 获取k8s客户端
-// 	kubeClient, err := r.client.GetKubeClient(clusterID)
+// 	kubeClient, err := s.client.GetKubeClient(clusterID)
 // 	if err != nil {
-// 		r.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
+// 		s.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 // 	}
 
@@ -444,61 +444,61 @@ package service
 // 	utils.CollectEventStats(ctx, kubeClient, stats)
 
 // 	// 计算总体健康评分
-// 	health.OverallHealth = r.calculateHealthScore(stats)
+// 	health.OverallHealth = s.calculateHealthScore(stats)
 
 // 	// 获取组件健康状态
-// 	components, err := r.getComponentHealth(ctx, kubeClient)
+// 	components, err := s.getComponentHealth(ctx, kubeClient)
 // 	if err != nil {
-// 		r.logger.Warn("获取组件健康状态失败", zap.Error(err))
+// 		s.logger.Warn("获取组件健康状态失败", zap.Error(err))
 // 	} else {
 // 		health.ComponentHealth = components
 // 	}
 
 // 	// 识别资源问题
-// 	health.ResourceIssues = r.identifyResourceIssues(ctx, kubeClient, stats)
+// 	health.ResourceIssues = s.identifyResourceIssues(ctx, kubeClient, stats)
 
 // 	// 生成健康趋势（模拟）
-// 	health.HealthTrend = r.generateHealthTrend()
+// 	health.HealthTrend = s.generateHealthTrend()
 
 // 	// 生成可操作警报
-// 	health.ActionableAlerts = r.generateActionableAlerts(health.ResourceIssues)
+// 	health.ActionableAlerts = s.generateActionableAlerts(health.ResourceIssues)
 
-// 	r.logger.Info("成功获取资源健康状态", zap.Int("clusterID", clusterID))
+// 	s.logger.Info("成功获取资源健康状态", zap.Int("clusterID", clusterID))
 // 	return health, nil
 // }
 
 // // GetWorkloadDistribution 获取工作负载分布
 // func (r *resourceService) GetWorkloadDistribution(ctx context.Context, clusterID int) (*model.WorkloadDistribution, error) {
 // 	// 获取k8s客户端
-// 	kubeClient, err := r.client.GetKubeClient(clusterID)
+// 	kubeClient, err := s.client.GetKubeClient(clusterID)
 // 	if err != nil {
-// 		r.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
+// 		s.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 // 	}
 
-// 	return r.getDetailedWorkloadDistribution(ctx, kubeClient)
+// 	return s.getDetailedWorkloadDistribution(ctx, kubeClient)
 // }
 
 // // GetNamespaceResources 获取命名空间资源信息
 // func (r *resourceService) GetNamespaceResources(ctx context.Context, clusterID int) ([]*model.NamespaceUsage, error) {
 // 	// 获取k8s客户端
-// 	kubeClient, err := r.client.GetKubeClient(clusterID)
+// 	kubeClient, err := s.client.GetKubeClient(clusterID)
 // 	if err != nil {
-// 		r.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
+// 		s.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 // 	}
 
 // 	// 获取所有命名空间
 // 	namespaces, err := kubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 // 	if err != nil {
-// 		r.logger.Error("获取命名空间列表失败", zap.Error(err))
+// 		s.logger.Error("获取命名空间列表失败", zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrK8sResourceList, "获取命名空间列表失败")
 // 	}
 
 // 	// 获取所有Pod用于统计
 // 	pods, err := kubeClient.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
 // 	if err != nil {
-// 		r.logger.Error("获取Pod列表失败", zap.Error(err))
+// 		s.logger.Error("获取Pod列表失败", zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrK8sResourceList, "获取Pod列表失败")
 // 	}
 
@@ -539,7 +539,7 @@ package service
 // 		return result[i].PodCount > result[j].PodCount
 // 	})
 
-// 	r.logger.Info("成功获取命名空间资源信息",
+// 	s.logger.Info("成功获取命名空间资源信息",
 // 		zap.Int("clusterID", clusterID),
 // 		zap.Int("namespaceCount", len(result)))
 
@@ -549,9 +549,9 @@ package service
 // // GetStorageOverview 获取存储概览
 // func (r *resourceService) GetStorageOverview(ctx context.Context, clusterID int) (*model.StorageStats, error) {
 // 	// 获取k8s客户端
-// 	kubeClient, err := r.client.GetKubeClient(clusterID)
+// 	kubeClient, err := s.client.GetKubeClient(clusterID)
 // 	if err != nil {
-// 		r.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
+// 		s.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 // 	}
 
@@ -559,20 +559,20 @@ package service
 // 	stats := &model.ClusterStats{}
 // 	err = utils.CollectStorageStats(ctx, kubeClient, stats)
 // 	if err != nil {
-// 		r.logger.Error("收集存储统计信息失败", zap.Error(err))
+// 		s.logger.Error("收集存储统计信息失败", zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrK8sResourceOperation, "获取存储信息失败")
 // 	}
 
-// 	r.logger.Info("成功获取存储概览", zap.Int("clusterID", clusterID))
+// 	s.logger.Info("成功获取存储概览", zap.Int("clusterID", clusterID))
 // 	return &stats.StorageStats, nil
 // }
 
 // // GetNetworkOverview 获取网络概览
 // func (r *resourceService) GetNetworkOverview(ctx context.Context, clusterID int) (*model.NetworkStats, error) {
 // 	// 获取k8s客户端
-// 	kubeClient, err := r.client.GetKubeClient(clusterID)
+// 	kubeClient, err := s.client.GetKubeClient(clusterID)
 // 	if err != nil {
-// 		r.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
+// 		s.logger.Error("获取Kubernetes客户端失败", zap.Int("clusterID", clusterID), zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 // 	}
 
@@ -580,11 +580,11 @@ package service
 // 	stats := &model.ClusterStats{}
 // 	err = utils.CollectNetworkStats(ctx, kubeClient, stats)
 // 	if err != nil {
-// 		r.logger.Error("收集网络统计信息失败", zap.Error(err))
+// 		s.logger.Error("收集网络统计信息失败", zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrK8sResourceOperation, "获取网络信息失败")
 // 	}
 
-// 	r.logger.Info("成功获取网络概览", zap.Int("clusterID", clusterID))
+// 	s.logger.Info("成功获取网络概览", zap.Int("clusterID", clusterID))
 // 	return &stats.NetworkStats, nil
 // }
 
@@ -604,16 +604,16 @@ package service
 
 // 	for _, clusterID := range clusterIDs {
 // 		// 获取集群信息
-// 		cluster, err := r.dao.GetClusterByID(ctx, clusterID)
+// 		cluster, err := s.dao.GetClusterByID(ctx, clusterID)
 // 		if err != nil || cluster == nil {
-// 			r.logger.Warn("获取集群信息失败", zap.Int("clusterID", clusterID))
+// 			s.logger.Warn("获取集群信息失败", zap.Int("clusterID", clusterID))
 // 			continue
 // 		}
 
 // 		// 获取集群统计信息
-// 		stats, err := r.GetResourceStatistics(ctx, clusterID)
+// 		stats, err := s.GetResourceStatistics(ctx, clusterID)
 // 		if err != nil {
-// 			r.logger.Warn("获取集群统计失败", zap.Int("clusterID", clusterID))
+// 			s.logger.Warn("获取集群统计失败", zap.Int("clusterID", clusterID))
 // 			continue
 // 		}
 
@@ -635,18 +635,18 @@ package service
 // 		})
 // 	}
 
-// 	r.logger.Info("成功对比集群资源", zap.Int("clusterCount", len(comparison.ClusterNames)))
+// 	s.logger.Info("成功对比集群资源", zap.Int("clusterCount", len(comparison.ClusterNames)))
 // 	return comparison, nil
 // }
 
 // // GetAllClustersSummary 获取所有集群资源汇总
 // func (r *resourceService) GetAllClustersSummary(ctx context.Context) (*model.AllClustersSummary, error) {
 // 	// 获取所有集群
-// 	clusters, total, err := r.dao.GetClusterList(ctx, &model.ListClustersReq{
+// 	clusters, total, err := s.dao.GetClusterList(ctx, &model.ListClustersReq{
 // 		ListReq: model.ListReq{Page: 1, Size: 100}, // 假设最多100个集群
 // 	})
 // 	if err != nil {
-// 		r.logger.Error("获取集群列表失败", zap.Error(err))
+// 		s.logger.Error("获取集群列表失败", zap.Error(err))
 // 		return nil, pkg.NewBusinessError(constants.ErrInvalidParam, "获取集群列表失败")
 // 	}
 
@@ -674,15 +674,15 @@ package service
 
 // 	for _, cluster := range clusters {
 // 		// 获取集群统计
-// 		stats, err := r.GetResourceStatistics(ctx, cluster.ID)
+// 		stats, err := s.GetResourceStatistics(ctx, cluster.ID)
 // 		if err != nil {
-// 			r.logger.Warn("获取集群统计失败", zap.Int("clusterID", cluster.ID))
+// 			s.logger.Warn("获取集群统计失败", zap.Int("clusterID", cluster.ID))
 // 			unhealthyCount++
 // 			continue
 // 		}
 
 // 		// 计算健康状态
-// 		healthScore := r.calculateHealthScore(stats)
+// 		healthScore := s.calculateHealthScore(stats)
 // 		if healthScore.Score > 70 {
 // 			healthyCount++
 // 		} else {
@@ -736,7 +736,7 @@ package service
 
 // 	summary.ResourceComparison = *comparison
 
-// 	r.logger.Info("成功获取所有集群汇总",
+// 	s.logger.Info("成功获取所有集群汇总",
 // 		zap.Int("totalClusters", summary.TotalClusters),
 // 		zap.Int("healthyClusters", summary.HealthyClusters))
 
@@ -755,7 +755,7 @@ package service
 
 // // calculateOverallHealthStatus 计算总体健康状态
 // func (r *resourceService) calculateOverallHealthStatus(stats *model.ClusterStats) string {
-// 	score := r.calculateHealthScore(stats).Score
+// 	score := s.calculateHealthScore(stats).Score
 // 	switch {
 // 	case score >= 90:
 // 		return "excellent"

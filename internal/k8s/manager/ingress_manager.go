@@ -59,10 +59,10 @@ func NewIngressManager(clientFactory client.K8sClient, logger *zap.Logger) Ingre
 }
 
 // getKubeClient 获取Kubernetes客户端
-func (i *ingressManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
-	kubeClient, err := i.clientFactory.GetKubeClient(clusterID)
+func (m *ingressManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
+	kubeClient, err := m.clientFactory.GetKubeClient(clusterID)
 	if err != nil {
-		i.logger.Error("获取Kubernetes客户端失败",
+		m.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", clusterID),
 			zap.Error(err))
 		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
@@ -71,12 +71,12 @@ func (i *ingressManager) getKubeClient(clusterID int) (*kubernetes.Clientset, er
 }
 
 // CreateIngress 创建Ingress
-func (i *ingressManager) CreateIngress(ctx context.Context, clusterID int, namespace string, ingress *networkingv1.Ingress) error {
+func (m *ingressManager) CreateIngress(ctx context.Context, clusterID int, namespace string, ingress *networkingv1.Ingress) error {
 	if ingress == nil {
 		return fmt.Errorf("ingress 不能为空")
 	}
 
-	kubeClient, err := i.getKubeClient(clusterID)
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func (i *ingressManager) CreateIngress(ctx context.Context, clusterID int, names
 
 	_, err = kubeClient.NetworkingV1().Ingresses(targetNamespace).Create(ctx, ingress, metav1.CreateOptions{})
 	if err != nil {
-		i.logger.Error("创建 Ingress 失败",
+		m.logger.Error("创建 Ingress 失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", targetNamespace),
 			zap.String("name", ingress.Name),
@@ -98,7 +98,7 @@ func (i *ingressManager) CreateIngress(ctx context.Context, clusterID int, names
 		return fmt.Errorf("创建 Ingress 失败: %w", err)
 	}
 
-	i.logger.Info("成功创建 Ingress",
+	m.logger.Info("成功创建 Ingress",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", targetNamespace),
 		zap.String("name", ingress.Name))
@@ -106,15 +106,15 @@ func (i *ingressManager) CreateIngress(ctx context.Context, clusterID int, names
 }
 
 // GetIngress 获取指定Ingress
-func (i *ingressManager) GetIngress(ctx context.Context, clusterID int, namespace, name string) (*networkingv1.Ingress, error) {
-	kubeClient, err := i.getKubeClient(clusterID)
+func (m *ingressManager) GetIngress(ctx context.Context, clusterID int, namespace, name string) (*networkingv1.Ingress, error) {
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
 
 	ingress, err := kubeClient.NetworkingV1().Ingresses(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		i.logger.Error("获取 Ingress 失败",
+		m.logger.Error("获取 Ingress 失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
@@ -122,7 +122,7 @@ func (i *ingressManager) GetIngress(ctx context.Context, clusterID int, namespac
 		return nil, fmt.Errorf("获取 Ingress 失败: %w", err)
 	}
 
-	i.logger.Debug("成功获取 Ingress",
+	m.logger.Debug("成功获取 Ingress",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", name))
@@ -130,15 +130,15 @@ func (i *ingressManager) GetIngress(ctx context.Context, clusterID int, namespac
 }
 
 // GetIngressList 获取Ingress列表
-func (i *ingressManager) GetIngressList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sIngress, error) {
-	kubeClient, err := i.getKubeClient(clusterID)
+func (m *ingressManager) GetIngressList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sIngress, error) {
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return nil, err
 	}
 
 	ingressList, err := kubeClient.NetworkingV1().Ingresses(namespace).List(ctx, listOptions)
 	if err != nil {
-		i.logger.Error("获取 Ingress 列表失败",
+		m.logger.Error("获取 Ingress 列表失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.Error(err))
@@ -152,7 +152,7 @@ func (i *ingressManager) GetIngressList(ctx context.Context, clusterID int, name
 		k8sIngresses = append(k8sIngresses, k8sIngress)
 	}
 
-	i.logger.Debug("成功获取 Ingress 列表",
+	m.logger.Debug("成功获取 Ingress 列表",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.Int("count", len(k8sIngresses)))
@@ -160,12 +160,12 @@ func (i *ingressManager) GetIngressList(ctx context.Context, clusterID int, name
 }
 
 // UpdateIngress 更新Ingress
-func (i *ingressManager) UpdateIngress(ctx context.Context, clusterID int, namespace string, ingress *networkingv1.Ingress) error {
+func (m *ingressManager) UpdateIngress(ctx context.Context, clusterID int, namespace string, ingress *networkingv1.Ingress) error {
 	if ingress == nil {
 		return fmt.Errorf("ingress 不能为空")
 	}
 
-	kubeClient, err := i.getKubeClient(clusterID)
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
@@ -179,7 +179,7 @@ func (i *ingressManager) UpdateIngress(ctx context.Context, clusterID int, names
 
 	_, err = kubeClient.NetworkingV1().Ingresses(targetNamespace).Update(ctx, ingress, metav1.UpdateOptions{})
 	if err != nil {
-		i.logger.Error("更新 Ingress 失败",
+		m.logger.Error("更新 Ingress 失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", targetNamespace),
 			zap.String("name", ingress.Name),
@@ -187,7 +187,7 @@ func (i *ingressManager) UpdateIngress(ctx context.Context, clusterID int, names
 		return fmt.Errorf("更新 Ingress 失败: %w", err)
 	}
 
-	i.logger.Info("成功更新 Ingress",
+	m.logger.Info("成功更新 Ingress",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", targetNamespace),
 		zap.String("name", ingress.Name))
@@ -195,15 +195,15 @@ func (i *ingressManager) UpdateIngress(ctx context.Context, clusterID int, names
 }
 
 // DeleteIngress 删除Ingress
-func (i *ingressManager) DeleteIngress(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
-	kubeClient, err := i.getKubeClient(clusterID)
+func (m *ingressManager) DeleteIngress(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
 	err = kubeClient.NetworkingV1().Ingresses(namespace).Delete(ctx, name, deleteOptions)
 	if err != nil {
-		i.logger.Error("删除 Ingress 失败",
+		m.logger.Error("删除 Ingress 失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
@@ -211,7 +211,7 @@ func (i *ingressManager) DeleteIngress(ctx context.Context, clusterID int, names
 		return fmt.Errorf("删除 Ingress 失败: %w", err)
 	}
 
-	i.logger.Info("成功删除 Ingress",
+	m.logger.Info("成功删除 Ingress",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", name))
