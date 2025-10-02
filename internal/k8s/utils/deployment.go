@@ -570,11 +570,12 @@ func BuildDeploymentFromYaml(req *model.CreateDeploymentByYamlReq) (*appsv1.Depl
 		return nil, err
 	}
 
-	// YAML中必须包含namespace和name信息
+	// 如果YAML中没有指定namespace，使用default
 	if deployment.Namespace == "" {
-		return nil, fmt.Errorf("YAML中必须指定namespace")
+		deployment.Namespace = "default"
 	}
 
+	// YAML中必须包含name信息
 	if deployment.Name == "" {
 		return nil, fmt.Errorf("YAML中必须指定name")
 	}

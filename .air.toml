@@ -9,10 +9,10 @@ tmp_dir = "tmp"
 
 [build]
 # 构建命令
+# 注意：Swagger 文档自动生成已禁用，请使用 make swagger 手动生成
 pre_cmd = [
     "echo '🔄 开始构建...'",
-    "echo '📄 检查 Swagger 文档生成设置...'",
-    "if [ \"${SWAGGER_ENABLED:-true}\" = \"false\" ]; then echo '⏭️ Swagger 文档生成已禁用，跳过生成'; else echo '📄 自动生成 Swagger 文档...'; go generate; echo '✅ Swagger 文档已自动更新'; fi"
+    "echo '📝 提示: 如需生成 Swagger 文档，请手动运行 make swagger'"
 ]
 
 # 编译后的二进制文件名

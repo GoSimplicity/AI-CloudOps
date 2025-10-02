@@ -445,6 +445,14 @@ func (h *K8sDeploymentHandler) ResumeDeployment(ctx *gin.Context) {
 func (h *K8sDeploymentHandler) CreateDeploymentByYaml(ctx *gin.Context) {
 	var req model.CreateDeploymentByYamlReq
 
+	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.deploymentService.CreateDeploymentByYaml(ctx, &req)
 	})

@@ -28,6 +28,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
@@ -223,14 +224,13 @@ func (m *deploymentManager) DeleteDeployment(ctx context.Context, clusterID int,
 	return nil
 }
 
-// RestartDeployment 重启deployment
+// RestartDeployment 重启deployment的所有pod
 func (m *deploymentManager) RestartDeployment(ctx context.Context, clusterID int, namespace, name string) error {
 	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	// 使用 Patch 方式重启
 	patchData := fmt.Sprintf(`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"%s"}}}}}`,
 		time.Now().Format(time.RFC3339))
 
@@ -244,7 +244,7 @@ func (m *deploymentManager) RestartDeployment(ctx context.Context, clusterID int
 		return fmt.Errorf("重启 Deployment 失败: %w", err)
 	}
 
-	m.logger.Info("成功重启 Deployment",
+	m.logger.Info("成功触发 Deployment 滚动重启，将逐个重启所有 Pod",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", name))
@@ -258,20 +258,19 @@ func (m *deploymentManager) ScaleDeployment(ctx context.Context, clusterID int, 
 		return err
 	}
 
-	// 获取当前 Deployment
-	deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+	scale, err := kubeClient.AppsV1().Deployments(namespace).GetScale(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		m.logger.Error("获取 Deployment 失败",
+		m.logger.Error("获取 Deployment Scale 失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
 			zap.Error(err))
-		return fmt.Errorf("获取 Deployment 失败: %w", err)
+		return fmt.Errorf("获取 Deployment Scale 失败: %w", err)
 	}
 
 	// 更新副本数
-	deployment.Spec.Replicas = &replicas
-	_, err = kubeClient.AppsV1().Deployments(namespace).Update(ctx, deployment, metav1.UpdateOptions{})
+	scale.Spec.Replicas = replicas
+	_, err = kubeClient.AppsV1().Deployments(namespace).UpdateScale(ctx, name, scale, metav1.UpdateOptions{})
 	if err != nil {
 		m.logger.Error("扩缩容 Deployment 失败",
 			zap.Int("clusterID", clusterID),
@@ -343,14 +342,39 @@ func (m *deploymentManager) GetDeploymentPods(ctx context.Context, clusterID int
 }
 
 // RollbackDeployment 回滚 Deployment 到指定版本
+// 通过查找对应版本的 ReplicaSet，并将其 PodTemplateSpec 应用到 Deployment
 func (m *deploymentManager) RollbackDeployment(ctx context.Context, clusterID int, namespace, name string, revision int64) error {
 	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
+	// 首先获取当前 Deployment 以获取其 selector
+	deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		m.logger.Error("获取 Deployment 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.Error(err))
+		return fmt.Errorf("获取 Deployment 失败: %w", err)
+	}
+
+	// 使用 selector 过滤，只获取属于该 Deployment 的 ReplicaSet
+	var labelSelectors []string
+	if deployment.Spec.Selector != nil && deployment.Spec.Selector.MatchLabels != nil {
+		for key, value := range deployment.Spec.Selector.MatchLabels {
+			labelSelectors = append(labelSelectors, fmt.Sprintf("%s=%s", key, value))
+		}
+	}
+
+	listOptions := metav1.ListOptions{}
+	if len(labelSelectors) > 0 {
+		listOptions.LabelSelector = strings.Join(labelSelectors, ",")
+	}
+
 	// 获取 ReplicaSet 列表，找到指定版本的 ReplicaSet
-	replicaSets, err := kubeClient.AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
+	replicaSets, err := kubeClient.AppsV1().ReplicaSets(namespace).List(ctx, listOptions)
 	if err != nil {
 		m.logger.Error("获取 ReplicaSet 列表失败",
 			zap.Int("clusterID", clusterID),
@@ -361,7 +385,9 @@ func (m *deploymentManager) RollbackDeployment(ctx context.Context, clusterID in
 	}
 
 	var targetReplicaSet *appsv1.ReplicaSet
-	for _, rs := range replicaSets.Items {
+	for i := range replicaSets.Items {
+		rs := &replicaSets.Items[i]
+
 		// 检查 ReplicaSet 是否属于该 Deployment
 		isOwned := false
 		for _, ownerRef := range rs.OwnerReferences {
@@ -375,7 +401,7 @@ func (m *deploymentManager) RollbackDeployment(ctx context.Context, clusterID in
 		if isOwned {
 			if revisionStr, ok := rs.Annotations["deployment.kubernetes.io/revision"]; ok {
 				if revisionStr == fmt.Sprintf("%d", revision) {
-					targetReplicaSet = &rs
+					targetReplicaSet = rs
 					break
 				}
 			}
@@ -383,22 +409,23 @@ func (m *deploymentManager) RollbackDeployment(ctx context.Context, clusterID in
 	}
 
 	if targetReplicaSet == nil {
-		return fmt.Errorf("未找到版本 %d 的 ReplicaSet", revision)
-	}
-
-	// 获取当前 Deployment
-	deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		m.logger.Error("获取 Deployment 失败",
+		m.logger.Error("未找到指定版本的 ReplicaSet",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
-			zap.Error(err))
-		return fmt.Errorf("获取 Deployment 失败: %w", err)
+			zap.Int64("revision", revision))
+		return fmt.Errorf("未找到版本 %d 的 ReplicaSet，请检查该版本是否存在", revision)
 	}
 
 	// 使用目标 ReplicaSet 的 PodTemplateSpec 更新 Deployment
+	// 这会触发滚动更新，逐步替换为旧版本的 Pod
 	deployment.Spec.Template = targetReplicaSet.Spec.Template
+
+	// 添加回滚注解，方便追踪
+	if deployment.Annotations == nil {
+		deployment.Annotations = make(map[string]string)
+	}
+	deployment.Annotations["kubernetes.io/change-cause"] = fmt.Sprintf("Rollback to revision %d", revision)
 
 	// 更新 Deployment
 	_, err = kubeClient.AppsV1().Deployments(namespace).Update(ctx, deployment, metav1.UpdateOptions{})
@@ -416,7 +443,8 @@ func (m *deploymentManager) RollbackDeployment(ctx context.Context, clusterID in
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", name),
-		zap.Int64("revision", revision))
+		zap.Int64("revision", revision),
+		zap.String("targetReplicaSet", targetReplicaSet.Name))
 	return nil
 }
 
