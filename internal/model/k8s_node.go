@@ -90,18 +90,11 @@ type GetNodeDetailReq struct {
 	NodeName  string `json:"node_name" binding:"required"`  // 节点名称
 }
 
-// AddLabelNodesReq 添加节点标签请求
-type AddLabelNodesReq struct {
+// UpdateNodeLabelsReq 更新节点标签请求
+type UpdateNodeLabelsReq struct {
 	ClusterID int               `json:"cluster_id" binding:"required"` // 集群ID
 	NodeName  string            `json:"node_name" binding:"required"`  // 节点名称
-	Labels    map[string]string `json:"labels" binding:"required"`     // 要添加的标签
-}
-
-// DeleteLabelNodesReq 删除节点标签请求
-type DeleteLabelNodesReq struct {
-	ClusterID int      `json:"cluster_id" binding:"required"` // 集群ID
-	NodeName  string   `json:"node_name" binding:"required"`  // 节点名称
-	LabelKeys []string `json:"label_keys" binding:"required"` // 要删除的标签键
+	Labels    map[string]string `json:"labels"`                        // 标签（完全覆盖现有标签，传空map表示清空所有标签）
 }
 
 // DrainNodeReq 驱逐节点请求
@@ -152,11 +145,4 @@ type CheckTaintYamlReq struct {
 	ClusterID int    `json:"cluster_id" binding:"required"` // 集群ID
 	NodeName  string `json:"node_name" binding:"required"`  // 节点名称
 	YamlData  string `json:"yaml_data" binding:"required"`  // YAML数据
-}
-
-// SwitchNodeScheduleReq 切换节点调度状态请求
-type SwitchNodeScheduleReq struct {
-	ClusterID int    `json:"cluster_id" binding:"required"`       // 集群ID
-	NodeName  string `json:"node_name" binding:"required"`        // 节点名称
-	Enable    int8   `json:"enable" binding:"required,oneof=1 2"` // 是否启用调度
 }

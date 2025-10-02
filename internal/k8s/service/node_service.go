@@ -41,12 +41,11 @@ import (
 type NodeService interface {
 	GetNodeList(ctx context.Context, req *model.GetNodeListReq) (model.ListResp[*model.K8sNode], error)
 	GetNodeDetail(ctx context.Context, req *model.GetNodeDetailReq) (*model.K8sNode, error)
-	AddOrUpdateNodeLabel(ctx context.Context, req *model.AddLabelNodesReq) error
+	UpdateNodeLabels(ctx context.Context, req *model.UpdateNodeLabelsReq) error
 	GetNodeTaints(ctx context.Context, req *model.GetNodeTaintsReq) (model.ListResp[*model.NodeTaint], error)
 	DrainNode(ctx context.Context, req *model.DrainNodeReq) error
 	CordonNode(ctx context.Context, req *model.NodeCordonReq) error
 	UncordonNode(ctx context.Context, req *model.NodeUncordonReq) error
-	DeleteNodeLabel(ctx context.Context, req *model.DeleteLabelNodesReq) error
 }
 
 type nodeService struct {
@@ -140,58 +139,33 @@ func (s *nodeService) GetNodeDetail(ctx context.Context, req *model.GetNodeDetai
 	return k8sNode, nil
 }
 
-// AddOrUpdateNodeLabel 添加或更新节点标签
-func (s *nodeService) AddOrUpdateNodeLabel(ctx context.Context, req *model.AddLabelNodesReq) error {
+// UpdateNodeLabels 更新节点标签（完全覆盖）
+func (s *nodeService) UpdateNodeLabels(ctx context.Context, req *model.UpdateNodeLabelsReq) error {
 	if req == nil {
-		return fmt.Errorf("添加节点标签请求参数不能为空")
+		return fmt.Errorf("更新节点标签请求参数不能为空")
 	}
 
 	if err := utils.ValidateBasicParams(req.ClusterID, req.NodeName); err != nil {
 		return err
 	}
 
-	if len(req.Labels) == 0 {
-		return fmt.Errorf("要添加的标签不能为空")
+	// 允许传入空标签，表示清空所有标签
+	if req.Labels != nil {
+		// 验证标签
+		if err := utils.ValidateNodeLabelsMap(req.Labels); err != nil {
+			s.logger.Error("UpdateNodeLabels: 标签验证失败", zap.Error(err))
+			return fmt.Errorf("标签验证失败: %w", err)
+		}
 	}
 
-	// 验证标签
-	if err := utils.ValidateNodeLabelsMap(req.Labels); err != nil {
-		s.logger.Error("AddOrUpdateNodeLabel: 标签验证失败", zap.Error(err))
-		return fmt.Errorf("标签验证失败: %w", err)
-	}
-
-	// 使用 NodeManager 添加或更新节点标签
-	err := s.nodeManager.AddOrUpdateNodeLabels(ctx, req.ClusterID, req.NodeName, req.Labels)
+	// 使用 NodeManager 更新节点标签（完全覆盖）
+	err := s.nodeManager.UpdateNodeLabels(ctx, req.ClusterID, req.NodeName, req.Labels)
 	if err != nil {
-		s.logger.Error("AddOrUpdateNodeLabel: 添加节点标签失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Any("labels", req.Labels))
-		return fmt.Errorf("添加节点标签失败: %w", err)
+		s.logger.Error("UpdateNodeLabels: 更新节点标签失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Any("labels", req.Labels))
+		return fmt.Errorf("更新节点标签失败: %w", err)
 	}
 
-	return nil
-}
-
-// DeleteNodeLabel 删除节点标签
-func (s *nodeService) DeleteNodeLabel(ctx context.Context, req *model.DeleteLabelNodesReq) error {
-	if req == nil {
-		return fmt.Errorf("删除节点标签请求参数不能为空")
-	}
-
-	if err := utils.ValidateBasicParams(req.ClusterID, req.NodeName); err != nil {
-		return err
-	}
-
-	if len(req.LabelKeys) == 0 {
-		return fmt.Errorf("要删除的标签键不能为空")
-	}
-
-	// 使用 NodeManager 删除节点标签
-	err := s.nodeManager.DeleteNodeLabels(ctx, req.ClusterID, req.NodeName, req.LabelKeys)
-	if err != nil {
-		s.logger.Error("DeleteNodeLabel: 删除节点标签失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Strings("labelKeys", req.LabelKeys))
-		return fmt.Errorf("删除节点标签失败: %w", err)
-	}
-
-	s.logger.Info("DeleteNodeLabel: 成功删除节点标签", zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Strings("labelKeys", req.LabelKeys))
+	s.logger.Info("UpdateNodeLabels: 成功更新节点标签", zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Any("labels", req.Labels))
 
 	return nil
 }

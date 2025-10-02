@@ -37,12 +37,10 @@ import (
 
 type TaintService interface {
 	CheckTaintYaml(ctx context.Context, taint *model.CheckTaintYamlReq) error
-	EnableSwitchNode(ctx context.Context, req *model.NodeCordonReq) error
+	AddNodeTaint(ctx context.Context, taint *model.AddNodeTaintsReq) error
+	DeleteNodeTaint(ctx context.Context, taint *model.DeleteNodeTaintsReq) error
 	AddOrUpdateNodeTaint(ctx context.Context, taint *model.AddNodeTaintsReq) error
 	DrainPods(ctx context.Context, req *model.DrainNodeReq) error
-	DeleteNodeTaint(ctx context.Context, taint *model.DeleteNodeTaintsReq) error
-	SwitchNodeSchedule(ctx context.Context, req *model.SwitchNodeScheduleReq) error
-	AddNodeTaint(ctx context.Context, taint *model.AddNodeTaintsReq) error
 }
 
 type taintService struct {
@@ -114,27 +112,6 @@ func (s *taintService) DeleteNodeTaint(ctx context.Context, req *model.DeleteNod
 	return nil
 }
 
-// SwitchNodeSchedule 切换节点调度状态
-func (s *taintService) SwitchNodeSchedule(ctx context.Context, req *model.SwitchNodeScheduleReq) error {
-	if req.ClusterID <= 0 {
-		return fmt.Errorf("集群ID不能为空")
-	}
-	if req.NodeName == "" {
-		return fmt.Errorf("节点名称不能为空")
-	}
-
-	if err := s.manager.EnableSwitchNode(ctx, req.ClusterID, req.NodeName, req.Enable == 1); err != nil {
-		s.logger.Error("切换节点调度状态失败",
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("nodeName", req.NodeName),
-			zap.Bool("enable", req.Enable == 1),
-			zap.Error(err))
-		return err
-	}
-
-	return nil
-}
-
 // AddOrUpdateNodeTaint 添加或更新节点污点
 func (s *taintService) AddOrUpdateNodeTaint(ctx context.Context, req *model.AddNodeTaintsReq) error {
 	if req.ClusterID <= 0 {
@@ -159,27 +136,6 @@ func (s *taintService) AddOrUpdateNodeTaint(ctx context.Context, req *model.AddN
 
 	if err := s.manager.AddOrUpdateNodeTaint(ctx, req.ClusterID, req.NodeName, yamlData, manager.ModTypeUpdate); err != nil {
 		s.logger.Error("添加或更新节点污点失败",
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("nodeName", req.NodeName),
-			zap.Error(err))
-		return err
-	}
-
-	return nil
-}
-
-// BatchEnableSwitchNodes 批量切换节点调度状态
-func (s *taintService) EnableSwitchNode(ctx context.Context, req *model.NodeCordonReq) error {
-	if req.ClusterID <= 0 {
-		return fmt.Errorf("集群ID不能为空")
-	}
-	if req.NodeName == "" {
-		return fmt.Errorf("节点名称不能为空")
-	}
-
-	// NodeCordonReq 用于禁用节点调度，所以这里 scheduleEnable 为 false
-	if err := s.manager.EnableSwitchNode(ctx, req.ClusterID, req.NodeName, false); err != nil {
-		s.logger.Error("禁用节点调度失败",
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("nodeName", req.NodeName),
 			zap.Error(err))
