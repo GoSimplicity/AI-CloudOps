@@ -131,12 +131,16 @@ func (s *statefulSetService) CreateStatefulSetByYaml(ctx context.Context, req *m
 		return fmt.Errorf("YAML内容不能为空")
 	}
 
-	// 解析YAML为StatefulSet对象
-	statefulSet, err := utils.YAMLToStatefulSet(req.YAML)
+	s.logger.Info("开始通过YAML创建StatefulSet",
+		zap.Int("clusterID", req.ClusterID))
+
+	// 从YAML构建StatefulSet对象
+	statefulSet, err := utils.BuildStatefulSetFromYaml(req)
 	if err != nil {
-		s.logger.Error("CreateStatefulSetByYaml: 解析YAML失败",
+		s.logger.Error("从YAML构建StatefulSet失败",
+			zap.Int("clusterID", req.ClusterID),
 			zap.Error(err))
-		return fmt.Errorf("解析YAML失败: %w", err)
+		return fmt.Errorf("从YAML构建StatefulSet失败: %w", err)
 	}
 
 	// 验证StatefulSet配置
@@ -147,15 +151,21 @@ func (s *statefulSetService) CreateStatefulSetByYaml(ctx context.Context, req *m
 		return fmt.Errorf("statefulSet配置验证失败: %w", err)
 	}
 
+	// 使用现有的创建方法
 	err = s.statefulSetManager.CreateStatefulSet(ctx, req.ClusterID, statefulSet.Namespace, statefulSet)
 	if err != nil {
-		s.logger.Error("CreateStatefulSetByYaml: 创建StatefulSet失败",
-			zap.Error(err),
+		s.logger.Error("通过YAML创建StatefulSet失败",
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", statefulSet.Namespace),
-			zap.String("name", statefulSet.Name))
-		return fmt.Errorf("创建StatefulSet失败: %w", err)
+			zap.String("name", statefulSet.Name),
+			zap.Error(err))
+		return fmt.Errorf("通过YAML创建StatefulSet失败: %w", err)
 	}
+
+	s.logger.Info("通过YAML创建StatefulSet成功",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("namespace", statefulSet.Namespace),
+		zap.String("name", statefulSet.Name))
 
 	return nil
 }
@@ -534,47 +544,45 @@ func (s *statefulSetService) UpdateStatefulSetByYaml(ctx context.Context, req *m
 		return fmt.Errorf("YAML内容不能为空")
 	}
 
-	// 解析YAML为StatefulSet对象
-	yamlStatefulSet, err := utils.YAMLToStatefulSet(req.YAML)
+	s.logger.Info("开始通过YAML更新StatefulSet",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
+
+	// 从YAML构建StatefulSet对象
+	statefulSet, err := utils.BuildStatefulSetFromYamlForUpdate(req)
 	if err != nil {
-		s.logger.Error("UpdateStatefulSetByYaml: 解析YAML失败",
-			zap.Error(err),
-			zap.String("name", req.Name))
-		return fmt.Errorf("解析YAML失败: %w", err)
+		s.logger.Error("从YAML构建StatefulSet失败",
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name),
+			zap.Error(err))
+		return fmt.Errorf("从YAML构建StatefulSet失败: %w", err)
 	}
 
 	// 验证StatefulSet配置
-	if err := utils.ValidateStatefulSet(yamlStatefulSet); err != nil {
+	if err := utils.ValidateStatefulSet(statefulSet); err != nil {
 		s.logger.Error("UpdateStatefulSetByYaml: StatefulSet配置验证失败",
 			zap.Error(err),
 			zap.String("name", req.Name))
 		return fmt.Errorf("statefulSet配置验证失败: %w", err)
 	}
 
-	// 获取现有StatefulSet以保持资源版本等元数据
-	existingStatefulSet, err := s.statefulSetManager.GetStatefulSet(ctx, req.ClusterID, req.Namespace, req.Name)
+	// 使用现有的更新方法
+	err = s.statefulSetManager.UpdateStatefulSet(ctx, req.ClusterID, req.Namespace, statefulSet)
 	if err != nil {
-		s.logger.Error("UpdateStatefulSetByYaml: 获取现有StatefulSet失败",
-			zap.Error(err),
+		s.logger.Error("通过YAML更新StatefulSet失败",
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
-			zap.String("name", req.Name))
-		return fmt.Errorf("获取现有StatefulSet失败: %w", err)
+			zap.String("name", req.Name),
+			zap.Error(err))
+		return fmt.Errorf("通过YAML更新StatefulSet失败: %w", err)
 	}
 
-	// 保留必要的元数据并更新spec
-	yamlStatefulSet.ObjectMeta.ResourceVersion = existingStatefulSet.ObjectMeta.ResourceVersion
-	yamlStatefulSet.ObjectMeta.UID = existingStatefulSet.ObjectMeta.UID
-
-	err = s.statefulSetManager.UpdateStatefulSet(ctx, req.ClusterID, req.Namespace, yamlStatefulSet)
-	if err != nil {
-		s.logger.Error("UpdateStatefulSetByYaml: 更新StatefulSet失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
-			zap.String("namespace", req.Namespace),
-			zap.String("name", req.Name))
-		return fmt.Errorf("更新StatefulSet失败: %w", err)
-	}
+	s.logger.Info("通过YAML更新StatefulSet成功",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
 
 	return nil
 }
@@ -623,8 +631,8 @@ func (s *statefulSetService) UpdateStatefulSet(ctx context.Context, req *model.U
 		updatedStatefulSet.Annotations = yamlStatefulSet.Annotations
 	} else {
 		// 更新基本字段
-		if req.Replicas > 0 {
-			updatedStatefulSet.Spec.Replicas = &req.Replicas
+		if req.Replicas != nil {
+			updatedStatefulSet.Spec.Replicas = req.Replicas
 		}
 		if len(req.Images) > 0 {
 			for i, image := range req.Images {
@@ -634,8 +642,30 @@ func (s *statefulSetService) UpdateStatefulSet(ctx context.Context, req *model.U
 			}
 		}
 		if req.Labels != nil {
-			updatedStatefulSet.Labels = req.Labels
-			updatedStatefulSet.Spec.Template.Labels = req.Labels
+			// 合并标签到对象级别
+			if updatedStatefulSet.Labels == nil {
+				updatedStatefulSet.Labels = make(map[string]string)
+			}
+			for k, v := range req.Labels {
+				updatedStatefulSet.Labels[k] = v
+			}
+
+			// 更新 template labels，确保包含 selector 中的所有必需标签
+			if updatedStatefulSet.Spec.Template.Labels == nil {
+				updatedStatefulSet.Spec.Template.Labels = make(map[string]string)
+			}
+
+			// 先添加用户指定的标签
+			for k, v := range req.Labels {
+				updatedStatefulSet.Spec.Template.Labels[k] = v
+			}
+
+			// 然后强制保留 selector 的标签（selector 是不可变的，必须匹配）
+			if updatedStatefulSet.Spec.Selector != nil && updatedStatefulSet.Spec.Selector.MatchLabels != nil {
+				for k, v := range updatedStatefulSet.Spec.Selector.MatchLabels {
+					updatedStatefulSet.Spec.Template.Labels[k] = v
+				}
+			}
 		}
 		if req.Annotations != nil {
 			updatedStatefulSet.Annotations = req.Annotations

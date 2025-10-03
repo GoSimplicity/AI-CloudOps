@@ -27,9 +27,11 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	appsv1 "k8s.io/api/apps/v1"
@@ -44,60 +46,74 @@ func BuildK8sStatefulSet(ctx context.Context, clusterID int, statefulSet appsv1.
 		return nil, fmt.Errorf("无效的集群ID: %d", clusterID)
 	}
 
-	// 获取StatefulSet状态
 	status := getStatefulSetStatus(statefulSet)
 
-	// 获取更新策略信息
 	updateStrategy := "RollingUpdate"
-
 	if statefulSet.Spec.UpdateStrategy.Type == appsv1.OnDeleteStatefulSetStrategyType {
 		updateStrategy = "OnDelete"
 	}
 
-	// 获取容器镜像列表
+	podManagementPolicy := string(appsv1.OrderedReadyPodManagement)
+	if statefulSet.Spec.PodManagementPolicy != "" {
+		podManagementPolicy = string(statefulSet.Spec.PodManagementPolicy)
+	}
+
 	var images []string
 	for _, container := range statefulSet.Spec.Template.Spec.Containers {
 		images = append(images, container.Image)
 	}
 
-	// 构建标签选择器
 	selector := make(map[string]string)
 	if statefulSet.Spec.Selector != nil && statefulSet.Spec.Selector.MatchLabels != nil {
 		selector = statefulSet.Spec.Selector.MatchLabels
 	}
 
-	// 获取持久卷声明模板
-	var volumeClaimTemplates []string
-	for _, pvc := range statefulSet.Spec.VolumeClaimTemplates {
-		volumeClaimTemplates = append(volumeClaimTemplates, pvc.Name)
+	var conditions []model.StatefulSetCondition
+	for _, condition := range statefulSet.Status.Conditions {
+		stsCondition := model.StatefulSetCondition{
+			Type:               string(condition.Type),
+			Status:             string(condition.Status),
+			LastUpdateTime:     condition.LastTransitionTime.Time,
+			LastTransitionTime: condition.LastTransitionTime.Time,
+			Reason:             condition.Reason,
+			Message:            condition.Message,
+		}
+		conditions = append(conditions, stsCondition)
 	}
 
-	// 构建基础StatefulSet信息
+	revisionHistoryLimit := int32(10)
+	if statefulSet.Spec.RevisionHistoryLimit != nil {
+		revisionHistoryLimit = *statefulSet.Spec.RevisionHistoryLimit
+	}
+
 	replicas := int32(0)
 	if statefulSet.Spec.Replicas != nil {
 		replicas = *statefulSet.Spec.Replicas
 	}
 
 	k8sStatefulSet := &model.K8sStatefulSet{
-		Name:            statefulSet.Name,
-		Namespace:       statefulSet.Namespace,
-		ClusterID:       clusterID,
-		UID:             string(statefulSet.UID),
-		Labels:          statefulSet.Labels,
-		Annotations:     statefulSet.Annotations,
-		CreatedAt:       statefulSet.CreationTimestamp.Time,
-		Status:          status,
-		Replicas:        replicas,
-		ReadyReplicas:   statefulSet.Status.ReadyReplicas,
-		CurrentReplicas: statefulSet.Status.CurrentReplicas,
-		UpdatedReplicas: statefulSet.Status.UpdatedReplicas,
-		Images:          images,
-		Selector:        selector,
-		ServiceName:     statefulSet.Spec.ServiceName,
-		UpdateStrategy:  updateStrategy,
+		Name:                 statefulSet.Name,
+		Namespace:            statefulSet.Namespace,
+		ClusterID:            clusterID,
+		UID:                  string(statefulSet.UID),
+		Labels:               statefulSet.Labels,
+		Annotations:          statefulSet.Annotations,
+		CreatedAt:            statefulSet.CreationTimestamp.Time,
+		UpdatedAt:            time.Now(),
+		Status:               status,
+		Replicas:             replicas,
+		ReadyReplicas:        statefulSet.Status.ReadyReplicas,
+		CurrentReplicas:      statefulSet.Status.CurrentReplicas,
+		UpdatedReplicas:      statefulSet.Status.UpdatedReplicas,
+		Images:               images,
+		Selector:             selector,
+		ServiceName:          statefulSet.Spec.ServiceName,
+		UpdateStrategy:       updateStrategy,
+		PodManagementPolicy:  podManagementPolicy,
+		RevisionHistoryLimit: revisionHistoryLimit,
+		Conditions:           conditions,
+		RawStatefulSet:       &statefulSet,
 	}
-
-	// 设置条件状态已在模型中处理
 
 	return k8sStatefulSet, nil
 }
@@ -257,10 +273,7 @@ func ValidateStatefulSet(statefulSet *appsv1.StatefulSet) error {
 
 // BuildStatefulSetListOptions 构建StatefulSet列表查询选项
 func BuildStatefulSetListOptions(req *model.GetStatefulSetListReq) metav1.ListOptions {
-	listOptions := metav1.ListOptions{}
-
-	// 基础查询选项，可以根据需要扩展
-	return listOptions
+	return metav1.ListOptions{}
 }
 
 // PaginateK8sStatefulSets 对StatefulSet列表进行分页
@@ -293,11 +306,11 @@ func BuildK8sStatefulSetHistory(revision appsv1.ControllerRevision) (*model.K8sS
 	return &model.K8sStatefulSetHistory{
 		Revision: revision.Revision,
 		Date:     revision.CreationTimestamp.Time,
-		Message:  getChangeReason(revision.Annotations),
+		Message:  GetChangeReason(revision.Annotations),
 	}, nil
 }
 
-// ExtractStatefulSetFromRevision 从ControllerRevision中提取StatefulSet模板
+// ExtractStatefulSetFromRevision 从ControllerRevision提取StatefulSet配置用于回滚
 func ExtractStatefulSetFromRevision(revision *appsv1.ControllerRevision, statefulSet *appsv1.StatefulSet) error {
 	if revision == nil {
 		return fmt.Errorf("ControllerRevision不能为空")
@@ -307,14 +320,42 @@ func ExtractStatefulSetFromRevision(revision *appsv1.ControllerRevision, statefu
 		return fmt.Errorf("StatefulSet对象不能为空")
 	}
 
-	// 简化实现，实际上ControllerRevision的Data包含序列化的对象数据
-	// 这里可以根据需要实现具体的反序列化逻辑
-	if revision.Data.Raw == nil {
+	if len(revision.Data.Raw) == 0 {
 		return fmt.Errorf("ControllerRevision数据为空")
 	}
 
-	// 这里可以添加具体的反序列化逻辑
-	// 暂时返回成功，实际使用中需要实现具体的反序列化
+	var revisionStatefulSet appsv1.StatefulSet
+	if err := json.Unmarshal(revision.Data.Raw, &revisionStatefulSet); err != nil {
+		var patchData map[string]interface{}
+		if err := json.Unmarshal(revision.Data.Raw, &patchData); err != nil {
+			return fmt.Errorf("反序列化数据失败: %w", err)
+		}
+
+		if spec, ok := patchData["spec"]; ok {
+			specBytes, err := json.Marshal(spec)
+			if err != nil {
+				return fmt.Errorf("序列化spec失败: %w", err)
+			}
+
+			var statefulSetSpec appsv1.StatefulSetSpec
+			if err := json.Unmarshal(specBytes, &statefulSetSpec); err != nil {
+				return fmt.Errorf("反序列化spec失败: %w", err)
+			}
+
+			statefulSet.Spec = statefulSetSpec
+			return nil
+		}
+
+		return fmt.Errorf("无法提取StatefulSet配置")
+	}
+
+	statefulSet.Spec = revisionStatefulSet.Spec
+	if revisionStatefulSet.Labels != nil {
+		statefulSet.Labels = revisionStatefulSet.Labels
+	}
+	if revisionStatefulSet.Annotations != nil {
+		statefulSet.Annotations = revisionStatefulSet.Annotations
+	}
 
 	return nil
 }
@@ -362,4 +403,137 @@ func getStatefulSetStatusString(status model.K8sStatefulSetStatus) string {
 	}
 }
 
-// GetStatefulSetResourceUsage 计算StatefulSet资源使用情况
+// BuildStatefulSetFromYaml 从YAML构建StatefulSet对象
+func BuildStatefulSetFromYaml(req *model.CreateStatefulSetByYamlReq) (*appsv1.StatefulSet, error) {
+	if req == nil {
+		return nil, fmt.Errorf("请求不能为空")
+	}
+
+	if req.YAML == "" {
+		return nil, fmt.Errorf("YAML内容不能为空")
+	}
+
+	statefulSet, err := YAMLToStatefulSet(req.YAML)
+	if err != nil {
+		return nil, err
+	}
+
+	if statefulSet.Namespace == "" {
+		statefulSet.Namespace = "default"
+	}
+
+	if statefulSet.Name == "" {
+		return nil, fmt.Errorf("YAML中必须指定name")
+	}
+
+	return statefulSet, nil
+}
+
+// BuildStatefulSetFromYamlForUpdate 构建用于更新的StatefulSet对象
+func BuildStatefulSetFromYamlForUpdate(req *model.UpdateStatefulSetByYamlReq) (*appsv1.StatefulSet, error) {
+	if req == nil {
+		return nil, fmt.Errorf("请求不能为空")
+	}
+
+	if req.YAML == "" {
+		return nil, fmt.Errorf("YAML内容不能为空")
+	}
+
+	statefulSet, err := YAMLToStatefulSet(req.YAML)
+	if err != nil {
+		return nil, err
+	}
+
+	if statefulSet.Namespace != "" && statefulSet.Namespace != req.Namespace {
+		return nil, fmt.Errorf("YAML中的namespace与请求参数不一致")
+	}
+
+	if statefulSet.Name != "" && statefulSet.Name != req.Name {
+		return nil, fmt.Errorf("YAML中的name与请求参数不一致")
+	}
+
+	if statefulSet.Namespace == "" {
+		statefulSet.Namespace = req.Namespace
+	}
+
+	if statefulSet.Name == "" {
+		statefulSet.Name = req.Name
+	}
+
+	return statefulSet, nil
+}
+
+// ConvertToK8sStatefulSet 将 appsv1.StatefulSet 转换为 model.K8sStatefulSet
+func ConvertToK8sStatefulSet(statefulSet *appsv1.StatefulSet) *model.K8sStatefulSet {
+	if statefulSet == nil {
+		return nil
+	}
+
+	status := getStatefulSetStatus(*statefulSet)
+
+	updateStrategy := "RollingUpdate"
+	if statefulSet.Spec.UpdateStrategy.Type == appsv1.OnDeleteStatefulSetStrategyType {
+		updateStrategy = "OnDelete"
+	}
+
+	podManagementPolicy := string(appsv1.OrderedReadyPodManagement)
+	if statefulSet.Spec.PodManagementPolicy != "" {
+		podManagementPolicy = string(statefulSet.Spec.PodManagementPolicy)
+	}
+
+	var images []string
+	for _, container := range statefulSet.Spec.Template.Spec.Containers {
+		images = append(images, container.Image)
+	}
+
+	selector := make(map[string]string)
+	if statefulSet.Spec.Selector != nil && statefulSet.Spec.Selector.MatchLabels != nil {
+		selector = statefulSet.Spec.Selector.MatchLabels
+	}
+
+	var conditions []model.StatefulSetCondition
+	for _, condition := range statefulSet.Status.Conditions {
+		stsCondition := model.StatefulSetCondition{
+			Type:               string(condition.Type),
+			Status:             string(condition.Status),
+			LastUpdateTime:     condition.LastTransitionTime.Time,
+			LastTransitionTime: condition.LastTransitionTime.Time,
+			Reason:             condition.Reason,
+			Message:            condition.Message,
+		}
+		conditions = append(conditions, stsCondition)
+	}
+
+	revisionHistoryLimit := int32(10)
+	if statefulSet.Spec.RevisionHistoryLimit != nil {
+		revisionHistoryLimit = *statefulSet.Spec.RevisionHistoryLimit
+	}
+
+	replicas := int32(0)
+	if statefulSet.Spec.Replicas != nil {
+		replicas = *statefulSet.Spec.Replicas
+	}
+
+	return &model.K8sStatefulSet{
+		Name:                 statefulSet.Name,
+		Namespace:            statefulSet.Namespace,
+		UID:                  string(statefulSet.UID),
+		Labels:               statefulSet.Labels,
+		Annotations:          statefulSet.Annotations,
+		CreatedAt:            statefulSet.CreationTimestamp.Time,
+		UpdatedAt:            time.Now(),
+		Status:               status,
+		Replicas:             replicas,
+		ReadyReplicas:        statefulSet.Status.ReadyReplicas,
+		CurrentReplicas:      statefulSet.Status.CurrentReplicas,
+		UpdatedReplicas:      statefulSet.Status.UpdatedReplicas,
+		Images:               images,
+		Selector:             selector,
+		ServiceName:          statefulSet.Spec.ServiceName,
+		UpdateStrategy:       updateStrategy,
+		PodManagementPolicy:  podManagementPolicy,
+		RevisionHistoryLimit: revisionHistoryLimit,
+		Conditions:           conditions,
+		RawStatefulSet:       statefulSet,
+	}
+}

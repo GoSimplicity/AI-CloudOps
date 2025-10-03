@@ -28,6 +28,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -267,22 +268,22 @@ func (m *statefulSetManager) ScaleStatefulSet(ctx context.Context, clusterID int
 		return err
 	}
 
-	// 获取当前 StatefulSet
-	statefulSet, err := kubeClient.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	// 使用 Scale subresource API 进行扩缩容
+	scale, err := kubeClient.AppsV1().StatefulSets(namespace).GetScale(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		m.logger.Error("获取 StatefulSet 失败",
+		m.logger.Error("获取 StatefulSet Scale 失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
 			zap.Error(err))
-		return fmt.Errorf("获取 StatefulSet 失败: %w", err)
+		return fmt.Errorf("获取 StatefulSet Scale 失败: %w", err)
 	}
 
 	// 更新副本数
-	statefulSet.Spec.Replicas = &replicas
+	scale.Spec.Replicas = replicas
 
-	// 执行更新
-	_, err = kubeClient.AppsV1().StatefulSets(namespace).Update(ctx, statefulSet, metav1.UpdateOptions{})
+	// 执行扩缩容
+	_, err = kubeClient.AppsV1().StatefulSets(namespace).UpdateScale(ctx, name, scale, metav1.UpdateOptions{})
 	if err != nil {
 		m.logger.Error("扩缩容 StatefulSet 失败",
 			zap.Int("clusterID", clusterID),
@@ -449,6 +450,11 @@ func (m *statefulSetManager) GetStatefulSetHistory(ctx context.Context, clusterI
 			}
 		}
 	}
+
+	// 按版本号排序（从新到旧）
+	sort.Slice(history, func(i, j int) bool {
+		return history[i].Revision > history[j].Revision
+	})
 
 	return history, int64(len(history)), nil
 }

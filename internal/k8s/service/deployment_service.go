@@ -501,8 +501,8 @@ func (s *deploymentService) UpdateDeployment(ctx context.Context, req *model.Upd
 	updatedDeployment := existingDeployment.DeepCopy()
 
 	// 更新基本字段
-	if req.Replicas > 0 {
-		updatedDeployment.Spec.Replicas = &req.Replicas
+	if req.Replicas != nil {
+		updatedDeployment.Spec.Replicas = req.Replicas
 	}
 	if len(req.Images) > 0 {
 		for i, image := range req.Images {
@@ -512,8 +512,30 @@ func (s *deploymentService) UpdateDeployment(ctx context.Context, req *model.Upd
 		}
 	}
 	if req.Labels != nil {
-		updatedDeployment.Labels = req.Labels
-		updatedDeployment.Spec.Template.Labels = req.Labels
+		// 合并标签到对象级别
+		if updatedDeployment.Labels == nil {
+			updatedDeployment.Labels = make(map[string]string)
+		}
+		for k, v := range req.Labels {
+			updatedDeployment.Labels[k] = v
+		}
+
+		// 更新 template labels，确保包含 selector 中的所有必需标签
+		if updatedDeployment.Spec.Template.Labels == nil {
+			updatedDeployment.Spec.Template.Labels = make(map[string]string)
+		}
+
+		// 先添加用户指定的标签
+		for k, v := range req.Labels {
+			updatedDeployment.Spec.Template.Labels[k] = v
+		}
+
+		// 然后强制保留 selector 的标签（selector 是不可变的，必须匹配）
+		if updatedDeployment.Spec.Selector != nil && updatedDeployment.Spec.Selector.MatchLabels != nil {
+			for k, v := range updatedDeployment.Spec.Selector.MatchLabels {
+				updatedDeployment.Spec.Template.Labels[k] = v
+			}
+		}
 	}
 	if req.Annotations != nil {
 		updatedDeployment.Annotations = req.Annotations

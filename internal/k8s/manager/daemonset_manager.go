@@ -551,13 +551,23 @@ func (m *daemonSetManager) RollbackDaemonSet(ctx context.Context, clusterID int,
 		return fmt.Errorf("找不到版本 %d 的 ControllerRevision", revision)
 	}
 
-	// DaemonSet 不像 Deployment 有内置的回滚功能，需要手动实现
-	// 这里我们提供一个简化的回滚：重新触发 DaemonSet 的滚动更新
+	// 从 ControllerRevision 中提取 DaemonSet 模板
+	var daemonSetTemplate appsv1.DaemonSet
+	err = utils.ExtractDaemonSetFromRevision(targetRevision, &daemonSetTemplate)
+	if err != nil {
+		m.logger.Error("从 ControllerRevision 提取 DaemonSet 模板失败",
+			zap.Int64("revision", revision),
+			zap.Error(err))
+		return fmt.Errorf("提取 DaemonSet 模板失败: %w", err)
+	}
+
+	// 更新当前 DaemonSet 的 spec
+	currentDaemonSet.Spec = daemonSetTemplate.Spec
+
+	// 添加回滚注解
 	if currentDaemonSet.Annotations == nil {
 		currentDaemonSet.Annotations = make(map[string]string)
 	}
-
-	// 添加回滚注解来触发更新
 	currentDaemonSet.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
 	currentDaemonSet.Annotations["rollback.daemonset.kubernetes.io/revision"] = fmt.Sprintf("%d", revision)
 
