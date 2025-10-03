@@ -37,6 +37,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/yaml"
 )
 
@@ -218,20 +219,24 @@ func YAMLToStatefulSet(yamlContent string) (*appsv1.StatefulSet, error) {
 	return &statefulSet, nil
 }
 
-// StatefulSetToYAML 将StatefulSet对象转换为YAML
+// StatefulSetToYAML 将StatefulSet转换为YAML
 func StatefulSetToYAML(statefulSet *appsv1.StatefulSet) (string, error) {
 	if statefulSet == nil {
-		return "", fmt.Errorf("StatefulSet对象不能为空")
+		return "", fmt.Errorf("statefulSet不能为空")
 	}
 
 	// 清理不需要的字段
 	cleanStatefulSet := statefulSet.DeepCopy()
-	cleanStatefulSet.ManagedFields = nil
 	cleanStatefulSet.Status = appsv1.StatefulSetStatus{}
+	cleanStatefulSet.ManagedFields = nil
+	cleanStatefulSet.ResourceVersion = ""
+	cleanStatefulSet.UID = ""
+	cleanStatefulSet.CreationTimestamp = metav1.Time{}
+	cleanStatefulSet.Generation = 0
 
 	yamlBytes, err := yaml.Marshal(cleanStatefulSet)
 	if err != nil {
-		return "", fmt.Errorf("YAML序列化失败: %w", err)
+		return "", fmt.Errorf("转换为YAML失败: %w", err)
 	}
 
 	return string(yamlBytes), nil
@@ -273,32 +278,168 @@ func ValidateStatefulSet(statefulSet *appsv1.StatefulSet) error {
 
 // BuildStatefulSetListOptions 构建StatefulSet列表查询选项
 func BuildStatefulSetListOptions(req *model.GetStatefulSetListReq) metav1.ListOptions {
-	return metav1.ListOptions{}
+	options := metav1.ListOptions{}
+
+	// 构建标签选择器
+	var labelSelectors []string
+	for key, value := range req.Labels {
+		labelSelectors = append(labelSelectors, fmt.Sprintf("%s=%s", key, value))
+	}
+	if len(labelSelectors) > 0 {
+		options.LabelSelector = strings.Join(labelSelectors, ",")
+	}
+
+	return options
 }
 
-// PaginateK8sStatefulSets 对StatefulSet列表进行分页
-func PaginateK8sStatefulSets(statefulSets []*model.K8sStatefulSet, page, size int) ([]*model.K8sStatefulSet, int64) {
+// GetStatefulSetPods 获取StatefulSet关联的Pod列表
+func GetStatefulSetPods(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, statefulSetName string) ([]*model.K8sPod, int64, error) {
+	// 首先获取StatefulSet的标签选择器
+	statefulSet, err := kubeClient.AppsV1().StatefulSets(namespace).Get(ctx, statefulSetName, metav1.GetOptions{})
+	if err != nil {
+		return nil, 0, fmt.Errorf("获取StatefulSet信息失败: %w", err)
+	}
+
+	// 构建标签选择器
+	var labelSelectors []string
+	for key, value := range statefulSet.Spec.Selector.MatchLabels {
+		labelSelectors = append(labelSelectors, fmt.Sprintf("%s=%s", key, value))
+	}
+	labelSelector := strings.Join(labelSelectors, ",")
+
+	// 获取Pod列表
+	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: labelSelector,
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("获取Pod列表失败: %w", err)
+	}
+
+	total := int64(len(podList.Items))
+	var pods []*model.K8sPod
+	for _, pod := range podList.Items {
+		// 转换标签和注解为JSON字符串
+		labelsJSON, _ := json.Marshal(pod.Labels)
+		annotationsJSON, _ := json.Marshal(pod.Annotations)
+
+		k8sPod := &model.K8sPod{
+			Name:        pod.Name,
+			Namespace:   pod.Namespace,
+			Status:      string(pod.Status.Phase),
+			NodeName:    pod.Spec.NodeName,
+			Labels:      string(labelsJSON),
+			Annotations: string(annotationsJSON),
+		}
+		pods = append(pods, k8sPod)
+	}
+
+	return pods, total, nil
+}
+
+// FilterStatefulSetsByStatus 根据StatefulSet状态过滤
+func FilterStatefulSetsByStatus(statefulSets []appsv1.StatefulSet, status string) []appsv1.StatefulSet {
+	if status == "" {
+		return statefulSets
+	}
+
+	var filtered []appsv1.StatefulSet
+	for _, statefulSet := range statefulSets {
+		statefulSetStatus := getStatefulSetStatus(statefulSet)
+		// 正确转换状态为字符串
+		var statusStr string
+		switch statefulSetStatus {
+		case model.K8sStatefulSetStatusRunning:
+			statusStr = "running"
+		case model.K8sStatefulSetStatusStopped:
+			statusStr = "stopped"
+		case model.K8sStatefulSetStatusUpdating:
+			statusStr = "updating"
+		case model.K8sStatefulSetStatusError:
+			statusStr = "error"
+		default:
+			statusStr = "unknown"
+		}
+		if strings.EqualFold(statusStr, status) {
+			filtered = append(filtered, statefulSet)
+		}
+	}
+
+	return filtered
+}
+
+// BuildStatefulSetListPagination 构建StatefulSet列表分页逻辑
+func BuildStatefulSetListPagination(statefulSets []appsv1.StatefulSet, page, size int) ([]appsv1.StatefulSet, int64) {
 	total := int64(len(statefulSets))
-
-	if page <= 0 {
-		page = 1
-	}
-	if size <= 0 {
-		size = 10
+	if total == 0 {
+		return []appsv1.StatefulSet{}, 0
 	}
 
-	start := (page - 1) * size
-	end := start + size
-
-	if start >= len(statefulSets) {
-		return []*model.K8sStatefulSet{}, total
+	// 如果没有设置分页参数，返回所有数据
+	if page <= 0 || size <= 0 {
+		return statefulSets, total
 	}
 
-	if end > len(statefulSets) {
-		end = len(statefulSets)
+	start := int64((page - 1) * size)
+	end := start + int64(size)
+
+	if start >= total {
+		return []appsv1.StatefulSet{}, total
+	}
+	if end > total {
+		end = total
 	}
 
 	return statefulSets[start:end], total
+}
+
+// PaginateK8sStatefulSets 对 K8sStatefulSet 列表进行分页
+func PaginateK8sStatefulSets(statefulSets []*model.K8sStatefulSet, page, size int) ([]*model.K8sStatefulSet, int64) {
+	total := int64(len(statefulSets))
+	if total == 0 {
+		return []*model.K8sStatefulSet{}, 0
+	}
+
+	// 如果没有设置分页参数，返回所有数据
+	if page <= 0 || size <= 0 {
+		return statefulSets, total
+	}
+
+	start := int64((page - 1) * size)
+	end := start + int64(size)
+
+	if start >= total {
+		return []*model.K8sStatefulSet{}, total
+	}
+	if end > total {
+		end = total
+	}
+
+	return statefulSets[start:end], total
+}
+
+// IsStatefulSetReady 判断StatefulSet是否就绪
+func IsStatefulSetReady(statefulSet appsv1.StatefulSet) bool {
+	replicas := int32(0)
+	if statefulSet.Spec.Replicas != nil {
+		replicas = *statefulSet.Spec.Replicas
+	}
+	return statefulSet.Status.ReadyReplicas == replicas &&
+		statefulSet.Status.UpdatedReplicas == replicas
+}
+
+// GetStatefulSetAge 获取StatefulSet年龄
+func GetStatefulSetAge(statefulSet appsv1.StatefulSet) string {
+	age := time.Since(statefulSet.CreationTimestamp.Time)
+	days := int(age.Hours() / 24)
+	if days > 0 {
+		return fmt.Sprintf("%dd", days)
+	}
+	hours := int(age.Hours())
+	if hours > 0 {
+		return fmt.Sprintf("%dh", hours)
+	}
+	minutes := int(age.Minutes())
+	return fmt.Sprintf("%dm", minutes)
 }
 
 // BuildK8sStatefulSetHistory 构建StatefulSet历史版本模型
@@ -368,39 +509,6 @@ func SortStatefulSetsByCreationTime(statefulSets []*model.K8sStatefulSet, desc b
 		}
 		return statefulSets[i].CreatedAt.Before(statefulSets[j].CreatedAt)
 	})
-}
-
-// FilterStatefulSetsByStatus 按状态过滤StatefulSet列表
-func FilterStatefulSetsByStatus(statefulSets []*model.K8sStatefulSet, status string) []*model.K8sStatefulSet {
-	if status == "" {
-		return statefulSets
-	}
-
-	var filtered []*model.K8sStatefulSet
-	for _, ss := range statefulSets {
-		statusStr := getStatefulSetStatusString(ss.Status)
-		if strings.EqualFold(statusStr, status) {
-			filtered = append(filtered, ss)
-		}
-	}
-
-	return filtered
-}
-
-// getStatefulSetStatusString 获取StatefulSet状态字符串
-func getStatefulSetStatusString(status model.K8sStatefulSetStatus) string {
-	switch status {
-	case model.K8sStatefulSetStatusRunning:
-		return "running"
-	case model.K8sStatefulSetStatusStopped:
-		return "stopped"
-	case model.K8sStatefulSetStatusUpdating:
-		return "updating"
-	case model.K8sStatefulSetStatusError:
-		return "error"
-	default:
-		return "unknown"
-	}
 }
 
 // BuildStatefulSetFromYaml 从YAML构建StatefulSet对象

@@ -415,12 +415,19 @@ func (m *statefulSetManager) GetStatefulSetHistory(ctx context.Context, clusterI
 		return nil, 0, err
 	}
 
-	// 获取与 StatefulSet 相关的 ControllerRevision
-	labelSelector := "controller-revision-hash"
-	listOptions := metav1.ListOptions{
-		LabelSelector: labelSelector,
+	// 先获取 StatefulSet 本身以获取其 UID
+	statefulSet, err := kubeClient.AppsV1().StatefulSets(namespace).Get(ctx, statefulSetName, metav1.GetOptions{})
+	if err != nil {
+		m.logger.Error("获取 StatefulSet 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", statefulSetName),
+			zap.Error(err))
+		return nil, 0, fmt.Errorf("获取 StatefulSet 失败: %w", err)
 	}
 
+	// 获取所有 ControllerRevision
+	listOptions := metav1.ListOptions{}
 	revisionList, err := kubeClient.AppsV1().ControllerRevisions(namespace).List(ctx, listOptions)
 	if err != nil {
 		m.logger.Error("获取 StatefulSet 历史版本失败",
@@ -434,20 +441,25 @@ func (m *statefulSetManager) GetStatefulSetHistory(ctx context.Context, clusterI
 	var history []*model.K8sStatefulSetHistory
 	for _, revision := range revisionList.Items {
 		// 检查是否属于指定的 StatefulSet
+		belongsToStatefulSet := false
 		if revision.OwnerReferences != nil {
 			for _, owner := range revision.OwnerReferences {
-				if owner.Kind == "StatefulSet" && owner.Name == statefulSetName {
-					k8sHistory, err := utils.BuildK8sStatefulSetHistory(revision)
-					if err != nil {
-						m.logger.Warn("构建 K8sStatefulSetHistory 失败",
-							zap.String("revisionName", revision.Name),
-							zap.Error(err))
-						continue
-					}
-					history = append(history, k8sHistory)
+				if owner.Kind == "StatefulSet" && owner.Name == statefulSetName && owner.UID == statefulSet.UID {
+					belongsToStatefulSet = true
 					break
 				}
 			}
+		}
+
+		if belongsToStatefulSet {
+			k8sHistory, err := utils.BuildK8sStatefulSetHistory(revision)
+			if err != nil {
+				m.logger.Warn("构建 K8sStatefulSetHistory 失败",
+					zap.String("revisionName", revision.Name),
+					zap.Error(err))
+				continue
+			}
+			history = append(history, k8sHistory)
 		}
 	}
 
@@ -461,34 +473,12 @@ func (m *statefulSetManager) GetStatefulSetHistory(ctx context.Context, clusterI
 
 // GetStatefulSetPods 获取 StatefulSet 管理的 Pods
 func (m *statefulSetManager) GetStatefulSetPods(ctx context.Context, clusterID int, namespace, statefulSetName string) ([]*model.K8sPod, int64, error) {
-	if statefulSetName == "" {
-		return nil, 0, fmt.Errorf("StatefulSet name 不能为空")
-	}
-
 	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	// 首先获取 StatefulSet 以获取其标签选择器
-	statefulSet, err := kubeClient.AppsV1().StatefulSets(namespace).Get(ctx, statefulSetName, metav1.GetOptions{})
-	if err != nil {
-		m.logger.Error("获取 StatefulSet 失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.String("name", statefulSetName),
-			zap.Error(err))
-		return nil, 0, fmt.Errorf("获取 StatefulSet 失败: %w", err)
-	}
-
-	// 构建标签选择器
-	labelSelector := metav1.FormatLabelSelector(statefulSet.Spec.Selector)
-
-	listOptions := metav1.ListOptions{
-		LabelSelector: labelSelector,
-	}
-
-	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, listOptions)
+	pods, total, err := utils.GetStatefulSetPods(ctx, kubeClient, namespace, statefulSetName)
 	if err != nil {
 		m.logger.Error("获取 StatefulSet Pods 失败",
 			zap.Int("clusterID", clusterID),
@@ -498,14 +488,7 @@ func (m *statefulSetManager) GetStatefulSetPods(ctx context.Context, clusterID i
 		return nil, 0, fmt.Errorf("获取 StatefulSet Pods 失败: %w", err)
 	}
 
-	var pods []*model.K8sPod
-	for _, pod := range podList.Items {
-		k8sPod := utils.ConvertToK8sPod(&pod)
-		k8sPod.ClusterID = int64(clusterID)
-		pods = append(pods, k8sPod)
-	}
-
-	return pods, int64(len(pods)), nil
+	return pods, total, nil
 }
 
 // RollbackStatefulSet 回滚 StatefulSet 到指定版本
@@ -522,18 +505,6 @@ func (m *statefulSetManager) RollbackStatefulSet(ctx context.Context, clusterID 
 		return err
 	}
 
-	// 获取指定版本的 ControllerRevision
-	revisionName := fmt.Sprintf("%s-%d", name, revision)
-	controllerRevision, err := kubeClient.AppsV1().ControllerRevisions(namespace).Get(ctx, revisionName, metav1.GetOptions{})
-	if err != nil {
-		m.logger.Error("获取 ControllerRevision 失败",
-			zap.Int("clusterID", clusterID),
-			zap.String("namespace", namespace),
-			zap.String("revisionName", revisionName),
-			zap.Error(err))
-		return fmt.Errorf("获取 ControllerRevision 失败: %w", err)
-	}
-
 	// 获取当前 StatefulSet
 	currentStatefulSet, err := kubeClient.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
@@ -545,18 +516,85 @@ func (m *statefulSetManager) RollbackStatefulSet(ctx context.Context, clusterID 
 		return fmt.Errorf("获取当前 StatefulSet 失败: %w", err)
 	}
 
+	// 获取所有 ControllerRevision
+	listOptions := metav1.ListOptions{}
+	revisionList, err := kubeClient.AppsV1().ControllerRevisions(namespace).List(ctx, listOptions)
+	if err != nil {
+		m.logger.Error("获取 ControllerRevision 列表失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("statefulSetName", name),
+			zap.Error(err))
+		return fmt.Errorf("获取 ControllerRevision 列表失败: %w", err)
+	}
+
+	// 查找指定版本的 ControllerRevision
+	var targetRevision *appsv1.ControllerRevision
+	for _, rev := range revisionList.Items {
+		// 检查是否属于指定的 StatefulSet 并且版本匹配
+		if rev.Revision == revision {
+			// 验证 ControllerRevision 是否属于当前 StatefulSet
+			if rev.OwnerReferences != nil {
+				for _, owner := range rev.OwnerReferences {
+					if owner.Kind == "StatefulSet" && owner.Name == name && owner.UID == currentStatefulSet.UID {
+						targetRevision = &rev
+						break
+					}
+				}
+			}
+			if targetRevision != nil {
+				break
+			}
+		}
+	}
+
+	if targetRevision == nil {
+		m.logger.Error("找不到指定版本的 ControllerRevision",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("statefulSetName", name),
+			zap.Int64("revision", revision))
+		return fmt.Errorf("找不到版本 %d 的 ControllerRevision", revision)
+	}
+
 	// 从 ControllerRevision 中提取 StatefulSet 模板
 	var statefulSetTemplate appsv1.StatefulSet
-	err = utils.ExtractStatefulSetFromRevision(controllerRevision, &statefulSetTemplate)
+	err = utils.ExtractStatefulSetFromRevision(targetRevision, &statefulSetTemplate)
 	if err != nil {
 		m.logger.Error("从 ControllerRevision 提取 StatefulSet 模板失败",
-			zap.String("revisionName", revisionName),
+			zap.Int64("revision", revision),
 			zap.Error(err))
 		return fmt.Errorf("提取 StatefulSet 模板失败: %w", err)
 	}
 
-	// 更新当前 StatefulSet 的 spec
-	currentStatefulSet.Spec = statefulSetTemplate.Spec
+	// StatefulSet 只允许更新以下字段：replicas, ordinals, template, updateStrategy,
+	// persistentVolumeClaimRetentionPolicy 和 minReadySeconds
+	// 不能更新 selector, serviceName 等不可变字段
+	currentStatefulSet.Spec.Template = statefulSetTemplate.Spec.Template
+	currentStatefulSet.Spec.UpdateStrategy = statefulSetTemplate.Spec.UpdateStrategy
+
+	if statefulSetTemplate.Spec.Replicas != nil {
+		currentStatefulSet.Spec.Replicas = statefulSetTemplate.Spec.Replicas
+	}
+	if statefulSetTemplate.Spec.RevisionHistoryLimit != nil {
+		currentStatefulSet.Spec.RevisionHistoryLimit = statefulSetTemplate.Spec.RevisionHistoryLimit
+	}
+	if statefulSetTemplate.Spec.MinReadySeconds != 0 {
+		currentStatefulSet.Spec.MinReadySeconds = statefulSetTemplate.Spec.MinReadySeconds
+	}
+	if statefulSetTemplate.Spec.PersistentVolumeClaimRetentionPolicy != nil {
+		currentStatefulSet.Spec.PersistentVolumeClaimRetentionPolicy = statefulSetTemplate.Spec.PersistentVolumeClaimRetentionPolicy
+	}
+	if statefulSetTemplate.Spec.Ordinals != nil {
+		currentStatefulSet.Spec.Ordinals = statefulSetTemplate.Spec.Ordinals
+	}
+
+	// 添加回滚注解
+	if currentStatefulSet.Annotations == nil {
+		currentStatefulSet.Annotations = make(map[string]string)
+	}
+	currentStatefulSet.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+	currentStatefulSet.Annotations["rollback.statefulset.kubernetes.io/revision"] = fmt.Sprintf("%d", revision)
 
 	// 执行更新
 	_, err = kubeClient.AppsV1().StatefulSets(namespace).Update(ctx, currentStatefulSet, metav1.UpdateOptions{})

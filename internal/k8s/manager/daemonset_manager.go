@@ -561,8 +561,17 @@ func (m *daemonSetManager) RollbackDaemonSet(ctx context.Context, clusterID int,
 		return fmt.Errorf("提取 DaemonSet 模板失败: %w", err)
 	}
 
-	// 更新当前 DaemonSet 的 spec
-	currentDaemonSet.Spec = daemonSetTemplate.Spec
+	// DaemonSet 只允许更新以下字段：template, updateStrategy, minReadySeconds, revisionHistoryLimit
+	// 不能更新 selector 等不可变字段
+	currentDaemonSet.Spec.Template = daemonSetTemplate.Spec.Template
+	currentDaemonSet.Spec.UpdateStrategy = daemonSetTemplate.Spec.UpdateStrategy
+
+	if daemonSetTemplate.Spec.MinReadySeconds != 0 {
+		currentDaemonSet.Spec.MinReadySeconds = daemonSetTemplate.Spec.MinReadySeconds
+	}
+	if daemonSetTemplate.Spec.RevisionHistoryLimit != nil {
+		currentDaemonSet.Spec.RevisionHistoryLimit = daemonSetTemplate.Spec.RevisionHistoryLimit
+	}
 
 	// 添加回滚注解
 	if currentDaemonSet.Annotations == nil {
