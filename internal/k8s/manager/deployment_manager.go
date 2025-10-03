@@ -226,13 +226,17 @@ func (m *deploymentManager) DeleteDeployment(ctx context.Context, clusterID int,
 
 // RestartDeployment 重启deployment的所有pod
 func (m *deploymentManager) RestartDeployment(ctx context.Context, clusterID int, namespace, name string) error {
+	if name == "" {
+		return fmt.Errorf("Deployment name 不能为空")
+	}
+
 	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
 		return err
 	}
 
-	patchData := fmt.Sprintf(`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"%s"}}}}}`,
-		time.Now().Format(time.RFC3339))
+	// 通过添加注解来触发 Deployment 重启
+	patchData := fmt.Sprintf(`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"%s"}}}}}`, time.Now().Format(time.RFC3339))
 
 	_, err = kubeClient.AppsV1().Deployments(namespace).Patch(ctx, name, types.StrategicMergePatchType, []byte(patchData), metav1.PatchOptions{})
 	if err != nil {
@@ -244,10 +248,11 @@ func (m *deploymentManager) RestartDeployment(ctx context.Context, clusterID int
 		return fmt.Errorf("重启 Deployment 失败: %w", err)
 	}
 
-	m.logger.Info("成功触发 Deployment 滚动重启，将逐个重启所有 Pod",
+	m.logger.Info("成功重启 Deployment",
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", name))
+
 	return nil
 }
 
