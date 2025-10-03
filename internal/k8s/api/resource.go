@@ -46,26 +46,26 @@ package api
 // 	k8sGroup := server.Group("/api/k8s")
 // 	{
 // 		// 资源概览相关路由
-// 		k8sGroup.GET("/resources/overview/:cluster_id", k.GetResourceOverview)
-// 		k8sGroup.GET("/resources/statistics/:cluster_id", k.GetResourceStatistics)
-// 		k8sGroup.GET("/resources/distribution/:cluster_id", k.GetResourceDistribution)
+// 		k8sGroup.GET("/resources/overview/:cluster_id", h.GetResourceOverview)
+// 		k8sGroup.GET("/resources/statistics/:cluster_id", h.GetResourceStatistics)
+// 		k8sGroup.GET("/resources/distribution/:cluster_id", h.GetResourceDistribution)
 
 // 		// 资源分析和趋势路由
-// 		k8sGroup.GET("/resources/trend/:cluster_id", k.GetResourceTrend)
-// 		k8sGroup.GET("/resources/utilization/:cluster_id", k.GetResourceUtilization)
-// 		k8sGroup.GET("/resources/health/:cluster_id", k.GetResourceHealth)
+// 		k8sGroup.GET("/resources/trend/:cluster_id", h.GetResourceTrend)
+// 		k8sGroup.GET("/resources/utilization/:cluster_id", h.GetResourceUtilization)
+// 		k8sGroup.GET("/resources/health/:cluster_id", h.GetResourceHealth)
 
 // 		// 工作负载分布路由
-// 		k8sGroup.GET("/resources/workloads/:cluster_id", k.GetWorkloadDistribution)
-// 		k8sGroup.GET("/resources/namespaces/:cluster_id", k.GetNamespaceResources)
+// 		k8sGroup.GET("/resources/workloads/:cluster_id", h.GetWorkloadDistribution)
+// 		k8sGroup.GET("/resources/namespaces/:cluster_id", h.GetNamespaceResources)
 
 // 		// 存储和网络资源路由
-// 		k8sGroup.GET("/resources/storage/:cluster_id", k.GetStorageOverview)
-// 		k8sGroup.GET("/resources/network/:cluster_id", k.GetNetworkOverview)
+// 		k8sGroup.GET("/resources/storage/:cluster_id", h.GetStorageOverview)
+// 		k8sGroup.GET("/resources/network/:cluster_id", h.GetNetworkOverview)
 
 // 		// 多集群资源对比
-// 		k8sGroup.POST("/resources/clusters/compare", k.CompareClusterResources)
-// 		k8sGroup.GET("/resources/clusters/summary", k.GetAllClustersSummary)
+// 		k8sGroup.POST("/resources/clusters/compare", h.CompareClusterResources)
+// 		k8sGroup.GET("/resources/clusters/summary", h.GetAllClustersSummary)
 // 	}
 // }
 
@@ -78,7 +78,7 @@ package api
 // 	}
 
 // 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.resourceService.GetResourceOverview(ctx, req.ClusterID)
+// 		return h.resourceService.GetResourceOverview(ctx, req.ClusterID)
 // 	})
 // }
 
@@ -91,7 +91,7 @@ package api
 // 	}
 
 // 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.resourceService.GetResourceStatistics(ctx, req.ClusterID)
+// 		return h.resourceService.GetResourceStatistics(ctx, req.ClusterID)
 // 	})
 // }
 
@@ -104,7 +104,7 @@ package api
 // 	}
 
 // 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.resourceService.GetResourceDistribution(ctx, req.ClusterID)
+// 		return h.resourceService.GetResourceDistribution(ctx, req.ClusterID)
 // 	})
 // }
 
@@ -121,7 +121,7 @@ package api
 // 	}
 
 // 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.resourceService.GetResourceTrend(ctx, &req)
+// 		return h.resourceService.GetResourceTrend(ctx, &req)
 // 	})
 // }
 
@@ -134,7 +134,7 @@ package api
 // 	}
 
 // 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.resourceService.GetResourceUtilization(ctx, req.ClusterID)
+// 		return h.resourceService.GetResourceUtilization(ctx, req.ClusterID)
 // 	})
 // }
 
@@ -147,7 +147,7 @@ package api
 // 	}
 
 // 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.resourceService.GetResourceHealth(ctx, req.ClusterID)
+// 		return h.resourceService.GetResourceHealth(ctx, req.ClusterID)
 // 	})
 // }
 
@@ -160,7 +160,7 @@ package api
 // 	}
 
 // 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.resourceService.GetWorkloadDistribution(ctx, req.ClusterID)
+// 		return h.resourceService.GetWorkloadDistribution(ctx, req.ClusterID)
 // 	})
 // }
 
@@ -173,7 +173,7 @@ package api
 // 	}
 
 // 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.resourceService.GetNamespaceResources(ctx, req.ClusterID)
+// 		return h.resourceService.GetNamespaceResources(ctx, req.ClusterID)
 // 	})
 // }
 
@@ -186,7 +186,7 @@ package api
 // 	}
 
 // 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.resourceService.GetStorageOverview(ctx, req.ClusterID)
+// 		return h.resourceService.GetStorageOverview(ctx, req.ClusterID)
 // 	})
 // }
 
@@ -199,7 +199,7 @@ package api
 // 	}
 
 // 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.resourceService.GetNetworkOverview(ctx, req.ClusterID)
+// 		return h.resourceService.GetNetworkOverview(ctx, req.ClusterID)
 // 	})
 // }
 
@@ -208,13 +208,13 @@ package api
 // 	var req model.CompareClusterResourcesReq
 
 // 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-// 		return k.resourceService.CompareClusterResources(ctx, req.ClusterIDs)
+// 		return h.resourceService.CompareClusterResources(ctx, req.ClusterIDs)
 // 	})
 // }
 
 // // GetAllClustersSummary 获取所有集群资源汇总
 // func (k *K8sResourceHandler) GetAllClustersSummary(ctx *gin.Context) {
 // 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-// 		return k.resourceService.GetAllClustersSummary(ctx)
+// 		return h.resourceService.GetAllClustersSummary(ctx)
 // 	})
 // }

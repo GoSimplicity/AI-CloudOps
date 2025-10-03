@@ -42,22 +42,22 @@ func NewK8sRoleBindingHandler(roleBindingService service.RoleBindingService) *K8
 	}
 }
 
-func (k *K8sRoleBindingHandler) RegisterRouters(server *gin.Engine) {
+func (h *K8sRoleBindingHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/rolebinding/:cluster_id/list", k.GetRoleBindingList)
-		k8sGroup.GET("/rolebinding/:cluster_id/:namespace/:name/detail", k.GetRoleBindingDetails)
-		k8sGroup.GET("/rolebinding/:cluster_id/:namespace/:name/detail/yaml", k.GetRoleBindingYaml)
-		k8sGroup.POST("/rolebinding/:cluster_id/create", k.CreateRoleBinding)
-		k8sGroup.POST("/rolebinding/:cluster_id/create/yaml", k.CreateRoleBindingByYaml)
-		k8sGroup.PUT("/rolebinding/:cluster_id/:namespace/:name/update", k.UpdateRoleBinding)
-		k8sGroup.PUT("/rolebinding/:cluster_id/:namespace/:name/update/yaml", k.UpdateRoleBindingYaml)
-		k8sGroup.DELETE("/rolebinding/:cluster_id/:namespace/:name/delete", k.DeleteRoleBinding)
+		k8sGroup.GET("/rolebinding/:cluster_id/list", h.GetRoleBindingList)
+		k8sGroup.GET("/rolebinding/:cluster_id/:namespace/:name/detail", h.GetRoleBindingDetails)
+		k8sGroup.GET("/rolebinding/:cluster_id/:namespace/:name/detail/yaml", h.GetRoleBindingYaml)
+		k8sGroup.POST("/rolebinding/:cluster_id/create", h.CreateRoleBinding)
+		k8sGroup.POST("/rolebinding/:cluster_id/create/yaml", h.CreateRoleBindingByYaml)
+		k8sGroup.PUT("/rolebinding/:cluster_id/:namespace/:name/update", h.UpdateRoleBinding)
+		k8sGroup.PUT("/rolebinding/:cluster_id/:namespace/:name/update/yaml", h.UpdateRoleBindingYaml)
+		k8sGroup.DELETE("/rolebinding/:cluster_id/:namespace/:name/delete", h.DeleteRoleBinding)
 	}
 }
 
 // GetRoleBindingList 获取 RoleBinding 列表
-func (k *K8sRoleBindingHandler) GetRoleBindingList(ctx *gin.Context) {
+func (h *K8sRoleBindingHandler) GetRoleBindingList(ctx *gin.Context) {
 	var req model.GetRoleBindingListReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -68,12 +68,12 @@ func (k *K8sRoleBindingHandler) GetRoleBindingList(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.roleBindingService.GetRoleBindingList(ctx, &req)
+		return h.roleBindingService.GetRoleBindingList(ctx, &req)
 	})
 }
 
 // GetRoleBindingDetails 获取 RoleBinding 详情
-func (k *K8sRoleBindingHandler) GetRoleBindingDetails(ctx *gin.Context) {
+func (h *K8sRoleBindingHandler) GetRoleBindingDetails(ctx *gin.Context) {
 	var req model.GetRoleBindingDetailsReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -99,21 +99,21 @@ func (k *K8sRoleBindingHandler) GetRoleBindingDetails(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.roleBindingService.GetRoleBindingDetails(ctx, &req)
+		return h.roleBindingService.GetRoleBindingDetails(ctx, &req)
 	})
 }
 
 // CreateRoleBinding 创建 RoleBinding
-func (k *K8sRoleBindingHandler) CreateRoleBinding(ctx *gin.Context) {
+func (h *K8sRoleBindingHandler) CreateRoleBinding(ctx *gin.Context) {
 	var req model.CreateRoleBindingReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.roleBindingService.CreateRoleBinding(ctx, &req)
+		return nil, h.roleBindingService.CreateRoleBinding(ctx, &req)
 	})
 }
 
 // CreateRoleBindingByYaml 通过YAML创建 RoleBinding
-func (k *K8sRoleBindingHandler) CreateRoleBindingByYaml(ctx *gin.Context) {
+func (h *K8sRoleBindingHandler) CreateRoleBindingByYaml(ctx *gin.Context) {
 	var req model.CreateRoleBindingByYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -125,21 +125,21 @@ func (k *K8sRoleBindingHandler) CreateRoleBindingByYaml(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.roleBindingService.CreateRoleBindingByYaml(ctx, &req)
+		return nil, h.roleBindingService.CreateRoleBindingByYaml(ctx, &req)
 	})
 }
 
 // UpdateRoleBinding 更新 RoleBinding
-func (k *K8sRoleBindingHandler) UpdateRoleBinding(ctx *gin.Context) {
+func (h *K8sRoleBindingHandler) UpdateRoleBinding(ctx *gin.Context) {
 	var req model.UpdateRoleBindingReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.roleBindingService.UpdateRoleBinding(ctx, &req)
+		return nil, h.roleBindingService.UpdateRoleBinding(ctx, &req)
 	})
 }
 
 // DeleteRoleBinding 删除 RoleBinding
-func (k *K8sRoleBindingHandler) DeleteRoleBinding(ctx *gin.Context) {
+func (h *K8sRoleBindingHandler) DeleteRoleBinding(ctx *gin.Context) {
 	var req model.DeleteRoleBindingReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -165,12 +165,12 @@ func (k *K8sRoleBindingHandler) DeleteRoleBinding(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.roleBindingService.DeleteRoleBinding(ctx, &req)
+		return nil, h.roleBindingService.DeleteRoleBinding(ctx, &req)
 	})
 }
 
 // GetRoleBindingYaml 获取 RoleBinding YAML
-func (k *K8sRoleBindingHandler) GetRoleBindingYaml(ctx *gin.Context) {
+func (h *K8sRoleBindingHandler) GetRoleBindingYaml(ctx *gin.Context) {
 	var req model.GetRoleBindingYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -196,15 +196,15 @@ func (k *K8sRoleBindingHandler) GetRoleBindingYaml(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.roleBindingService.GetRoleBindingYaml(ctx, &req)
+		return h.roleBindingService.GetRoleBindingYaml(ctx, &req)
 	})
 }
 
 // UpdateRoleBindingYaml 更新 RoleBinding YAML
-func (k *K8sRoleBindingHandler) UpdateRoleBindingYaml(ctx *gin.Context) {
+func (h *K8sRoleBindingHandler) UpdateRoleBindingYaml(ctx *gin.Context) {
 	var req model.UpdateRoleBindingByYamlReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.roleBindingService.UpdateRoleBindingYaml(ctx, &req)
+		return nil, h.roleBindingService.UpdateRoleBindingYaml(ctx, &req)
 	})
 }

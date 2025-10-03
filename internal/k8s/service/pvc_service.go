@@ -82,10 +82,10 @@ func NewPVCService(dao dao.ClusterDAO, client client.K8sClient, pvcManager manag
 }
 
 // GetPVCList 获取PVC列表
-func (p *pvcService) GetPVCList(ctx context.Context, req *model.GetPVCListReq) (model.ListResp[*model.K8sPVC], error) {
-	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
+func (s *pvcService) GetPVCList(ctx context.Context, req *model.GetPVCListReq) (model.ListResp[*model.K8sPVC], error) {
+	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
+		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
 		return model.ListResp[*model.K8sPVC]{}, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
@@ -93,7 +93,7 @@ func (p *pvcService) GetPVCList(ctx context.Context, req *model.GetPVCListReq) (
 
 	pvcs, err := kubeClient.CoreV1().PersistentVolumeClaims(req.Namespace).List(ctx, listOptions)
 	if err != nil {
-		p.logger.Error("获取PVC列表失败",
+		s.logger.Error("获取PVC列表失败",
 			zap.String("namespace", req.Namespace),
 			zap.Error(err))
 		return model.ListResp[*model.K8sPVC]{}, pkg.NewBusinessError(constants.ErrK8sResourceList, "获取PVC列表失败")
@@ -101,7 +101,7 @@ func (p *pvcService) GetPVCList(ctx context.Context, req *model.GetPVCListReq) (
 
 	entities := make([]*model.K8sPVC, 0, len(pvcs.Items))
 	for _, pvc := range pvcs.Items {
-		entity := p.convertPVCToEntity(&pvc, req.ClusterID)
+		entity := s.convertPVCToEntity(&pvc, req.ClusterID)
 		entities = append(entities, entity)
 	}
 	// filters
@@ -109,7 +109,7 @@ func (p *pvcService) GetPVCList(ctx context.Context, req *model.GetPVCListReq) (
 	for _, e := range entities {
 		// 过滤状态
 		if req.Status != "" {
-			statusStr := p.pvcStatusToString(e.Status)
+			statusStr := s.pvcStatusToString(e.Status)
 			if !strings.EqualFold(statusStr, req.Status) {
 				continue
 			}
@@ -151,16 +151,16 @@ func (p *pvcService) GetPVCList(ctx context.Context, req *model.GetPVCListReq) (
 }
 
 // GetPVCsByNamespace 根据命名空间获取PVC列表
-func (p *pvcService) GetPVCsByNamespace(ctx context.Context, clusterID int, namespace string) ([]*model.K8sPVC, error) {
-	kubeClient, err := p.client.GetKubeClient(clusterID)
+func (s *pvcService) GetPVCsByNamespace(ctx context.Context, clusterID int, namespace string) ([]*model.K8sPVC, error) {
+	kubeClient, err := s.client.GetKubeClient(clusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
+		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
 		return nil, constants.ErrorK8sClientNotReady
 	}
 
 	pvcs, err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		p.logger.Error("获取PVC列表失败",
+		s.logger.Error("获取PVC列表失败",
 			zap.String("namespace", namespace),
 			zap.Error(err))
 		return nil, err
@@ -168,7 +168,7 @@ func (p *pvcService) GetPVCsByNamespace(ctx context.Context, clusterID int, name
 
 	entities := make([]*model.K8sPVC, 0, len(pvcs.Items))
 	for _, pvc := range pvcs.Items {
-		entity := p.convertPVCToEntity(&pvc, clusterID)
+		entity := s.convertPVCToEntity(&pvc, clusterID)
 		entities = append(entities, entity)
 	}
 
@@ -176,36 +176,36 @@ func (p *pvcService) GetPVCsByNamespace(ctx context.Context, clusterID int, name
 }
 
 // GetPVC 获取单个PVC详情
-func (p *pvcService) GetPVC(ctx context.Context, req *model.GetPVCDetailsReq) (*model.K8sPVC, error) {
-	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
+func (s *pvcService) GetPVC(ctx context.Context, req *model.GetPVCDetailsReq) (*model.K8sPVC, error) {
+	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
+		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
 	pvc, err := kubeClient.CoreV1().PersistentVolumeClaims(req.Namespace).Get(ctx, req.Name, metav1.GetOptions{})
 	if err != nil {
-		p.logger.Error("获取PVC详情失败",
+		s.logger.Error("获取PVC详情失败",
 			zap.String("namespace", req.Namespace),
 			zap.String("name", req.Name),
 			zap.Error(err))
 		return nil, pkg.NewBusinessError(constants.ErrK8sResourceGet, "获取PVC详情失败")
 	}
 
-	return p.convertPVCToEntity(pvc, req.ClusterID), nil
+	return s.convertPVCToEntity(pvc, req.ClusterID), nil
 }
 
 // GetPVCYaml 获取PVC的YAML
-func (p *pvcService) GetPVCYaml(ctx context.Context, req *model.GetPVCYamlReq) (*model.K8sYaml, error) {
-	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
+func (s *pvcService) GetPVCYaml(ctx context.Context, req *model.GetPVCYamlReq) (*model.K8sYaml, error) {
+	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
+		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
 	pvc, err := kubeClient.CoreV1().PersistentVolumeClaims(req.Namespace).Get(ctx, req.Name, metav1.GetOptions{})
 	if err != nil {
-		p.logger.Error("获取PVC失败",
+		s.logger.Error("获取PVC失败",
 			zap.String("namespace", req.Namespace),
 			zap.String("name", req.Name),
 			zap.Error(err))
@@ -214,7 +214,7 @@ func (p *pvcService) GetPVCYaml(ctx context.Context, req *model.GetPVCYamlReq) (
 
 	yamlData, err := yaml.Marshal(pvc)
 	if err != nil {
-		p.logger.Error("序列化PVC为YAML失败", zap.Error(err))
+		s.logger.Error("序列化PVC为YAML失败", zap.Error(err))
 		return nil, pkg.NewBusinessError(constants.ErrK8sResourceOperation, "序列化PVC为YAML失败")
 	}
 
@@ -222,10 +222,10 @@ func (p *pvcService) GetPVCYaml(ctx context.Context, req *model.GetPVCYamlReq) (
 }
 
 // CreatePVC 创建PVC
-func (p *pvcService) CreatePVC(ctx context.Context, req *model.CreatePVCReq) error {
-	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
+func (s *pvcService) CreatePVC(ctx context.Context, req *model.CreatePVCReq) error {
+	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
+		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
@@ -237,24 +237,24 @@ func (p *pvcService) CreatePVC(ctx context.Context, req *model.CreatePVCReq) err
 
 	_, err = kubeClient.CoreV1().PersistentVolumeClaims(req.Namespace).Create(ctx, pvc, metav1.CreateOptions{})
 	if err != nil {
-		p.logger.Error("创建PVC失败",
+		s.logger.Error("创建PVC失败",
 			zap.String("namespace", req.Namespace),
 			zap.String("name", req.Name),
 			zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrK8sResourceCreate, "创建PVC失败")
 	}
 
-	p.logger.Info("成功创建PVC",
+	s.logger.Info("成功创建PVC",
 		zap.String("namespace", req.Namespace),
 		zap.String("name", req.Name))
 	return nil
 }
 
 // UpdatePVC 更新PVC
-func (p *pvcService) UpdatePVC(ctx context.Context, req *model.UpdatePVCReq) error {
-	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
+func (s *pvcService) UpdatePVC(ctx context.Context, req *model.UpdatePVCReq) error {
+	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
+		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
@@ -266,44 +266,44 @@ func (p *pvcService) UpdatePVC(ctx context.Context, req *model.UpdatePVCReq) err
 
 	_, err = kubeClient.CoreV1().PersistentVolumeClaims(req.Namespace).Update(ctx, pvc, metav1.UpdateOptions{})
 	if err != nil {
-		p.logger.Error("更新PVC失败",
+		s.logger.Error("更新PVC失败",
 			zap.String("namespace", req.Namespace),
 			zap.String("name", req.Name),
 			zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrK8sResourceUpdate, "更新PVC失败")
 	}
 
-	p.logger.Info("成功更新PVC",
+	s.logger.Info("成功更新PVC",
 		zap.String("namespace", req.Namespace),
 		zap.String("name", req.Name))
 	return nil
 }
 
 // DeletePVC 删除PVC
-func (p *pvcService) DeletePVC(ctx context.Context, req *model.DeletePVCReq) error {
-	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
+func (s *pvcService) DeletePVC(ctx context.Context, req *model.DeletePVCReq) error {
+	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
+		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
 	err = kubeClient.CoreV1().PersistentVolumeClaims(req.Namespace).Delete(ctx, req.Name, metav1.DeleteOptions{})
 	if err != nil {
-		p.logger.Error("删除PVC失败",
+		s.logger.Error("删除PVC失败",
 			zap.String("namespace", req.Namespace),
 			zap.String("name", req.Name),
 			zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, "删除PVC失败")
 	}
 
-	p.logger.Info("成功删除PVC",
+	s.logger.Info("成功删除PVC",
 		zap.String("namespace", req.Namespace),
 		zap.String("name", req.Name))
 	return nil
 }
 
 // convertPVCToEntity 将Kubernetes PVC对象转换为实体模型
-func (p *pvcService) convertPVCToEntity(pvc *corev1.PersistentVolumeClaim, clusterID int) *model.K8sPVC {
+func (s *pvcService) convertPVCToEntity(pvc *corev1.PersistentVolumeClaim, clusterID int) *model.K8sPVC {
 	if pvc == nil {
 		return nil
 	}
@@ -343,7 +343,7 @@ func (p *pvcService) convertPVCToEntity(pvc *corev1.PersistentVolumeClaim, clust
 	}
 
 	// 转换状态为枚举类型
-	status := p.convertPVCStatus(pvc.Status.Phase)
+	status := s.convertPVCStatus(pvc.Status.Phase)
 
 	// 获取选择器
 	selector := make(map[string]string)
@@ -377,7 +377,7 @@ func (p *pvcService) convertPVCToEntity(pvc *corev1.PersistentVolumeClaim, clust
 }
 
 // convertPVCStatus 转换PVC状态为枚举类型
-func (p *pvcService) convertPVCStatus(phase corev1.PersistentVolumeClaimPhase) model.K8sPVCStatus {
+func (s *pvcService) convertPVCStatus(phase corev1.PersistentVolumeClaimPhase) model.K8sPVCStatus {
 	switch phase {
 	case corev1.ClaimPending:
 		return model.K8sPVCStatusPending
@@ -391,7 +391,7 @@ func (p *pvcService) convertPVCStatus(phase corev1.PersistentVolumeClaimPhase) m
 }
 
 // pvcStatusToString 将PVC状态枚举转换为字符串
-func (p *pvcService) pvcStatusToString(status model.K8sPVCStatus) string {
+func (s *pvcService) pvcStatusToString(status model.K8sPVCStatus) string {
 	switch status {
 	case model.K8sPVCStatusPending:
 		return "Pending"
@@ -407,7 +407,7 @@ func (p *pvcService) pvcStatusToString(status model.K8sPVCStatus) string {
 }
 
 // CreatePVCByYaml 通过YAML创建PVC
-func (p *pvcService) CreatePVCByYaml(ctx context.Context, req *model.CreatePVCByYamlReq) error {
+func (s *pvcService) CreatePVCByYaml(ctx context.Context, req *model.CreatePVCByYamlReq) error {
 	if req == nil {
 		return pkg.NewBusinessError(constants.ErrInvalidParam, "通过YAML创建PVC请求不能为空")
 	}
@@ -419,23 +419,23 @@ func (p *pvcService) CreatePVCByYaml(ctx context.Context, req *model.CreatePVCBy
 	}
 	pvc, err := k8sutils.YAMLToPVC(req.YAML)
 	if err != nil {
-		p.logger.Error("解析PVC YAML失败", zap.Error(err))
+		s.logger.Error("解析PVC YAML失败", zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrK8sResourceOperation, "解析YAML失败")
 	}
 	// Namespace will be extracted from YAML content
 	if err := k8sutils.ValidatePVC(pvc); err != nil {
-		p.logger.Error("PVC配置验证失败", zap.Error(err))
+		s.logger.Error("PVC配置验证失败", zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrInvalidParam, "PVC配置验证失败")
 	}
-	if err := p.pvcManager.CreatePVC(ctx, req.ClusterID, pvc.Namespace, pvc); err != nil {
-		p.logger.Error("创建PVC失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("namespace", pvc.Namespace), zap.String("name", pvc.Name))
+	if err := s.pvcManager.CreatePVC(ctx, req.ClusterID, pvc.Namespace, pvc); err != nil {
+		s.logger.Error("创建PVC失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("namespace", pvc.Namespace), zap.String("name", pvc.Name))
 		return pkg.NewBusinessError(constants.ErrK8sResourceCreate, "创建PVC失败")
 	}
 	return nil
 }
 
 // UpdatePVCByYaml 通过YAML更新PVC
-func (p *pvcService) UpdatePVCByYaml(ctx context.Context, req *model.UpdatePVCByYamlReq) error {
+func (s *pvcService) UpdatePVCByYaml(ctx context.Context, req *model.UpdatePVCByYamlReq) error {
 	if req == nil {
 		return pkg.NewBusinessError(constants.ErrInvalidParam, "通过YAML更新PVC请求不能为空")
 	}
@@ -450,7 +450,7 @@ func (p *pvcService) UpdatePVCByYaml(ctx context.Context, req *model.UpdatePVCBy
 	}
 	desired, err := k8sutils.YAMLToPVC(req.YAML)
 	if err != nil {
-		p.logger.Error("解析PVC YAML失败", zap.Error(err))
+		s.logger.Error("解析PVC YAML失败", zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrK8sResourceOperation, "解析YAML失败")
 	}
 	if desired.Name == "" {
@@ -463,18 +463,18 @@ func (p *pvcService) UpdatePVCByYaml(ctx context.Context, req *model.UpdatePVCBy
 		return pkg.NewBusinessError(constants.ErrInvalidParam, "请求的名称/命名空间与YAML不一致")
 	}
 	if err := k8sutils.ValidatePVC(desired); err != nil {
-		p.logger.Error("PVC配置验证失败", zap.Error(err))
+		s.logger.Error("PVC配置验证失败", zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrInvalidParam, "PVC配置验证失败")
 	}
-	if err := p.pvcManager.UpdatePVC(ctx, req.ClusterID, req.Namespace, desired); err != nil {
-		p.logger.Error("更新PVC失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("namespace", req.Namespace), zap.String("name", req.Name))
+	if err := s.pvcManager.UpdatePVC(ctx, req.ClusterID, req.Namespace, desired); err != nil {
+		s.logger.Error("更新PVC失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("namespace", req.Namespace), zap.String("name", req.Name))
 		return pkg.NewBusinessError(constants.ErrK8sResourceUpdate, "更新PVC失败")
 	}
 	return nil
 }
 
 // ExpandPVC 扩容PVC
-func (p *pvcService) ExpandPVC(ctx context.Context, req *model.ExpandPVCReq) error {
+func (s *pvcService) ExpandPVC(ctx context.Context, req *model.ExpandPVCReq) error {
 	if req == nil {
 		return pkg.NewBusinessError(constants.ErrInvalidParam, "扩容PVC请求不能为空")
 	}
@@ -489,17 +489,17 @@ func (p *pvcService) ExpandPVC(ctx context.Context, req *model.ExpandPVCReq) err
 	}
 
 	// 使用manager的扩容方法
-	if err := p.pvcManager.ExpandPVC(ctx, req.ClusterID, req.Namespace, req.Name, req.NewCapacity); err != nil {
-		p.logger.Error("扩容PVC失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("namespace", req.Namespace), zap.String("name", req.Name))
+	if err := s.pvcManager.ExpandPVC(ctx, req.ClusterID, req.Namespace, req.Name, req.NewCapacity); err != nil {
+		s.logger.Error("扩容PVC失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("namespace", req.Namespace), zap.String("name", req.Name))
 		return pkg.NewBusinessError(constants.ErrK8sResourceUpdate, "扩容PVC失败")
 	}
 
-	p.logger.Info("成功扩容PVC", zap.Int("clusterID", req.ClusterID), zap.String("namespace", req.Namespace), zap.String("name", req.Name), zap.String("newCapacity", req.NewCapacity))
+	s.logger.Info("成功扩容PVC", zap.Int("clusterID", req.ClusterID), zap.String("namespace", req.Namespace), zap.String("name", req.Name), zap.String("newCapacity", req.NewCapacity))
 	return nil
 }
 
 // GetPVCPods 获取使用PVC的Pod列表
-func (p *pvcService) GetPVCPods(ctx context.Context, req *model.GetPVCPodsReq) (model.ListResp[*model.K8sPod], error) {
+func (s *pvcService) GetPVCPods(ctx context.Context, req *model.GetPVCPodsReq) (model.ListResp[*model.K8sPod], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sPod]{}, pkg.NewBusinessError(constants.ErrInvalidParam, "获取PVC Pods请求不能为空")
 	}
@@ -510,16 +510,16 @@ func (p *pvcService) GetPVCPods(ctx context.Context, req *model.GetPVCPodsReq) (
 		return model.ListResp[*model.K8sPod]{}, pkg.NewBusinessError(constants.ErrInvalidParam, "命名空间和PVC名称不能为空")
 	}
 
-	kubeClient, err := p.client.GetKubeClient(req.ClusterID)
+	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
-		p.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
+		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
 		return model.ListResp[*model.K8sPod]{}, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
 	// 获取所有Pod，然后过滤使用指定PVC的Pod
 	pods, err := kubeClient.CoreV1().Pods(req.Namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		p.logger.Error("获取Pod列表失败",
+		s.logger.Error("获取Pod列表失败",
 			zap.String("namespace", req.Namespace),
 			zap.Error(err))
 		return model.ListResp[*model.K8sPod]{}, pkg.NewBusinessError(constants.ErrK8sResourceList, "获取Pod列表失败")
@@ -527,24 +527,24 @@ func (p *pvcService) GetPVCPods(ctx context.Context, req *model.GetPVCPodsReq) (
 
 	// 过滤使用指定PVC的Pod
 	var filteredPods []*model.K8sPod
-	p.logger.Info("开始过滤使用指定PVC的Pod",
+	s.logger.Info("开始过滤使用指定PVC的Pod",
 		zap.String("pvc_name", req.Name),
 		zap.String("namespace", req.Namespace),
 		zap.Int("total_pods", len(pods.Items)))
 
 	for _, pod := range pods.Items {
-		if p.podUsesPVC(&pod, req.Name) {
-			p.logger.Info("找到使用PVC的Pod",
+		if s.podUsesPVC(&pod, req.Name) {
+			s.logger.Info("找到使用PVC的Pod",
 				zap.String("pod_name", pod.Name),
 				zap.String("pvc_name", req.Name))
-			k8sPod := p.convertPodToEntity(&pod, req.ClusterID)
+			k8sPod := s.convertPodToEntity(&pod, req.ClusterID)
 			if k8sPod != nil {
 				filteredPods = append(filteredPods, k8sPod)
 			}
 		}
 	}
 
-	p.logger.Info("PVC关联Pod查询完成",
+	s.logger.Info("PVC关联Pod查询完成",
 		zap.String("pvc_name", req.Name),
 		zap.Int("filtered_pods_count", len(filteredPods)))
 
@@ -555,7 +555,7 @@ func (p *pvcService) GetPVCPods(ctx context.Context, req *model.GetPVCPodsReq) (
 }
 
 // podUsesPVC 检查Pod是否使用指定的PVC
-func (p *pvcService) podUsesPVC(pod *corev1.Pod, pvcName string) bool {
+func (s *pvcService) podUsesPVC(pod *corev1.Pod, pvcName string) bool {
 	for _, volume := range pod.Spec.Volumes {
 		if volume.PersistentVolumeClaim != nil && volume.PersistentVolumeClaim.ClaimName == pvcName {
 			return true
@@ -565,7 +565,7 @@ func (p *pvcService) podUsesPVC(pod *corev1.Pod, pvcName string) bool {
 }
 
 // convertPodToEntity 将Kubernetes Pod对象转换为实体模型
-func (p *pvcService) convertPodToEntity(pod *corev1.Pod, clusterID int) *model.K8sPod {
+func (s *pvcService) convertPodToEntity(pod *corev1.Pod, clusterID int) *model.K8sPod {
 	if pod == nil {
 		return nil
 	}

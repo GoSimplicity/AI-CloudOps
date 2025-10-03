@@ -55,7 +55,7 @@ func NewWorkorderInstanceTimeLineService(
 }
 
 // CreateInstanceTimeLine 创建时间线
-func (i *instanceTimeLineService) CreateInstanceTimeLine(ctx context.Context, req *model.CreateWorkorderInstanceTimelineReq, creatorID int, creatorName string) (*model.WorkorderInstanceTimeline, error) {
+func (s *instanceTimeLineService) CreateInstanceTimeLine(ctx context.Context, req *model.CreateWorkorderInstanceTimelineReq, creatorID int, creatorName string) (*model.WorkorderInstanceTimeline, error) {
 	timeline := &model.WorkorderInstanceTimeline{
 		InstanceID:   req.InstanceID,
 		Action:       req.Action,
@@ -64,8 +64,8 @@ func (i *instanceTimeLineService) CreateInstanceTimeLine(ctx context.Context, re
 		OperatorName: creatorName,
 	}
 
-	if err := i.dao.Create(ctx, timeline); err != nil {
-		i.logger.Error("创建时间线记录失败", zap.Error(err))
+	if err := s.dao.Create(ctx, timeline); err != nil {
+		s.logger.Error("创建时间线记录失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -73,20 +73,20 @@ func (i *instanceTimeLineService) CreateInstanceTimeLine(ctx context.Context, re
 }
 
 // GetInstanceTimeLine 获取时间线记录
-func (i *instanceTimeLineService) GetInstanceTimeLine(ctx context.Context, id int) (*model.WorkorderInstanceTimeline, error) {
-	timeline, err := i.dao.GetByID(ctx, id)
+func (s *instanceTimeLineService) GetInstanceTimeLine(ctx context.Context, id int) (*model.WorkorderInstanceTimeline, error) {
+	timeline, err := s.dao.GetByID(ctx, id)
 	if err != nil {
-		i.logger.Error("获取时间线记录失败", zap.Error(err), zap.Int("id", id))
+		s.logger.Error("获取时间线记录失败", zap.Error(err), zap.Int("id", id))
 		return nil, err
 	}
 	return timeline, nil
 }
 
 // ListInstanceTimeLine 获取时间线列表
-func (i *instanceTimeLineService) ListInstanceTimeLine(ctx context.Context, req *model.ListWorkorderInstanceTimelineReq) (*model.ListResp[*model.WorkorderInstanceTimeline], error) {
-	timelines, total, err := i.dao.List(ctx, req)
+func (s *instanceTimeLineService) ListInstanceTimeLine(ctx context.Context, req *model.ListWorkorderInstanceTimelineReq) (*model.ListResp[*model.WorkorderInstanceTimeline], error) {
+	timelines, total, err := s.dao.List(ctx, req)
 	if err != nil {
-		i.logger.Error("获取时间线记录列表失败", zap.Error(err))
+		s.logger.Error("获取时间线记录列表失败", zap.Error(err))
 		return nil, err
 	}
 

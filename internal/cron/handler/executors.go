@@ -62,7 +62,7 @@ type CommandTask struct {
 }
 
 // Execute 执行命令，返回输出字符串
-func (e *CommandExecutor) Execute(ctx context.Context, task *CommandTask) (string, error) {
+func (h *CommandExecutor) Execute(ctx context.Context, task *CommandTask) (string, error) {
 	// 设置超时
 	timeout := time.Duration(task.Timeout) * time.Second
 	if timeout <= 0 {
@@ -103,7 +103,7 @@ func (e *CommandExecutor) Execute(ctx context.Context, task *CommandTask) (strin
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	e.logger.Info("执行命令",
+	h.logger.Info("执行命令",
 		zap.String("command", task.Command),
 		zap.Any("args", task.Args))
 
@@ -120,13 +120,13 @@ func (e *CommandExecutor) Execute(ctx context.Context, task *CommandTask) (strin
 	}
 
 	if err != nil {
-		e.logger.Error("命令执行失败",
+		h.logger.Error("命令执行失败",
 			zap.String("command", task.Command),
 			zap.Error(err))
 		return output, fmt.Errorf("命令执行失败: %w", err)
 	}
 
-	e.logger.Info("命令执行成功", zap.String("command", task.Command))
+	h.logger.Info("命令执行成功", zap.String("command", task.Command))
 	return output, nil
 }
 
@@ -156,7 +156,7 @@ type HTTPTask struct {
 }
 
 // Execute 执行HTTP请求，返回响应字符串
-func (e *HTTPExecutor) Execute(ctx context.Context, task *HTTPTask) (string, error) {
+func (h *HTTPExecutor) Execute(ctx context.Context, task *HTTPTask) (string, error) {
 	// 设置超时
 	timeout := time.Duration(task.Timeout) * time.Second
 	if timeout <= 0 {
@@ -182,14 +182,14 @@ func (e *HTTPExecutor) Execute(ctx context.Context, task *HTTPTask) (string, err
 		req.Header.Set(header.Key, header.Value)
 	}
 
-	e.logger.Info("执行HTTP请求",
+	h.logger.Info("执行HTTP请求",
 		zap.String("method", task.Method),
 		zap.String("url", task.URL))
 
 	// 发送请求
-	resp, err := e.client.Do(req)
+	resp, err := h.client.Do(req)
 	if err != nil {
-		e.logger.Error("HTTP请求失败", zap.Error(err))
+		h.logger.Error("HTTP请求失败", zap.Error(err))
 		return "", fmt.Errorf("HTTP请求失败: %w", err)
 	}
 	defer resp.Body.Close()
@@ -202,7 +202,7 @@ func (e *HTTPExecutor) Execute(ctx context.Context, task *HTTPTask) (string, err
 
 	response := string(body)
 
-	e.logger.Info("HTTP请求完成",
+	h.logger.Info("HTTP请求完成",
 		zap.String("url", task.URL),
 		zap.Int("statusCode", resp.StatusCode))
 
@@ -234,7 +234,7 @@ type ScriptTask struct {
 }
 
 // Execute 执行脚本，返回输出字符串
-func (e *ScriptExecutor) Execute(ctx context.Context, task *ScriptTask) (string, error) {
+func (h *ScriptExecutor) Execute(ctx context.Context, task *ScriptTask) (string, error) {
 	// 设置超时
 	timeout := time.Duration(task.Timeout) * time.Second
 	if timeout <= 0 {
@@ -265,7 +265,7 @@ func (e *ScriptExecutor) Execute(ctx context.Context, task *ScriptTask) (string,
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	e.logger.Info("执行脚本",
+	h.logger.Info("执行脚本",
 		zap.String("type", task.Type),
 		zap.String("interpreter", interpreter))
 
@@ -282,12 +282,12 @@ func (e *ScriptExecutor) Execute(ctx context.Context, task *ScriptTask) (string,
 	}
 
 	if err != nil {
-		e.logger.Error("脚本执行失败",
+		h.logger.Error("脚本执行失败",
 			zap.String("type", task.Type),
 			zap.Error(err))
 		return output, fmt.Errorf("脚本执行失败: %w", err)
 	}
 
-	e.logger.Info("脚本执行成功", zap.String("type", task.Type))
+	h.logger.Info("脚本执行成功", zap.String("type", task.Type))
 	return output, nil
 }

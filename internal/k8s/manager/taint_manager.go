@@ -49,7 +49,6 @@ const (
 
 type TaintManager interface {
 	CheckTaintYaml(ctx context.Context, clusterID int, nodeName string, taintYaml string) error
-	EnableSwitchNode(ctx context.Context, clusterID int, nodeName string, scheduleEnable bool) error
 	AddOrUpdateNodeTaint(ctx context.Context, clusterID int, nodeName string, taintYaml string, modType string) error
 	DrainPods(ctx context.Context, clusterID int, nodeName string) error
 	GetNodeTaints(ctx context.Context, clusterID int, nodeName string) ([]corev1.Taint, error)
@@ -104,36 +103,6 @@ func (tm *taintManager) CheckTaintYaml(ctx context.Context, clusterID int, nodeN
 		return fmt.Errorf("获取节点 %s 信息失败: %w", nodeName, err)
 	}
 
-	return nil
-}
-
-func (tm *taintManager) EnableSwitchNode(ctx context.Context, clusterID int, nodeName string, scheduleEnable bool) error {
-	cluster, err := tm.clusterDao.GetClusterByID(ctx, clusterID)
-	if err != nil {
-		tm.logger.Error("获取集群信息失败", zap.Error(err), zap.Int("clusterID", clusterID))
-		return fmt.Errorf("获取集群信息失败: %w", err)
-	}
-
-	kubeClient, err := tm.client.GetKubeClient(cluster.ID)
-	if err != nil {
-		tm.logger.Error("获取 Kubernetes 客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
-		return fmt.Errorf("获取 Kubernetes 客户端失败: %w", err)
-	}
-
-	node, err := kubeClient.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-	if err != nil {
-		tm.logger.Error("获取节点信息失败", zap.Error(err), zap.String("nodeName", nodeName))
-		return fmt.Errorf("获取节点 %s 信息失败: %w", nodeName, err)
-	}
-
-	node.Spec.Unschedulable = !scheduleEnable
-	if _, err := kubeClient.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{}); err != nil {
-		tm.logger.Error("更新节点调度状态失败", zap.Error(err),
-			zap.String("nodeName", nodeName), zap.Bool("scheduleEnable", scheduleEnable))
-		return fmt.Errorf("更新节点 %s 调度状态失败: %w", nodeName, err)
-	}
-
-	tm.logger.Info("更新节点调度状态成功", zap.String("nodeName", nodeName), zap.Bool("scheduleEnable", scheduleEnable))
 	return nil
 }
 

@@ -63,7 +63,7 @@ func NewNotificationDAO(db *gorm.DB, logger *zap.Logger) WorkorderNotificationDA
 }
 
 // CreateNotification 创建通知配置
-func (n *notificationDAO) CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error {
+func (d *notificationDAO) CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error {
 	notification := &model.WorkorderNotification{
 		Name:             req.Name,
 		Description:      req.Description,
@@ -91,8 +91,8 @@ func (n *notificationDAO) CreateNotification(ctx context.Context, req *model.Cre
 		Settings:         req.Settings,
 	}
 
-	if err := n.db.WithContext(ctx).Create(notification).Error; err != nil {
-		n.logger.Error("创建通知配置失败", zap.Error(err), zap.String("name", req.Name))
+	if err := d.db.WithContext(ctx).Create(notification).Error; err != nil {
+		d.logger.Error("创建通知配置失败", zap.Error(err), zap.String("name", req.Name))
 		return fmt.Errorf("创建通知配置失败: %w", err)
 	}
 
@@ -100,7 +100,7 @@ func (n *notificationDAO) CreateNotification(ctx context.Context, req *model.Cre
 }
 
 // UpdateNotification 更新通知配置
-func (n *notificationDAO) UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error {
+func (d *notificationDAO) UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error {
 	updateData := map[string]any{}
 
 	if req.Name != "" {
@@ -171,12 +171,12 @@ func (n *notificationDAO) UpdateNotification(ctx context.Context, req *model.Upd
 		updateData["settings"] = req.Settings
 	}
 
-	result := n.db.WithContext(ctx).Model(&model.WorkorderNotification{}).
+	result := d.db.WithContext(ctx).Model(&model.WorkorderNotification{}).
 		Where("id = ?", req.ID).
 		Updates(updateData)
 
 	if result.Error != nil {
-		n.logger.Error("更新通知配置失败", zap.Error(result.Error), zap.Int("id", req.ID))
+		d.logger.Error("更新通知配置失败", zap.Error(result.Error), zap.Int("id", req.ID))
 		return fmt.Errorf("更新通知配置失败: %w", result.Error)
 	}
 
@@ -188,10 +188,10 @@ func (n *notificationDAO) UpdateNotification(ctx context.Context, req *model.Upd
 }
 
 // DeleteNotification 删除通知配置
-func (n *notificationDAO) DeleteNotification(ctx context.Context, req *model.DeleteWorkorderNotificationReq) error {
-	result := n.db.WithContext(ctx).Delete(&model.WorkorderNotification{}, req.ID)
+func (d *notificationDAO) DeleteNotification(ctx context.Context, req *model.DeleteWorkorderNotificationReq) error {
+	result := d.db.WithContext(ctx).Delete(&model.WorkorderNotification{}, req.ID)
 	if result.Error != nil {
-		n.logger.Error("删除通知配置失败", zap.Error(result.Error), zap.Int("id", req.ID))
+		d.logger.Error("删除通知配置失败", zap.Error(result.Error), zap.Int("id", req.ID))
 		return fmt.Errorf("删除通知配置失败: %w", result.Error)
 	}
 
@@ -203,13 +203,13 @@ func (n *notificationDAO) DeleteNotification(ctx context.Context, req *model.Del
 }
 
 // ListNotification 获取通知配置列表
-func (n *notificationDAO) ListNotification(ctx context.Context, req *model.ListWorkorderNotificationReq) (*model.ListResp[*model.WorkorderNotification], error) {
+func (d *notificationDAO) ListNotification(ctx context.Context, req *model.ListWorkorderNotificationReq) (*model.ListResp[*model.WorkorderNotification], error) {
 	var notifications []*model.WorkorderNotification
 	var total int64
 
 	req.Page, req.PageSize = ValidatePagination(req.Page, req.PageSize)
 
-	db := n.db.WithContext(ctx).Model(&model.WorkorderNotification{})
+	db := d.db.WithContext(ctx).Model(&model.WorkorderNotification{})
 
 	if req.Name != "" {
 		searchTerm := sanitizeSearchInput(req.Name)
@@ -232,14 +232,14 @@ func (n *notificationDAO) ListNotification(ctx context.Context, req *model.ListW
 	}
 
 	if err := db.Count(&total).Error; err != nil {
-		n.logger.Error("获取通知配置总数失败", zap.Error(err))
+		d.logger.Error("获取通知配置总数失败", zap.Error(err))
 		return nil, fmt.Errorf("获取通知配置总数失败: %w", err)
 	}
 
 	offset := (req.Page - 1) * req.PageSize
 	err := db.Order("id DESC").Offset(offset).Limit(req.PageSize).Find(&notifications).Error
 	if err != nil {
-		n.logger.Error("获取通知配置列表失败", zap.Error(err))
+		d.logger.Error("获取通知配置列表失败", zap.Error(err))
 		return nil, fmt.Errorf("获取通知配置列表失败: %w", err)
 	}
 
@@ -250,50 +250,50 @@ func (n *notificationDAO) ListNotification(ctx context.Context, req *model.ListW
 }
 
 // DetailNotification 获取通知配置详情
-func (n *notificationDAO) DetailNotification(ctx context.Context, req *model.DetailWorkorderNotificationReq) (*model.WorkorderNotification, error) {
+func (d *notificationDAO) DetailNotification(ctx context.Context, req *model.DetailWorkorderNotificationReq) (*model.WorkorderNotification, error) {
 	var notification model.WorkorderNotification
-	err := n.db.WithContext(ctx).First(&notification, req.ID).Error
+	err := d.db.WithContext(ctx).First(&notification, req.ID).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("通知配置不存在")
 		}
-		n.logger.Error("获取通知配置详情失败", zap.Error(err), zap.Int("id", req.ID))
+		d.logger.Error("获取通知配置详情失败", zap.Error(err), zap.Int("id", req.ID))
 		return nil, fmt.Errorf("获取通知配置详情失败: %w", err)
 	}
 	return &notification, nil
 }
 
 // GetNotificationByID 根据ID获取通知配置
-func (n *notificationDAO) GetNotificationByID(ctx context.Context, id int) (*model.WorkorderNotification, error) {
+func (d *notificationDAO) GetNotificationByID(ctx context.Context, id int) (*model.WorkorderNotification, error) {
 	var notification model.WorkorderNotification
-	err := n.db.WithContext(ctx).First(&notification, id).Error
+	err := d.db.WithContext(ctx).First(&notification, id).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("通知配置不存在")
 		}
-		n.logger.Error("根据ID获取通知配置失败", zap.Error(err), zap.Int("id", id))
+		d.logger.Error("根据ID获取通知配置失败", zap.Error(err), zap.Int("id", id))
 		return nil, fmt.Errorf("根据ID获取通知配置失败: %w", err)
 	}
 	return &notification, nil
 }
 
 // AddSendLog 添加发送日志
-func (n *notificationDAO) AddSendLog(ctx context.Context, log *model.WorkorderNotificationLog) error {
-	if err := n.db.WithContext(ctx).Create(log).Error; err != nil {
-		n.logger.Error("添加发送日志失败", zap.Error(err))
+func (d *notificationDAO) AddSendLog(ctx context.Context, log *model.WorkorderNotificationLog) error {
+	if err := d.db.WithContext(ctx).Create(log).Error; err != nil {
+		d.logger.Error("添加发送日志失败", zap.Error(err))
 		return fmt.Errorf("添加发送日志失败: %w", err)
 	}
 	return nil
 }
 
 // GetSendLogs 获取发送日志列表
-func (n *notificationDAO) GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (*model.ListResp[*model.WorkorderNotificationLog], error) {
+func (d *notificationDAO) GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (*model.ListResp[*model.WorkorderNotificationLog], error) {
 	var logs []*model.WorkorderNotificationLog
 	var total int64
 
 	req.Page, req.PageSize = ValidatePagination(req.Page, req.PageSize)
 
-	db := n.db.WithContext(ctx).Model(&model.WorkorderNotificationLog{})
+	db := d.db.WithContext(ctx).Model(&model.WorkorderNotificationLog{})
 
 	if req.NotificationID != nil {
 		db = db.Where("notification_id = ?", *req.NotificationID)
@@ -318,14 +318,14 @@ func (n *notificationDAO) GetSendLogs(ctx context.Context, req *model.ListWorkor
 	}
 
 	if err := db.Count(&total).Error; err != nil {
-		n.logger.Error("获取发送日志总数失败", zap.Error(err))
+		d.logger.Error("获取发送日志总数失败", zap.Error(err))
 		return nil, fmt.Errorf("获取发送日志总数失败: %w", err)
 	}
 
 	offset := (req.Page - 1) * req.PageSize
 	err := db.Order("id DESC").Offset(offset).Limit(req.PageSize).Find(&logs).Error
 	if err != nil {
-		n.logger.Error("获取发送日志列表失败", zap.Error(err))
+		d.logger.Error("获取发送日志列表失败", zap.Error(err))
 		return nil, fmt.Errorf("获取发送日志列表失败: %w", err)
 	}
 
@@ -336,23 +336,23 @@ func (n *notificationDAO) GetSendLogs(ctx context.Context, req *model.ListWorkor
 }
 
 // IncrementSentCount 增加发送计数
-func (n *notificationDAO) IncrementSentCount(ctx context.Context, id int) error {
-	err := n.db.WithContext(ctx).Model(&model.WorkorderNotification{}).
+func (d *notificationDAO) IncrementSentCount(ctx context.Context, id int) error {
+	err := d.db.WithContext(ctx).Model(&model.WorkorderNotification{}).
 		Where("id = ?", id).
 		Update("updated_at", time.Now()).Error
 	if err != nil {
-		n.logger.Error("更新发送计数失败", zap.Error(err), zap.Int("id", id))
+		d.logger.Error("更新发送计数失败", zap.Error(err), zap.Int("id", id))
 		return fmt.Errorf("更新发送计数失败: %w", err)
 	}
 	return nil
 }
 
 // GetActiveNotificationsByEventType 根据事件类型和流程ID获取活跃的通知配置
-func (n *notificationDAO) GetActiveNotificationsByEventType(ctx context.Context, eventType string, processID int) ([]*model.WorkorderNotification, error) {
+func (d *notificationDAO) GetActiveNotificationsByEventType(ctx context.Context, eventType string, processID int) ([]*model.WorkorderNotification, error) {
 	var notifications []*model.WorkorderNotification
 
 	// 构建查询条件
-	db := n.db.WithContext(ctx).Model(&model.WorkorderNotification{}).
+	db := d.db.WithContext(ctx).Model(&model.WorkorderNotification{}).
 		Where("status = ?", 1) // 1-启用状态
 
 	db = db.Where("(process_id IS NULL OR process_id = ?)", processID)
@@ -360,7 +360,7 @@ func (n *notificationDAO) GetActiveNotificationsByEventType(ctx context.Context,
 
 	err := db.Order("priority ASC, id ASC").Find(&notifications).Error
 	if err != nil {
-		n.logger.Error("获取活跃通知配置失败",
+		d.logger.Error("获取活跃通知配置失败",
 			zap.Error(err),
 			zap.String("event_type", eventType),
 			zap.Int("process_id", processID))
@@ -371,14 +371,14 @@ func (n *notificationDAO) GetActiveNotificationsByEventType(ctx context.Context,
 }
 
 // GetInstanceByID 根据ID获取工单实例信息
-func (n *notificationDAO) GetInstanceByID(ctx context.Context, instanceID int) (*model.WorkorderInstance, error) {
+func (d *notificationDAO) GetInstanceByID(ctx context.Context, instanceID int) (*model.WorkorderInstance, error) {
 	var instance model.WorkorderInstance
-	err := n.db.WithContext(ctx).First(&instance, instanceID).Error
+	err := d.db.WithContext(ctx).First(&instance, instanceID).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("工单实例不存在")
 		}
-		n.logger.Error("根据ID获取工单实例失败", zap.Error(err), zap.Int("instance_id", instanceID))
+		d.logger.Error("根据ID获取工单实例失败", zap.Error(err), zap.Int("instance_id", instanceID))
 		return nil, fmt.Errorf("根据ID获取工单实例失败: %w", err)
 	}
 	return &instance, nil

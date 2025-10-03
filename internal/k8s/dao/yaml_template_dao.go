@@ -55,10 +55,10 @@ func NewYamlTemplateDAO(db *gorm.DB, l *zap.Logger) YamlTemplateDAO {
 }
 
 // ListAllYamlTemplates 查询所有 YAML 模板
-func (y *yamlTemplateDAO) ListAllYamlTemplates(ctx context.Context, req *model.YamlTemplateListReq) ([]*model.K8sYamlTemplate, error) {
+func (d *yamlTemplateDAO) ListAllYamlTemplates(ctx context.Context, req *model.YamlTemplateListReq) ([]*model.K8sYamlTemplate, error) {
 	var yamls []*model.K8sYamlTemplate
 
-	query := y.db.WithContext(ctx)
+	query := d.db.WithContext(ctx)
 
 	// 根据集群ID过滤
 	if req.ClusterID > 0 {
@@ -80,7 +80,7 @@ func (y *yamlTemplateDAO) ListAllYamlTemplates(ctx context.Context, req *model.Y
 	query = query.Order("created_at DESC")
 
 	if err := query.Find(&yamls).Error; err != nil {
-		y.l.Error("ListAllYamlTemplates 查询所有Yaml模板失败", zap.Error(err))
+		d.l.Error("ListAllYamlTemplates 查询所有Yaml模板失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -88,9 +88,9 @@ func (y *yamlTemplateDAO) ListAllYamlTemplates(ctx context.Context, req *model.Y
 }
 
 // CreateYamlTemplate 创建 YAML 模板
-func (y *yamlTemplateDAO) CreateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error {
-	if err := y.db.WithContext(ctx).Create(&yaml).Error; err != nil {
-		y.l.Error("CreateYamlTemplate 创建Yaml模板失败", zap.Error(err), zap.Any("yaml", yaml))
+func (d *yamlTemplateDAO) CreateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error {
+	if err := d.db.WithContext(ctx).Create(&yaml).Error; err != nil {
+		d.l.Error("CreateYamlTemplate 创建Yaml模板失败", zap.Error(err), zap.Any("yaml", yaml))
 		return err
 	}
 
@@ -98,14 +98,14 @@ func (y *yamlTemplateDAO) CreateYamlTemplate(ctx context.Context, yaml *model.K8
 }
 
 // UpdateYamlTemplate 更新 YAML 模板
-func (y *yamlTemplateDAO) UpdateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error {
+func (d *yamlTemplateDAO) UpdateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error {
 	if yaml.ID == 0 {
-		y.l.Error("UpdateYamlTemplate ID 不能为空", zap.Any("yaml", yaml))
+		d.l.Error("UpdateYamlTemplate ID 不能为空", zap.Any("yaml", yaml))
 		return fmt.Errorf("invalid yaml ID")
 	}
 
-	if err := y.db.WithContext(ctx).Where("id = ? AND cluster_id = ?", yaml.ID, yaml.ClusterID).Updates(yaml).Error; err != nil {
-		y.l.Error("UpdateYamlTemplate 更新Yaml模板失败", zap.Int("yamlID", yaml.ID), zap.Error(err))
+	if err := d.db.WithContext(ctx).Where("id = ? AND cluster_id = ?", yaml.ID, yaml.ClusterID).Updates(yaml).Error; err != nil {
+		d.l.Error("UpdateYamlTemplate 更新Yaml模板失败", zap.Int("yamlID", yaml.ID), zap.Error(err))
 		return err
 	}
 
@@ -113,14 +113,14 @@ func (y *yamlTemplateDAO) UpdateYamlTemplate(ctx context.Context, yaml *model.K8
 }
 
 // DeleteYamlTemplate 删除 YAML 模板
-func (y *yamlTemplateDAO) DeleteYamlTemplate(ctx context.Context, id int, clusterId int) error {
+func (d *yamlTemplateDAO) DeleteYamlTemplate(ctx context.Context, id int, clusterId int) error {
 	if id == 0 {
-		y.l.Error("DeleteYamlTemplate ID 不能为空", zap.Int("id", id))
+		d.l.Error("DeleteYamlTemplate ID 不能为空", zap.Int("id", id))
 		return fmt.Errorf("invalid yaml template ID")
 	}
 
-	if err := y.db.WithContext(ctx).Where("id = ? AND cluster_id = ?", id, clusterId).Delete(&model.K8sYamlTemplate{}).Error; err != nil {
-		y.l.Error("DeleteYamlTemplate 删除Yaml模板失败", zap.Int("yamlID", id), zap.Error(err))
+	if err := d.db.WithContext(ctx).Where("id = ? AND cluster_id = ?", id, clusterId).Delete(&model.K8sYamlTemplate{}).Error; err != nil {
+		d.l.Error("DeleteYamlTemplate 删除Yaml模板失败", zap.Int("yamlID", id), zap.Error(err))
 		return err
 	}
 
@@ -128,16 +128,16 @@ func (y *yamlTemplateDAO) DeleteYamlTemplate(ctx context.Context, id int, cluste
 }
 
 // GetYamlTemplateByID 根据 ID 查询 YAML 模板
-func (y *yamlTemplateDAO) GetYamlTemplateByID(ctx context.Context, id int, clusterId int) (*model.K8sYamlTemplate, error) {
+func (d *yamlTemplateDAO) GetYamlTemplateByID(ctx context.Context, id int, clusterId int) (*model.K8sYamlTemplate, error) {
 	if id == 0 {
-		y.l.Error("GetYamlTemplateByID ID 不能为空", zap.Int("id", id))
+		d.l.Error("GetYamlTemplateByID ID 不能为空", zap.Int("id", id))
 		return nil, fmt.Errorf("invalid yaml template ID")
 	}
 
 	var yaml *model.K8sYamlTemplate
 
-	if err := y.db.WithContext(ctx).Where("id = ? AND cluster_id = ?", id, clusterId).First(&yaml).Error; err != nil {
-		y.l.Error("GetYamlTemplateByID 查询Yaml模板失败", zap.Int("yamlID", id), zap.Error(err))
+	if err := d.db.WithContext(ctx).Where("id = ? AND cluster_id = ?", id, clusterId).First(&yaml).Error; err != nil {
+		d.l.Error("GetYamlTemplateByID 查询Yaml模板失败", zap.Int("yamlID", id), zap.Error(err))
 		return nil, err
 	}
 

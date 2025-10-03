@@ -34,6 +34,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -44,8 +45,7 @@ type NodeManager interface {
 	DrainNode(ctx context.Context, clusterID int, nodeName string, options *utils.DrainOptions) error
 	CordonNode(ctx context.Context, clusterID int, nodeName string) error
 	UncordonNode(ctx context.Context, clusterID int, nodeName string) error
-	AddOrUpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string, overwrite int8) error
-	DeleteNodeLabels(ctx context.Context, clusterID int, nodeName string, labelKeys []string) error
+	UpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string) error
 	GetNodeTaints(ctx context.Context, clusterID int, nodeName string) ([]*model.NodeTaint, int64, error)
 }
 
@@ -132,20 +132,68 @@ func (m *nodeManager) DrainNode(ctx context.Context, clusterID int, nodeName str
 		return fmt.Errorf("获取节点Pod列表失败: %w", err)
 	}
 
+	var drainErrors []error
+	successCount := 0
+	skipCount := 0
+
 	for _, pod := range pods.Items {
 		if utils.ShouldSkipPodDrain(pod, options) {
+			skipCount++
+			m.logger.Debug("跳过Pod驱逐",
+				zap.String("podName", pod.Name),
+				zap.String("namespace", pod.Namespace),
+				zap.String("reason", "shouldSkip"))
 			continue
 		}
 
+		// 使用Eviction API而不是直接删除，这样会遵守PDB
 		deleteOptions := utils.BuildDeleteOptions(options.GracePeriodSeconds)
 
-		err := clientset.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, deleteOptions)
-		if err != nil {
-			m.logger.Error("驱逐Pod失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName), zap.String("podName", pod.Name))
+		eviction := &policyv1.Eviction{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      pod.Name,
+				Namespace: pod.Namespace,
+			},
+			DeleteOptions: &deleteOptions,
 		}
+
+		err := clientset.PolicyV1().Evictions(pod.Namespace).Evict(ctx, eviction)
+		if err != nil {
+			m.logger.Error("驱逐Pod失败",
+				zap.Error(err),
+				zap.Int("clusterID", clusterID),
+				zap.String("nodeName", nodeName),
+				zap.String("podName", pod.Name),
+				zap.String("namespace", pod.Namespace))
+			drainErrors = append(drainErrors, fmt.Errorf("驱逐Pod %s/%s 失败: %w", pod.Namespace, pod.Name, err))
+
+			// 如果强制驱逐，即使失败也继续
+			if options.Force == 2 {
+				continue
+			}
+			// 非强制模式下，遇到错误就停止
+			return fmt.Errorf("驱逐节点失败: %w", err)
+		}
+
+		successCount++
+		m.logger.Info("成功驱逐Pod",
+			zap.String("podName", pod.Name),
+			zap.String("namespace", pod.Namespace),
+			zap.String("nodeName", nodeName))
 	}
 
-	m.logger.Info("节点驱逐完成", zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
+	m.logger.Info("节点驱逐完成",
+		zap.Int("clusterID", clusterID),
+		zap.String("nodeName", nodeName),
+		zap.Int("successCount", successCount),
+		zap.Int("skipCount", skipCount),
+		zap.Int("errorCount", len(drainErrors)))
+
+	// 如果有错误但是是强制模式，返回成功但记录错误
+	if len(drainErrors) > 0 {
+		m.logger.Warn("部分Pod驱逐失败", zap.Errors("errors", drainErrors))
+	}
+
 	return nil
 }
 
@@ -205,12 +253,17 @@ func (m *nodeManager) UncordonNode(ctx context.Context, clusterID int, nodeName 
 	return nil
 }
 
-func (m *nodeManager) AddOrUpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string, overwrite int8) error {
+// UpdateNodeLabels 更新节点标签
+func (m *nodeManager) UpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string) error {
 	if err := utils.ValidateNodeName(nodeName); err != nil {
 		return err
 	}
-	if err := utils.ValidateNodeLabelsMap(labels); err != nil {
-		return err
+
+	// 允许传入空标签，用于清空所有标签
+	if labels != nil {
+		if err := utils.ValidateNodeLabelsMap(labels); err != nil {
+			return err
+		}
 	}
 
 	clientset, err := m.client.GetKubeClient(clusterID)
@@ -225,16 +278,11 @@ func (m *nodeManager) AddOrUpdateNodeLabels(ctx context.Context, clusterID int, 
 		return fmt.Errorf("获取节点失败: %w", err)
 	}
 
-	if node.Labels == nil {
+	// 完全覆盖原有标签
+	if labels == nil {
 		node.Labels = make(map[string]string)
-	}
-
-	for key, value := range labels {
-		// 如果标签存在且不允许覆盖，则跳过
-		if _, exists := node.Labels[key]; exists && overwrite == 0 {
-			continue
-		}
-		node.Labels[key] = value
+	} else {
+		node.Labels = labels
 	}
 
 	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
@@ -243,43 +291,7 @@ func (m *nodeManager) AddOrUpdateNodeLabels(ctx context.Context, clusterID int, 
 		return fmt.Errorf("更新节点标签失败: %w", err)
 	}
 
-	m.logger.Info("节点标签更新成功", zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
-	return nil
-}
-
-func (m *nodeManager) DeleteNodeLabels(ctx context.Context, clusterID int, nodeName string, labelKeys []string) error {
-	if err := utils.ValidateNodeName(nodeName); err != nil {
-		return err
-	}
-	if err := utils.ValidateLabelKeys(labelKeys); err != nil {
-		return err
-	}
-
-	clientset, err := m.client.GetKubeClient(clusterID)
-	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("clusterID", clusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-	if err != nil {
-		m.logger.Error("获取节点失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
-		return fmt.Errorf("获取节点失败: %w", err)
-	}
-
-	if node.Labels != nil {
-		for _, key := range labelKeys {
-			delete(node.Labels, key)
-		}
-	}
-
-	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
-	if err != nil {
-		m.logger.Error("删除节点标签失败", zap.Error(err), zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
-		return fmt.Errorf("删除节点标签失败: %w", err)
-	}
-
-	m.logger.Info("节点标签删除成功", zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName))
+	m.logger.Info("节点标签更新成功", zap.Int("clusterID", clusterID), zap.String("nodeName", nodeName), zap.Any("labels", labels))
 	return nil
 }
 

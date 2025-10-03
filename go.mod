@@ -19,7 +19,6 @@ require (
 	github.com/imdario/mergo v0.3.16
 	github.com/joho/godotenv v1.5.1
 	github.com/jonboulle/clockwork v0.5.0
-	github.com/mark3labs/mcp-go v0.25.0
 	github.com/openkruise/kruise-api v1.7.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/alertmanager v0.28.1
@@ -58,7 +57,6 @@ require (
 	github.com/go-redis/redis/v8 v8.11.2 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 )
 
 require (

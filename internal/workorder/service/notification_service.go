@@ -74,13 +74,13 @@ func NewWorkorderNotificationService(dao workorderDao.WorkorderNotificationDAO, 
 }
 
 // CreateNotification 创建通知配置
-func (n *workorderNotificationService) CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error {
-	return n.dao.CreateNotification(ctx, req)
+func (s *workorderNotificationService) CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error {
+	return s.dao.CreateNotification(ctx, req)
 }
 
 // UpdateNotification 更新通知配置
-func (n *workorderNotificationService) UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error {
-	_, err := n.dao.GetNotificationByID(ctx, req.ID)
+func (s *workorderNotificationService) UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error {
+	_, err := s.dao.GetNotificationByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("通知配置不存在")
@@ -88,12 +88,12 @@ func (n *workorderNotificationService) UpdateNotification(ctx context.Context, r
 		return fmt.Errorf("查询通知配置失败: %w", err)
 	}
 
-	return n.dao.UpdateNotification(ctx, req)
+	return s.dao.UpdateNotification(ctx, req)
 }
 
 // DeleteNotification 删除通知配置
-func (n *workorderNotificationService) DeleteNotification(ctx context.Context, req *model.DeleteWorkorderNotificationReq) error {
-	_, err := n.dao.GetNotificationByID(ctx, req.ID)
+func (s *workorderNotificationService) DeleteNotification(ctx context.Context, req *model.DeleteWorkorderNotificationReq) error {
+	_, err := s.dao.GetNotificationByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("通知配置不存在")
@@ -101,37 +101,37 @@ func (n *workorderNotificationService) DeleteNotification(ctx context.Context, r
 		return fmt.Errorf("查询通知配置失败: %w", err)
 	}
 
-	return n.dao.DeleteNotification(ctx, req)
+	return s.dao.DeleteNotification(ctx, req)
 }
 
 // ListNotification 获取通知配置列表
-func (n *workorderNotificationService) ListNotification(ctx context.Context, req *model.ListWorkorderNotificationReq) (*model.ListResp[*model.WorkorderNotification], error) {
-	result, err := n.dao.ListNotification(ctx, req)
+func (s *workorderNotificationService) ListNotification(ctx context.Context, req *model.ListWorkorderNotificationReq) (*model.ListResp[*model.WorkorderNotification], error) {
+	result, err := s.dao.ListNotification(ctx, req)
 	if err != nil {
-		n.logger.Error("获取通知配置列表失败", zap.Error(err))
+		s.logger.Error("获取通知配置列表失败", zap.Error(err))
 		return nil, fmt.Errorf("获取通知配置列表失败: %w", err)
 	}
 	return result, nil
 }
 
 // DetailNotification 获取通知配置
-func (n *workorderNotificationService) DetailNotification(ctx context.Context, req *model.DetailWorkorderNotificationReq) (*model.WorkorderNotification, error) {
-	return n.dao.DetailNotification(ctx, req)
+func (s *workorderNotificationService) DetailNotification(ctx context.Context, req *model.DetailWorkorderNotificationReq) (*model.WorkorderNotification, error) {
+	return s.dao.DetailNotification(ctx, req)
 }
 
 // GetSendLogs 获取发送日志
-func (n *workorderNotificationService) GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (*model.ListResp[*model.WorkorderNotificationLog], error) {
-	result, err := n.dao.GetSendLogs(ctx, req)
+func (s *workorderNotificationService) GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (*model.ListResp[*model.WorkorderNotificationLog], error) {
+	result, err := s.dao.GetSendLogs(ctx, req)
 	if err != nil {
-		n.logger.Error("获取发送日志失败", zap.Error(err))
+		s.logger.Error("获取发送日志失败", zap.Error(err))
 		return nil, fmt.Errorf("获取发送日志失败: %w", err)
 	}
 	return result, nil
 }
 
 // TestSendNotification 测试发送指定通知配置
-func (n *workorderNotificationService) TestSendNotification(ctx context.Context, req *model.TestSendWorkorderNotificationReq) error {
-	notificationConfig, err := n.dao.GetNotificationByID(ctx, req.NotificationID)
+func (s *workorderNotificationService) TestSendNotification(ctx context.Context, req *model.TestSendWorkorderNotificationReq) error {
+	notificationConfig, err := s.dao.GetNotificationByID(ctx, req.NotificationID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("通知配置不存在")
@@ -207,7 +207,7 @@ func (n *workorderNotificationService) TestSendNotification(ctx context.Context,
 		sendRequest.Templates["platform_name"] = "运维管理平台"
 		sendRequest.Templates["department"] = "技术运维部"
 		sendRequest.Templates["test_content"] = "本次测试验证了系统通知功能的完整性，包括邮件发送、飞书消息推送等多个渠道的有效性。"
-		response, err := n.notificationMgr.SendNotification(ctx, sendRequest)
+		response, err := s.notificationMgr.SendNotification(ctx, sendRequest)
 
 		log := &model.WorkorderNotificationLog{
 			NotificationID: notificationConfig.ID,
@@ -239,19 +239,19 @@ func (n *workorderNotificationService) TestSendNotification(ctx context.Context,
 			}
 		}
 
-		if err := n.dao.AddSendLog(ctx, log); err != nil {
-			n.logger.Error("记录发送日志失败", zap.Error(err))
+		if err := s.dao.AddSendLog(ctx, log); err != nil {
+			s.logger.Error("记录发送日志失败", zap.Error(err))
 		}
 	}
 
-	return n.dao.IncrementSentCount(ctx, notificationConfig.ID)
+	return s.dao.IncrementSentCount(ctx, notificationConfig.ID)
 }
 
 // SendWorkorderNotification 发送工单相关通知
-func (n *workorderNotificationService) SendWorkorderNotification(ctx context.Context, instanceID int, eventType string, customContent ...string) error {
-	instance, err := n.instanceDAO.GetInstanceByID(ctx, instanceID)
+func (s *workorderNotificationService) SendWorkorderNotification(ctx context.Context, instanceID int, eventType string, customContent ...string) error {
+	instance, err := s.instanceDAO.GetInstanceByID(ctx, instanceID)
 	if err != nil {
-		n.logger.Error("获取工单实例失败",
+		s.logger.Error("获取工单实例失败",
 			zap.Int("instance_id", instanceID),
 			zap.Error(err))
 		return fmt.Errorf("获取工单实例失败: %w", err)
@@ -264,9 +264,9 @@ func (n *workorderNotificationService) SendWorkorderNotification(ctx context.Con
 		}
 	}
 
-	notifications, err := n.dao.GetActiveNotificationsByEventType(ctx, eventType, instance.ProcessID)
+	notifications, err := s.dao.GetActiveNotificationsByEventType(ctx, eventType, instance.ProcessID)
 	if err != nil {
-		n.logger.Error("获取通知配置失败",
+		s.logger.Error("获取通知配置失败",
 			zap.String("event_type", eventType),
 			zap.Int("process_id", instance.ProcessID),
 			zap.Error(err))
@@ -274,15 +274,15 @@ func (n *workorderNotificationService) SendWorkorderNotification(ctx context.Con
 	}
 
 	if len(notifications) == 0 {
-		n.logger.Info("没有找到匹配的通知配置",
+		s.logger.Info("没有找到匹配的通知配置",
 			zap.String("event_type", eventType),
 			zap.Int("process_id", instance.ProcessID))
 		return nil
 	}
 
 	for _, notification := range notifications {
-		if err := n.processNotification(ctx, notification, instance, eventType, senderID, customContent...); err != nil {
-			n.logger.Error("处理通知配置失败",
+		if err := s.processNotification(ctx, notification, instance, eventType, senderID, customContent...); err != nil {
+			s.logger.Error("处理通知配置失败",
 				zap.Int("notification_id", notification.ID),
 				zap.Int("instance_id", instanceID),
 				zap.Error(err))
@@ -290,7 +290,7 @@ func (n *workorderNotificationService) SendWorkorderNotification(ctx context.Con
 		}
 	}
 
-	n.logger.Info("工单通知发送完成",
+	s.logger.Info("工单通知发送完成",
 		zap.Int("instance_id", instanceID),
 		zap.String("event_type", eventType),
 		zap.Int("notification_count", len(notifications)))
@@ -299,16 +299,16 @@ func (n *workorderNotificationService) SendWorkorderNotification(ctx context.Con
 }
 
 // processNotification 处理并发送单个通知配置
-func (n *workorderNotificationService) processNotification(ctx context.Context, notification *model.WorkorderNotification,
+func (s *workorderNotificationService) processNotification(ctx context.Context, notification *model.WorkorderNotification,
 	instance *model.WorkorderInstance, eventType string, senderID int, customContent ...string) error {
 
-	recipients, err := n.getRecipients(ctx, notification, instance)
+	recipients, err := s.getRecipients(ctx, notification, instance)
 	if err != nil {
 		return fmt.Errorf("获取接收人失败: %w", err)
 	}
 
 	if len(recipients) == 0 {
-		n.logger.Info("没有找到接收人",
+		s.logger.Info("没有找到接收人",
 			zap.Int("notification_id", notification.ID),
 			zap.Int("instance_id", instance.ID))
 		return nil
@@ -329,14 +329,14 @@ func (n *workorderNotificationService) processNotification(ctx context.Context, 
 				defer cancel()
 			}
 
-			if err := n.sendChannelNotification(channelCtx, notification, instance, ch, recipients, eventType, senderID, customContent...); err != nil {
-				n.logger.Error("发送渠道通知失败",
+			if err := s.sendChannelNotification(channelCtx, notification, instance, ch, recipients, eventType, senderID, customContent...); err != nil {
+				s.logger.Error("发送渠道通知失败",
 					zap.String("channel", ch),
 					zap.Int("notification_id", notification.ID),
 					zap.Error(err))
 				channelErrors <- fmt.Errorf("渠道 %s 发送失败: %w", ch, err)
 			} else {
-				n.logger.Info("渠道通知发送成功",
+				s.logger.Info("渠道通知发送成功",
 					zap.String("channel", ch),
 					zap.Int("notification_id", notification.ID))
 			}
@@ -352,7 +352,7 @@ func (n *workorderNotificationService) processNotification(ctx context.Context, 
 	}
 
 	if len(errors) > 0 {
-		n.logger.Warn("部分渠道发送失败，但其他渠道已成功发送",
+		s.logger.Warn("部分渠道发送失败，但其他渠道已成功发送",
 			zap.Strings("errors", errors),
 			zap.Int("notification_id", notification.ID))
 	}
@@ -361,7 +361,7 @@ func (n *workorderNotificationService) processNotification(ctx context.Context, 
 }
 
 // getRecipients 根据配置获取接收人列表
-func (n *workorderNotificationService) getRecipients(ctx context.Context, notification *model.WorkorderNotification,
+func (s *workorderNotificationService) getRecipients(ctx context.Context, notification *model.WorkorderNotification,
 	instance *model.WorkorderInstance) ([]RecipientInfo, error) {
 
 	var recipients []RecipientInfo
@@ -377,7 +377,7 @@ func (n *workorderNotificationService) getRecipients(ctx context.Context, notifi
 		case model.RecipientTypeAssignee:
 			if instance.AssigneeID != nil {
 				assigneeName := "处理人"
-				if user, err := n.userDAO.GetUserByID(ctx, *instance.AssigneeID); err == nil {
+				if user, err := s.userDAO.GetUserByID(ctx, *instance.AssigneeID); err == nil {
 					assigneeName = user.RealName
 				}
 
@@ -391,13 +391,13 @@ func (n *workorderNotificationService) getRecipients(ctx context.Context, notifi
 			for _, userIDStr := range notification.RecipientUsers {
 				userID, err := strconv.Atoi(userIDStr)
 				if err != nil {
-					n.logger.Warn("无效的用户ID",
+					s.logger.Warn("无效的用户ID",
 						zap.String("user_id", userIDStr))
 					continue
 				}
 
 				userName := "指定用户"
-				if user, err := n.userDAO.GetUserByID(ctx, userID); err == nil {
+				if user, err := s.userDAO.GetUserByID(ctx, userID); err == nil {
 					userName = user.RealName
 				}
 
@@ -408,13 +408,13 @@ func (n *workorderNotificationService) getRecipients(ctx context.Context, notifi
 				})
 			}
 		case model.RecipientTypeRole:
-			n.logger.Info("角色用户通知暂未实现",
+			s.logger.Info("角色用户通知暂未实现",
 				zap.Strings("roles", notification.RecipientRoles))
 		case model.RecipientTypeDept:
-			n.logger.Info("部门用户通知暂未实现",
+			s.logger.Info("部门用户通知暂未实现",
 				zap.Strings("depts", notification.RecipientDepts))
 		case model.RecipientTypeCustom:
-			n.logger.Info("自定义用户通知暂未实现")
+			s.logger.Info("自定义用户通知暂未实现")
 		}
 	}
 
@@ -422,10 +422,10 @@ func (n *workorderNotificationService) getRecipients(ctx context.Context, notifi
 }
 
 // sendChannelNotification 通过指定渠道发送通知
-func (n *workorderNotificationService) sendChannelNotification(ctx context.Context, notificationConfig *model.WorkorderNotification,
+func (s *workorderNotificationService) sendChannelNotification(ctx context.Context, notificationConfig *model.WorkorderNotification,
 	instance *model.WorkorderInstance, channel string, recipients []RecipientInfo, eventType string, senderID int, customContent ...string) error {
 
-	subject, content := n.buildMessageContent(notificationConfig, instance, eventType, customContent...)
+	subject, content := s.buildMessageContent(notificationConfig, instance, eventType, customContent...)
 
 	var wg sync.WaitGroup
 	recipientErrors := make(chan error, len(recipients))
@@ -442,15 +442,15 @@ func (n *workorderNotificationService) sendChannelNotification(ctx context.Conte
 				defer cancel()
 			}
 
-			recipientAddr := n.getRecipientAddress(rec, channel)
+			recipientAddr := s.getRecipientAddress(rec, channel)
 			if recipientAddr == "" {
-				n.logger.Warn("无法获取接收人地址",
+				s.logger.Warn("无法获取接收人地址",
 					zap.String("recipient_id", rec.ID),
 					zap.String("channel", channel))
 				return
 			}
 
-			recipientType := n.getRecipientTypeForChannel(channel)
+			recipientType := s.getRecipientTypeForChannel(channel)
 
 			sendRequest := &notification.SendRequest{
 				Subject:       subject,
@@ -470,7 +470,7 @@ func (n *workorderNotificationService) sendChannelNotification(ctx context.Conte
 				},
 			}
 
-			response, err := n.notificationMgr.SendNotification(recipientCtx, sendRequest)
+			response, err := s.notificationMgr.SendNotification(recipientCtx, sendRequest)
 
 			log := &model.WorkorderNotificationLog{
 				NotificationID: notificationConfig.ID,
@@ -491,7 +491,7 @@ func (n *workorderNotificationService) sendChannelNotification(ctx context.Conte
 			if err != nil {
 				log.Status = 4
 				log.ErrorMessage = err.Error()
-				n.logger.Error("发送通知失败",
+				s.logger.Error("发送通知失败",
 					zap.String("channel", channel),
 					zap.String("recipient", recipientAddr),
 					zap.Error(err))
@@ -506,13 +506,13 @@ func (n *workorderNotificationService) sendChannelNotification(ctx context.Conte
 				if response.Cost != nil {
 					log.Cost = response.Cost
 				}
-				n.logger.Info("通知发送成功",
+				s.logger.Info("通知发送成功",
 					zap.String("channel", channel),
 					zap.String("recipient", recipientAddr))
 			}
 
-			if err := n.dao.AddSendLog(recipientCtx, log); err != nil {
-				n.logger.Error("记录发送日志失败", zap.Error(err))
+			if err := s.dao.AddSendLog(recipientCtx, log); err != nil {
+				s.logger.Error("记录发送日志失败", zap.Error(err))
 			}
 		}(recipient)
 	}
@@ -526,7 +526,7 @@ func (n *workorderNotificationService) sendChannelNotification(ctx context.Conte
 	}
 
 	if len(errors) > 0 {
-		n.logger.Warn("部分接收人发送失败，但其他接收人已成功发送",
+		s.logger.Warn("部分接收人发送失败，但其他接收人已成功发送",
 			zap.Strings("errors", errors),
 			zap.String("channel", channel))
 	}
@@ -535,7 +535,7 @@ func (n *workorderNotificationService) sendChannelNotification(ctx context.Conte
 }
 
 // buildMessageContent 根据模板构建消息内容
-func (n *workorderNotificationService) buildMessageContent(notificationConfig *model.WorkorderNotification,
+func (s *workorderNotificationService) buildMessageContent(notificationConfig *model.WorkorderNotification,
 	instance *model.WorkorderInstance, eventType string, customContent ...string) (string, string) {
 
 	// 创建发送请求对象，用于模板渲染
@@ -569,7 +569,7 @@ func (n *workorderNotificationService) buildMessageContent(notificationConfig *m
 	// 处理处理人名称
 	assigneeName := "待分配"
 	if instance.AssigneeID != nil {
-		if user, err := n.userDAO.GetUserByID(context.Background(), *instance.AssigneeID); err == nil && user != nil {
+		if user, err := s.userDAO.GetUserByID(context.Background(), *instance.AssigneeID); err == nil && user != nil {
 			assigneeName = user.RealName
 		}
 	}
@@ -647,7 +647,7 @@ AI-CloudOps 技术运维部
 		content = renderedContent
 	}
 
-	n.logger.Debug("消息内容构建完成",
+	s.logger.Debug("消息内容构建完成",
 		zap.String("subject", subject),
 		zap.String("content", content))
 
@@ -655,18 +655,18 @@ AI-CloudOps 技术运维部
 }
 
 // getRecipientAddress 根据渠道类型获取接收人地址
-func (n *workorderNotificationService) getRecipientAddress(recipient RecipientInfo, channel string) string {
+func (s *workorderNotificationService) getRecipientAddress(recipient RecipientInfo, channel string) string {
 	userID, err := strconv.Atoi(recipient.ID)
 	if err != nil {
-		n.logger.Error("无效的用户ID",
+		s.logger.Error("无效的用户ID",
 			zap.String("recipient_id", recipient.ID),
 			zap.Error(err))
 		return ""
 	}
 
-	user, err := n.userDAO.GetUserByID(context.Background(), userID)
+	user, err := s.userDAO.GetUserByID(context.Background(), userID)
 	if err != nil {
-		n.logger.Error("获取用户信息失败",
+		s.logger.Error("获取用户信息失败",
 			zap.Int("user_id", userID),
 			zap.Error(err))
 		return ""
@@ -675,7 +675,7 @@ func (n *workorderNotificationService) getRecipientAddress(recipient RecipientIn
 	switch channel {
 	case model.NotificationChannelEmail:
 		if user.Email == "" {
-			n.logger.Warn("用户没有配置邮箱",
+			s.logger.Warn("用户没有配置邮箱",
 				zap.Int("user_id", userID),
 				zap.String("user_name", user.RealName))
 			return ""
@@ -683,7 +683,7 @@ func (n *workorderNotificationService) getRecipientAddress(recipient RecipientIn
 		return user.Email
 	case model.NotificationChannelFeishu:
 		if user.FeiShuUserId == "" {
-			n.logger.Warn("用户没有配置飞书用户ID",
+			s.logger.Warn("用户没有配置飞书用户ID",
 				zap.Int("user_id", userID),
 				zap.String("user_name", user.RealName))
 			return ""
@@ -691,26 +691,26 @@ func (n *workorderNotificationService) getRecipientAddress(recipient RecipientIn
 		return user.FeiShuUserId
 	case model.NotificationChannelSMS:
 		if user.Mobile == "" {
-			n.logger.Warn("用户没有配置手机号",
+			s.logger.Warn("用户没有配置手机号",
 				zap.Int("user_id", userID),
 				zap.String("user_name", user.RealName))
 			return ""
 		}
 		return user.Mobile
 	case model.NotificationChannelWebhook:
-		n.logger.Warn("Webhook地址需要配置",
+		s.logger.Warn("Webhook地址需要配置",
 			zap.Int("user_id", userID),
 			zap.String("user_name", user.RealName))
 		return ""
 	default:
-		n.logger.Warn("不支持的通知渠道",
+		s.logger.Warn("不支持的通知渠道",
 			zap.String("channel", channel))
 		return ""
 	}
 }
 
 // getRecipientTypeForChannel 获取渠道对应的接收人类型
-func (n *workorderNotificationService) getRecipientTypeForChannel(channel string) string {
+func (s *workorderNotificationService) getRecipientTypeForChannel(channel string) string {
 	switch channel {
 	case model.NotificationChannelEmail:
 		return "email"
@@ -726,8 +726,8 @@ func (n *workorderNotificationService) getRecipientTypeForChannel(channel string
 }
 
 // SendNotificationByChannels 通过多个渠道发送通知
-func (n *workorderNotificationService) SendNotificationByChannels(ctx context.Context, channels []string, recipient, subject, content string) error {
-	if n.notificationMgr == nil {
+func (s *workorderNotificationService) SendNotificationByChannels(ctx context.Context, channels []string, recipient, subject, content string) error {
+	if s.notificationMgr == nil {
 		return errors.New("通知管理器未初始化")
 	}
 
@@ -741,9 +741,9 @@ func (n *workorderNotificationService) SendNotificationByChannels(ctx context.Co
 			EventType:     "manual",
 		}
 
-		_, err := n.notificationMgr.SendNotification(ctx, sendRequest)
+		_, err := s.notificationMgr.SendNotification(ctx, sendRequest)
 		if err != nil {
-			n.logger.Error("发送通知失败",
+			s.logger.Error("发送通知失败",
 				zap.String("channel", channel),
 				zap.String("recipient", recipient),
 				zap.Error(err))
@@ -755,15 +755,15 @@ func (n *workorderNotificationService) SendNotificationByChannels(ctx context.Co
 }
 
 // GetAvailableChannels 获取当前可用的通知渠道列表
-func (n *workorderNotificationService) GetAvailableChannels() *model.ListResp[*model.WorkorderNotificationChannel] {
-	if n.notificationMgr == nil {
+func (s *workorderNotificationService) GetAvailableChannels() *model.ListResp[*model.WorkorderNotificationChannel] {
+	if s.notificationMgr == nil {
 		return &model.ListResp[*model.WorkorderNotificationChannel]{
 			Items: []*model.WorkorderNotificationChannel{},
 			Total: 0,
 		}
 	}
 
-	availableChannels := n.notificationMgr.GetAvailableChannels()
+	availableChannels := s.notificationMgr.GetAvailableChannels()
 	channels := make([]*model.WorkorderNotificationChannel, 0, len(availableChannels))
 
 	for _, channel := range availableChannels {

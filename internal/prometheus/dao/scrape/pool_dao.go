@@ -61,11 +61,11 @@ func NewScrapePoolDAO(db *gorm.DB, l *zap.Logger, userDao userDao.UserDAO) Scrap
 }
 
 // GetMonitorScrapePoolList 获取监控采集池列表
-func (s *scrapePoolDAO) GetMonitorScrapePoolList(ctx context.Context, req *model.GetMonitorScrapePoolListReq) ([]*model.MonitorScrapePool, int64, error) {
+func (d *scrapePoolDAO) GetMonitorScrapePoolList(ctx context.Context, req *model.GetMonitorScrapePoolListReq) ([]*model.MonitorScrapePool, int64, error) {
 	var pools []*model.MonitorScrapePool
 	var count int64
 
-	query := s.db.WithContext(ctx).Model(&model.MonitorScrapePool{})
+	query := d.db.WithContext(ctx).Model(&model.MonitorScrapePool{})
 
 	// 添加搜索条件
 	if req.Search != "" {
@@ -82,13 +82,13 @@ func (s *scrapePoolDAO) GetMonitorScrapePoolList(ctx context.Context, req *model
 
 	// 获取总数
 	if err := query.Count(&count).Error; err != nil {
-		s.l.Error("获取 MonitorScrapePool 总数失败", zap.Error(err))
+		d.l.Error("获取 MonitorScrapePool 总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
 	// 分页查询
 	if err := query.Offset((req.Page - 1) * req.Size).Limit(req.Size).Find(&pools).Error; err != nil {
-		s.l.Error("获取 MonitorScrapePool 记录失败", zap.Error(err))
+		d.l.Error("获取 MonitorScrapePool 记录失败", zap.Error(err))
 		return nil, 0, err
 	}
 
@@ -96,13 +96,13 @@ func (s *scrapePoolDAO) GetMonitorScrapePoolList(ctx context.Context, req *model
 }
 
 // CreateMonitorScrapePool 创建监控采集池
-func (s *scrapePoolDAO) CreateMonitorScrapePool(ctx context.Context, pool *model.MonitorScrapePool) error {
+func (d *scrapePoolDAO) CreateMonitorScrapePool(ctx context.Context, pool *model.MonitorScrapePool) error {
 	// 检查是否已存在相同名称的pool
 	var count int64
-	if err := s.db.WithContext(ctx).Model(&model.MonitorScrapePool{}).
+	if err := d.db.WithContext(ctx).Model(&model.MonitorScrapePool{}).
 		Where("name = ?", pool.Name).
 		Count(&count).Error; err != nil {
-		s.l.Error("检查 MonitorScrapePool 是否存在失败", zap.Error(err))
+		d.l.Error("检查 MonitorScrapePool 是否存在失败", zap.Error(err))
 		return err
 	}
 
@@ -110,8 +110,8 @@ func (s *scrapePoolDAO) CreateMonitorScrapePool(ctx context.Context, pool *model
 		return fmt.Errorf("pool已存在,请勿重复创建")
 	}
 
-	if err := s.db.WithContext(ctx).Create(pool).Error; err != nil {
-		s.l.Error("创建 MonitorScrapePool 失败", zap.Error(err))
+	if err := d.db.WithContext(ctx).Create(pool).Error; err != nil {
+		d.l.Error("创建 MonitorScrapePool 失败", zap.Error(err))
 		return err
 	}
 
@@ -119,16 +119,16 @@ func (s *scrapePoolDAO) CreateMonitorScrapePool(ctx context.Context, pool *model
 }
 
 // GetMonitorScrapePoolById 根据 ID 获取监控采集池
-func (s *scrapePoolDAO) GetMonitorScrapePoolById(ctx context.Context, id int) (*model.MonitorScrapePool, error) {
+func (d *scrapePoolDAO) GetMonitorScrapePoolById(ctx context.Context, id int) (*model.MonitorScrapePool, error) {
 	if id <= 0 {
-		s.l.Error("GetMonitorScrapePoolById 失败：无效的 ID", zap.Int("id", id))
+		d.l.Error("GetMonitorScrapePoolById 失败：无效的 ID", zap.Int("id", id))
 		return nil, fmt.Errorf("无效的 ID: %d", id)
 	}
 
 	var pool model.MonitorScrapePool
 
-	if err := s.db.WithContext(ctx).First(&pool, id).Error; err != nil {
-		s.l.Error("根据 ID 获取 MonitorScrapePool 失败", zap.Error(err), zap.Int("id", id))
+	if err := d.db.WithContext(ctx).First(&pool, id).Error; err != nil {
+		d.l.Error("根据 ID 获取 MonitorScrapePool 失败", zap.Error(err), zap.Int("id", id))
 		return nil, err
 	}
 
@@ -136,13 +136,13 @@ func (s *scrapePoolDAO) GetMonitorScrapePoolById(ctx context.Context, id int) (*
 }
 
 // UpdateMonitorScrapePool 更新监控采集池
-func (s *scrapePoolDAO) UpdateMonitorScrapePool(ctx context.Context, req *model.UpdateMonitorScrapePoolReq) error {
+func (d *scrapePoolDAO) UpdateMonitorScrapePool(ctx context.Context, req *model.UpdateMonitorScrapePoolReq) error {
 	if req.ID <= 0 {
-		s.l.Error("UpdateMonitorScrapePool 失败: ID 为 0", zap.Any("pool", req))
+		d.l.Error("UpdateMonitorScrapePool 失败: ID 为 0", zap.Any("pool", req))
 		return fmt.Errorf("monitorScrapePool 的 ID 必须设置且非零")
 	}
 
-	if err := s.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Model(&model.MonitorScrapePool{}).
 		Where("id = ?", req.ID).
 		Updates(map[string]interface{}{
@@ -161,7 +161,7 @@ func (s *scrapePoolDAO) UpdateMonitorScrapePool(ctx context.Context, req *model.
 			"record_file_path":       req.RecordFilePath,
 			"user_id":                req.UserID,
 		}).Error; err != nil {
-		s.l.Error("更新 MonitorScrapePool 失败", zap.Error(err), zap.Int("id", req.ID))
+		d.l.Error("更新 MonitorScrapePool 失败", zap.Error(err), zap.Int("id", req.ID))
 		return err
 	}
 
@@ -169,18 +169,18 @@ func (s *scrapePoolDAO) UpdateMonitorScrapePool(ctx context.Context, req *model.
 }
 
 // DeleteMonitorScrapePool 删除监控采集池
-func (s *scrapePoolDAO) DeleteMonitorScrapePool(ctx context.Context, poolId int) error {
+func (d *scrapePoolDAO) DeleteMonitorScrapePool(ctx context.Context, poolId int) error {
 	if poolId <= 0 {
-		s.l.Error("DeleteMonitorScrapePool 失败: 无效的 poolId", zap.Int("poolId", poolId))
+		d.l.Error("DeleteMonitorScrapePool 失败: 无效的 poolId", zap.Int("poolId", poolId))
 		return fmt.Errorf("无效的 poolId: %d", poolId)
 	}
 
-	result := s.db.WithContext(ctx).
+	result := d.db.WithContext(ctx).
 		Where("id = ?", poolId).
 		Delete(&model.MonitorScrapePool{})
 
 	if result.Error != nil {
-		s.l.Error("删除 MonitorScrapePool 失败", zap.Error(result.Error), zap.Int("poolId", poolId))
+		d.l.Error("删除 MonitorScrapePool 失败", zap.Error(result.Error), zap.Int("poolId", poolId))
 		return fmt.Errorf("删除 ID 为 %d 的 MonitorScrapePool 失败: %w", poolId, result.Error)
 	}
 
@@ -192,22 +192,22 @@ func (s *scrapePoolDAO) DeleteMonitorScrapePool(ctx context.Context, poolId int)
 }
 
 // GetMonitorScrapePoolSupportedAlert 获取支持警报的监控采集池
-func (s *scrapePoolDAO) GetMonitorScrapePoolSupportedAlert(ctx context.Context) ([]*model.MonitorScrapePool, int64, error) {
+func (d *scrapePoolDAO) GetMonitorScrapePoolSupportedAlert(ctx context.Context) ([]*model.MonitorScrapePool, int64, error) {
 	var pools []*model.MonitorScrapePool
 	var count int64
 
-	if err := s.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Model(&model.MonitorScrapePool{}).
 		Where("support_alert = ?", 1).
 		Count(&count).Error; err != nil {
-		s.l.Error("获取支持警报的 MonitorScrapePool 总数失败", zap.Error(err))
+		d.l.Error("获取支持警报的 MonitorScrapePool 总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
-	if err := s.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Where("support_alert = ?", 1).
 		Find(&pools).Error; err != nil {
-		s.l.Error("获取支持警报的 MonitorScrapePool 失败", zap.Error(err))
+		d.l.Error("获取支持警报的 MonitorScrapePool 失败", zap.Error(err))
 		return nil, 0, err
 	}
 
@@ -215,22 +215,22 @@ func (s *scrapePoolDAO) GetMonitorScrapePoolSupportedAlert(ctx context.Context) 
 }
 
 // GetMonitorScrapePoolSupportedRecord 获取支持记录规则的监控采集池
-func (s *scrapePoolDAO) GetMonitorScrapePoolSupportedRecord(ctx context.Context) ([]*model.MonitorScrapePool, int64, error) {
+func (d *scrapePoolDAO) GetMonitorScrapePoolSupportedRecord(ctx context.Context) ([]*model.MonitorScrapePool, int64, error) {
 	var pools []*model.MonitorScrapePool
 	var count int64
 
-	if err := s.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Model(&model.MonitorScrapePool{}).
 		Where("support_record = ?", 1).
 		Count(&count).Error; err != nil {
-		s.l.Error("获取支持记录规则的 MonitorScrapePool 总数失败", zap.Error(err))
+		d.l.Error("获取支持记录规则的 MonitorScrapePool 总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
-	if err := s.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Where("support_record = ?", 1).
 		Find(&pools).Error; err != nil {
-		s.l.Error("获取支持记录规则的 MonitorScrapePool 失败", zap.Error(err))
+		d.l.Error("获取支持记录规则的 MonitorScrapePool 失败", zap.Error(err))
 		return nil, 0, err
 	}
 
@@ -238,18 +238,18 @@ func (s *scrapePoolDAO) GetMonitorScrapePoolSupportedRecord(ctx context.Context)
 }
 
 // CheckMonitorScrapePoolExists 检查监控采集池是否存在
-func (s *scrapePoolDAO) CheckMonitorScrapePoolExists(ctx context.Context, scrapePool *model.MonitorScrapePool) (bool, error) {
+func (d *scrapePoolDAO) CheckMonitorScrapePoolExists(ctx context.Context, scrapePool *model.MonitorScrapePool) (bool, error) {
 	if scrapePool.Name == "" {
 		return false, fmt.Errorf("scrapePool 或 name 不能为空")
 	}
 
 	var count int64
 
-	if err := s.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Model(&model.MonitorScrapePool{}).
 		Where("name = ?", scrapePool.Name).
 		Count(&count).Error; err != nil {
-		s.l.Error("检查 MonitorScrapePool 是否存在失败", zap.Error(err))
+		d.l.Error("检查 MonitorScrapePool 是否存在失败", zap.Error(err))
 		return false, err
 	}
 

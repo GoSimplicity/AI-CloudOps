@@ -58,11 +58,11 @@ func NewScrapeJobDAO(db *gorm.DB, l *zap.Logger) ScrapeJobDAO {
 }
 
 // GetMonitorScrapeJobList 获取监控采集作业列表
-func (s *scrapeJobDAO) GetMonitorScrapeJobList(ctx context.Context, req *model.GetMonitorScrapeJobListReq) ([]*model.MonitorScrapeJob, int64, error) {
+func (d *scrapeJobDAO) GetMonitorScrapeJobList(ctx context.Context, req *model.GetMonitorScrapeJobListReq) ([]*model.MonitorScrapeJob, int64, error) {
 	var jobs []*model.MonitorScrapeJob
 	var total int64
 
-	query := s.db.WithContext(ctx).Model(&model.MonitorScrapeJob{})
+	query := d.db.WithContext(ctx).Model(&model.MonitorScrapeJob{})
 
 	offset := (req.Page - 1) * req.Size
 	limit := req.Size
@@ -79,12 +79,12 @@ func (s *scrapeJobDAO) GetMonitorScrapeJobList(ctx context.Context, req *model.G
 	}
 
 	if err := query.Count(&total).Error; err != nil {
-		s.l.Error("计算监控采集作业总数失败", zap.Error(err))
+		d.l.Error("计算监控采集作业总数失败", zap.Error(err))
 		return nil, 0, err
 	}
 
 	if err := query.Offset(offset).Limit(limit).Find(&jobs).Error; err != nil {
-		s.l.Error("获取监控采集作业列表失败", zap.Error(err))
+		d.l.Error("获取监控采集作业列表失败", zap.Error(err))
 		return nil, 0, err
 	}
 
@@ -92,9 +92,9 @@ func (s *scrapeJobDAO) GetMonitorScrapeJobList(ctx context.Context, req *model.G
 }
 
 // CreateMonitorScrapeJob 创建监控采集作业
-func (s *scrapeJobDAO) CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
-	if err := s.db.WithContext(ctx).Create(monitorScrapeJob).Error; err != nil {
-		s.l.Error("创建 MonitorScrapeJob 失败", zap.Error(err))
+func (d *scrapeJobDAO) CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
+	if err := d.db.WithContext(ctx).Create(monitorScrapeJob).Error; err != nil {
+		d.l.Error("创建 MonitorScrapeJob 失败", zap.Error(err))
 		return err
 	}
 
@@ -102,19 +102,19 @@ func (s *scrapeJobDAO) CreateMonitorScrapeJob(ctx context.Context, monitorScrape
 }
 
 // GetMonitorScrapeJobsByPoolId 获取监控采集作业列表
-func (s *scrapeJobDAO) GetMonitorScrapeJobsByPoolId(ctx context.Context, poolId int) ([]*model.MonitorScrapeJob, error) {
+func (d *scrapeJobDAO) GetMonitorScrapeJobsByPoolId(ctx context.Context, poolId int) ([]*model.MonitorScrapeJob, error) {
 	if poolId <= 0 {
-		s.l.Error("GetMonitorScrapeJobsByPoolId 失败: 无效的 poolId", zap.Int("poolId", poolId))
+		d.l.Error("GetMonitorScrapeJobsByPoolId 失败: 无效的 poolId", zap.Int("poolId", poolId))
 		return nil, fmt.Errorf("无效的 poolId: %d", poolId)
 	}
 
 	var jobs []*model.MonitorScrapeJob
 
-	if err := s.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Where("enable = ?", 1).
 		Where("pool_id = ?", poolId).
 		Find(&jobs).Error; err != nil {
-		s.l.Error("获取 MonitorScrapeJob 失败", zap.Error(err), zap.Int("poolId", poolId))
+		d.l.Error("获取 MonitorScrapeJob 失败", zap.Error(err), zap.Int("poolId", poolId))
 		return nil, err
 	}
 
@@ -122,17 +122,17 @@ func (s *scrapeJobDAO) GetMonitorScrapeJobsByPoolId(ctx context.Context, poolId 
 }
 
 // UpdateMonitorScrapeJob 更新监控采集作业
-func (s *scrapeJobDAO) UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
+func (d *scrapeJobDAO) UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
 	if monitorScrapeJob.ID <= 0 {
-		s.l.Error("UpdateMonitorScrapeJob 失败: ID 无效", zap.Any("job", monitorScrapeJob))
+		d.l.Error("UpdateMonitorScrapeJob 失败: ID 无效", zap.Any("job", monitorScrapeJob))
 		return fmt.Errorf("monitorScrapeJob 的 ID 必须大于 0")
 	}
 
-	if err := s.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Model(&model.MonitorScrapeJob{}).
 		Where("id = ?", monitorScrapeJob.ID).
 		Updates(monitorScrapeJob).Error; err != nil {
-		s.l.Error("更新 MonitorScrapeJob 失败", zap.Error(err), zap.Int("id", monitorScrapeJob.ID))
+		d.l.Error("更新 MonitorScrapeJob 失败", zap.Error(err), zap.Int("id", monitorScrapeJob.ID))
 		return err
 	}
 
@@ -140,18 +140,18 @@ func (s *scrapeJobDAO) UpdateMonitorScrapeJob(ctx context.Context, monitorScrape
 }
 
 // DeleteMonitorScrapeJob 删除监控采集作业
-func (s *scrapeJobDAO) DeleteMonitorScrapeJob(ctx context.Context, jobId int) error {
+func (d *scrapeJobDAO) DeleteMonitorScrapeJob(ctx context.Context, jobId int) error {
 	if jobId <= 0 {
-		s.l.Error("DeleteMonitorScrapeJob 失败: 无效的 jobId", zap.Int("jobId", jobId))
+		d.l.Error("DeleteMonitorScrapeJob 失败: 无效的 jobId", zap.Int("jobId", jobId))
 		return fmt.Errorf("无效的 jobId: %d", jobId)
 	}
 
-	result := s.db.WithContext(ctx).
+	result := d.db.WithContext(ctx).
 		Where("id = ?", jobId).
 		Delete(&model.MonitorScrapeJob{})
 
 	if err := result.Error; err != nil {
-		s.l.Error("删除 MonitorScrapeJob 失败", zap.Error(err), zap.Int("jobId", jobId))
+		d.l.Error("删除 MonitorScrapeJob 失败", zap.Error(err), zap.Int("jobId", jobId))
 		return fmt.Errorf("删除 ID 为 %d 的 MonitorScrapeJob 失败: %w", jobId, err)
 	}
 
@@ -163,18 +163,18 @@ func (s *scrapeJobDAO) DeleteMonitorScrapeJob(ctx context.Context, jobId int) er
 }
 
 // CheckMonitorScrapeJobExists 检查监控采集作业是否存在
-func (s *scrapeJobDAO) CheckMonitorScrapeJobExists(ctx context.Context, name string) (bool, error) {
+func (d *scrapeJobDAO) CheckMonitorScrapeJobExists(ctx context.Context, name string) (bool, error) {
 	if name == "" {
 		return false, fmt.Errorf("名称不能为空")
 	}
 
 	var count int64
 
-	if err := s.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Model(&model.MonitorScrapeJob{}).
 		Where("name = ?", name).
 		Count(&count).Error; err != nil {
-		s.l.Error("检查 MonitorScrapeJob 是否存在失败", zap.Error(err))
+		d.l.Error("检查 MonitorScrapeJob 是否存在失败", zap.Error(err))
 		return false, err
 	}
 
@@ -182,21 +182,21 @@ func (s *scrapeJobDAO) CheckMonitorScrapeJobExists(ctx context.Context, name str
 }
 
 // GetMonitorScrapeJobById 获取监控采集作业
-func (s *scrapeJobDAO) GetMonitorScrapeJobById(ctx context.Context, id int) (*model.MonitorScrapeJob, error) {
+func (d *scrapeJobDAO) GetMonitorScrapeJobById(ctx context.Context, id int) (*model.MonitorScrapeJob, error) {
 	if id <= 0 {
-		s.l.Error("GetMonitorScrapeJobById 失败: 无效的 ID", zap.Int("id", id))
+		d.l.Error("GetMonitorScrapeJobById 失败: 无效的 ID", zap.Int("id", id))
 		return nil, fmt.Errorf("无效的 ID: %d", id)
 	}
 
 	var scrapeJob model.MonitorScrapeJob
 
-	if err := s.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Where("id = ?", id).
 		First(&scrapeJob).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("未找到ID为 %d 的记录", id)
 		}
-		s.l.Error("获取 MonitorScrapeJob 失败", zap.Error(err), zap.Int("id", id))
+		d.l.Error("获取 MonitorScrapeJob 失败", zap.Error(err), zap.Int("id", id))
 		return nil, err
 	}
 
@@ -204,18 +204,18 @@ func (s *scrapeJobDAO) GetMonitorScrapeJobById(ctx context.Context, id int) (*mo
 }
 
 // CheckMonitorInstanceExists 检查监控实例是否存在
-func (s *scrapeJobDAO) CheckMonitorInstanceExists(ctx context.Context, poolID int) (bool, error) {
+func (d *scrapeJobDAO) CheckMonitorInstanceExists(ctx context.Context, poolID int) (bool, error) {
 	if poolID <= 0 {
 		return false, fmt.Errorf("无效的 poolID: %d", poolID)
 	}
 
 	var count int64
 
-	if err := s.db.WithContext(ctx).
+	if err := d.db.WithContext(ctx).
 		Model(&model.MonitorScrapePool{}).
 		Where("id = ?", poolID).
 		Count(&count).Error; err != nil {
-		s.l.Error("检查监控实例是否存在失败", zap.Error(err))
+		d.l.Error("检查监控实例是否存在失败", zap.Error(err))
 		return false, err
 	}
 

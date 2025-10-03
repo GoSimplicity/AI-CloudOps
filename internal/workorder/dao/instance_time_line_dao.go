@@ -55,13 +55,13 @@ func NewInstanceTimeLineDAO(db *gorm.DB, logger *zap.Logger) WorkorderInstanceTi
 }
 
 // Create 创建时间线记录
-func (i *instanceTimeLineDAO) Create(ctx context.Context, timeline *model.WorkorderInstanceTimeline) error {
+func (d *instanceTimeLineDAO) Create(ctx context.Context, timeline *model.WorkorderInstanceTimeline) error {
 	if timeline == nil {
 		return fmt.Errorf("时间线记录不能为空")
 	}
 
-	if err := i.db.WithContext(ctx).Create(timeline).Error; err != nil {
-		i.logger.Error("创建时间线记录失败", zap.Error(err), zap.Int("instanceID", timeline.InstanceID))
+	if err := d.db.WithContext(ctx).Create(timeline).Error; err != nil {
+		d.logger.Error("创建时间线记录失败", zap.Error(err), zap.Int("instanceID", timeline.InstanceID))
 		return fmt.Errorf("创建时间线记录失败: %w", err)
 	}
 
@@ -69,13 +69,13 @@ func (i *instanceTimeLineDAO) Create(ctx context.Context, timeline *model.Workor
 }
 
 // GetByID 根据ID获取时间线记录
-func (i *instanceTimeLineDAO) GetByID(ctx context.Context, id int) (*model.WorkorderInstanceTimeline, error) {
+func (d *instanceTimeLineDAO) GetByID(ctx context.Context, id int) (*model.WorkorderInstanceTimeline, error) {
 	if id <= 0 {
 		return nil, fmt.Errorf("时间线记录ID无效")
 	}
 
 	var timeline model.WorkorderInstanceTimeline
-	err := i.db.WithContext(ctx).
+	err := d.db.WithContext(ctx).
 		Where("id = ?", id).
 		First(&timeline).Error
 
@@ -83,7 +83,7 @@ func (i *instanceTimeLineDAO) GetByID(ctx context.Context, id int) (*model.Worko
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("时间线记录不存在")
 		}
-		i.logger.Error("获取时间线记录失败", zap.Error(err), zap.Int("id", id))
+		d.logger.Error("获取时间线记录失败", zap.Error(err), zap.Int("id", id))
 		return nil, fmt.Errorf("获取时间线记录失败: %w", err)
 	}
 
@@ -91,19 +91,19 @@ func (i *instanceTimeLineDAO) GetByID(ctx context.Context, id int) (*model.Worko
 }
 
 // GetByInstanceID 根据工单ID获取时间线记录列表
-func (i *instanceTimeLineDAO) GetByInstanceID(ctx context.Context, instanceID int) ([]*model.WorkorderInstanceTimeline, error) {
+func (d *instanceTimeLineDAO) GetByInstanceID(ctx context.Context, instanceID int) ([]*model.WorkorderInstanceTimeline, error) {
 	if instanceID <= 0 {
 		return nil, fmt.Errorf("工单ID无效")
 	}
 
 	var timelines []*model.WorkorderInstanceTimeline
-	err := i.db.WithContext(ctx).
+	err := d.db.WithContext(ctx).
 		Where("instance_id = ?", instanceID).
 		Order("created_at DESC").
 		Find(&timelines).Error
 
 	if err != nil {
-		i.logger.Error("获取工单时间线记录失败", zap.Error(err), zap.Int("instanceID", instanceID))
+		d.logger.Error("获取工单时间线记录失败", zap.Error(err), zap.Int("instanceID", instanceID))
 		return nil, fmt.Errorf("获取工单时间线记录失败: %w", err)
 	}
 
@@ -111,13 +111,13 @@ func (i *instanceTimeLineDAO) GetByInstanceID(ctx context.Context, instanceID in
 }
 
 // List 获取时间线记录列表
-func (i *instanceTimeLineDAO) List(ctx context.Context, req *model.ListWorkorderInstanceTimelineReq) ([]*model.WorkorderInstanceTimeline, int64, error) {
+func (d *instanceTimeLineDAO) List(ctx context.Context, req *model.ListWorkorderInstanceTimelineReq) ([]*model.WorkorderInstanceTimeline, int64, error) {
 	var timelines []*model.WorkorderInstanceTimeline
 	var total int64
 
 	req.Page, req.Size = ValidatePagination(req.Page, req.Size)
 
-	db := i.db.WithContext(ctx).Model(&model.WorkorderInstanceTimeline{})
+	db := d.db.WithContext(ctx).Model(&model.WorkorderInstanceTimeline{})
 
 	// 构建查询条件
 	if req.InstanceID != nil {
@@ -139,7 +139,7 @@ func (i *instanceTimeLineDAO) List(ctx context.Context, req *model.ListWorkorder
 
 	// 获取总数
 	if err := db.Count(&total).Error; err != nil {
-		i.logger.Error("获取时间线记录总数失败", zap.Error(err))
+		d.logger.Error("获取时间线记录总数失败", zap.Error(err))
 		return nil, 0, fmt.Errorf("获取时间线记录总数失败: %w", err)
 	}
 
@@ -151,7 +151,7 @@ func (i *instanceTimeLineDAO) List(ctx context.Context, req *model.ListWorkorder
 		Find(&timelines).Error
 
 	if err != nil {
-		i.logger.Error("获取时间线记录列表失败", zap.Error(err))
+		d.logger.Error("获取时间线记录列表失败", zap.Error(err))
 		return nil, 0, fmt.Errorf("获取时间线记录列表失败: %w", err)
 	}
 
@@ -159,12 +159,12 @@ func (i *instanceTimeLineDAO) List(ctx context.Context, req *model.ListWorkorder
 }
 
 // UpdateInstanceTimeLine 更新时间线记录
-func (i *instanceTimeLineDAO) UpdateInstanceTimeLine(ctx context.Context, timeline *model.WorkorderInstanceTimeline) error {
+func (d *instanceTimeLineDAO) UpdateInstanceTimeLine(ctx context.Context, timeline *model.WorkorderInstanceTimeline) error {
 	if timeline == nil || timeline.ID <= 0 {
 		return fmt.Errorf("时间线记录ID无效")
 	}
 
-	result := i.db.WithContext(ctx).
+	result := d.db.WithContext(ctx).
 		Model(&model.WorkorderInstanceTimeline{}).
 		Where("id = ?", timeline.ID).
 		Updates(map[string]any{
@@ -172,7 +172,7 @@ func (i *instanceTimeLineDAO) UpdateInstanceTimeLine(ctx context.Context, timeli
 		})
 
 	if result.Error != nil {
-		i.logger.Error("更新时间线记录失败", zap.Error(result.Error), zap.Int("id", timeline.ID))
+		d.logger.Error("更新时间线记录失败", zap.Error(result.Error), zap.Int("id", timeline.ID))
 		return fmt.Errorf("更新时间线记录失败: %w", result.Error)
 	}
 
@@ -184,14 +184,14 @@ func (i *instanceTimeLineDAO) UpdateInstanceTimeLine(ctx context.Context, timeli
 }
 
 // DeleteInstanceTimeLine 删除时间线记录
-func (i *instanceTimeLineDAO) DeleteInstanceTimeLine(ctx context.Context, id int) error {
+func (d *instanceTimeLineDAO) DeleteInstanceTimeLine(ctx context.Context, id int) error {
 	if id <= 0 {
 		return fmt.Errorf("时间线记录ID无效")
 	}
 
-	result := i.db.WithContext(ctx).Delete(&model.WorkorderInstanceTimeline{}, id)
+	result := d.db.WithContext(ctx).Delete(&model.WorkorderInstanceTimeline{}, id)
 	if result.Error != nil {
-		i.logger.Error("删除时间线记录失败", zap.Error(result.Error), zap.Int("id", id))
+		d.logger.Error("删除时间线记录失败", zap.Error(result.Error), zap.Int("id", id))
 		return fmt.Errorf("删除时间线记录失败: %w", result.Error)
 	}
 
@@ -203,13 +203,13 @@ func (i *instanceTimeLineDAO) DeleteInstanceTimeLine(ctx context.Context, id int
 }
 
 // GetInstanceTimeLine 获取时间线记录详情
-func (i *instanceTimeLineDAO) GetInstanceTimeLine(ctx context.Context, id int) (*model.WorkorderInstanceTimeline, error) {
+func (d *instanceTimeLineDAO) GetInstanceTimeLine(ctx context.Context, id int) (*model.WorkorderInstanceTimeline, error) {
 	if id <= 0 {
 		return nil, fmt.Errorf("时间线记录ID无效")
 	}
 
 	var timeline model.WorkorderInstanceTimeline
-	err := i.db.WithContext(ctx).
+	err := d.db.WithContext(ctx).
 		Where("id = ?", id).
 		First(&timeline).Error
 
@@ -217,7 +217,7 @@ func (i *instanceTimeLineDAO) GetInstanceTimeLine(ctx context.Context, id int) (
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("时间线记录不存在")
 		}
-		i.logger.Error("获取时间线记录失败", zap.Error(err), zap.Int("id", id))
+		d.logger.Error("获取时间线记录失败", zap.Error(err), zap.Int("id", id))
 		return nil, fmt.Errorf("获取时间线记录失败: %w", err)
 	}
 
@@ -225,13 +225,13 @@ func (i *instanceTimeLineDAO) GetInstanceTimeLine(ctx context.Context, id int) (
 }
 
 // ListInstanceTimeLine 获取时间线记录列表
-func (i *instanceTimeLineDAO) ListInstanceTimeLine(ctx context.Context, req *model.ListWorkorderInstanceTimelineReq) ([]*model.WorkorderInstanceTimeline, int64, error) {
+func (d *instanceTimeLineDAO) ListInstanceTimeLine(ctx context.Context, req *model.ListWorkorderInstanceTimelineReq) ([]*model.WorkorderInstanceTimeline, int64, error) {
 	var timelines []*model.WorkorderInstanceTimeline
 	var total int64
 
 	req.Page, req.Size = ValidatePagination(req.Page, req.Size)
 
-	db := i.db.WithContext(ctx).Model(&model.WorkorderInstanceTimeline{})
+	db := d.db.WithContext(ctx).Model(&model.WorkorderInstanceTimeline{})
 
 	// 构建查询条件
 	if req.InstanceID != nil {
@@ -253,7 +253,7 @@ func (i *instanceTimeLineDAO) ListInstanceTimeLine(ctx context.Context, req *mod
 
 	// 获取总数
 	if err := db.Count(&total).Error; err != nil {
-		i.logger.Error("获取时间线记录总数失败", zap.Error(err))
+		d.logger.Error("获取时间线记录总数失败", zap.Error(err))
 		return nil, 0, fmt.Errorf("获取时间线记录总数失败: %w", err)
 	}
 
@@ -265,7 +265,7 @@ func (i *instanceTimeLineDAO) ListInstanceTimeLine(ctx context.Context, req *mod
 		Find(&timelines).Error
 
 	if err != nil {
-		i.logger.Error("获取时间线记录列表失败", zap.Error(err))
+		d.logger.Error("获取时间线记录列表失败", zap.Error(err))
 		return nil, 0, fmt.Errorf("获取时间线记录列表失败: %w", err)
 	}
 

@@ -145,7 +145,7 @@ type UpdateStatefulSetReq struct {
 	ClusterID   int               `json:"cluster_id"`   // 集群ID
 	Name        string            `json:"name"`         // StatefulSet名称
 	Namespace   string            `json:"namespace"`    // 命名空间
-	Replicas    int32             `json:"replicas"`     // 副本数量
+	Replicas    *int32            `json:"replicas"`     // 副本数量
 	ServiceName string            `json:"service_name"` // 服务名称
 	Images      []string          `json:"images"`       // 容器镜像列表
 	Labels      map[string]string `json:"labels"`       // 标签

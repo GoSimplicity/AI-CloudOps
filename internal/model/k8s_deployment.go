@@ -135,7 +135,7 @@ type UpdateDeploymentReq struct {
 	ClusterID   int               `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
 	Name        string            `json:"name" form:"name" binding:"required" comment:"Deployment名称"`     // Deployment名称
 	Namespace   string            `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
-	Replicas    int32             `json:"replicas" comment:"副本数量"`                                        // 副本数量
+	Replicas    *int32            `json:"replicas" comment:"副本数量"`                                        // 副本数量
 	Images      []string          `json:"images" comment:"容器镜像列表"`                                        // 容器镜像列表
 	Labels      map[string]string `json:"labels" comment:"标签"`                                            // 标签
 	Annotations map[string]string `json:"annotations" comment:"注解"`                                       // 注解

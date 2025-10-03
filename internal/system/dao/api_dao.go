@@ -57,7 +57,7 @@ func NewApiDAO(db *gorm.DB, l *zap.Logger) ApiDAO {
 }
 
 // CreateApi 创建新的API记录
-func (a *apiDAO) CreateApi(ctx context.Context, api *model.Api) error {
+func (d *apiDAO) CreateApi(ctx context.Context, api *model.Api) error {
 	if api == nil {
 		return errors.New("API对象不能为空")
 	}
@@ -76,24 +76,24 @@ func (a *apiDAO) CreateApi(ctx context.Context, api *model.Api) error {
 
 	// 检查API名称是否已存在
 	var count int64
-	if err := a.db.WithContext(ctx).Model(&model.Api{}).Where("name = ? AND deleted_at = ?", api.Name, 0).Count(&count).Error; err != nil {
+	if err := d.db.WithContext(ctx).Model(&model.Api{}).Where("name = ? AND deleted_at = ?", api.Name, 0).Count(&count).Error; err != nil {
 		return fmt.Errorf("检查API名称失败: %v", err)
 	}
 	if count > 0 {
 		return errors.New("API名称已存在")
 	}
 
-	return a.db.WithContext(ctx).Create(api).Error
+	return d.db.WithContext(ctx).Create(api).Error
 }
 
 // GetApiById 根据ID获取API记录
-func (a *apiDAO) GetApiById(ctx context.Context, id int) (*model.Api, error) {
+func (d *apiDAO) GetApiById(ctx context.Context, id int) (*model.Api, error) {
 	if id <= 0 {
 		return nil, errors.New("无效的API ID")
 	}
 
 	var api model.Api
-	if err := a.db.WithContext(ctx).Where("id = ?", id).First(&api).Error; err != nil {
+	if err := d.db.WithContext(ctx).Where("id = ?", id).First(&api).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
@@ -104,7 +104,7 @@ func (a *apiDAO) GetApiById(ctx context.Context, id int) (*model.Api, error) {
 }
 
 // UpdateApi 更新API记录
-func (a *apiDAO) UpdateApi(ctx context.Context, api *model.Api) error {
+func (d *apiDAO) UpdateApi(ctx context.Context, api *model.Api) error {
 	if api == nil {
 		return errors.New("API对象不能为空")
 	}
@@ -126,7 +126,7 @@ func (a *apiDAO) UpdateApi(ctx context.Context, api *model.Api) error {
 	}
 
 	// 获取旧的API记录
-	oldApi, err := a.GetApiById(ctx, api.ID)
+	oldApi, err := d.GetApiById(ctx, api.ID)
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func (a *apiDAO) UpdateApi(ctx context.Context, api *model.Api) error {
 	// 检查API名称是否已被其他记录使用
 	if oldApi.Name != api.Name {
 		var count int64
-		if err := a.db.WithContext(ctx).Model(&model.Api{}).Where("name = ? AND id != ?", api.Name, api.ID).Count(&count).Error; err != nil {
+		if err := d.db.WithContext(ctx).Model(&model.Api{}).Where("name = ? AND id != ?", api.Name, api.ID).Count(&count).Error; err != nil {
 			return fmt.Errorf("检查API名称失败: %v", err)
 		}
 		if count > 0 {
@@ -157,7 +157,7 @@ func (a *apiDAO) UpdateApi(ctx context.Context, api *model.Api) error {
 	}
 
 	// 开启事务
-	tx := a.db.WithContext(ctx).Begin()
+	tx := d.db.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		return tx.Error
 	}
@@ -174,13 +174,13 @@ func (a *apiDAO) UpdateApi(ctx context.Context, api *model.Api) error {
 }
 
 // DeleteApi 软删除API记录
-func (a *apiDAO) DeleteApi(ctx context.Context, id int) error {
+func (d *apiDAO) DeleteApi(ctx context.Context, id int) error {
 	if id <= 0 {
 		return errors.New("无效的API ID")
 	}
 
 	// 检查API是否存在
-	api, err := a.GetApiById(ctx, id)
+	api, err := d.GetApiById(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -190,14 +190,14 @@ func (a *apiDAO) DeleteApi(ctx context.Context, id int) error {
 
 	// 检查API是否被角色使用
 	var count int64
-	if err := a.db.WithContext(ctx).Table("cl_system_role_apis").Where("api_id = ?", id).Count(&count).Error; err != nil {
+	if err := d.db.WithContext(ctx).Table("cl_system_role_apis").Where("api_id = ?", id).Count(&count).Error; err != nil {
 		return fmt.Errorf("检查API使用情况失败: %v", err)
 	}
 	if count > 0 {
 		return errors.New("该API已被角色使用，无法删除")
 	}
 
-	result := a.db.WithContext(ctx).Model(&model.Api{}).Where("id = ?", id).Delete(&model.Api{})
+	result := d.db.WithContext(ctx).Model(&model.Api{}).Where("id = ?", id).Delete(&model.Api{})
 	if result.Error != nil {
 		return fmt.Errorf("删除API失败: %v", result.Error)
 	}
@@ -210,7 +210,7 @@ func (a *apiDAO) DeleteApi(ctx context.Context, id int) error {
 }
 
 // ListApis 分页获取API列表
-func (a *apiDAO) ListApis(ctx context.Context, page, size int, search string, isPublic int, method int) ([]*model.Api, int64, error) {
+func (d *apiDAO) ListApis(ctx context.Context, page, size int, search string, isPublic int, method int) ([]*model.Api, int64, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -218,7 +218,7 @@ func (a *apiDAO) ListApis(ctx context.Context, page, size int, search string, is
 		size = 10
 	}
 
-	query := a.db.WithContext(ctx).Model(&model.Api{})
+	query := d.db.WithContext(ctx).Model(&model.Api{})
 	if search != "" {
 		query = query.Where("name LIKE ? OR path LIKE ?", "%"+search+"%", "%"+search+"%")
 	}
@@ -248,14 +248,14 @@ func (a *apiDAO) ListApis(ctx context.Context, page, size int, search string, is
 	return apis, total, nil
 }
 
-func (a *apiDAO) GetApiStatistics(ctx context.Context) (*model.ApiStatistics, error) {
+func (d *apiDAO) GetApiStatistics(ctx context.Context) (*model.ApiStatistics, error) {
 	var statistics model.ApiStatistics
 
-	if err := a.db.WithContext(ctx).Model(&model.Api{}).Where("is_public = ?", 1).Count(&statistics.PublicCount).Error; err != nil {
+	if err := d.db.WithContext(ctx).Model(&model.Api{}).Where("is_public = ?", 1).Count(&statistics.PublicCount).Error; err != nil {
 		return nil, fmt.Errorf("获取公开API数量失败: %v", err)
 	}
 
-	if err := a.db.WithContext(ctx).Model(&model.Api{}).Where("is_public = ?", 2).Count(&statistics.PrivateCount).Error; err != nil {
+	if err := d.db.WithContext(ctx).Model(&model.Api{}).Where("is_public = ?", 2).Count(&statistics.PrivateCount).Error; err != nil {
 		return nil, fmt.Errorf("获取私有API数量失败: %v", err)
 	}
 

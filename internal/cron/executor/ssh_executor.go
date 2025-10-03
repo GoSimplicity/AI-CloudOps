@@ -52,13 +52,13 @@ func NewSSHExecutor(logger *zap.Logger, treeLocalDAO dao.TreeLocalDAO) *SSHExecu
 }
 
 // ExecuteSSHJob 执行SSH任务
-func (e *SSHExecutor) ExecuteSSHJob(ctx context.Context, job *model.CronJob) (string, error) {
+func (s *SSHExecutor) ExecuteSSHJob(ctx context.Context, job *model.CronJob) (string, error) {
 	resourceID := 0
 	if job.SSHResourceID != nil {
 		resourceID = *job.SSHResourceID
 	}
 
-	e.logger.Info("开始执行SSH任务",
+	s.logger.Info("开始执行SSH任务",
 		zap.String("任务名称", job.Name),
 		zap.Int("资源ID", resourceID))
 
@@ -76,9 +76,9 @@ func (e *SSHExecutor) ExecuteSSHJob(ctx context.Context, job *model.CronJob) (st
 	}
 
 	// 获取SSH资源信息
-	resource, err := e.treeLocalDAO.GetByID(ctx, *job.SSHResourceID)
+	resource, err := s.treeLocalDAO.GetByID(ctx, *job.SSHResourceID)
 	if err != nil {
-		e.logger.Error("获取SSH资源失败",
+		s.logger.Error("获取SSH资源失败",
 			zap.Int("资源ID", *job.SSHResourceID),
 			zap.Error(err))
 		return "", fmt.Errorf("获取SSH资源失败: %w", err)
@@ -94,10 +94,10 @@ func (e *SSHExecutor) ExecuteSSHJob(ctx context.Context, job *model.CronJob) (st
 	}
 
 	// 创建SSH连接
-	sshClient := ssh.NewSSH(e.logger)
+	sshClient := ssh.NewSSH(s.logger)
 	defer func() {
 		if closeErr := sshClient.Close(); closeErr != nil {
-			e.logger.Error("关闭SSH连接失败", zap.Error(closeErr))
+			s.logger.Error("关闭SSH连接失败", zap.Error(closeErr))
 		}
 	}()
 
@@ -119,7 +119,7 @@ func (e *SSHExecutor) ExecuteSSHJob(ctx context.Context, job *model.CronJob) (st
 		0, // 系统任务使用用户ID 0
 	)
 	if err != nil {
-		e.logger.Error("SSH连接失败",
+		s.logger.Error("SSH连接失败",
 			zap.String("地址", resource.IpAddr),
 			zap.Int("端口", resource.Port),
 			zap.String("用户名", resource.Username),
@@ -127,10 +127,10 @@ func (e *SSHExecutor) ExecuteSSHJob(ctx context.Context, job *model.CronJob) (st
 		return "", fmt.Errorf("SSH连接失败: %w", err)
 	}
 
-	e.logger.Info("SSH连接成功", zap.String("地址", resource.IpAddr))
+	s.logger.Info("SSH连接成功", zap.String("地址", resource.IpAddr))
 
 	// 构建执行命令
-	command := e.buildSSHCommand(job)
+	command := s.buildSSHCommand(job)
 
 	// 设置超时控制
 	cmdCtx, cancel := context.WithTimeout(ctx, time.Duration(job.Timeout)*time.Second)
@@ -154,12 +154,12 @@ func (e *SSHExecutor) ExecuteSSHJob(ctx context.Context, job *model.CronJob) (st
 	case <-cmdCtx.Done():
 		return "", fmt.Errorf("SSH命令执行超时: %d秒", job.Timeout)
 	case err := <-errorCh:
-		e.logger.Error("SSH命令执行失败",
+		s.logger.Error("SSH命令执行失败",
 			zap.String("命令", command),
 			zap.Error(err))
 		return "", fmt.Errorf("SSH命令执行失败: %w", err)
 	case output := <-resultCh:
-		e.logger.Info("SSH命令执行成功",
+		s.logger.Info("SSH命令执行成功",
 			zap.String("命令", command),
 			zap.String("输出长度", fmt.Sprintf("%d字符", len(output))))
 		return output, nil
@@ -167,7 +167,7 @@ func (e *SSHExecutor) ExecuteSSHJob(ctx context.Context, job *model.CronJob) (st
 }
 
 // buildSSHCommand 构建SSH执行命令
-func (e *SSHExecutor) buildSSHCommand(job *model.CronJob) string {
+func (s *SSHExecutor) buildSSHCommand(job *model.CronJob) string {
 	var commandParts []string
 
 	// 设置工作目录

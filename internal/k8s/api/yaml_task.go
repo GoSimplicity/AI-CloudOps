@@ -42,19 +42,19 @@ func NewK8sYamlTaskHandler(yamlTaskService service.YamlTaskService) *K8sYamlTask
 	}
 }
 
-func (k *K8sYamlTaskHandler) RegisterRouters(server *gin.Engine) {
+func (h *K8sYamlTaskHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/yaml_task/:cluster_id/list", k.GetYamlTaskList)         // 获取 YAML 任务列表
-		k8sGroup.POST("/yaml_task/:cluster_id/create", k.CreateYamlTask)       // 创建新的 YAML 任务
-		k8sGroup.POST("/yaml_task/:cluster_id/:id/update", k.UpdateYamlTask)   // 更新指定 ID 的 YAML 任务
-		k8sGroup.POST("/yaml_task/:cluster_id/:id/apply", k.ApplyYamlTask)     // 应用指定 ID 的 YAML 任务
-		k8sGroup.DELETE("/yaml_task/:cluster_id/:id/delete", k.DeleteYamlTask) // 删除指定 ID 的 YAML 任务
+		k8sGroup.GET("/yaml_task/:cluster_id/list", h.GetYamlTaskList)         // 获取 YAML 任务列表
+		k8sGroup.POST("/yaml_task/:cluster_id/create", h.CreateYamlTask)       // 创建新的 YAML 任务
+		k8sGroup.POST("/yaml_task/:cluster_id/:id/update", h.UpdateYamlTask)   // 更新指定 ID 的 YAML 任务
+		k8sGroup.POST("/yaml_task/:cluster_id/:id/apply", h.ApplyYamlTask)     // 应用指定 ID 的 YAML 任务
+		k8sGroup.DELETE("/yaml_task/:cluster_id/:id/delete", h.DeleteYamlTask) // 删除指定 ID 的 YAML 任务
 	}
 }
 
 // GetYamlTaskList 获取 YAML 任务列表
-func (k *K8sYamlTaskHandler) GetYamlTaskList(ctx *gin.Context) {
+func (h *K8sYamlTaskHandler) GetYamlTaskList(ctx *gin.Context) {
 	var req model.YamlTaskListReq
 
 	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -66,12 +66,12 @@ func (k *K8sYamlTaskHandler) GetYamlTaskList(ctx *gin.Context) {
 	req.ClusterID = clusterId
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.yamlTaskService.GetYamlTaskList(ctx, &req)
+		return h.yamlTaskService.GetYamlTaskList(ctx, &req)
 	})
 }
 
 // CreateYamlTask 创建新的 YAML 任务
-func (k *K8sYamlTaskHandler) CreateYamlTask(ctx *gin.Context) {
+func (h *K8sYamlTaskHandler) CreateYamlTask(ctx *gin.Context) {
 	var req model.YamlTaskCreateReq
 
 	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -85,12 +85,12 @@ func (k *K8sYamlTaskHandler) CreateYamlTask(ctx *gin.Context) {
 	req.ClusterID = clusterId
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.yamlTaskService.CreateYamlTask(ctx, &req)
+		return nil, h.yamlTaskService.CreateYamlTask(ctx, &req)
 	})
 }
 
 // UpdateYamlTask 更新指定 ID 的 YAML 任务
-func (k *K8sYamlTaskHandler) UpdateYamlTask(ctx *gin.Context) {
+func (h *K8sYamlTaskHandler) UpdateYamlTask(ctx *gin.Context) {
 	var req model.YamlTaskUpdateReq
 
 	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -111,12 +111,12 @@ func (k *K8sYamlTaskHandler) UpdateYamlTask(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.yamlTaskService.UpdateYamlTask(ctx, &req)
+		return nil, h.yamlTaskService.UpdateYamlTask(ctx, &req)
 	})
 }
 
 // ApplyYamlTask 应用指定 ID 的 YAML 任务
-func (k *K8sYamlTaskHandler) ApplyYamlTask(ctx *gin.Context) {
+func (h *K8sYamlTaskHandler) ApplyYamlTask(ctx *gin.Context) {
 	var req model.YamlTaskExecuteReq
 
 	id, err := utils.GetParamID(ctx)
@@ -135,12 +135,12 @@ func (k *K8sYamlTaskHandler) ApplyYamlTask(ctx *gin.Context) {
 	req.ClusterID = clusterId
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.yamlTaskService.ApplyYamlTask(ctx, &req)
+		return nil, h.yamlTaskService.ApplyYamlTask(ctx, &req)
 	})
 }
 
 // DeleteYamlTask 删除指定 ID 的 YAML 任务
-func (k *K8sYamlTaskHandler) DeleteYamlTask(ctx *gin.Context) {
+func (h *K8sYamlTaskHandler) DeleteYamlTask(ctx *gin.Context) {
 	var req model.YamlTaskDeleteReq
 
 	id, err := utils.GetParamID(ctx)
@@ -159,6 +159,6 @@ func (k *K8sYamlTaskHandler) DeleteYamlTask(ctx *gin.Context) {
 	req.ClusterID = clusterId
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.yamlTaskService.DeleteYamlTask(ctx, &req)
+		return nil, h.yamlTaskService.DeleteYamlTask(ctx, &req)
 	})
 }

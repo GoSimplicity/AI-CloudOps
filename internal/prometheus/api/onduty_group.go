@@ -42,32 +42,32 @@ func NewOnDutyGroupHandler(alertOnDutyService alert.AlertManagerOnDutyService) *
 	}
 }
 
-func (o *OnDutyGroupHandler) RegisterRouters(server *gin.Engine) {
+func (h *OnDutyGroupHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
 	{
-		monitorGroup.GET("/onduty_groups/list", o.GetMonitorOnDutyGroupList)
-		monitorGroup.POST("/onduty_groups/create", o.CreateMonitorOnDutyGroup)
-		monitorGroup.POST("/onduty_groups/changes", o.CreateMonitorOnDutyGroupChange)
-		monitorGroup.GET("/onduty_groups/changes/:id", o.GetMonitorOnDutyGroupChangeList)
-		monitorGroup.PUT("/onduty_groups/update/:id", o.UpdateMonitorOnDutyGroup)
-		monitorGroup.DELETE("/onduty_groups/delete/:id", o.DeleteMonitorOnDutyGroup)
-		monitorGroup.GET("/onduty_groups/detail/:id", o.GetMonitorOnDutyGroup)
-		monitorGroup.GET("/onduty_groups/future_plan/:id", o.GetMonitorOnDutyGroupFuturePlan)
-		monitorGroup.GET("/onduty_groups/history/:id", o.GetMonitorOnDutyHistory)
+		monitorGroup.GET("/onduty_groups/list", h.GetMonitorOnDutyGroupList)
+		monitorGroup.POST("/onduty_groups/create", h.CreateMonitorOnDutyGroup)
+		monitorGroup.POST("/onduty_groups/changes", h.CreateMonitorOnDutyGroupChange)
+		monitorGroup.GET("/onduty_groups/changes/:id", h.GetMonitorOnDutyGroupChangeList)
+		monitorGroup.PUT("/onduty_groups/update/:id", h.UpdateMonitorOnDutyGroup)
+		monitorGroup.DELETE("/onduty_groups/delete/:id", h.DeleteMonitorOnDutyGroup)
+		monitorGroup.GET("/onduty_groups/detail/:id", h.GetMonitorOnDutyGroup)
+		monitorGroup.GET("/onduty_groups/future_plan/:id", h.GetMonitorOnDutyGroupFuturePlan)
+		monitorGroup.GET("/onduty_groups/history/:id", h.GetMonitorOnDutyHistory)
 	}
 }
 
 // GetMonitorOnDutyGroupList 获取值班组列表
-func (o *OnDutyGroupHandler) GetMonitorOnDutyGroupList(ctx *gin.Context) {
+func (h *OnDutyGroupHandler) GetMonitorOnDutyGroupList(ctx *gin.Context) {
 	var req model.GetMonitorOnDutyGroupListReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return o.alertOnDutyService.GetMonitorOnDutyGroupList(ctx, &req)
+		return h.alertOnDutyService.GetMonitorOnDutyGroupList(ctx, &req)
 	})
 }
 
 // CreateMonitorOnDutyGroup 创建新的值班组
-func (o *OnDutyGroupHandler) CreateMonitorOnDutyGroup(ctx *gin.Context) {
+func (h *OnDutyGroupHandler) CreateMonitorOnDutyGroup(ctx *gin.Context) {
 	var req model.CreateMonitorOnDutyGroupReq
 
 	uc := ctx.MustGet("user").(utils.UserClaims)
@@ -75,12 +75,12 @@ func (o *OnDutyGroupHandler) CreateMonitorOnDutyGroup(ctx *gin.Context) {
 	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, o.alertOnDutyService.CreateMonitorOnDutyGroup(ctx, &req)
+		return nil, h.alertOnDutyService.CreateMonitorOnDutyGroup(ctx, &req)
 	})
 }
 
 // CreateMonitorOnDutyGroupChange 创建值班组的换班记录
-func (o *OnDutyGroupHandler) CreateMonitorOnDutyGroupChange(ctx *gin.Context) {
+func (h *OnDutyGroupHandler) CreateMonitorOnDutyGroupChange(ctx *gin.Context) {
 	var req model.CreateMonitorOnDutyGroupChangeReq
 
 	uc := ctx.MustGet("user").(utils.UserClaims)
@@ -88,12 +88,12 @@ func (o *OnDutyGroupHandler) CreateMonitorOnDutyGroupChange(ctx *gin.Context) {
 	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, o.alertOnDutyService.CreateMonitorOnDutyGroupChange(ctx, &req)
+		return nil, h.alertOnDutyService.CreateMonitorOnDutyGroupChange(ctx, &req)
 	})
 }
 
 // UpdateMonitorOnDutyGroup 更新值班组信息
-func (o *OnDutyGroupHandler) UpdateMonitorOnDutyGroup(ctx *gin.Context) {
+func (h *OnDutyGroupHandler) UpdateMonitorOnDutyGroup(ctx *gin.Context) {
 	var req model.UpdateMonitorOnDutyGroupReq
 
 	id, err := utils.GetParamID(ctx)
@@ -105,12 +105,12 @@ func (o *OnDutyGroupHandler) UpdateMonitorOnDutyGroup(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, o.alertOnDutyService.UpdateMonitorOnDutyGroup(ctx, &req)
+		return nil, h.alertOnDutyService.UpdateMonitorOnDutyGroup(ctx, &req)
 	})
 }
 
 // DeleteMonitorOnDutyGroup 删除指定的值班组
-func (o *OnDutyGroupHandler) DeleteMonitorOnDutyGroup(ctx *gin.Context) {
+func (h *OnDutyGroupHandler) DeleteMonitorOnDutyGroup(ctx *gin.Context) {
 	var req model.DeleteMonitorOnDutyGroupReq
 
 	id, err := utils.GetParamID(ctx)
@@ -122,12 +122,12 @@ func (o *OnDutyGroupHandler) DeleteMonitorOnDutyGroup(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, o.alertOnDutyService.DeleteMonitorOnDutyGroup(ctx, &req)
+		return nil, h.alertOnDutyService.DeleteMonitorOnDutyGroup(ctx, &req)
 	})
 }
 
 // GetMonitorOnDutyGroup 获取指定的值班组信息
-func (o *OnDutyGroupHandler) GetMonitorOnDutyGroup(ctx *gin.Context) {
+func (h *OnDutyGroupHandler) GetMonitorOnDutyGroup(ctx *gin.Context) {
 	var req model.GetMonitorOnDutyGroupReq
 
 	id, err := utils.GetParamID(ctx)
@@ -139,12 +139,12 @@ func (o *OnDutyGroupHandler) GetMonitorOnDutyGroup(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return o.alertOnDutyService.GetMonitorOnDutyGroup(ctx, &req)
+		return h.alertOnDutyService.GetMonitorOnDutyGroup(ctx, &req)
 	})
 }
 
 // GetMonitorOnDutyGroupFuturePlan 获取指定值班组的未来值班计划
-func (o *OnDutyGroupHandler) GetMonitorOnDutyGroupFuturePlan(ctx *gin.Context) {
+func (h *OnDutyGroupHandler) GetMonitorOnDutyGroupFuturePlan(ctx *gin.Context) {
 	var req model.GetMonitorOnDutyGroupFuturePlanReq
 
 	id, err := utils.GetParamID(ctx)
@@ -156,12 +156,12 @@ func (o *OnDutyGroupHandler) GetMonitorOnDutyGroupFuturePlan(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return o.alertOnDutyService.GetMonitorOnDutyGroupFuturePlan(ctx, &req)
+		return h.alertOnDutyService.GetMonitorOnDutyGroupFuturePlan(ctx, &req)
 	})
 }
 
 // GetMonitorOnDutyHistory 获取值班历史记录
-func (o *OnDutyGroupHandler) GetMonitorOnDutyHistory(ctx *gin.Context) {
+func (h *OnDutyGroupHandler) GetMonitorOnDutyHistory(ctx *gin.Context) {
 	var req model.GetMonitorOnDutyHistoryReq
 
 	id, err := utils.GetParamID(ctx)
@@ -173,12 +173,12 @@ func (o *OnDutyGroupHandler) GetMonitorOnDutyHistory(ctx *gin.Context) {
 	req.OnDutyGroupID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return o.alertOnDutyService.GetMonitorOnDutyHistory(ctx, &req)
+		return h.alertOnDutyService.GetMonitorOnDutyHistory(ctx, &req)
 	})
 }
 
 // GetMonitorOnDutyGroupChangeList 获取值班组换班记录列表
-func (o *OnDutyGroupHandler) GetMonitorOnDutyGroupChangeList(ctx *gin.Context) {
+func (h *OnDutyGroupHandler) GetMonitorOnDutyGroupChangeList(ctx *gin.Context) {
 	var req model.GetMonitorOnDutyGroupChangeListReq
 
 	id, err := utils.GetParamID(ctx)
@@ -190,6 +190,6 @@ func (o *OnDutyGroupHandler) GetMonitorOnDutyGroupChangeList(ctx *gin.Context) {
 	req.OnDutyGroupID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return o.alertOnDutyService.GetMonitorOnDutyGroupChangeList(ctx, &req)
+		return h.alertOnDutyService.GetMonitorOnDutyGroupChangeList(ctx, &req)
 	})
 }

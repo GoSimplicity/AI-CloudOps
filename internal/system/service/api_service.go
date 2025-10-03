@@ -56,55 +56,55 @@ func NewApiService(l *zap.Logger, dao dao.ApiDAO) ApiService {
 }
 
 // CreateApi 创建新的API
-func (a *apiService) CreateApi(ctx context.Context, req *model.CreateApiRequest) error {
+func (s *apiService) CreateApi(ctx context.Context, req *model.CreateApiRequest) error {
 	if req == nil {
-		a.l.Warn("API不能为空")
+		s.l.Warn("API不能为空")
 		return errors.New("api不能为空")
 	}
 
-	return a.dao.CreateApi(ctx, a.buildCreateApi(req))
+	return s.dao.CreateApi(ctx, s.buildCreateApi(req))
 }
 
 // GetApiById 根据ID获取API
-func (a *apiService) GetApiById(ctx context.Context, id int) (*model.Api, error) {
+func (s *apiService) GetApiById(ctx context.Context, id int) (*model.Api, error) {
 	if id <= 0 {
-		a.l.Warn("API ID无效", zap.Int("ID", id))
+		s.l.Warn("API ID无效", zap.Int("ID", id))
 		return nil, errors.New("api id无效")
 	}
 
-	return a.dao.GetApiById(ctx, id)
+	return s.dao.GetApiById(ctx, id)
 }
 
 // UpdateApi 更新API信息
-func (a *apiService) UpdateApi(ctx context.Context, req *model.UpdateApiRequest) error {
+func (s *apiService) UpdateApi(ctx context.Context, req *model.UpdateApiRequest) error {
 	if req == nil {
-		a.l.Warn("API不能为空")
+		s.l.Warn("API不能为空")
 		return errors.New("api不能为空")
 	}
 
-	return a.dao.UpdateApi(ctx, a.buildUpdateApi(req))
+	return s.dao.UpdateApi(ctx, s.buildUpdateApi(req))
 }
 
 // DeleteApi 删除指定ID的API
-func (a *apiService) DeleteApi(ctx context.Context, id int) error {
+func (s *apiService) DeleteApi(ctx context.Context, id int) error {
 	if id <= 0 {
-		a.l.Warn("API ID无效", zap.Int("ID", id))
+		s.l.Warn("API ID无效", zap.Int("ID", id))
 		return errors.New("api id无效")
 	}
 
-	return a.dao.DeleteApi(ctx, id)
+	return s.dao.DeleteApi(ctx, id)
 }
 
 // ListApis 分页获取API列表
-func (a *apiService) ListApis(ctx context.Context, req *model.ListApisRequest) (model.ListResp[*model.Api], error) {
+func (s *apiService) ListApis(ctx context.Context, req *model.ListApisRequest) (model.ListResp[*model.Api], error) {
 	if req.Page < 1 || req.Size < 1 {
-		a.l.Warn("分页参数无效", zap.Int("页码", req.Page), zap.Int("每页数量", req.Size))
+		s.l.Warn("分页参数无效", zap.Int("页码", req.Page), zap.Int("每页数量", req.Size))
 		return model.ListResp[*model.Api]{}, errors.New("分页参数无效")
 	}
 
-	apis, total, err := a.dao.ListApis(ctx, req.Page, req.Size, req.Search, req.IsPublic, req.Method)
+	apis, total, err := s.dao.ListApis(ctx, req.Page, req.Size, req.Search, req.IsPublic, req.Method)
 	if err != nil {
-		a.l.Error("获取API列表失败", zap.Error(err))
+		s.l.Error("获取API列表失败", zap.Error(err))
 		return model.ListResp[*model.Api]{}, err
 	}
 
@@ -114,7 +114,7 @@ func (a *apiService) ListApis(ctx context.Context, req *model.ListApisRequest) (
 	}, nil
 }
 
-func (a *apiService) buildCreateApi(req *model.CreateApiRequest) *model.Api {
+func (s *apiService) buildCreateApi(req *model.CreateApiRequest) *model.Api {
 	return &model.Api{
 		Name:        req.Name,
 		Path:        req.Path,
@@ -126,7 +126,7 @@ func (a *apiService) buildCreateApi(req *model.CreateApiRequest) *model.Api {
 	}
 }
 
-func (a *apiService) buildUpdateApi(req *model.UpdateApiRequest) *model.Api {
+func (s *apiService) buildUpdateApi(req *model.UpdateApiRequest) *model.Api {
 	return &model.Api{
 		Model: model.Model{
 			ID: req.ID,
@@ -141,10 +141,10 @@ func (a *apiService) buildUpdateApi(req *model.UpdateApiRequest) *model.Api {
 	}
 }
 
-func (a *apiService) GetApiStatistics(ctx context.Context) (*model.ApiStatistics, error) {
-	statistics, err := a.dao.GetApiStatistics(ctx)
+func (s *apiService) GetApiStatistics(ctx context.Context) (*model.ApiStatistics, error) {
+	statistics, err := s.dao.GetApiStatistics(ctx)
 	if err != nil {
-		a.l.Error("获取API统计失败", zap.Error(err))
+		s.l.Error("获取API统计失败", zap.Error(err))
 		return nil, err
 	}
 

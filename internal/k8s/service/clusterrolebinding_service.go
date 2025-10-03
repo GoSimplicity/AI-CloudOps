@@ -67,7 +67,7 @@ func NewClusterRoleBindingService(clusterRoleBindingManager manager.ClusterRoleB
 }
 
 // GetClusterRoleBindingList 获取ClusterRoleBinding列表
-func (c *clusterRoleBindingService) GetClusterRoleBindingList(ctx context.Context, req *model.GetClusterRoleBindingListReq) (model.ListResp[*model.K8sClusterRoleBinding], error) {
+func (s *clusterRoleBindingService) GetClusterRoleBindingList(ctx context.Context, req *model.GetClusterRoleBindingListReq) (model.ListResp[*model.K8sClusterRoleBinding], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sClusterRoleBinding]{}, fmt.Errorf("获取ClusterRoleBinding列表请求不能为空")
 	}
@@ -79,9 +79,9 @@ func (c *clusterRoleBindingService) GetClusterRoleBindingList(ctx context.Contex
 	// 构建查询选项
 	listOptions := metav1.ListOptions{}
 
-	k8sClusterRoleBindings, err := c.clusterRoleBindingManager.GetClusterRoleBindingList(ctx, req.ClusterID, listOptions)
+	k8sClusterRoleBindings, err := s.clusterRoleBindingManager.GetClusterRoleBindingList(ctx, req.ClusterID, listOptions)
 	if err != nil {
-		c.logger.Error("GetClusterRoleBindingList: 获取ClusterRoleBinding列表失败",
+		s.logger.Error("GetClusterRoleBindingList: 获取ClusterRoleBinding列表失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID))
 		return model.ListResp[*model.K8sClusterRoleBinding]{}, fmt.Errorf("获取ClusterRoleBinding列表失败: %w", err)
@@ -121,7 +121,7 @@ func (c *clusterRoleBindingService) GetClusterRoleBindingList(ctx context.Contex
 		filteredClusterRoleBindings = filteredClusterRoleBindings[start:end]
 	}
 
-	c.logger.Debug("GetClusterRoleBindingList: 获取ClusterRoleBinding列表成功",
+	s.logger.Debug("GetClusterRoleBindingList: 获取ClusterRoleBinding列表成功",
 		zap.Int("clusterID", req.ClusterID),
 		zap.Int64("total", total),
 		zap.Int("returned", len(filteredClusterRoleBindings)))
@@ -133,7 +133,7 @@ func (c *clusterRoleBindingService) GetClusterRoleBindingList(ctx context.Contex
 }
 
 // GetClusterRoleBindingDetails 获取ClusterRoleBinding详情
-func (c *clusterRoleBindingService) GetClusterRoleBindingDetails(ctx context.Context, req *model.GetClusterRoleBindingDetailsReq) (*model.K8sClusterRoleBinding, error) {
+func (s *clusterRoleBindingService) GetClusterRoleBindingDetails(ctx context.Context, req *model.GetClusterRoleBindingDetailsReq) (*model.K8sClusterRoleBinding, error) {
 	if req == nil {
 		return nil, fmt.Errorf("获取ClusterRoleBinding详情请求不能为空")
 	}
@@ -146,9 +146,9 @@ func (c *clusterRoleBindingService) GetClusterRoleBindingDetails(ctx context.Con
 		return nil, fmt.Errorf("ClusterRoleBinding名称不能为空")
 	}
 
-	clusterRoleBinding, err := c.clusterRoleBindingManager.GetClusterRoleBinding(ctx, req.ClusterID, req.Name)
+	clusterRoleBinding, err := s.clusterRoleBindingManager.GetClusterRoleBinding(ctx, req.ClusterID, req.Name)
 	if err != nil {
-		c.logger.Error("GetClusterRoleBindingDetails: 获取ClusterRoleBinding失败",
+		s.logger.Error("GetClusterRoleBindingDetails: 获取ClusterRoleBinding失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("name", req.Name))
@@ -160,7 +160,7 @@ func (c *clusterRoleBindingService) GetClusterRoleBindingDetails(ctx context.Con
 		k8sClusterRoleBinding.ClusterID = req.ClusterID
 	}
 
-	c.logger.Debug("GetClusterRoleBindingDetails: 获取ClusterRoleBinding详情成功",
+	s.logger.Debug("GetClusterRoleBindingDetails: 获取ClusterRoleBinding详情成功",
 		zap.Int("clusterID", req.ClusterID),
 		zap.String("name", req.Name))
 
@@ -168,7 +168,7 @@ func (c *clusterRoleBindingService) GetClusterRoleBindingDetails(ctx context.Con
 }
 
 // CreateClusterRoleBinding 创建ClusterRoleBinding
-func (c *clusterRoleBindingService) CreateClusterRoleBinding(ctx context.Context, req *model.CreateClusterRoleBindingReq) error {
+func (s *clusterRoleBindingService) CreateClusterRoleBinding(ctx context.Context, req *model.CreateClusterRoleBindingReq) error {
 	// 构建 ClusterRoleBinding 对象
 	clusterRoleBinding := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -181,7 +181,7 @@ func (c *clusterRoleBindingService) CreateClusterRoleBinding(ctx context.Context
 	}
 
 	// 使用 ClusterRoleBindingManager 创建 ClusterRoleBinding
-	err := c.clusterRoleBindingManager.CreateClusterRoleBinding(ctx, req.ClusterID, clusterRoleBinding)
+	err := s.clusterRoleBindingManager.CreateClusterRoleBinding(ctx, req.ClusterID, clusterRoleBinding)
 	if err != nil {
 		return fmt.Errorf("failed to create cluster role binding: %w", err)
 	}
@@ -190,9 +190,9 @@ func (c *clusterRoleBindingService) CreateClusterRoleBinding(ctx context.Context
 }
 
 // UpdateClusterRoleBinding 更新ClusterRoleBinding
-func (c *clusterRoleBindingService) UpdateClusterRoleBinding(ctx context.Context, req *model.UpdateClusterRoleBindingReq) error {
+func (s *clusterRoleBindingService) UpdateClusterRoleBinding(ctx context.Context, req *model.UpdateClusterRoleBindingReq) error {
 	// 获取现有ClusterRoleBinding
-	existingClusterRoleBinding, err := c.clusterRoleBindingManager.GetClusterRoleBinding(ctx, req.ClusterID, req.Name)
+	existingClusterRoleBinding, err := s.clusterRoleBindingManager.GetClusterRoleBinding(ctx, req.ClusterID, req.Name)
 	if err != nil {
 		return fmt.Errorf("failed to get existing cluster role binding: %w", err)
 	}
@@ -204,7 +204,7 @@ func (c *clusterRoleBindingService) UpdateClusterRoleBinding(ctx context.Context
 	existingClusterRoleBinding.Subjects = k8sutils.ConvertSubjectsToK8s(req.Subjects)
 
 	// 使用 ClusterRoleBindingManager 更新 ClusterRoleBinding
-	err = c.clusterRoleBindingManager.UpdateClusterRoleBinding(ctx, req.ClusterID, existingClusterRoleBinding)
+	err = s.clusterRoleBindingManager.UpdateClusterRoleBinding(ctx, req.ClusterID, existingClusterRoleBinding)
 	if err != nil {
 		return fmt.Errorf("failed to update cluster role binding: %w", err)
 	}
@@ -213,9 +213,9 @@ func (c *clusterRoleBindingService) UpdateClusterRoleBinding(ctx context.Context
 }
 
 // DeleteClusterRoleBinding 删除ClusterRoleBinding
-func (c *clusterRoleBindingService) DeleteClusterRoleBinding(ctx context.Context, req *model.DeleteClusterRoleBindingReq) error {
+func (s *clusterRoleBindingService) DeleteClusterRoleBinding(ctx context.Context, req *model.DeleteClusterRoleBindingReq) error {
 	// 使用 ClusterRoleBindingManager 删除 ClusterRoleBinding
-	err := c.clusterRoleBindingManager.DeleteClusterRoleBinding(ctx, req.ClusterID, req.Name, metav1.DeleteOptions{})
+	err := s.clusterRoleBindingManager.DeleteClusterRoleBinding(ctx, req.ClusterID, req.Name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to delete cluster role binding: %w", err)
 	}
@@ -224,13 +224,13 @@ func (c *clusterRoleBindingService) DeleteClusterRoleBinding(ctx context.Context
 }
 
 // GetClusterRoleBindingYaml 获取ClusterRoleBinding YAML
-func (c *clusterRoleBindingService) GetClusterRoleBindingYaml(ctx context.Context, req *model.GetClusterRoleBindingYamlReq) (*model.K8sYaml, error) {
+func (s *clusterRoleBindingService) GetClusterRoleBindingYaml(ctx context.Context, req *model.GetClusterRoleBindingYamlReq) (*model.K8sYaml, error) {
 	if req == nil {
 		return nil, fmt.Errorf("获取ClusterRoleBinding YAML请求不能为空")
 	}
 
 	// 获取 ClusterRoleBinding
-	clusterRoleBinding, err := c.clusterRoleBindingManager.GetClusterRoleBinding(ctx, req.ClusterID, req.Name)
+	clusterRoleBinding, err := s.clusterRoleBindingManager.GetClusterRoleBinding(ctx, req.ClusterID, req.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster role binding: %w", err)
 	}
@@ -246,7 +246,7 @@ func (c *clusterRoleBindingService) GetClusterRoleBindingYaml(ctx context.Contex
 }
 
 // CreateClusterRoleBindingByYaml 通过YAML创建ClusterRoleBinding
-func (c *clusterRoleBindingService) CreateClusterRoleBindingByYaml(ctx context.Context, req *model.CreateClusterRoleBindingByYamlReq) error {
+func (s *clusterRoleBindingService) CreateClusterRoleBindingByYaml(ctx context.Context, req *model.CreateClusterRoleBindingByYamlReq) error {
 	if req == nil {
 		return fmt.Errorf("通过YAML创建ClusterRoleBinding请求不能为空")
 	}
@@ -257,7 +257,7 @@ func (c *clusterRoleBindingService) CreateClusterRoleBindingByYaml(ctx context.C
 	}
 
 	// 使用 ClusterRoleBindingManager 创建 ClusterRoleBinding
-	err = c.clusterRoleBindingManager.CreateClusterRoleBinding(ctx, req.ClusterID, clusterRoleBinding)
+	err = s.clusterRoleBindingManager.CreateClusterRoleBinding(ctx, req.ClusterID, clusterRoleBinding)
 	if err != nil {
 		return fmt.Errorf("failed to create cluster role binding: %w", err)
 	}
@@ -266,7 +266,7 @@ func (c *clusterRoleBindingService) CreateClusterRoleBindingByYaml(ctx context.C
 }
 
 // UpdateClusterRoleBindingYaml 更新ClusterRoleBinding YAML
-func (c *clusterRoleBindingService) UpdateClusterRoleBindingYaml(ctx context.Context, req *model.UpdateClusterRoleBindingByYamlReq) error {
+func (s *clusterRoleBindingService) UpdateClusterRoleBindingYaml(ctx context.Context, req *model.UpdateClusterRoleBindingByYamlReq) error {
 	if req == nil {
 		return fmt.Errorf("更新ClusterRoleBinding YAML请求不能为空")
 	}
@@ -280,7 +280,7 @@ func (c *clusterRoleBindingService) UpdateClusterRoleBindingYaml(ctx context.Con
 	clusterRoleBinding.Name = req.Name
 
 	// 获取现有ClusterRoleBinding以保持ResourceVersion
-	existingClusterRoleBinding, err := c.clusterRoleBindingManager.GetClusterRoleBinding(ctx, req.ClusterID, req.Name)
+	existingClusterRoleBinding, err := s.clusterRoleBindingManager.GetClusterRoleBinding(ctx, req.ClusterID, req.Name)
 	if err != nil {
 		return fmt.Errorf("failed to get existing cluster role binding: %w", err)
 	}
@@ -289,7 +289,7 @@ func (c *clusterRoleBindingService) UpdateClusterRoleBindingYaml(ctx context.Con
 	clusterRoleBinding.UID = existingClusterRoleBinding.UID
 
 	// 使用 RBACManager 更新 ClusterRoleBinding
-	err = c.clusterRoleBindingManager.UpdateClusterRoleBinding(ctx, req.ClusterID, clusterRoleBinding)
+	err = s.clusterRoleBindingManager.UpdateClusterRoleBinding(ctx, req.ClusterID, clusterRoleBinding)
 	if err != nil {
 		return fmt.Errorf("failed to update cluster role binding: %w", err)
 	}

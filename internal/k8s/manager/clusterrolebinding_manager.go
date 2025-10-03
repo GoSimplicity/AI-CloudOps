@@ -63,36 +63,36 @@ func NewClusterRoleBindingManager(client client.K8sClient, logger *zap.Logger) C
 }
 
 // CreateClusterRoleBinding 创建ClusterRoleBinding
-func (c *clusterRoleBindingManager) CreateClusterRoleBinding(ctx context.Context, clusterID int, clusterRoleBinding *rbacv1.ClusterRoleBinding) error {
-	clientset, err := c.client.GetKubeClient(clusterID)
+func (m *clusterRoleBindingManager) CreateClusterRoleBinding(ctx context.Context, clusterID int, clusterRoleBinding *rbacv1.ClusterRoleBinding) error {
+	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		c.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
 		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
 	_, err = clientset.RbacV1().ClusterRoleBindings().Create(ctx, clusterRoleBinding, metav1.CreateOptions{})
 	if err != nil {
-		c.logger.Error("创建ClusterRoleBinding失败", zap.Error(err),
+		m.logger.Error("创建ClusterRoleBinding失败", zap.Error(err),
 			zap.Int("cluster_id", clusterID), zap.String("name", clusterRoleBinding.Name))
 		return fmt.Errorf("创建ClusterRoleBinding %s 失败: %w", clusterRoleBinding.Name, err)
 	}
 
-	c.logger.Info("成功创建ClusterRoleBinding",
+	m.logger.Info("成功创建ClusterRoleBinding",
 		zap.Int("cluster_id", clusterID), zap.String("name", clusterRoleBinding.Name))
 	return nil
 }
 
 // GetClusterRoleBinding 获取单个ClusterRoleBinding
-func (c *clusterRoleBindingManager) GetClusterRoleBinding(ctx context.Context, clusterID int, name string) (*rbacv1.ClusterRoleBinding, error) {
-	clientset, err := c.client.GetKubeClient(clusterID)
+func (m *clusterRoleBindingManager) GetClusterRoleBinding(ctx context.Context, clusterID int, name string) (*rbacv1.ClusterRoleBinding, error) {
+	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		c.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
 		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
 	clusterRoleBinding, err := clientset.RbacV1().ClusterRoleBindings().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		c.logger.Error("获取ClusterRoleBinding失败", zap.Error(err),
+		m.logger.Error("获取ClusterRoleBinding失败", zap.Error(err),
 			zap.Int("cluster_id", clusterID), zap.String("name", name))
 		return nil, fmt.Errorf("获取ClusterRoleBinding %s 失败: %w", name, err)
 	}
@@ -101,16 +101,16 @@ func (c *clusterRoleBindingManager) GetClusterRoleBinding(ctx context.Context, c
 }
 
 // GetClusterRoleBindingList 获取ClusterRoleBinding列表（转换为模型）
-func (c *clusterRoleBindingManager) GetClusterRoleBindingList(ctx context.Context, clusterID int, listOptions metav1.ListOptions) ([]*model.K8sClusterRoleBinding, error) {
-	clientset, err := c.client.GetKubeClient(clusterID)
+func (m *clusterRoleBindingManager) GetClusterRoleBindingList(ctx context.Context, clusterID int, listOptions metav1.ListOptions) ([]*model.K8sClusterRoleBinding, error) {
+	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		c.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
 		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
 	clusterRoleBindings, err := clientset.RbacV1().ClusterRoleBindings().List(ctx, listOptions)
 	if err != nil {
-		c.logger.Error("获取ClusterRoleBinding列表失败", zap.Error(err), zap.Int("cluster_id", clusterID))
+		m.logger.Error("获取ClusterRoleBinding列表失败", zap.Error(err), zap.Int("cluster_id", clusterID))
 		return nil, fmt.Errorf("获取ClusterRoleBinding列表失败: %w", err)
 	}
 
@@ -126,68 +126,68 @@ func (c *clusterRoleBindingManager) GetClusterRoleBindingList(ctx context.Contex
 		k8sClusterRoleBindings = append(k8sClusterRoleBindings, &k8sClusterRoleBinding)
 	}
 
-	c.logger.Debug("成功获取ClusterRoleBinding列表",
+	m.logger.Debug("成功获取ClusterRoleBinding列表",
 		zap.Int("cluster_id", clusterID), zap.Int("count", len(clusterRoleBindings.Items)))
 
 	return k8sClusterRoleBindings, nil
 }
 
 // GetClusterRoleBindingListRaw 获取ClusterRoleBinding原始列表
-func (c *clusterRoleBindingManager) GetClusterRoleBindingListRaw(ctx context.Context, clusterID int, listOptions metav1.ListOptions) (*rbacv1.ClusterRoleBindingList, error) {
-	clientset, err := c.client.GetKubeClient(clusterID)
+func (m *clusterRoleBindingManager) GetClusterRoleBindingListRaw(ctx context.Context, clusterID int, listOptions metav1.ListOptions) (*rbacv1.ClusterRoleBindingList, error) {
+	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		c.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
 		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
 	clusterRoleBindings, err := clientset.RbacV1().ClusterRoleBindings().List(ctx, listOptions)
 	if err != nil {
-		c.logger.Error("获取ClusterRoleBinding列表失败", zap.Error(err), zap.Int("cluster_id", clusterID))
+		m.logger.Error("获取ClusterRoleBinding列表失败", zap.Error(err), zap.Int("cluster_id", clusterID))
 		return nil, fmt.Errorf("获取ClusterRoleBinding列表失败: %w", err)
 	}
 
-	c.logger.Debug("成功获取ClusterRoleBinding列表",
+	m.logger.Debug("成功获取ClusterRoleBinding列表",
 		zap.Int("cluster_id", clusterID), zap.Int("count", len(clusterRoleBindings.Items)))
 
 	return clusterRoleBindings, nil
 }
 
 // UpdateClusterRoleBinding 更新ClusterRoleBinding
-func (c *clusterRoleBindingManager) UpdateClusterRoleBinding(ctx context.Context, clusterID int, clusterRoleBinding *rbacv1.ClusterRoleBinding) error {
-	clientset, err := c.client.GetKubeClient(clusterID)
+func (m *clusterRoleBindingManager) UpdateClusterRoleBinding(ctx context.Context, clusterID int, clusterRoleBinding *rbacv1.ClusterRoleBinding) error {
+	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		c.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
 		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
 	_, err = clientset.RbacV1().ClusterRoleBindings().Update(ctx, clusterRoleBinding, metav1.UpdateOptions{})
 	if err != nil {
-		c.logger.Error("更新ClusterRoleBinding失败", zap.Error(err),
+		m.logger.Error("更新ClusterRoleBinding失败", zap.Error(err),
 			zap.Int("cluster_id", clusterID), zap.String("name", clusterRoleBinding.Name))
 		return fmt.Errorf("更新ClusterRoleBinding %s 失败: %w", clusterRoleBinding.Name, err)
 	}
 
-	c.logger.Info("成功更新ClusterRoleBinding",
+	m.logger.Info("成功更新ClusterRoleBinding",
 		zap.Int("cluster_id", clusterID), zap.String("name", clusterRoleBinding.Name))
 	return nil
 }
 
 // DeleteClusterRoleBinding 删除ClusterRoleBinding
-func (c *clusterRoleBindingManager) DeleteClusterRoleBinding(ctx context.Context, clusterID int, name string, deleteOptions metav1.DeleteOptions) error {
-	clientset, err := c.client.GetKubeClient(clusterID)
+func (m *clusterRoleBindingManager) DeleteClusterRoleBinding(ctx context.Context, clusterID int, name string, deleteOptions metav1.DeleteOptions) error {
+	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
-		c.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
+		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
 		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
 	}
 
 	err = clientset.RbacV1().ClusterRoleBindings().Delete(ctx, name, deleteOptions)
 	if err != nil {
-		c.logger.Error("删除ClusterRoleBinding失败", zap.Error(err),
+		m.logger.Error("删除ClusterRoleBinding失败", zap.Error(err),
 			zap.Int("cluster_id", clusterID), zap.String("name", name))
 		return fmt.Errorf("删除ClusterRoleBinding %s 失败: %w", name, err)
 	}
 
-	c.logger.Info("成功删除ClusterRoleBinding",
+	m.logger.Info("成功删除ClusterRoleBinding",
 		zap.Int("cluster_id", clusterID), zap.String("name", name))
 	return nil
 }

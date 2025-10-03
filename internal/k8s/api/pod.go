@@ -41,34 +41,33 @@ type K8sPodHandler struct {
 
 func NewK8sPodHandler(podService service.PodService) *K8sPodHandler {
 	return &K8sPodHandler{
-
 		podService: podService,
 	}
 }
 
-func (k *K8sPodHandler) RegisterRouters(server *gin.Engine) {
+func (h *K8sPodHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
 		// Pod相关接口
-		k8sGroup.GET("/pod/:cluster_id/list", k.GetPodList)
-		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/detail", k.GetPodDetails)
-		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/detail/yaml", k.GetPodYaml)
-		k8sGroup.POST("/pod/:cluster_id/create", k.CreatePod)
-		k8sGroup.POST("/pod/:cluster_id/create/yaml", k.CreatePodByYaml)
-		k8sGroup.PUT("/pod/:cluster_id/:namespace/:name/update", k.UpdatePod)
-		k8sGroup.PUT("/pod/:cluster_id/:namespace/:name/update/yaml", k.UpdatePodByYaml)
-		k8sGroup.DELETE("/pod/:cluster_id/:namespace/:name/delete", k.DeletePod)
-		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/containers", k.GetPodContainers)
-		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/containers/:container/logs", k.GetPodLogs)
-		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/containers/:container/exec", k.PodExec)
-		k8sGroup.POST("/pod/:cluster_id/:namespace/:name/port-forward", k.PodPortForward)
-		k8sGroup.POST("/pod/:cluster_id/:namespace/:name/containers/:container/files/upload", k.PodFileUpload)
-		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/containers/:container/files/download", k.PodFileDownload)
+		k8sGroup.GET("/pod/:cluster_id/list", h.GetPodList)
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/detail", h.GetPodDetails)
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/detail/yaml", h.GetPodYaml)
+		k8sGroup.POST("/pod/:cluster_id/create", h.CreatePod)
+		k8sGroup.POST("/pod/:cluster_id/create/yaml", h.CreatePodByYaml)
+		k8sGroup.PUT("/pod/:cluster_id/:namespace/:name/update", h.UpdatePod)
+		k8sGroup.PUT("/pod/:cluster_id/:namespace/:name/update/yaml", h.UpdatePodByYaml)
+		k8sGroup.DELETE("/pod/:cluster_id/:namespace/:name/delete", h.DeletePod)
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/containers", h.GetPodContainers)
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/containers/:container/logs", h.GetPodLogs)
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/containers/:container/exec", h.PodExec)
+		k8sGroup.POST("/pod/:cluster_id/:namespace/:name/port-forward", h.PodPortForward)
+		k8sGroup.POST("/pod/:cluster_id/:namespace/:name/containers/:container/files/upload", h.PodFileUpload)
+		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/containers/:container/files/download", h.PodFileDownload)
 	}
 }
 
 // GetPodDetails 获取Pod详情
-func (k *K8sPodHandler) GetPodDetails(ctx *gin.Context) {
+func (h *K8sPodHandler) GetPodDetails(ctx *gin.Context) {
 	var req model.GetPodDetailsReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -94,12 +93,12 @@ func (k *K8sPodHandler) GetPodDetails(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.podService.GetPodDetails(ctx, &req)
+		return h.podService.GetPodDetails(ctx, &req)
 	})
 }
 
 // GetPodList 获取Pod列表
-func (k *K8sPodHandler) GetPodList(ctx *gin.Context) {
+func (h *K8sPodHandler) GetPodList(ctx *gin.Context) {
 	var req model.GetPodListReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -111,12 +110,12 @@ func (k *K8sPodHandler) GetPodList(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.podService.GetPodList(ctx, &req)
+		return h.podService.GetPodList(ctx, &req)
 	})
 }
 
 // GetPodContainers 获取Pod容器列表
-func (k *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
+func (h *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
 	var req model.GetPodContainersReq
 
 	// 绑定路径参数
@@ -126,12 +125,12 @@ func (k *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
 	}
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.podService.GetPodContainers(ctx, &req)
+		return h.podService.GetPodContainers(ctx, &req)
 	})
 }
 
 // GetPodLogs 获取容器日志
-func (k *K8sPodHandler) GetPodLogs(ctx *gin.Context) {
+func (h *K8sPodHandler) GetPodLogs(ctx *gin.Context) {
 	var req model.GetPodLogsReq
 
 	// 绑定路径参数
@@ -154,14 +153,14 @@ func (k *K8sPodHandler) GetPodLogs(ctx *gin.Context) {
 	ctx.Header("Access-Control-Allow-Headers", "Cache-Control")
 
 	// 调用service层进行流式推送
-	if err := k.podService.GetPodLogs(ctx, &req); err != nil {
+	if err := h.podService.GetPodLogs(ctx, &req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 }
 
 // GetPodYaml 获取Pod的YAML配置
-func (k *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
+func (h *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
 	var req model.GetPodYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -187,12 +186,12 @@ func (k *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.podService.GetPodYaml(ctx, &req)
+		return h.podService.GetPodYaml(ctx, &req)
 	})
 }
 
 // CreatePod 创建Pod
-func (k *K8sPodHandler) CreatePod(ctx *gin.Context) {
+func (h *K8sPodHandler) CreatePod(ctx *gin.Context) {
 	var req model.CreatePodReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -204,12 +203,12 @@ func (k *K8sPodHandler) CreatePod(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.podService.CreatePod(ctx, &req)
+		return nil, h.podService.CreatePod(ctx, &req)
 	})
 }
 
 // CreatePodByYaml 通过YAML创建Pod
-func (k *K8sPodHandler) CreatePodByYaml(ctx *gin.Context) {
+func (h *K8sPodHandler) CreatePodByYaml(ctx *gin.Context) {
 	var req model.CreatePodByYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -221,12 +220,12 @@ func (k *K8sPodHandler) CreatePodByYaml(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.podService.CreatePodByYaml(ctx, &req)
+		return nil, h.podService.CreatePodByYaml(ctx, &req)
 	})
 }
 
 // UpdatePod 更新Pod
-func (k *K8sPodHandler) UpdatePod(ctx *gin.Context) {
+func (h *K8sPodHandler) UpdatePod(ctx *gin.Context) {
 	var req model.UpdatePodReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -252,12 +251,12 @@ func (k *K8sPodHandler) UpdatePod(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.podService.UpdatePod(ctx, &req)
+		return nil, h.podService.UpdatePod(ctx, &req)
 	})
 }
 
 // UpdatePodByYaml 通过YAML更新Pod
-func (k *K8sPodHandler) UpdatePodByYaml(ctx *gin.Context) {
+func (h *K8sPodHandler) UpdatePodByYaml(ctx *gin.Context) {
 	var req model.UpdatePodByYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -283,12 +282,12 @@ func (k *K8sPodHandler) UpdatePodByYaml(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.podService.UpdatePodByYaml(ctx, &req)
+		return nil, h.podService.UpdatePodByYaml(ctx, &req)
 	})
 }
 
 // DeletePod 删除Pod
-func (k *K8sPodHandler) DeletePod(ctx *gin.Context) {
+func (h *K8sPodHandler) DeletePod(ctx *gin.Context) {
 	var req model.DeletePodReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -314,12 +313,12 @@ func (k *K8sPodHandler) DeletePod(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.podService.DeletePod(ctx, &req)
+		return nil, h.podService.DeletePod(ctx, &req)
 	})
 }
 
 // PodExec Pod终端连接
-func (k *K8sPodHandler) PodExec(ctx *gin.Context) {
+func (h *K8sPodHandler) PodExec(ctx *gin.Context) {
 	var req model.PodExecReq
 
 	// 获取路径参数
@@ -392,14 +391,14 @@ func (k *K8sPodHandler) PodExec(ctx *gin.Context) {
 	req.Shell = shell
 
 	// 建立WebSocket连接
-	if err := k.podService.PodExec(ctx, &req); err != nil {
+	if err := h.podService.PodExec(ctx, &req); err != nil {
 		utils.BadRequestError(ctx, "建立终端连接失败: "+err.Error())
 		return
 	}
 }
 
 // PodPortForward Pod端口转发
-func (k *K8sPodHandler) PodPortForward(ctx *gin.Context) {
+func (h *K8sPodHandler) PodPortForward(ctx *gin.Context) {
 	var req model.PodPortForwardReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -425,12 +424,12 @@ func (k *K8sPodHandler) PodPortForward(ctx *gin.Context) {
 	req.PodName = podName
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.podService.PodPortForward(ctx, &req)
+		return nil, h.podService.PodPortForward(ctx, &req)
 	})
 }
 
 // PodFileUpload 上传文件到Pod
-func (k *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
+func (h *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
 	var req model.PodFileUploadReq
 
 	// 获取路径参数
@@ -513,7 +512,7 @@ func (k *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
 	req.FilePath = filePath
 
 	// 调用文件上传服务
-	if err := k.podService.PodFileUpload(ctx, &req); err != nil {
+	if err := h.podService.PodFileUpload(ctx, &req); err != nil {
 		utils.BadRequestError(ctx, "文件上传失败: "+err.Error())
 		return
 	}
@@ -522,7 +521,7 @@ func (k *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
 }
 
 // PodFileDownload 从Pod下载文件
-func (k *K8sPodHandler) PodFileDownload(ctx *gin.Context) {
+func (h *K8sPodHandler) PodFileDownload(ctx *gin.Context) {
 	var req model.PodFileDownloadReq
 
 	// 获取路径参数
@@ -592,7 +591,7 @@ func (k *K8sPodHandler) PodFileDownload(ctx *gin.Context) {
 	req.FilePath = filePath
 
 	// 调用文件下载服务
-	if err := k.podService.PodFileDownload(ctx, &req); err != nil {
+	if err := h.podService.PodFileDownload(ctx, &req); err != nil {
 		utils.BadRequestError(ctx, "文件下载失败: "+err.Error())
 		return
 	}

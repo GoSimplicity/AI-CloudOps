@@ -43,20 +43,20 @@ func NewAlertRuleHandler(svc alertService.AlertManagerRuleService) *AlertRuleHan
 	}
 }
 
-func (a *AlertRuleHandler) RegisterRouters(server *gin.Engine) {
+func (h *AlertRuleHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
 	{
-		monitorGroup.GET("/alert_rules/list", a.GetMonitorAlertRuleList)
-		monitorGroup.GET("/alert_rules/detail/:id", a.GetMonitorAlertRule)
-		monitorGroup.POST("/alert_rules/promql_check", a.PromqlExprCheck)
-		monitorGroup.POST("/alert_rules/create", a.CreateMonitorAlertRule)
-		monitorGroup.PUT("/alert_rules/update/:id", a.UpdateMonitorAlertRule)
-		monitorGroup.DELETE("/alert_rules/delete/:id", a.DeleteMonitorAlertRule)
+		monitorGroup.GET("/alert_rules/list", h.GetMonitorAlertRuleList)
+		monitorGroup.GET("/alert_rules/detail/:id", h.GetMonitorAlertRule)
+		monitorGroup.POST("/alert_rules/promql_check", h.PromqlExprCheck)
+		monitorGroup.POST("/alert_rules/create", h.CreateMonitorAlertRule)
+		monitorGroup.PUT("/alert_rules/update/:id", h.UpdateMonitorAlertRule)
+		monitorGroup.DELETE("/alert_rules/delete/:id", h.DeleteMonitorAlertRule)
 	}
 }
 
 // CreateMonitorAlertRule 创建新的告警规则
-func (a *AlertRuleHandler) CreateMonitorAlertRule(ctx *gin.Context) {
+func (h *AlertRuleHandler) CreateMonitorAlertRule(ctx *gin.Context) {
 	var req model.CreateMonitorAlertRuleReq
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
@@ -64,12 +64,12 @@ func (a *AlertRuleHandler) CreateMonitorAlertRule(ctx *gin.Context) {
 	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.svc.CreateMonitorAlertRule(ctx, &req)
+		return nil, h.svc.CreateMonitorAlertRule(ctx, &req)
 	})
 }
 
 // UpdateMonitorAlertRule 更新现有的告警规则
-func (a *AlertRuleHandler) UpdateMonitorAlertRule(ctx *gin.Context) {
+func (h *AlertRuleHandler) UpdateMonitorAlertRule(ctx *gin.Context) {
 	var req model.UpdateMonitorAlertRuleReq
 
 	id, err := utils.GetParamID(ctx)
@@ -81,12 +81,12 @@ func (a *AlertRuleHandler) UpdateMonitorAlertRule(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.svc.UpdateMonitorAlertRule(ctx, &req)
+		return nil, h.svc.UpdateMonitorAlertRule(ctx, &req)
 	})
 }
 
 // DeleteMonitorAlertRule 删除指定的告警规则
-func (a *AlertRuleHandler) DeleteMonitorAlertRule(ctx *gin.Context) {
+func (h *AlertRuleHandler) DeleteMonitorAlertRule(ctx *gin.Context) {
 	var req model.DeleteMonitorAlertRuleReq
 
 	id, err := utils.GetParamID(ctx)
@@ -98,30 +98,30 @@ func (a *AlertRuleHandler) DeleteMonitorAlertRule(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.svc.DeleteMonitorAlertRule(ctx, &req)
+		return nil, h.svc.DeleteMonitorAlertRule(ctx, &req)
 	})
 }
 
 // GetMonitorAlertRuleList 获取告警规则列表
-func (a *AlertRuleHandler) GetMonitorAlertRuleList(ctx *gin.Context) {
+func (h *AlertRuleHandler) GetMonitorAlertRuleList(ctx *gin.Context) {
 	var req model.GetMonitorAlertRuleListReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return a.svc.GetMonitorAlertRuleList(ctx, &req)
+		return h.svc.GetMonitorAlertRuleList(ctx, &req)
 	})
 }
 
 // PromqlExprCheck 检查 PromQL 表达式的合法性
-func (a *AlertRuleHandler) PromqlExprCheck(ctx *gin.Context) {
+func (h *AlertRuleHandler) PromqlExprCheck(ctx *gin.Context) {
 	var promql model.PromqlAlertRuleExprCheckReq
 
 	utils.HandleRequest(ctx, &promql, func() (interface{}, error) {
-		return a.svc.PromqlExprCheck(ctx, &promql)
+		return h.svc.PromqlExprCheck(ctx, &promql)
 	})
 }
 
 // GetMonitorAlertRule 获取指定的告警规则详情
-func (a *AlertRuleHandler) GetMonitorAlertRule(ctx *gin.Context) {
+func (h *AlertRuleHandler) GetMonitorAlertRule(ctx *gin.Context) {
 	var req model.GetMonitorAlertRuleReq
 
 	id, err := utils.GetParamID(ctx)
@@ -133,6 +133,6 @@ func (a *AlertRuleHandler) GetMonitorAlertRule(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return a.svc.GetMonitorAlertRule(ctx, &req)
+		return h.svc.GetMonitorAlertRule(ctx, &req)
 	})
 }

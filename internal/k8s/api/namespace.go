@@ -42,20 +42,20 @@ func NewK8sNamespaceHandler(namespaceService service.NamespaceService) *K8sNames
 	}
 }
 
-func (k *K8sNamespaceHandler) RegisterRouters(server *gin.Engine) {
+func (h *K8sNamespaceHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
 		// Namespace基础管理
-		k8sGroup.GET("/clusters/:cluster_id/namespace/list", k.ListNamespaces)              // 获取Namespace列表
-		k8sGroup.GET("/clusters/:cluster_id/namespace/:name/detail", k.GetNamespaceDetails) // 获取Namespace详情
-		k8sGroup.POST("/clusters/:cluster_id/namespace/create", k.CreateNamespace)          // 创建Namespace
-		k8sGroup.PUT("/clusters/:cluster_id/namespace/:name/update", k.UpdateNamespace)     // 更新Namespace
-		k8sGroup.DELETE("/clusters/:cluster_id/namespace/:name/delete", k.DeleteNamespace)  // 删除Namespace
+		k8sGroup.GET("/clusters/:cluster_id/namespace/list", h.ListNamespaces)              // 获取Namespace列表
+		k8sGroup.GET("/clusters/:cluster_id/namespace/:name/detail", h.GetNamespaceDetails) // 获取Namespace详情
+		k8sGroup.POST("/clusters/:cluster_id/namespace/create", h.CreateNamespace)          // 创建Namespace
+		k8sGroup.PUT("/clusters/:cluster_id/namespace/:name/update", h.UpdateNamespace)     // 更新Namespace
+		k8sGroup.DELETE("/clusters/:cluster_id/namespace/:name/delete", h.DeleteNamespace)  // 删除Namespace
 	}
 }
 
 // CreateNamespace 创建Namespace
-func (k *K8sNamespaceHandler) CreateNamespace(ctx *gin.Context) {
+func (h *K8sNamespaceHandler) CreateNamespace(ctx *gin.Context) {
 	var req model.K8sNamespaceCreateReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -67,12 +67,12 @@ func (k *K8sNamespaceHandler) CreateNamespace(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.namespaceService.CreateNamespace(ctx, &req)
+		return nil, h.namespaceService.CreateNamespace(ctx, &req)
 	})
 }
 
 // DeleteNamespace 删除Namespace
-func (k *K8sNamespaceHandler) DeleteNamespace(ctx *gin.Context) {
+func (h *K8sNamespaceHandler) DeleteNamespace(ctx *gin.Context) {
 	var req model.K8sNamespaceDeleteReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -90,13 +90,13 @@ func (k *K8sNamespaceHandler) DeleteNamespace(ctx *gin.Context) {
 	req.ClusterID = clusterID
 	req.Name = name
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, k.namespaceService.DeleteNamespace(ctx, &req)
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.namespaceService.DeleteNamespace(ctx, &req)
 	})
 }
 
 // GetNamespaceDetails 获取Namespace详情
-func (k *K8sNamespaceHandler) GetNamespaceDetails(ctx *gin.Context) {
+func (h *K8sNamespaceHandler) GetNamespaceDetails(ctx *gin.Context) {
 	var req model.K8sNamespaceGetDetailsReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -115,12 +115,12 @@ func (k *K8sNamespaceHandler) GetNamespaceDetails(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.namespaceService.GetNamespaceDetails(ctx, &req)
+		return h.namespaceService.GetNamespaceDetails(ctx, &req)
 	})
 }
 
 // UpdateNamespace 更新Namespace
-func (k *K8sNamespaceHandler) UpdateNamespace(ctx *gin.Context) {
+func (h *K8sNamespaceHandler) UpdateNamespace(ctx *gin.Context) {
 	var req model.K8sNamespaceUpdateReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -139,12 +139,12 @@ func (k *K8sNamespaceHandler) UpdateNamespace(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.namespaceService.UpdateNamespace(ctx, &req)
+		return nil, h.namespaceService.UpdateNamespace(ctx, &req)
 	})
 }
 
 // ListNamespaces 获取Namespace列表
-func (k *K8sNamespaceHandler) ListNamespaces(ctx *gin.Context) {
+func (h *K8sNamespaceHandler) ListNamespaces(ctx *gin.Context) {
 	var req model.K8sNamespaceListReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -156,6 +156,6 @@ func (k *K8sNamespaceHandler) ListNamespaces(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.namespaceService.ListNamespaces(ctx, &req)
+		return h.namespaceService.ListNamespaces(ctx, &req)
 	})
 }

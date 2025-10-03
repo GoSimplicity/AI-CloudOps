@@ -66,15 +66,15 @@ func NewTemplateDAO(db *gorm.DB, logger *zap.Logger) WorkorderTemplateDAO {
 }
 
 // CreateTemplate 创建模板
-func (t *templateDAO) CreateTemplate(ctx context.Context, template *model.WorkorderTemplate) error {
+func (d *templateDAO) CreateTemplate(ctx context.Context, template *model.WorkorderTemplate) error {
 	// 设置默认值
 	if len(template.DefaultValues) == 0 {
 		template.DefaultValues = model.JSONMap{}
 	}
 
-	if err := t.db.WithContext(ctx).Create(template).Error; err != nil {
-		t.logger.Error("创建模板失败", zap.Error(err), zap.String("name", template.Name))
-		if t.isDuplicateKeyError(err) {
+	if err := d.db.WithContext(ctx).Create(template).Error; err != nil {
+		d.logger.Error("创建模板失败", zap.Error(err), zap.String("name", template.Name))
+		if d.isDuplicateKeyError(err) {
 			return ErrTemplateNameExists
 		}
 		return fmt.Errorf("创建模板失败: %w", err)
@@ -84,7 +84,7 @@ func (t *templateDAO) CreateTemplate(ctx context.Context, template *model.Workor
 }
 
 // UpdateTemplate 更新模板
-func (t *templateDAO) UpdateTemplate(ctx context.Context, template *model.WorkorderTemplate) error {
+func (d *templateDAO) UpdateTemplate(ctx context.Context, template *model.WorkorderTemplate) error {
 	if template.ID <= 0 {
 		return ErrInvalidID
 	}
@@ -104,13 +104,13 @@ func (t *templateDAO) UpdateTemplate(ctx context.Context, template *model.Workor
 		"category_id":    template.CategoryID,
 	}
 
-	result := t.db.WithContext(ctx).Model(&model.WorkorderTemplate{}).
+	result := d.db.WithContext(ctx).Model(&model.WorkorderTemplate{}).
 		Where("id = ?", template.ID).
 		Updates(updates)
 
 	if result.Error != nil {
-		t.logger.Error("更新模板失败", zap.Error(result.Error), zap.Int("id", template.ID))
-		if t.isDuplicateKeyError(result.Error) {
+		d.logger.Error("更新模板失败", zap.Error(result.Error), zap.Int("id", template.ID))
+		if d.isDuplicateKeyError(result.Error) {
 			return ErrTemplateNameExists
 		}
 		return fmt.Errorf("更新模板失败: %w", result.Error)
@@ -124,14 +124,14 @@ func (t *templateDAO) UpdateTemplate(ctx context.Context, template *model.Workor
 }
 
 // DeleteTemplate 删除模板
-func (t *templateDAO) DeleteTemplate(ctx context.Context, id int) error {
+func (d *templateDAO) DeleteTemplate(ctx context.Context, id int) error {
 	if id <= 0 {
 		return ErrInvalidID
 	}
 
-	result := t.db.WithContext(ctx).Where("id = ?", id).Delete(&model.WorkorderTemplate{})
+	result := d.db.WithContext(ctx).Where("id = ?", id).Delete(&model.WorkorderTemplate{})
 	if result.Error != nil {
-		t.logger.Error("删除模板失败", zap.Error(result.Error), zap.Int("id", id))
+		d.logger.Error("删除模板失败", zap.Error(result.Error), zap.Int("id", id))
 		return fmt.Errorf("删除模板失败: %w", result.Error)
 	}
 
@@ -143,13 +143,13 @@ func (t *templateDAO) DeleteTemplate(ctx context.Context, id int) error {
 }
 
 // GetTemplate 获取单个模板
-func (t *templateDAO) GetTemplate(ctx context.Context, id int) (*model.WorkorderTemplate, error) {
+func (d *templateDAO) GetTemplate(ctx context.Context, id int) (*model.WorkorderTemplate, error) {
 	if id <= 0 {
 		return nil, ErrInvalidID
 	}
 
 	var template model.WorkorderTemplate
-	err := t.db.WithContext(ctx).
+	err := d.db.WithContext(ctx).
 		Where("id = ?", id).
 		Preload("Process").
 		Preload("Category").
@@ -160,7 +160,7 @@ func (t *templateDAO) GetTemplate(ctx context.Context, id int) (*model.Workorder
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrTemplateNotFound
 		}
-		t.logger.Error("获取模板失败", zap.Error(err), zap.Int("id", id))
+		d.logger.Error("获取模板失败", zap.Error(err), zap.Int("id", id))
 		return nil, fmt.Errorf("获取模板失败: %w", err)
 	}
 
@@ -173,7 +173,7 @@ func (t *templateDAO) GetTemplate(ctx context.Context, id int) (*model.Workorder
 }
 
 // ListTemplate 列表查询模板
-func (t *templateDAO) ListTemplate(ctx context.Context, req *model.ListWorkorderTemplateReq) ([]*model.WorkorderTemplate, int64, error) {
+func (d *templateDAO) ListTemplate(ctx context.Context, req *model.ListWorkorderTemplateReq) ([]*model.WorkorderTemplate, int64, error) {
 	if req == nil {
 		return nil, 0, fmt.Errorf("请求参数不能为空")
 	}
@@ -184,14 +184,14 @@ func (t *templateDAO) ListTemplate(ctx context.Context, req *model.ListWorkorder
 	var templates []*model.WorkorderTemplate
 	var total int64
 
-	db := t.db.WithContext(ctx).Model(&model.WorkorderTemplate{})
+	db := d.db.WithContext(ctx).Model(&model.WorkorderTemplate{})
 
 	// 构建查询条件
-	db = t.buildListQuery(db, req)
+	db = d.buildListQuery(db, req)
 
 	// 获取总数
 	if err := db.Count(&total).Error; err != nil {
-		t.logger.Error("获取模板总数失败", zap.Error(err))
+		d.logger.Error("获取模板总数失败", zap.Error(err))
 		return nil, 0, fmt.Errorf("获取模板总数失败: %w", err)
 	}
 
@@ -206,7 +206,7 @@ func (t *templateDAO) ListTemplate(ctx context.Context, req *model.ListWorkorder
 		Find(&templates).Error
 
 	if err != nil {
-		t.logger.Error("查询模板列表失败", zap.Error(err))
+		d.logger.Error("查询模板列表失败", zap.Error(err))
 		return nil, 0, fmt.Errorf("查询模板列表失败: %w", err)
 	}
 
@@ -221,21 +221,21 @@ func (t *templateDAO) ListTemplate(ctx context.Context, req *model.ListWorkorder
 }
 
 // UpdateTemplateStatus 更新模板状态
-func (t *templateDAO) UpdateTemplateStatus(ctx context.Context, id int, status int8) error {
+func (d *templateDAO) UpdateTemplateStatus(ctx context.Context, id int, status int8) error {
 	if id <= 0 {
 		return ErrInvalidID
 	}
 
-	if !t.isValidStatus(status) {
+	if !d.isValidStatus(status) {
 		return ErrInvalidStatus
 	}
 
-	result := t.db.WithContext(ctx).Model(&model.WorkorderTemplate{}).
+	result := d.db.WithContext(ctx).Model(&model.WorkorderTemplate{}).
 		Where("id = ?", id).
 		Update("status", status)
 
 	if result.Error != nil {
-		t.logger.Error("更新模板状态失败", zap.Error(result.Error), zap.Int("id", id))
+		d.logger.Error("更新模板状态失败", zap.Error(result.Error), zap.Int("id", id))
 		return fmt.Errorf("更新模板状态失败: %w", result.Error)
 	}
 
@@ -247,14 +247,14 @@ func (t *templateDAO) UpdateTemplateStatus(ctx context.Context, id int, status i
 }
 
 // IsTemplateNameExists 检查模板名称是否存在
-func (t *templateDAO) IsTemplateNameExists(ctx context.Context, name string, excludeID int) (bool, error) {
+func (d *templateDAO) IsTemplateNameExists(ctx context.Context, name string, excludeID int) (bool, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return false, fmt.Errorf("模板名称不能为空")
 	}
 
 	var count int64
-	query := t.db.WithContext(ctx).Model(&model.WorkorderTemplate{}).Where("name = ?", name)
+	query := d.db.WithContext(ctx).Model(&model.WorkorderTemplate{}).Where("name = ?", name)
 
 	if excludeID > 0 {
 		query = query.Where("id != ?", excludeID)
@@ -262,7 +262,7 @@ func (t *templateDAO) IsTemplateNameExists(ctx context.Context, name string, exc
 
 	err := query.Count(&count).Error
 	if err != nil {
-		t.logger.Error("检查模板名称是否存在失败", zap.Error(err))
+		d.logger.Error("检查模板名称是否存在失败", zap.Error(err))
 		return false, fmt.Errorf("检查模板名称是否存在失败: %w", err)
 	}
 
@@ -270,7 +270,7 @@ func (t *templateDAO) IsTemplateNameExists(ctx context.Context, name string, exc
 }
 
 // buildListQuery 构建列表查询条件
-func (t *templateDAO) buildListQuery(db *gorm.DB, req *model.ListWorkorderTemplateReq) *gorm.DB {
+func (d *templateDAO) buildListQuery(db *gorm.DB, req *model.ListWorkorderTemplateReq) *gorm.DB {
 	// 通用搜索
 	if req.Search != "" {
 		searchTerm := "%" + strings.TrimSpace(req.Search) + "%"
@@ -301,7 +301,7 @@ func (t *templateDAO) buildListQuery(db *gorm.DB, req *model.ListWorkorderTempla
 }
 
 // isDuplicateKeyError 判断是否为重复键错误
-func (t *templateDAO) isDuplicateKeyError(err error) bool {
+func (d *templateDAO) isDuplicateKeyError(err error) bool {
 	if err == nil {
 		return false
 	}
@@ -313,6 +313,6 @@ func (t *templateDAO) isDuplicateKeyError(err error) bool {
 }
 
 // isValidStatus 验证状态值是否有效
-func (t *templateDAO) isValidStatus(status int8) bool {
+func (d *templateDAO) isValidStatus(status int8) bool {
 	return status == model.TemplateStatusEnabled || status == model.TemplateStatusDisabled
 }

@@ -42,23 +42,23 @@ func NewK8sIngressHandler(ingressService service.IngressService) *K8sIngressHand
 	}
 }
 
-func (k *K8sIngressHandler) RegisterRouters(server *gin.Engine) {
+func (h *K8sIngressHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
 		// Ingress基础管理
-		k8sGroup.GET("/ingress/:cluster_id/list", k.GetIngressList)                              // 获取Ingress列表
-		k8sGroup.GET("/ingress/:cluster_id/:namespace/:name/detail", k.GetIngressDetails)        // 获取Ingress详情
-		k8sGroup.GET("/ingress/:cluster_id/:namespace/:name/detail/yaml", k.GetIngressYaml)      // 获取Ingress YAML
-		k8sGroup.POST("/ingress/:cluster_id/create", k.CreateIngress)                            // 创建Ingress
-		k8sGroup.POST("/ingress/:cluster_id/create/yaml", k.CreateIngressByYaml)                 // 通过YAML创建Ingress
-		k8sGroup.PUT("/ingress/:cluster_id/:namespace/:name/update", k.UpdateIngress)            // 更新Ingress
-		k8sGroup.PUT("/ingress/:cluster_id/:namespace/:name/update/yaml", k.UpdateIngressByYaml) // 通过YAML更新Ingress
-		k8sGroup.DELETE("/ingress/:cluster_id/:namespace/:name/delete", k.DeleteIngress)         // 删除Ingress
+		k8sGroup.GET("/ingress/:cluster_id/list", h.GetIngressList)                              // 获取Ingress列表
+		k8sGroup.GET("/ingress/:cluster_id/:namespace/:name/detail", h.GetIngressDetails)        // 获取Ingress详情
+		k8sGroup.GET("/ingress/:cluster_id/:namespace/:name/detail/yaml", h.GetIngressYaml)      // 获取Ingress YAML
+		k8sGroup.POST("/ingress/:cluster_id/create", h.CreateIngress)                            // 创建Ingress
+		k8sGroup.POST("/ingress/:cluster_id/create/yaml", h.CreateIngressByYaml)                 // 通过YAML创建Ingress
+		k8sGroup.PUT("/ingress/:cluster_id/:namespace/:name/update", h.UpdateIngress)            // 更新Ingress
+		k8sGroup.PUT("/ingress/:cluster_id/:namespace/:name/update/yaml", h.UpdateIngressByYaml) // 通过YAML更新Ingress
+		k8sGroup.DELETE("/ingress/:cluster_id/:namespace/:name/delete", h.DeleteIngress)         // 删除Ingress
 	}
 }
 
 // GetIngressList 获取Ingress列表
-func (k *K8sIngressHandler) GetIngressList(ctx *gin.Context) {
+func (h *K8sIngressHandler) GetIngressList(ctx *gin.Context) {
 	var req model.GetIngressListReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -70,12 +70,12 @@ func (k *K8sIngressHandler) GetIngressList(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.ingressService.GetIngressList(ctx, &req)
+		return h.ingressService.GetIngressList(ctx, &req)
 	})
 }
 
 // GetIngressDetails 获取Ingress详情
-func (k *K8sIngressHandler) GetIngressDetails(ctx *gin.Context) {
+func (h *K8sIngressHandler) GetIngressDetails(ctx *gin.Context) {
 	var req model.GetIngressDetailsReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -101,12 +101,12 @@ func (k *K8sIngressHandler) GetIngressDetails(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.ingressService.GetIngressDetails(ctx, &req)
+		return h.ingressService.GetIngressDetails(ctx, &req)
 	})
 }
 
 // GetIngressYaml 获取Ingress的YAML配置
-func (k *K8sIngressHandler) GetIngressYaml(ctx *gin.Context) {
+func (h *K8sIngressHandler) GetIngressYaml(ctx *gin.Context) {
 	var req model.GetIngressYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -132,12 +132,12 @@ func (k *K8sIngressHandler) GetIngressYaml(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return k.ingressService.GetIngressYaml(ctx, &req)
+		return h.ingressService.GetIngressYaml(ctx, &req)
 	})
 }
 
 // CreateIngress 创建Ingress
-func (k *K8sIngressHandler) CreateIngress(ctx *gin.Context) {
+func (h *K8sIngressHandler) CreateIngress(ctx *gin.Context) {
 	var req model.CreateIngressReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -149,12 +149,12 @@ func (k *K8sIngressHandler) CreateIngress(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.ingressService.CreateIngress(ctx, &req)
+		return nil, h.ingressService.CreateIngress(ctx, &req)
 	})
 }
 
 // CreateIngressByYaml 通过YAML创建Ingress
-func (k *K8sIngressHandler) CreateIngressByYaml(ctx *gin.Context) {
+func (h *K8sIngressHandler) CreateIngressByYaml(ctx *gin.Context) {
 	var req model.CreateIngressByYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -166,12 +166,12 @@ func (k *K8sIngressHandler) CreateIngressByYaml(ctx *gin.Context) {
 	req.ClusterID = clusterID
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.ingressService.CreateIngressByYaml(ctx, &req)
+		return nil, h.ingressService.CreateIngressByYaml(ctx, &req)
 	})
 }
 
 // UpdateIngress 更新Ingress
-func (k *K8sIngressHandler) UpdateIngress(ctx *gin.Context) {
+func (h *K8sIngressHandler) UpdateIngress(ctx *gin.Context) {
 	var req model.UpdateIngressReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -197,12 +197,12 @@ func (k *K8sIngressHandler) UpdateIngress(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.ingressService.UpdateIngress(ctx, &req)
+		return nil, h.ingressService.UpdateIngress(ctx, &req)
 	})
 }
 
 // UpdateIngressByYaml 通过YAML更新Ingress
-func (k *K8sIngressHandler) UpdateIngressByYaml(ctx *gin.Context) {
+func (h *K8sIngressHandler) UpdateIngressByYaml(ctx *gin.Context) {
 	var req model.UpdateIngressByYamlReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -228,12 +228,12 @@ func (k *K8sIngressHandler) UpdateIngressByYaml(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.ingressService.UpdateIngressByYaml(ctx, &req)
+		return nil, h.ingressService.UpdateIngressByYaml(ctx, &req)
 	})
 }
 
 // DeleteIngress 删除Ingress
-func (k *K8sIngressHandler) DeleteIngress(ctx *gin.Context) {
+func (h *K8sIngressHandler) DeleteIngress(ctx *gin.Context) {
 	var req model.DeleteIngressReq
 
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
@@ -259,6 +259,6 @@ func (k *K8sIngressHandler) DeleteIngress(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, k.ingressService.DeleteIngress(ctx, &req)
+		return nil, h.ingressService.DeleteIngress(ctx, &req)
 	})
 }

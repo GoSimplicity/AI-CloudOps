@@ -80,7 +80,7 @@ func NewPodService(podManager manager.PodManager, sseHandler sse.Handler, logger
 }
 
 // CreatePod 创建Pod
-func (p *podService) CreatePod(ctx context.Context, req *model.CreatePodReq) error {
+func (s *podService) CreatePod(ctx context.Context, req *model.CreatePodReq) error {
 	if req == nil {
 		return fmt.Errorf("创建Pod请求不能为空")
 	}
@@ -100,7 +100,7 @@ func (p *podService) CreatePod(ctx context.Context, req *model.CreatePodReq) err
 	// 从请求构建Pod对象
 	pod, err := utils.BuildPodFromRequest(req)
 	if err != nil {
-		p.logger.Error("CreatePod: 构建Pod对象失败",
+		s.logger.Error("CreatePod: 构建Pod对象失败",
 			zap.Error(err),
 			zap.String("name", req.Name))
 		return fmt.Errorf("构建Pod对象失败: %w", err)
@@ -108,16 +108,16 @@ func (p *podService) CreatePod(ctx context.Context, req *model.CreatePodReq) err
 
 	// 验证Pod配置
 	if err := utils.ValidatePod(pod); err != nil {
-		p.logger.Error("CreatePod: Pod配置验证失败",
+		s.logger.Error("CreatePod: Pod配置验证失败",
 			zap.Error(err),
 			zap.String("name", req.Name))
 		return fmt.Errorf("pod配置验证失败: %w", err)
 	}
 
 	// 创建Pod
-	_, err = p.podManager.CreatePod(ctx, req.ClusterID, req.Namespace, pod)
+	_, err = s.podManager.CreatePod(ctx, req.ClusterID, req.Namespace, pod)
 	if err != nil {
-		p.logger.Error("CreatePod: 创建Pod失败",
+		s.logger.Error("CreatePod: 创建Pod失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -129,7 +129,7 @@ func (p *podService) CreatePod(ctx context.Context, req *model.CreatePodReq) err
 }
 
 // GetPodList 获取Pod列表
-func (p *podService) GetPodList(ctx context.Context, req *model.GetPodListReq) (model.ListResp[*model.K8sPod], error) {
+func (s *podService) GetPodList(ctx context.Context, req *model.GetPodListReq) (model.ListResp[*model.K8sPod], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("获取Pod列表请求不能为空")
 	}
@@ -151,9 +151,9 @@ func (p *podService) GetPodList(ctx context.Context, req *model.GetPodListReq) (
 		// 注意：K8s标签选择器语法有限制，先获取所有再过滤
 	}
 
-	k8sPods, err := p.podManager.GetPodList(ctx, req.ClusterID, namespace, listOptions)
+	k8sPods, err := s.podManager.GetPodList(ctx, req.ClusterID, namespace, listOptions)
 	if err != nil {
-		p.logger.Error("GetPodList: 获取Pod列表失败",
+		s.logger.Error("GetPodList: 获取Pod列表失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", namespace))
@@ -203,7 +203,7 @@ func (p *podService) GetPodList(ctx context.Context, req *model.GetPodListReq) (
 }
 
 // GetPodDetails 获取Pod详情
-func (p *podService) GetPodDetails(ctx context.Context, req *model.GetPodDetailsReq) (*model.K8sPod, error) {
+func (s *podService) GetPodDetails(ctx context.Context, req *model.GetPodDetailsReq) (*model.K8sPod, error) {
 	if req == nil {
 		return nil, fmt.Errorf("获取Pod详情请求不能为空")
 	}
@@ -220,9 +220,9 @@ func (p *podService) GetPodDetails(ctx context.Context, req *model.GetPodDetails
 		return nil, fmt.Errorf("Pod名称不能为空")
 	}
 
-	pod, err := p.podManager.GetPod(ctx, req.ClusterID, req.Namespace, req.Name)
+	pod, err := s.podManager.GetPod(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		p.logger.Error("GetPodDetails: 获取Pod失败",
+		s.logger.Error("GetPodDetails: 获取Pod失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -234,7 +234,7 @@ func (p *podService) GetPodDetails(ctx context.Context, req *model.GetPodDetails
 }
 
 // GetPodYaml 获取Pod YAML
-func (p *podService) GetPodYaml(ctx context.Context, req *model.GetPodYamlReq) (*model.K8sYaml, error) {
+func (s *podService) GetPodYaml(ctx context.Context, req *model.GetPodYamlReq) (*model.K8sYaml, error) {
 	if req == nil {
 		return nil, fmt.Errorf("获取Pod YAML请求不能为空")
 	}
@@ -251,9 +251,9 @@ func (p *podService) GetPodYaml(ctx context.Context, req *model.GetPodYamlReq) (
 		return nil, fmt.Errorf("Pod名称不能为空")
 	}
 
-	pod, err := p.podManager.GetPod(ctx, req.ClusterID, req.Namespace, req.Name)
+	pod, err := s.podManager.GetPod(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		p.logger.Error("GetPodYaml: 获取Pod失败",
+		s.logger.Error("GetPodYaml: 获取Pod失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -264,7 +264,7 @@ func (p *podService) GetPodYaml(ctx context.Context, req *model.GetPodYamlReq) (
 	// 转换为YAML
 	yamlContent, err := utils.PodToYAML(pod)
 	if err != nil {
-		p.logger.Error("GetPodYaml: 转换为YAML失败",
+		s.logger.Error("GetPodYaml: 转换为YAML失败",
 			zap.Error(err),
 			zap.String("podName", pod.Name))
 		return nil, fmt.Errorf("转换为YAML失败: %w", err)
@@ -276,7 +276,7 @@ func (p *podService) GetPodYaml(ctx context.Context, req *model.GetPodYamlReq) (
 }
 
 // UpdatePod 更新Pod
-func (p *podService) UpdatePod(ctx context.Context, req *model.UpdatePodReq) error {
+func (s *podService) UpdatePod(ctx context.Context, req *model.UpdatePodReq) error {
 	if req == nil {
 		return fmt.Errorf("更新Pod请求不能为空")
 	}
@@ -294,9 +294,9 @@ func (p *podService) UpdatePod(ctx context.Context, req *model.UpdatePodReq) err
 	}
 
 	// 先获取当前Pod
-	currentPod, err := p.podManager.GetPod(ctx, req.ClusterID, req.Namespace, req.Name)
+	currentPod, err := s.podManager.GetPod(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		p.logger.Error("UpdatePod: 获取当前Pod失败",
+		s.logger.Error("UpdatePod: 获取当前Pod失败",
 			zap.Error(err),
 			zap.String("name", req.Name))
 		return fmt.Errorf("获取当前Pod失败: %w", err)
@@ -312,16 +312,16 @@ func (p *podService) UpdatePod(ctx context.Context, req *model.UpdatePodReq) err
 
 	// 验证Pod配置
 	if err := utils.ValidatePod(currentPod); err != nil {
-		p.logger.Error("UpdatePod: Pod配置验证失败",
+		s.logger.Error("UpdatePod: Pod配置验证失败",
 			zap.Error(err),
 			zap.String("name", req.Name))
 		return fmt.Errorf("pod配置验证失败: %w", err)
 	}
 
 	// 更新Pod
-	_, err = p.podManager.UpdatePod(ctx, req.ClusterID, req.Namespace, currentPod)
+	_, err = s.podManager.UpdatePod(ctx, req.ClusterID, req.Namespace, currentPod)
 	if err != nil {
-		p.logger.Error("UpdatePod: 更新Pod失败",
+		s.logger.Error("UpdatePod: 更新Pod失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -333,7 +333,7 @@ func (p *podService) UpdatePod(ctx context.Context, req *model.UpdatePodReq) err
 }
 
 // DeletePod 删除Pod
-func (p *podService) DeletePod(ctx context.Context, req *model.DeletePodReq) error {
+func (s *podService) DeletePod(ctx context.Context, req *model.DeletePodReq) error {
 	if req == nil {
 		return fmt.Errorf("删除Pod请求不能为空")
 	}
@@ -359,9 +359,9 @@ func (p *podService) DeletePod(ctx context.Context, req *model.DeletePodReq) err
 		deleteOptions.PropagationPolicy = &policy
 	}
 
-	err := p.podManager.DeletePod(ctx, req.ClusterID, req.Namespace, req.Name, deleteOptions)
+	err := s.podManager.DeletePod(ctx, req.ClusterID, req.Namespace, req.Name, deleteOptions)
 	if err != nil {
-		p.logger.Error("DeletePod: 删除Pod失败",
+		s.logger.Error("DeletePod: 删除Pod失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -373,7 +373,7 @@ func (p *podService) DeletePod(ctx context.Context, req *model.DeletePodReq) err
 }
 
 // GetPodsByNodeName 获取指定节点上的Pod列表
-func (p *podService) GetPodsByNodeName(ctx context.Context, req *model.GetPodsByNodeReq) (model.ListResp[*model.K8sPod], error) {
+func (s *podService) GetPodsByNodeName(ctx context.Context, req *model.GetPodsByNodeReq) (model.ListResp[*model.K8sPod], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("获取节点Pod列表请求不能为空")
 	}
@@ -386,9 +386,9 @@ func (p *podService) GetPodsByNodeName(ctx context.Context, req *model.GetPodsBy
 		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("节点名称不能为空")
 	}
 
-	pods, err := p.podManager.GetPodsByNodeName(ctx, req.ClusterID, req.NodeName)
+	pods, err := s.podManager.GetPodsByNodeName(ctx, req.ClusterID, req.NodeName)
 	if err != nil {
-		p.logger.Error("GetPodsByNodeName: 获取节点Pod列表失败",
+		s.logger.Error("GetPodsByNodeName: 获取节点Pod列表失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("nodeName", req.NodeName))
@@ -402,7 +402,7 @@ func (p *podService) GetPodsByNodeName(ctx context.Context, req *model.GetPodsBy
 }
 
 // GetPodContainers 获取Pod的容器列表
-func (p *podService) GetPodContainers(ctx context.Context, req *model.GetPodContainersReq) (model.ListResp[*model.PodContainer], error) {
+func (s *podService) GetPodContainers(ctx context.Context, req *model.GetPodContainersReq) (model.ListResp[*model.PodContainer], error) {
 	if req == nil {
 		return model.ListResp[*model.PodContainer]{}, fmt.Errorf("获取Pod容器列表请求不能为空")
 	}
@@ -419,9 +419,9 @@ func (p *podService) GetPodContainers(ctx context.Context, req *model.GetPodCont
 		return model.ListResp[*model.PodContainer]{}, fmt.Errorf("Pod名称不能为空")
 	}
 
-	pod, err := p.podManager.GetPod(ctx, req.ClusterID, req.Namespace, req.PodName)
+	pod, err := s.podManager.GetPod(ctx, req.ClusterID, req.Namespace, req.PodName)
 	if err != nil {
-		p.logger.Error("GetPodContainers: 获取Pod失败",
+		s.logger.Error("GetPodContainers: 获取Pod失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -443,7 +443,7 @@ func (p *podService) GetPodContainers(ctx context.Context, req *model.GetPodCont
 }
 
 // GetPodLogs 获取Pod日志
-func (p *podService) GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) error {
+func (s *podService) GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) error {
 	if req == nil {
 		return fmt.Errorf("获取Pod日志请求不能为空")
 	}
@@ -473,22 +473,22 @@ func (p *podService) GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) erro
 	if req.SinceTime != "" {
 		sinceTime, err := time.Parse(time.RFC3339, req.SinceTime)
 		if err != nil {
-			p.logger.Error("解析时间参数失败", zap.String("sinceTime", req.SinceTime), zap.Error(err))
+			s.logger.Error("解析时间参数失败", zap.String("sinceTime", req.SinceTime), zap.Error(err))
 			return fmt.Errorf("时间参数格式错误: %w", err)
 		}
 		metaTime := metav1.NewTime(sinceTime)
 		logOptions.SinceTime = &metaTime
 	}
 
-	out, err := p.podManager.GetPodLogs(ctx, req.ClusterID, req.Namespace, req.PodName, logOptions)
+	out, err := s.podManager.GetPodLogs(ctx, req.ClusterID, req.Namespace, req.PodName, logOptions)
 	if err != nil {
 		// 检查是否请求previous日志但容器未重启
 		if strings.Contains(err.Error(), "previous terminated container") &&
 			strings.Contains(err.Error(), "not found") {
-			return p.sseHandler.Stream(ctx, func(ctx context.Context, msgChan chan<- interface{}) {
+			return s.sseHandler.Stream(ctx, func(ctx context.Context, msgChan chan<- interface{}) {
 				// 发送友好提示
 				msgChan <- "该容器没有重启过，无法获取之前的日志。请取消 'Previous' 选项查看当前日志。"
-				p.logger.Info("容器没有previous日志",
+				s.logger.Info("容器没有previous日志",
 					zap.Int("clusterID", req.ClusterID),
 					zap.String("namespace", req.Namespace),
 					zap.String("podName", req.PodName))
@@ -497,16 +497,16 @@ func (p *podService) GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) erro
 		return err
 	}
 
-	return p.sseHandler.Stream(ctx, func(ctx context.Context, msgChan chan<- interface{}) {
+	return s.sseHandler.Stream(ctx, func(ctx context.Context, msgChan chan<- interface{}) {
 		defer func() {
 			if err := out.Close(); err != nil {
 				// 检查是否是客户端断开连接
 				if errors.Is(err, context.Canceled) ||
 					strings.Contains(err.Error(), "request canceled") ||
 					strings.Contains(err.Error(), "context cancellation") {
-					p.logger.Debug("Pod日志流已正常关闭（客户端断开）", zap.Error(err))
+					s.logger.Debug("Pod日志流已正常关闭（客户端断开）", zap.Error(err))
 				} else {
-					p.logger.Error("关闭Pod日志流失败", zap.Error(err))
+					s.logger.Error("关闭Pod日志流失败", zap.Error(err))
 				}
 			}
 		}()
@@ -518,7 +518,7 @@ func (p *podService) GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) erro
 		for {
 			select {
 			case <-ctx.Done():
-				p.logger.Info("上下文已取消，停止读取Pod日志")
+				s.logger.Info("上下文已取消，停止读取Pod日志")
 				return
 			default:
 				line, err := reader.ReadString('\n')
@@ -532,7 +532,7 @@ func (p *podService) GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) erro
 						// Follow模式不立即关闭连接
 						// EOF可能只是暂时无新日志，继续等待
 						if logOptions.Follow {
-							p.logger.Debug("Pod日志暂时无新内容，继续等待...")
+							s.logger.Debug("Pod日志暂时无新内容，继续等待...")
 							// 短暂等待避免CPU密集循环
 							select {
 							case <-ctx.Done():
@@ -541,7 +541,7 @@ func (p *podService) GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) erro
 								continue
 							}
 						} else {
-							p.logger.Info("Pod日志流已结束")
+							s.logger.Info("Pod日志流已结束")
 							return
 						}
 					}
@@ -552,26 +552,26 @@ func (p *podService) GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) erro
 						strings.Contains(err.Error(), "Client.Timeout") ||
 						strings.Contains(err.Error(), "context cancellation") ||
 						strings.Contains(err.Error(), "request canceled") {
-						p.logger.Info("客户端断开连接或请求超时，停止读取Pod日志")
+						s.logger.Info("客户端断开连接或请求超时，停止读取Pod日志")
 						return
 					}
 
 					// 检查网络超时
 					var netErr net.Error
 					if errors.As(err, &netErr) && netErr.Timeout() {
-						p.logger.Info("网络超时，停止读取Pod日志")
+						s.logger.Info("网络超时，停止读取Pod日志")
 						return
 					}
 
 					retryCount++
 					if retryCount > maxRetries {
-						p.logger.Error("读取Pod日志失败，已达到最大重试次数",
+						s.logger.Error("读取Pod日志失败，已达到最大重试次数",
 							zap.Error(err),
 							zap.Int("retryCount", retryCount))
 						return
 					}
 
-					p.logger.Warn("读取Pod日志失败，将重试",
+					s.logger.Warn("读取Pod日志失败，将重试",
 						zap.Error(err),
 						zap.Int("retryCount", retryCount),
 						zap.Int("maxRetries", maxRetries))
@@ -606,7 +606,7 @@ func (p *podService) GetPodLogs(ctx *gin.Context, req *model.GetPodLogsReq) erro
 }
 
 // PodExec Pod终端执行
-func (p *podService) PodExec(ctx *gin.Context, req *model.PodExecReq) error {
+func (s *podService) PodExec(ctx *gin.Context, req *model.PodExecReq) error {
 	if req == nil {
 		return fmt.Errorf("Pod终端执行请求不能为空")
 	}
@@ -625,15 +625,15 @@ func (p *podService) PodExec(ctx *gin.Context, req *model.PodExecReq) error {
 
 	conn, err := pkg.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
-		p.logger.Error("升级ws失败", zap.Error(err))
+		s.logger.Error("升级ws失败", zap.Error(err))
 		return fmt.Errorf("初始化WebSocket失败: %w", err)
 	}
 
-	return p.podManager.PodTerminalSession(ctx, req.ClusterID, req.Namespace, req.PodName, req.Container, req.Shell, conn)
+	return s.podManager.PodTerminalSession(ctx, req.ClusterID, req.Namespace, req.PodName, req.Container, req.Shell, conn)
 }
 
 // PodPortForward Pod端口转发
-func (p *podService) PodPortForward(ctx context.Context, req *model.PodPortForwardReq) error {
+func (s *podService) PodPortForward(ctx context.Context, req *model.PodPortForwardReq) error {
 	if req == nil {
 		return fmt.Errorf("Pod端口转发请求不能为空")
 	}
@@ -665,11 +665,11 @@ func (p *podService) PodPortForward(ctx context.Context, req *model.PodPortForwa
 	}
 
 	// 调用Manager层进行端口转发
-	return p.podManager.PodPortForward(ctx, req.ClusterID, req.Namespace, req.PodName, req.Ports)
+	return s.podManager.PodPortForward(ctx, req.ClusterID, req.Namespace, req.PodName, req.Ports)
 }
 
 // PodFileUpload 上传文件到Pod
-func (p *podService) PodFileUpload(ctx *gin.Context, req *model.PodFileUploadReq) error {
+func (s *podService) PodFileUpload(ctx *gin.Context, req *model.PodFileUploadReq) error {
 	if req == nil {
 		return fmt.Errorf("上传文件到Pod请求不能为空")
 	}
@@ -694,16 +694,16 @@ func (p *podService) PodFileUpload(ctx *gin.Context, req *model.PodFileUploadReq
 		return fmt.Errorf("文件路径不能为空")
 	}
 
-	p.logger.Info("开始上传文件到Pod",
+	s.logger.Info("开始上传文件到Pod",
 		zap.Int("clusterID", req.ClusterID),
 		zap.String("namespace", req.Namespace),
 		zap.String("podName", req.PodName),
 		zap.String("containerName", req.ContainerName),
 		zap.String("filePath", req.FilePath))
 
-	err := p.podManager.UploadFileToPod(ctx, req.ClusterID, req.Namespace, req.PodName, req.ContainerName, req.FilePath)
+	err := s.podManager.UploadFileToPod(ctx, req.ClusterID, req.Namespace, req.PodName, req.ContainerName, req.FilePath)
 	if err != nil {
-		p.logger.Error("上传文件到Pod失败",
+		s.logger.Error("上传文件到Pod失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -713,7 +713,7 @@ func (p *podService) PodFileUpload(ctx *gin.Context, req *model.PodFileUploadReq
 		return fmt.Errorf("上传文件到Pod失败: %w", err)
 	}
 
-	p.logger.Info("成功上传文件到Pod",
+	s.logger.Info("成功上传文件到Pod",
 		zap.Int("clusterID", req.ClusterID),
 		zap.String("namespace", req.Namespace),
 		zap.String("podName", req.PodName),
@@ -724,7 +724,7 @@ func (p *podService) PodFileUpload(ctx *gin.Context, req *model.PodFileUploadReq
 }
 
 // PodFileDownload 从Pod下载文件
-func (p *podService) PodFileDownload(ctx *gin.Context, req *model.PodFileDownloadReq) error {
+func (s *podService) PodFileDownload(ctx *gin.Context, req *model.PodFileDownloadReq) error {
 	if req == nil {
 		return fmt.Errorf("从Pod下载文件请求不能为空")
 	}
@@ -749,7 +749,7 @@ func (p *podService) PodFileDownload(ctx *gin.Context, req *model.PodFileDownloa
 		return fmt.Errorf("文件路径不能为空")
 	}
 
-	p.logger.Info("开始从Pod下载文件",
+	s.logger.Info("开始从Pod下载文件",
 		zap.Int("clusterID", req.ClusterID),
 		zap.String("namespace", req.Namespace),
 		zap.String("podName", req.PodName),
@@ -770,9 +770,9 @@ func (p *podService) PodFileDownload(ctx *gin.Context, req *model.PodFileDownloa
 	ctx.Header("Expires", "0")
 
 	// 创建文件流
-	reader, err := p.podManager.DownloadPodFile(ctx.Request.Context(), req.ClusterID, req.Namespace, req.PodName, req.ContainerName, req.FilePath)
+	reader, err := s.podManager.DownloadPodFile(ctx.Request.Context(), req.ClusterID, req.Namespace, req.PodName, req.ContainerName, req.FilePath)
 	if err != nil {
-		p.logger.Error("创建Pod文件流失败",
+		s.logger.Error("创建Pod文件流失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -783,20 +783,20 @@ func (p *podService) PodFileDownload(ctx *gin.Context, req *model.PodFileDownloa
 	}
 	defer func() {
 		if closeErr := reader.Close(); closeErr != nil {
-			p.logger.Error("关闭文件流失败", zap.Error(closeErr))
+			s.logger.Error("关闭文件流失败", zap.Error(closeErr))
 		}
 	}()
 
 	// 直接使用io.Copy进行高效复制
 	bytesWritten, err := io.Copy(ctx.Writer, reader)
 	if err != nil {
-		p.logger.Error("文件传输失败",
+		s.logger.Error("文件传输失败",
 			zap.Error(err),
 			zap.Int64("bytesWritten", bytesWritten))
 		return fmt.Errorf("文件传输失败: %w", err)
 	}
 
-	p.logger.Info("成功下载文件从Pod",
+	s.logger.Info("成功下载文件从Pod",
 		zap.Int("clusterID", req.ClusterID),
 		zap.String("namespace", req.Namespace),
 		zap.String("podName", req.PodName),
@@ -808,7 +808,7 @@ func (p *podService) PodFileDownload(ctx *gin.Context, req *model.PodFileDownloa
 }
 
 // CreatePodByYaml 通过YAML创建Pod
-func (p *podService) CreatePodByYaml(ctx context.Context, req *model.CreatePodByYamlReq) error {
+func (s *podService) CreatePodByYaml(ctx context.Context, req *model.CreatePodByYamlReq) error {
 	if req == nil {
 		return fmt.Errorf("通过YAML创建Pod请求不能为空")
 	}
@@ -824,7 +824,7 @@ func (p *podService) CreatePodByYaml(ctx context.Context, req *model.CreatePodBy
 	// 解析YAML为Pod对象
 	pod, err := utils.YAMLToPod(req.YAML)
 	if err != nil {
-		p.logger.Error("CreatePodByYaml: 解析YAML失败",
+		s.logger.Error("CreatePodByYaml: 解析YAML失败",
 			zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID))
 		return fmt.Errorf("解析YAML失败: %w", err)
@@ -832,16 +832,16 @@ func (p *podService) CreatePodByYaml(ctx context.Context, req *model.CreatePodBy
 
 	// 验证Pod配置
 	if err := utils.ValidatePod(pod); err != nil {
-		p.logger.Error("CreatePodByYaml: Pod配置验证失败",
+		s.logger.Error("CreatePodByYaml: Pod配置验证失败",
 			zap.Error(err),
 			zap.String("name", pod.Name))
 		return fmt.Errorf("Pod配置验证失败: %w", err)
 	}
 
 	// 创建Pod
-	_, err = p.podManager.CreatePod(ctx, req.ClusterID, pod.Namespace, pod)
+	_, err = s.podManager.CreatePod(ctx, req.ClusterID, pod.Namespace, pod)
 	if err != nil {
-		p.logger.Error("CreatePodByYaml: 创建Pod失败",
+		s.logger.Error("CreatePodByYaml: 创建Pod失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", pod.Namespace),
@@ -853,7 +853,7 @@ func (p *podService) CreatePodByYaml(ctx context.Context, req *model.CreatePodBy
 }
 
 // UpdatePodByYaml 通过YAML更新Pod
-func (p *podService) UpdatePodByYaml(ctx context.Context, req *model.UpdatePodByYamlReq) error {
+func (s *podService) UpdatePodByYaml(ctx context.Context, req *model.UpdatePodByYamlReq) error {
 	if req == nil {
 		return fmt.Errorf("通过YAML更新Pod请求不能为空")
 	}
@@ -869,7 +869,7 @@ func (p *podService) UpdatePodByYaml(ctx context.Context, req *model.UpdatePodBy
 	// 解析YAML为Pod对象
 	pod, err := utils.YAMLToPod(req.YAML)
 	if err != nil {
-		p.logger.Error("UpdatePodByYaml: 解析YAML失败",
+		s.logger.Error("UpdatePodByYaml: 解析YAML失败",
 			zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID))
 		return fmt.Errorf("解析YAML失败: %w", err)
@@ -877,16 +877,16 @@ func (p *podService) UpdatePodByYaml(ctx context.Context, req *model.UpdatePodBy
 
 	// 验证Pod配置
 	if err := utils.ValidatePod(pod); err != nil {
-		p.logger.Error("UpdatePodByYaml: Pod配置验证失败",
+		s.logger.Error("UpdatePodByYaml: Pod配置验证失败",
 			zap.Error(err),
 			zap.String("name", pod.Name))
 		return fmt.Errorf("Pod配置验证失败: %w", err)
 	}
 
 	// 更新Pod
-	_, err = p.podManager.UpdatePod(ctx, req.ClusterID, req.Namespace, pod)
+	_, err = s.podManager.UpdatePod(ctx, req.ClusterID, req.Namespace, pod)
 	if err != nil {
-		p.logger.Error("UpdatePodByYaml: 更新Pod失败",
+		s.logger.Error("UpdatePodByYaml: 更新Pod失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),

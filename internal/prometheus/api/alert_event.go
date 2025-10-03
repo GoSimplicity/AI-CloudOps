@@ -43,27 +43,27 @@ func NewAlertEventHandler(svc alertEventService.AlertManagerEventService) *Alert
 	}
 }
 
-func (a *AlertEventHandler) RegisterRouters(server *gin.Engine) {
+func (h *AlertEventHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
 	{
-		monitorGroup.GET("/alert_events/list", a.GetMonitorAlertEventList)
-		monitorGroup.POST("/alert_events/silence/:id", a.EventAlertSilence)
-		monitorGroup.POST("/alert_events/claim/:id", a.EventAlertClaim)
-		monitorGroup.POST("/alert_events/unsilence/:id", a.EventAlertUnSilence)
+		monitorGroup.GET("/alert_events/list", h.GetMonitorAlertEventList)
+		monitorGroup.POST("/alert_events/silence/:id", h.EventAlertSilence)
+		monitorGroup.POST("/alert_events/claim/:id", h.EventAlertClaim)
+		monitorGroup.POST("/alert_events/unsilence/:id", h.EventAlertUnSilence)
 	}
 }
 
 // GetMonitorAlertEventList 获取告警事件列表
-func (a *AlertEventHandler) GetMonitorAlertEventList(ctx *gin.Context) {
+func (h *AlertEventHandler) GetMonitorAlertEventList(ctx *gin.Context) {
 	var req model.GetMonitorAlertEventListReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return a.svc.GetMonitorAlertEventList(ctx, &req)
+		return h.svc.GetMonitorAlertEventList(ctx, &req)
 	})
 }
 
 // EventAlertSilence 将指定告警事件设置为静默状态
-func (a *AlertEventHandler) EventAlertSilence(ctx *gin.Context) {
+func (h *AlertEventHandler) EventAlertSilence(ctx *gin.Context) {
 	var req model.EventAlertSilenceReq
 
 	uc := ctx.MustGet("user").(utils.UserClaims)
@@ -77,12 +77,12 @@ func (a *AlertEventHandler) EventAlertSilence(ctx *gin.Context) {
 	req.UserID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.svc.EventAlertSilence(ctx, &req)
+		return nil, h.svc.EventAlertSilence(ctx, &req)
 	})
 }
 
 // EventAlertClaim 认领指定的告警事件
-func (a *AlertEventHandler) EventAlertClaim(ctx *gin.Context) {
+func (h *AlertEventHandler) EventAlertClaim(ctx *gin.Context) {
 	var req model.EventAlertClaimReq
 
 	uc := ctx.MustGet("user").(utils.UserClaims)
@@ -96,12 +96,12 @@ func (a *AlertEventHandler) EventAlertClaim(ctx *gin.Context) {
 	req.UserID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.svc.EventAlertClaim(ctx, &req)
+		return nil, h.svc.EventAlertClaim(ctx, &req)
 	})
 }
 
 // EventAlertUnSilence 取消指定告警事件的静默状态
-func (a *AlertEventHandler) EventAlertUnSilence(ctx *gin.Context) {
+func (h *AlertEventHandler) EventAlertUnSilence(ctx *gin.Context) {
 	var req model.EventAlertUnSilenceReq
 
 	uc := ctx.MustGet("user").(utils.UserClaims)
@@ -115,6 +115,6 @@ func (a *AlertEventHandler) EventAlertUnSilence(ctx *gin.Context) {
 	req.UserID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, a.svc.EventAlertUnSilence(ctx, &req)
+		return nil, h.svc.EventAlertUnSilence(ctx, &req)
 	})
 }

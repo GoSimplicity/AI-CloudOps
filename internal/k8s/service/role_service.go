@@ -67,7 +67,7 @@ func NewRoleService(roleManager manager.RoleManager, logger *zap.Logger) RoleSer
 }
 
 // GetRoleList 获取Role列表
-func (r *roleService) GetRoleList(ctx context.Context, req *model.GetRoleListReq) (model.ListResp[*model.K8sRole], error) {
+func (s *roleService) GetRoleList(ctx context.Context, req *model.GetRoleListReq) (model.ListResp[*model.K8sRole], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sRole]{}, fmt.Errorf("获取Role列表请求不能为空")
 	}
@@ -76,9 +76,9 @@ func (r *roleService) GetRoleList(ctx context.Context, req *model.GetRoleListReq
 		return model.ListResp[*model.K8sRole]{}, fmt.Errorf("集群ID不能为空")
 	}
 
-	roleList, err := r.roleManager.GetRoleList(ctx, req.ClusterID, req.Namespace, metav1.ListOptions{})
+	roleList, err := s.roleManager.GetRoleList(ctx, req.ClusterID, req.Namespace, metav1.ListOptions{})
 	if err != nil {
-		r.logger.Error("GetRoleList: 获取Role列表失败",
+		s.logger.Error("GetRoleList: 获取Role列表失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID))
 		return model.ListResp[*model.K8sRole]{}, fmt.Errorf("获取Role列表失败: %w", err)
@@ -125,7 +125,7 @@ func (r *roleService) GetRoleList(ctx context.Context, req *model.GetRoleListReq
 }
 
 // GetRoleDetails 获取Role详情
-func (r *roleService) GetRoleDetails(ctx context.Context, req *model.GetRoleDetailsReq) (*model.K8sRole, error) {
+func (s *roleService) GetRoleDetails(ctx context.Context, req *model.GetRoleDetailsReq) (*model.K8sRole, error) {
 	if req == nil {
 		return nil, fmt.Errorf("获取Role详情请求不能为空")
 	}
@@ -142,9 +142,9 @@ func (r *roleService) GetRoleDetails(ctx context.Context, req *model.GetRoleDeta
 		return nil, fmt.Errorf("命名空间不能为空")
 	}
 
-	role, err := r.roleManager.GetRole(ctx, req.ClusterID, req.Namespace, req.Name)
+	role, err := s.roleManager.GetRole(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		r.logger.Error("GetRoleDetails: 获取Role失败",
+		s.logger.Error("GetRoleDetails: 获取Role失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -157,7 +157,7 @@ func (r *roleService) GetRoleDetails(ctx context.Context, req *model.GetRoleDeta
 }
 
 // CreateRole 创建Role
-func (r *roleService) CreateRole(ctx context.Context, req *model.CreateRoleReq) error {
+func (s *roleService) CreateRole(ctx context.Context, req *model.CreateRoleReq) error {
 	// 构建 Role 对象
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
@@ -170,7 +170,7 @@ func (r *roleService) CreateRole(ctx context.Context, req *model.CreateRoleReq) 
 	}
 
 	// 使用 RoleManager 创建 Role
-	err := r.roleManager.CreateRole(ctx, req.ClusterID, req.Namespace, role)
+	err := s.roleManager.CreateRole(ctx, req.ClusterID, req.Namespace, role)
 	if err != nil {
 		return fmt.Errorf("failed to create role: %w", err)
 	}
@@ -179,9 +179,9 @@ func (r *roleService) CreateRole(ctx context.Context, req *model.CreateRoleReq) 
 }
 
 // UpdateRole 更新Role
-func (r *roleService) UpdateRole(ctx context.Context, req *model.UpdateRoleReq) error {
+func (s *roleService) UpdateRole(ctx context.Context, req *model.UpdateRoleReq) error {
 	// 获取现有Role
-	existingRole, err := r.roleManager.GetRole(ctx, req.ClusterID, req.Namespace, req.Name)
+	existingRole, err := s.roleManager.GetRole(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		return fmt.Errorf("failed to get existing role: %w", err)
 	}
@@ -192,7 +192,7 @@ func (r *roleService) UpdateRole(ctx context.Context, req *model.UpdateRoleReq) 
 	existingRole.Rules = utils.ConvertPolicyRulesToK8s(req.Rules)
 
 	// 使用 RoleManager 更新 Role
-	err = r.roleManager.UpdateRole(ctx, req.ClusterID, req.Namespace, existingRole)
+	err = s.roleManager.UpdateRole(ctx, req.ClusterID, req.Namespace, existingRole)
 	if err != nil {
 		return fmt.Errorf("failed to update role: %w", err)
 	}
@@ -201,9 +201,9 @@ func (r *roleService) UpdateRole(ctx context.Context, req *model.UpdateRoleReq) 
 }
 
 // DeleteRole 删除Role
-func (r *roleService) DeleteRole(ctx context.Context, req *model.DeleteRoleReq) error {
+func (s *roleService) DeleteRole(ctx context.Context, req *model.DeleteRoleReq) error {
 	// 使用 RoleManager 删除 Role
-	err := r.roleManager.DeleteRole(ctx, req.ClusterID, req.Namespace, req.Name, metav1.DeleteOptions{})
+	err := s.roleManager.DeleteRole(ctx, req.ClusterID, req.Namespace, req.Name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to delete role: %w", err)
 	}
@@ -212,7 +212,7 @@ func (r *roleService) DeleteRole(ctx context.Context, req *model.DeleteRoleReq) 
 }
 
 // CreateRoleByYaml 通过YAML创建Role
-func (r *roleService) CreateRoleByYaml(ctx context.Context, req *model.CreateRoleByYamlReq) error {
+func (s *roleService) CreateRoleByYaml(ctx context.Context, req *model.CreateRoleByYamlReq) error {
 	role, err := utils.YAMLToRole(req.YamlContent)
 	if err != nil {
 		return fmt.Errorf("failed to parse yaml: %w", err)
@@ -222,7 +222,7 @@ func (r *roleService) CreateRoleByYaml(ctx context.Context, req *model.CreateRol
 	// Namespace will be extracted from YAML content
 
 	// 使用 RoleManager 创建 Role
-	err = r.roleManager.CreateRole(ctx, req.ClusterID, role.Namespace, role)
+	err = s.roleManager.CreateRole(ctx, req.ClusterID, role.Namespace, role)
 	if err != nil {
 		return fmt.Errorf("failed to create role: %w", err)
 	}
@@ -231,13 +231,13 @@ func (r *roleService) CreateRoleByYaml(ctx context.Context, req *model.CreateRol
 }
 
 // GetRoleYaml 获取Role YAML
-func (r *roleService) GetRoleYaml(ctx context.Context, req *model.GetRoleYamlReq) (*model.K8sYaml, error) {
+func (s *roleService) GetRoleYaml(ctx context.Context, req *model.GetRoleYamlReq) (*model.K8sYaml, error) {
 	if req == nil {
 		return nil, fmt.Errorf("获取Role YAML请求不能为空")
 	}
 
 	// 获取 Role
-	role, err := r.roleManager.GetRole(ctx, req.ClusterID, req.Namespace, req.Name)
+	role, err := s.roleManager.GetRole(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get role: %w", err)
 	}
@@ -253,7 +253,7 @@ func (r *roleService) GetRoleYaml(ctx context.Context, req *model.GetRoleYamlReq
 }
 
 // UpdateRoleYaml 更新Role YAML
-func (r *roleService) UpdateRoleYaml(ctx context.Context, req *model.UpdateRoleByYamlReq) error {
+func (s *roleService) UpdateRoleYaml(ctx context.Context, req *model.UpdateRoleByYamlReq) error {
 	if req == nil {
 		return fmt.Errorf("更新Role YAML请求不能为空")
 	}
@@ -268,7 +268,7 @@ func (r *roleService) UpdateRoleYaml(ctx context.Context, req *model.UpdateRoleB
 	role.Namespace = req.Namespace
 
 	// 获取现有Role以保持ResourceVersion
-	existingRole, err := r.roleManager.GetRole(ctx, req.ClusterID, req.Namespace, req.Name)
+	existingRole, err := s.roleManager.GetRole(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		return fmt.Errorf("failed to get existing role: %w", err)
 	}
@@ -277,7 +277,7 @@ func (r *roleService) UpdateRoleYaml(ctx context.Context, req *model.UpdateRoleB
 	role.UID = existingRole.UID
 
 	// 使用 RoleManager 更新 Role
-	err = r.roleManager.UpdateRole(ctx, req.ClusterID, req.Namespace, role)
+	err = s.roleManager.UpdateRole(ctx, req.ClusterID, req.Namespace, role)
 	if err != nil {
 		return fmt.Errorf("failed to update role: %w", err)
 	}

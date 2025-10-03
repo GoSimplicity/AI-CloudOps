@@ -44,28 +44,28 @@ func NewRecordRuleHandler(alertRecordService alertEventService.AlertManagerRecor
 	}
 }
 
-func (r *RecordRuleHandler) RegisterRouters(server *gin.Engine) {
+func (h *RecordRuleHandler) RegisterRouters(server *gin.Engine) {
 	monitorGroup := server.Group("/api/monitor")
 	{
-		monitorGroup.GET("/record_rules/list", r.GetMonitorRecordRuleList)
-		monitorGroup.POST("/record_rules/create", r.CreateMonitorRecordRule)
-		monitorGroup.PUT("/record_rules/update/:id", r.UpdateMonitorRecordRule)
-		monitorGroup.DELETE("/record_rules/delete/:id", r.DeleteMonitorRecordRule)
-		monitorGroup.GET("/record_rules/detail/:id", r.GetMonitorRecordRule)
+		monitorGroup.GET("/record_rules/list", h.GetMonitorRecordRuleList)
+		monitorGroup.POST("/record_rules/create", h.CreateMonitorRecordRule)
+		monitorGroup.PUT("/record_rules/update/:id", h.UpdateMonitorRecordRule)
+		monitorGroup.DELETE("/record_rules/delete/:id", h.DeleteMonitorRecordRule)
+		monitorGroup.GET("/record_rules/detail/:id", h.GetMonitorRecordRule)
 	}
 }
 
 // GetMonitorRecordRuleList 获取预聚合规则列表
-func (r *RecordRuleHandler) GetMonitorRecordRuleList(ctx *gin.Context) {
+func (h *RecordRuleHandler) GetMonitorRecordRuleList(ctx *gin.Context) {
 	var req model.GetMonitorRecordRuleListReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return r.alertRecordService.GetMonitorRecordRuleList(ctx, &req)
+		return h.alertRecordService.GetMonitorRecordRuleList(ctx, &req)
 	})
 }
 
 // CreateMonitorRecordRule 创建新的预聚合规则
-func (r *RecordRuleHandler) CreateMonitorRecordRule(ctx *gin.Context) {
+func (h *RecordRuleHandler) CreateMonitorRecordRule(ctx *gin.Context) {
 	var req model.CreateMonitorRecordRuleReq
 
 	uc := ctx.MustGet("user").(ijwt.UserClaims)
@@ -73,12 +73,12 @@ func (r *RecordRuleHandler) CreateMonitorRecordRule(ctx *gin.Context) {
 	req.CreateUserName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, r.alertRecordService.CreateMonitorRecordRule(ctx, &req)
+		return nil, h.alertRecordService.CreateMonitorRecordRule(ctx, &req)
 	})
 }
 
 // UpdateMonitorRecordRule 更新现有的预聚合规则
-func (r *RecordRuleHandler) UpdateMonitorRecordRule(ctx *gin.Context) {
+func (h *RecordRuleHandler) UpdateMonitorRecordRule(ctx *gin.Context) {
 	var req model.UpdateMonitorRecordRuleReq
 
 	id, err := utils.GetParamID(ctx)
@@ -90,12 +90,12 @@ func (r *RecordRuleHandler) UpdateMonitorRecordRule(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, r.alertRecordService.UpdateMonitorRecordRule(ctx, &req)
+		return nil, h.alertRecordService.UpdateMonitorRecordRule(ctx, &req)
 	})
 }
 
 // DeleteMonitorRecordRule 删除指定的预聚合规则
-func (r *RecordRuleHandler) DeleteMonitorRecordRule(ctx *gin.Context) {
+func (h *RecordRuleHandler) DeleteMonitorRecordRule(ctx *gin.Context) {
 	var req model.DeleteMonitorRecordRuleReq
 
 	id, err := utils.GetParamID(ctx)
@@ -107,12 +107,12 @@ func (r *RecordRuleHandler) DeleteMonitorRecordRule(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, r.alertRecordService.DeleteMonitorRecordRule(ctx, &req)
+		return nil, h.alertRecordService.DeleteMonitorRecordRule(ctx, &req)
 	})
 }
 
 // GetMonitorRecordRule 获取指定的预聚合规则详情
-func (r *RecordRuleHandler) GetMonitorRecordRule(ctx *gin.Context) {
+func (h *RecordRuleHandler) GetMonitorRecordRule(ctx *gin.Context) {
 	var req model.GetMonitorRecordRuleReq
 
 	id, err := utils.GetParamID(ctx)
@@ -124,6 +124,6 @@ func (r *RecordRuleHandler) GetMonitorRecordRule(ctx *gin.Context) {
 	req.ID = id
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return r.alertRecordService.GetMonitorRecordRule(ctx, &req)
+		return h.alertRecordService.GetMonitorRecordRule(ctx, &req)
 	})
 }

@@ -334,15 +334,15 @@ func formatBytes(bytes int64) string {
 }
 
 // CreateConfigMapByYaml 通过YAML创建ConfigMap
-func (c *configMapService) CreateConfigMapByYaml(ctx context.Context, req *model.CreateConfigMapByYamlReq) error {
+func (s *configMapService) CreateConfigMapByYaml(ctx context.Context, req *model.CreateConfigMapByYamlReq) error {
 	cm, err := k8sutils.YAMLToConfigMap(req.YAML)
 	if err != nil {
 		return err
 	}
 
-	_, err = c.configMapManager.CreateConfigMap(ctx, req.ClusterID, cm)
+	_, err = s.configMapManager.CreateConfigMap(ctx, req.ClusterID, cm)
 	if err != nil {
-		c.logger.Error("通过YAML创建ConfigMap失败", zap.Error(err),
+		s.logger.Error("通过YAML创建ConfigMap失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID), zap.String("namespace", cm.Namespace), zap.String("name", cm.Name))
 		return fmt.Errorf("通过YAML创建ConfigMap失败: %w", err)
 	}
@@ -351,16 +351,16 @@ func (c *configMapService) CreateConfigMapByYaml(ctx context.Context, req *model
 }
 
 // UpdateConfigMapByYaml 通过YAML更新ConfigMap
-func (c *configMapService) UpdateConfigMapByYaml(ctx context.Context, req *model.UpdateConfigMapByYamlReq) error {
+func (s *configMapService) UpdateConfigMapByYaml(ctx context.Context, req *model.UpdateConfigMapByYamlReq) error {
 	cm, err := k8sutils.YAMLToConfigMap(req.YAML)
 	if err != nil {
 		return err
 	}
 	cm.Namespace = req.Namespace
 	cm.Name = req.Name
-	_, err = c.configMapManager.UpdateConfigMap(ctx, req.ClusterID, cm)
+	_, err = s.configMapManager.UpdateConfigMap(ctx, req.ClusterID, cm)
 	if err != nil {
-		c.logger.Error("通过YAML更新ConfigMap失败", zap.Error(err),
+		s.logger.Error("通过YAML更新ConfigMap失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID), zap.String("namespace", req.Namespace), zap.String("name", req.Name))
 		return fmt.Errorf("通过YAML更新ConfigMap失败: %w", err)
 	}

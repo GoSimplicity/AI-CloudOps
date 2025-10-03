@@ -27,9 +27,11 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	appsv1 "k8s.io/api/apps/v1"
@@ -44,28 +46,23 @@ func BuildK8sDaemonSet(ctx context.Context, clusterID int, daemonSet appsv1.Daem
 		return nil, fmt.Errorf("无效的集群ID: %d", clusterID)
 	}
 
-	// 获取DaemonSet状态
 	status := getDaemonSetStatus(daemonSet)
 
-	// 获取更新策略信息
 	updateStrategy := "RollingUpdate"
 	if daemonSet.Spec.UpdateStrategy.Type == appsv1.OnDeleteDaemonSetStrategyType {
 		updateStrategy = "OnDelete"
 	}
 
-	// 获取容器镜像列表
 	var images []string
 	for _, container := range daemonSet.Spec.Template.Spec.Containers {
 		images = append(images, container.Image)
 	}
 
-	// 构建标签选择器
 	selector := make(map[string]string)
 	if daemonSet.Spec.Selector != nil && daemonSet.Spec.Selector.MatchLabels != nil {
 		selector = daemonSet.Spec.Selector.MatchLabels
 	}
 
-	// 构建Conditions
 	var conditions []model.DaemonSetCondition
 	for _, condition := range daemonSet.Status.Conditions {
 		dsCondition := model.DaemonSetCondition{
@@ -79,13 +76,11 @@ func BuildK8sDaemonSet(ctx context.Context, clusterID int, daemonSet appsv1.Daem
 		conditions = append(conditions, dsCondition)
 	}
 
-	// 设置历史版本限制
-	revisionHistoryLimit := int32(10) // 默认值
+	revisionHistoryLimit := int32(10)
 	if daemonSet.Spec.RevisionHistoryLimit != nil {
 		revisionHistoryLimit = *daemonSet.Spec.RevisionHistoryLimit
 	}
 
-	// 构建基础DaemonSet信息
 	k8sDaemonSet := &model.K8sDaemonSet{
 		Name:                   daemonSet.Name,
 		Namespace:              daemonSet.Namespace,
@@ -94,7 +89,7 @@ func BuildK8sDaemonSet(ctx context.Context, clusterID int, daemonSet appsv1.Daem
 		Labels:                 daemonSet.Labels,
 		Annotations:            daemonSet.Annotations,
 		CreatedAt:              daemonSet.CreationTimestamp.Time,
-		UpdatedAt:              daemonSet.CreationTimestamp.Time,
+		UpdatedAt:              time.Now(),
 		Status:                 status,
 		DesiredNumberScheduled: daemonSet.Status.DesiredNumberScheduled,
 		CurrentNumberScheduled: daemonSet.Status.CurrentNumberScheduled,
@@ -121,16 +116,16 @@ func getDaemonSetStatus(daemonSet appsv1.DaemonSet) model.K8sDaemonSetStatus {
 	available := daemonSet.Status.NumberAvailable
 	unavailable := daemonSet.Status.NumberUnavailable
 
-	if unavailable > 0 {
-		return model.K8sDaemonSetStatusUpdating
-	}
-
-	if ready == desired && available == desired {
+	if ready == desired && available == desired && desired > 0 {
 		return model.K8sDaemonSetStatusRunning
 	}
 
-	if ready == 0 {
-		return model.K8sDaemonSetStatusError
+	if unavailable > 0 || ready < desired {
+		return model.K8sDaemonSetStatusUpdating
+	}
+
+	if ready == 0 && desired == 0 {
+		return model.K8sDaemonSetStatusRunning
 	}
 
 	return model.K8sDaemonSetStatusError
@@ -258,10 +253,7 @@ func ValidateDaemonSet(daemonSet *appsv1.DaemonSet) error {
 
 // BuildDaemonSetListOptions 构建DaemonSet列表查询选项
 func BuildDaemonSetListOptions(req *model.GetDaemonSetListReq) metav1.ListOptions {
-	listOptions := metav1.ListOptions{}
-
-	// 基础查询选项，可以根据需要扩展
-	return listOptions
+	return metav1.ListOptions{}
 }
 
 // PaginateK8sDaemonSets 对DaemonSet列表进行分页
@@ -294,13 +286,11 @@ func BuildK8sDaemonSetHistory(revision appsv1.ControllerRevision) (*model.K8sDae
 	return &model.K8sDaemonSetHistory{
 		Revision: revision.Revision,
 		Date:     revision.CreationTimestamp.Time,
-		Message:  getChangeReason(revision.Annotations),
+		Message:  GetChangeReason(revision.Annotations),
 	}, nil
 }
 
-// ExtractDaemonSetFromRevision 从ControllerRevision中提取DaemonSet模板
-// 注意：DaemonSet回滚相比Deployment更复杂，因为Kubernetes没有内置的DaemonSet回滚API
-// 这个函数提供基础框架，在实际使用中需要根据具体需求实现反序列化逻辑
+// ExtractDaemonSetFromRevision 从ControllerRevision提取DaemonSet配置用于回滚
 func ExtractDaemonSetFromRevision(revision *appsv1.ControllerRevision, daemonSet *appsv1.DaemonSet) error {
 	if revision == nil {
 		return fmt.Errorf("ControllerRevision不能为空")
@@ -310,34 +300,52 @@ func ExtractDaemonSetFromRevision(revision *appsv1.ControllerRevision, daemonSet
 		return fmt.Errorf("DaemonSet对象不能为空")
 	}
 
-	// 简化实现：ControllerRevision的Data包含序列化的对象数据
-	// 对于DaemonSet，通常需要从ControllerRevision.Data中反序列化DaemonSetSpec
-	if revision.Data.Raw == nil {
+	if len(revision.Data.Raw) == 0 {
 		return fmt.Errorf("ControllerRevision数据为空")
 	}
 
-	// DaemonSet回滚说明：
-	// 1. DaemonSet不像Deployment有内置回滚功能
-	// 2. 通常通过重新应用历史版本的配置来实现
-	// 3. 实际项目中可以通过kubectl rollout undo daemonset/<name> --to-revision=<revision>
+	var revisionDaemonSet appsv1.DaemonSet
+	if err := json.Unmarshal(revision.Data.Raw, &revisionDaemonSet); err != nil {
+		var patchData map[string]interface{}
+		if err := json.Unmarshal(revision.Data.Raw, &patchData); err != nil {
+			return fmt.Errorf("反序列化数据失败: %w", err)
+		}
 
-	d := daemonSet
-	_ = d // 避免未使用变量警告
+		if spec, ok := patchData["spec"]; ok {
+			specBytes, err := json.Marshal(spec)
+			if err != nil {
+				return fmt.Errorf("序列化spec失败: %w", err)
+			}
 
-	// 这里可以添加具体的JSON反序列化逻辑
-	// 例如：json.Unmarshal(revision.Data.Raw, &daemonSetSpec)
-	// 然后将spec应用到传入的daemonSet对象
+			var daemonSetSpec appsv1.DaemonSetSpec
+			if err := json.Unmarshal(specBytes, &daemonSetSpec); err != nil {
+				return fmt.Errorf("反序列化spec失败: %w", err)
+			}
 
-	return fmt.Errorf("DaemonSet回滚功能需要实现具体的反序列化逻辑")
+			daemonSet.Spec = daemonSetSpec
+			return nil
+		}
+
+		return fmt.Errorf("无法提取DaemonSet配置")
+	}
+
+	daemonSet.Spec = revisionDaemonSet.Spec
+	if revisionDaemonSet.Labels != nil {
+		daemonSet.Labels = revisionDaemonSet.Labels
+	}
+	if revisionDaemonSet.Annotations != nil {
+		daemonSet.Annotations = revisionDaemonSet.Annotations
+	}
+
+	return nil
 }
 
-// getChangeReason 获取变更原因
-func getChangeReason(annotations map[string]string) string {
+// GetChangeReason 从annotations中获取变更原因
+func GetChangeReason(annotations map[string]string) string {
 	if annotations == nil {
 		return ""
 	}
 
-	// 常见的变更原因注解
 	changeReasonKeys := []string{
 		"deployment.kubernetes.io/revision-change-cause",
 		"kubernetes.io/change-cause",
@@ -393,4 +401,128 @@ func getDaemonSetStatusString(status model.K8sDaemonSetStatus) string {
 	}
 }
 
-// GetDaemonSetResourceUsage 计算DaemonSet资源使用情况
+// BuildDaemonSetFromYaml 从YAML构建DaemonSet对象
+func BuildDaemonSetFromYaml(req *model.CreateDaemonSetByYamlReq) (*appsv1.DaemonSet, error) {
+	if req == nil {
+		return nil, fmt.Errorf("请求不能为空")
+	}
+
+	if req.YAML == "" {
+		return nil, fmt.Errorf("YAML内容不能为空")
+	}
+
+	daemonSet, err := YAMLToDaemonSet(req.YAML)
+	if err != nil {
+		return nil, err
+	}
+
+	if daemonSet.Namespace == "" {
+		daemonSet.Namespace = "default"
+	}
+
+	if daemonSet.Name == "" {
+		return nil, fmt.Errorf("YAML中必须指定name")
+	}
+
+	return daemonSet, nil
+}
+
+// BuildDaemonSetFromYamlForUpdate 构建用于更新的DaemonSet对象
+func BuildDaemonSetFromYamlForUpdate(req *model.UpdateDaemonSetByYamlReq) (*appsv1.DaemonSet, error) {
+	if req == nil {
+		return nil, fmt.Errorf("请求不能为空")
+	}
+
+	if req.YAML == "" {
+		return nil, fmt.Errorf("YAML内容不能为空")
+	}
+
+	daemonSet, err := YAMLToDaemonSet(req.YAML)
+	if err != nil {
+		return nil, err
+	}
+
+	if daemonSet.Namespace != "" && daemonSet.Namespace != req.Namespace {
+		return nil, fmt.Errorf("YAML中的namespace与请求参数不一致")
+	}
+
+	if daemonSet.Name != "" && daemonSet.Name != req.Name {
+		return nil, fmt.Errorf("YAML中的name与请求参数不一致")
+	}
+
+	if daemonSet.Namespace == "" {
+		daemonSet.Namespace = req.Namespace
+	}
+
+	if daemonSet.Name == "" {
+		daemonSet.Name = req.Name
+	}
+
+	return daemonSet, nil
+}
+
+// ConvertToK8sDaemonSet 将 appsv1.DaemonSet 转换为 model.K8sDaemonSet
+func ConvertToK8sDaemonSet(daemonSet *appsv1.DaemonSet) *model.K8sDaemonSet {
+	if daemonSet == nil {
+		return nil
+	}
+
+	status := getDaemonSetStatus(*daemonSet)
+
+	updateStrategy := "RollingUpdate"
+	if daemonSet.Spec.UpdateStrategy.Type == appsv1.OnDeleteDaemonSetStrategyType {
+		updateStrategy = "OnDelete"
+	}
+
+	var images []string
+	for _, container := range daemonSet.Spec.Template.Spec.Containers {
+		images = append(images, container.Image)
+	}
+
+	selector := make(map[string]string)
+	if daemonSet.Spec.Selector != nil && daemonSet.Spec.Selector.MatchLabels != nil {
+		selector = daemonSet.Spec.Selector.MatchLabels
+	}
+
+	var conditions []model.DaemonSetCondition
+	for _, condition := range daemonSet.Status.Conditions {
+		dsCondition := model.DaemonSetCondition{
+			Type:               string(condition.Type),
+			Status:             string(condition.Status),
+			LastUpdateTime:     condition.LastTransitionTime.Time,
+			LastTransitionTime: condition.LastTransitionTime.Time,
+			Reason:             condition.Reason,
+			Message:            condition.Message,
+		}
+		conditions = append(conditions, dsCondition)
+	}
+
+	revisionHistoryLimit := int32(10)
+	if daemonSet.Spec.RevisionHistoryLimit != nil {
+		revisionHistoryLimit = *daemonSet.Spec.RevisionHistoryLimit
+	}
+
+	return &model.K8sDaemonSet{
+		Name:                   daemonSet.Name,
+		Namespace:              daemonSet.Namespace,
+		UID:                    string(daemonSet.UID),
+		Labels:                 daemonSet.Labels,
+		Annotations:            daemonSet.Annotations,
+		CreatedAt:              daemonSet.CreationTimestamp.Time,
+		UpdatedAt:              time.Now(),
+		Status:                 status,
+		DesiredNumberScheduled: daemonSet.Status.DesiredNumberScheduled,
+		CurrentNumberScheduled: daemonSet.Status.CurrentNumberScheduled,
+		NumberReady:            daemonSet.Status.NumberReady,
+		NumberAvailable:        daemonSet.Status.NumberAvailable,
+		NumberUnavailable:      daemonSet.Status.NumberUnavailable,
+		UpdatedNumberScheduled: daemonSet.Status.UpdatedNumberScheduled,
+		NumberMisscheduled:     daemonSet.Status.NumberMisscheduled,
+		Images:                 images,
+		Selector:               selector,
+		UpdateStrategy:         updateStrategy,
+		RevisionHistoryLimit:   revisionHistoryLimit,
+		Conditions:             conditions,
+		RawDaemonSet:           daemonSet,
+	}
+}

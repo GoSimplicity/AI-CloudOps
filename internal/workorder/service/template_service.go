@@ -68,22 +68,22 @@ func NewWorkorderTemplateService(
 }
 
 // CreateTemplate 创建模板
-func (t *workorderTemplateService) CreateTemplate(ctx context.Context, req *model.CreateWorkorderTemplateReq) error {
-	exists, err := t.checkTemplateNameExists(ctx, req.Name)
+func (s *workorderTemplateService) CreateTemplate(ctx context.Context, req *model.CreateWorkorderTemplateReq) error {
+	exists, err := s.checkTemplateNameExists(ctx, req.Name)
 	if err != nil {
-		t.l.Error("检查模板名称失败", zap.Error(err), zap.String("name", req.Name), zap.Int("creatorID", req.OperatorID))
+		s.l.Error("检查模板名称失败", zap.Error(err), zap.String("name", req.Name), zap.Int("creatorID", req.OperatorID))
 		return fmt.Errorf("检查模板名称失败: %w", err)
 	}
 	if exists {
 		return fmt.Errorf("模板名称已存在: %s", req.Name)
 	}
 
-	if err := t.validateProcessExists(ctx, req.ProcessID); err != nil {
+	if err := s.validateProcessExists(ctx, req.ProcessID); err != nil {
 		return err
 	}
 
 	if req.CategoryID != nil && *req.CategoryID > 0 {
-		if err := t.validateCategoryExists(ctx, *req.CategoryID); err != nil {
+		if err := s.validateCategoryExists(ctx, *req.CategoryID); err != nil {
 			return err
 		}
 	}
@@ -101,8 +101,8 @@ func (t *workorderTemplateService) CreateTemplate(ctx context.Context, req *mode
 		Tags:          req.Tags,
 	}
 
-	if err := t.dao.CreateTemplate(ctx, template); err != nil {
-		t.l.Error("创建模板失败", zap.Error(err), zap.String("name", req.Name), zap.Int("creatorID", req.OperatorID))
+	if err := s.dao.CreateTemplate(ctx, template); err != nil {
+		s.l.Error("创建模板失败", zap.Error(err), zap.String("name", req.Name), zap.Int("creatorID", req.OperatorID))
 		return fmt.Errorf("创建模板失败: %w", err)
 	}
 
@@ -110,20 +110,20 @@ func (t *workorderTemplateService) CreateTemplate(ctx context.Context, req *mode
 }
 
 // UpdateTemplate 更新模板
-func (t *workorderTemplateService) UpdateTemplate(ctx context.Context, req *model.UpdateWorkorderTemplateReq) error {
+func (s *workorderTemplateService) UpdateTemplate(ctx context.Context, req *model.UpdateWorkorderTemplateReq) error {
 	if req.ID <= 0 {
 		return errors.New("模板ID无效")
 	}
 
-	existingTemplate, err := t.dao.GetTemplate(ctx, req.ID)
+	existingTemplate, err := s.dao.GetTemplate(ctx, req.ID)
 	if err != nil {
 		return fmt.Errorf("获取模板失败: %w", err)
 	}
 
 	if req.Name != existingTemplate.Name {
-		exists, err := t.dao.IsTemplateNameExists(ctx, req.Name, req.ID)
+		exists, err := s.dao.IsTemplateNameExists(ctx, req.Name, req.ID)
 		if err != nil {
-			t.l.Error("检查模板名称失败", zap.Error(err), zap.String("name", req.Name))
+			s.l.Error("检查模板名称失败", zap.Error(err), zap.String("name", req.Name))
 			return fmt.Errorf("检查模板名称失败: %w", err)
 		}
 
@@ -133,13 +133,13 @@ func (t *workorderTemplateService) UpdateTemplate(ctx context.Context, req *mode
 	}
 
 	if req.ProcessID != existingTemplate.ProcessID {
-		if err := t.validateProcessExists(ctx, req.ProcessID); err != nil {
+		if err := s.validateProcessExists(ctx, req.ProcessID); err != nil {
 			return err
 		}
 	}
 
 	if req.CategoryID != nil && *req.CategoryID > 0 {
-		if err := t.validateCategoryExists(ctx, *req.CategoryID); err != nil {
+		if err := s.validateCategoryExists(ctx, *req.CategoryID); err != nil {
 			return err
 		}
 	}
@@ -156,8 +156,8 @@ func (t *workorderTemplateService) UpdateTemplate(ctx context.Context, req *mode
 		Tags:          req.Tags,
 	}
 
-	if err := t.dao.UpdateTemplate(ctx, template); err != nil {
-		t.l.Error("更新模板失败", zap.Error(err), zap.Int("id", req.ID))
+	if err := s.dao.UpdateTemplate(ctx, template); err != nil {
+		s.l.Error("更新模板失败", zap.Error(err), zap.Int("id", req.ID))
 		return fmt.Errorf("更新模板失败: %w", err)
 	}
 
@@ -165,31 +165,31 @@ func (t *workorderTemplateService) UpdateTemplate(ctx context.Context, req *mode
 }
 
 // DeleteTemplate 删除模板
-func (t *workorderTemplateService) DeleteTemplate(ctx context.Context, req *model.DeleteWorkorderTemplateReq) error {
+func (s *workorderTemplateService) DeleteTemplate(ctx context.Context, req *model.DeleteWorkorderTemplateReq) error {
 	if req.ID <= 0 {
 		return errors.New("模板ID无效")
 	}
 
-	template, err := t.dao.GetTemplate(ctx, req.ID)
+	template, err := s.dao.GetTemplate(ctx, req.ID)
 	if err != nil {
 		return fmt.Errorf("获取模板失败: %w", err)
 	}
 
-	instances, _, err := t.instanceDao.ListInstance(ctx, &model.ListWorkorderInstanceReq{
+	instances, _, err := s.instanceDao.ListInstance(ctx, &model.ListWorkorderInstanceReq{
 		ProcessID: &template.ProcessID,
 	})
 	if err != nil {
-		t.l.Error("获取关联工单失败", zap.Error(err), zap.Int("templateID", req.ID))
+		s.l.Error("获取关联工单失败", zap.Error(err), zap.Int("templateID", req.ID))
 		return fmt.Errorf("获取关联工单失败: %w", err)
 	}
 
 	if len(instances) > 0 {
-		t.l.Warn("模板有关联的工单，无法删除", zap.Int("templateID", req.ID), zap.Int("instanceCount", len(instances)))
+		s.l.Warn("模板有关联的工单，无法删除", zap.Int("templateID", req.ID), zap.Int("instanceCount", len(instances)))
 		return errors.New("模板有关联的工单，无法删除")
 	}
 
-	if err := t.dao.DeleteTemplate(ctx, req.ID); err != nil {
-		t.l.Error("删除模板失败", zap.Error(err), zap.Int("id", req.ID), zap.String("name", template.Name))
+	if err := s.dao.DeleteTemplate(ctx, req.ID); err != nil {
+		s.l.Error("删除模板失败", zap.Error(err), zap.Int("id", req.ID), zap.String("name", template.Name))
 		return fmt.Errorf("删除模板失败: %w", err)
 	}
 
@@ -197,10 +197,10 @@ func (t *workorderTemplateService) DeleteTemplate(ctx context.Context, req *mode
 }
 
 // ListTemplate 获取模板列表
-func (t *workorderTemplateService) ListTemplate(ctx context.Context, req *model.ListWorkorderTemplateReq) (*model.ListResp[*model.WorkorderTemplate], error) {
-	templates, total, err := t.dao.ListTemplate(ctx, req)
+func (s *workorderTemplateService) ListTemplate(ctx context.Context, req *model.ListWorkorderTemplateReq) (*model.ListResp[*model.WorkorderTemplate], error) {
+	templates, total, err := s.dao.ListTemplate(ctx, req)
 	if err != nil {
-		t.l.Error("获取模板列表失败", zap.Error(err))
+		s.l.Error("获取模板列表失败", zap.Error(err))
 		return nil, fmt.Errorf("获取模板列表失败: %w", err)
 	}
 
@@ -213,14 +213,14 @@ func (t *workorderTemplateService) ListTemplate(ctx context.Context, req *model.
 }
 
 // DetailTemplate 获取模板
-func (t *workorderTemplateService) DetailTemplate(ctx context.Context, req *model.DetailWorkorderTemplateReq) (*model.WorkorderTemplate, error) {
+func (s *workorderTemplateService) DetailTemplate(ctx context.Context, req *model.DetailWorkorderTemplateReq) (*model.WorkorderTemplate, error) {
 	if req.ID <= 0 {
 		return nil, errors.New("模板ID无效")
 	}
 
-	template, err := t.dao.GetTemplate(ctx, req.ID)
+	template, err := s.dao.GetTemplate(ctx, req.ID)
 	if err != nil {
-		t.l.Error("获取模板详情失败", zap.Error(err), zap.Int("id", req.ID))
+		s.l.Error("获取模板详情失败", zap.Error(err), zap.Int("id", req.ID))
 		return nil, fmt.Errorf("获取模板详情失败: %w", err)
 	}
 
@@ -228,7 +228,7 @@ func (t *workorderTemplateService) DetailTemplate(ctx context.Context, req *mode
 }
 
 // checkTemplateNameExists 检查模板名称
-func (t *workorderTemplateService) checkTemplateNameExists(ctx context.Context, name string, excludeID ...int) (bool, error) {
+func (s *workorderTemplateService) checkTemplateNameExists(ctx context.Context, name string, excludeID ...int) (bool, error) {
 	if name == "" {
 		return false, errors.New("模板名称不能为空")
 	}
@@ -239,18 +239,18 @@ func (t *workorderTemplateService) checkTemplateNameExists(ctx context.Context, 
 		id = excludeID[0]
 	}
 
-	return t.dao.IsTemplateNameExists(ctx, name, id)
+	return s.dao.IsTemplateNameExists(ctx, name, id)
 }
 
 // validateProcessExists 验证流程是否存在
-func (t *workorderTemplateService) validateProcessExists(ctx context.Context, processID int) error {
+func (s *workorderTemplateService) validateProcessExists(ctx context.Context, processID int) error {
 	if processID <= 0 {
 		return errors.New("流程ID无效")
 	}
 
-	_, err := t.processDao.GetProcessByID(ctx, processID)
+	_, err := s.processDao.GetProcessByID(ctx, processID)
 	if err != nil {
-		t.l.Error("验证流程发生错误", zap.Error(err))
+		s.l.Error("验证流程发生错误", zap.Error(err))
 		return errors.New("关联的流程不存在或无效")
 	}
 
@@ -258,14 +258,14 @@ func (t *workorderTemplateService) validateProcessExists(ctx context.Context, pr
 }
 
 // validateCategoryExists 验证分类
-func (t *workorderTemplateService) validateCategoryExists(ctx context.Context, categoryID int) error {
+func (s *workorderTemplateService) validateCategoryExists(ctx context.Context, categoryID int) error {
 	if categoryID <= 0 {
 		return errors.New("分类ID无效")
 	}
 
-	_, err := t.categoryDao.GetCategory(ctx, categoryID)
+	_, err := s.categoryDao.GetCategory(ctx, categoryID)
 	if err != nil {
-		t.l.Error("验证分类发生错误", zap.Error(err))
+		s.l.Error("验证分类发生错误", zap.Error(err))
 		return errors.New("关联的分类不存在或无效")
 	}
 
