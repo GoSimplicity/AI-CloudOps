@@ -116,12 +116,14 @@ type PodVolumeMount struct {
 
 // PodProbe 探测配置
 type PodProbe struct {
-	HTTPGet             *PodHTTPGetAction `json:"http_get"`              // HTTP GET探测
-	InitialDelaySeconds int32             `json:"initial_delay_seconds"` // 初始延迟时间
-	PeriodSeconds       int32             `json:"period_seconds"`        // 探测间隔时间
-	TimeoutSeconds      int32             `json:"timeout_seconds"`       // 探测超时时间
-	SuccessThreshold    int32             `json:"success_threshold"`     // 成功阈值
-	FailureThreshold    int32             `json:"failure_threshold"`     // 失败阈值
+	HTTPGet             *PodHTTPGetAction   `json:"http_get,omitempty"`    // HTTP GET探测
+	TCPSocket           *PodTCPSocketAction `json:"tcp_socket,omitempty"`  // TCP Socket探测
+	Exec                *PodExecAction      `json:"exec,omitempty"`        // 命令执行探测
+	InitialDelaySeconds int32               `json:"initial_delay_seconds"` // 初始延迟时间
+	PeriodSeconds       int32               `json:"period_seconds"`        // 探测间隔时间
+	TimeoutSeconds      int32               `json:"timeout_seconds"`       // 探测超时时间
+	SuccessThreshold    int32               `json:"success_threshold"`     // 成功阈值
+	FailureThreshold    int32               `json:"failure_threshold"`     // 失败阈值
 }
 
 // PodHTTPGetAction HTTP GET探测动作
@@ -129,6 +131,16 @@ type PodHTTPGetAction struct {
 	Path   string `json:"path"`   // 探测路径
 	Port   int32  `json:"port"`   // 探测端口
 	Scheme string `json:"scheme"` // 协议类型
+}
+
+// PodTCPSocketAction TCP Socket探测动作
+type PodTCPSocketAction struct {
+	Port int32 `json:"port"` // 探测端口
+}
+
+// PodExecAction 命令执行探测动作
+type PodExecAction struct {
+	Command []string `json:"command"` // 执行的命令
 }
 
 // PodContainerState 容器状态

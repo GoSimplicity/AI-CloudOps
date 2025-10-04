@@ -458,7 +458,13 @@ func (h *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
 	}
 
 	// 获取目标路径
-	filePath := ctx.DefaultPostForm("file_path", "/tmp")
+	filePath := ctx.Query("file_path")
+	if filePath == "" {
+		filePath = ctx.PostForm("file_path")
+	}
+	if filePath == "" {
+		filePath = "/tmp" // 默认路径
+	}
 
 	// 参数验证
 	if clusterID <= 0 {

@@ -125,6 +125,11 @@ func (s *podService) CreatePod(ctx context.Context, req *model.CreatePodReq) err
 		return fmt.Errorf("创建Pod失败: %w", err)
 	}
 
+	s.logger.Info("CreatePod: 创建Pod成功",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
+
 	return nil
 }
 
@@ -329,6 +334,11 @@ func (s *podService) UpdatePod(ctx context.Context, req *model.UpdatePodReq) err
 		return fmt.Errorf("更新Pod失败: %w", err)
 	}
 
+	s.logger.Info("UpdatePod: 更新Pod成功",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
+
 	return nil
 }
 
@@ -368,6 +378,11 @@ func (s *podService) DeletePod(ctx context.Context, req *model.DeletePodReq) err
 			zap.String("name", req.Name))
 		return fmt.Errorf("删除Pod失败: %w", err)
 	}
+
+	s.logger.Info("DeletePod: 删除Pod成功",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
 
 	return nil
 }
@@ -821,19 +836,35 @@ func (s *podService) CreatePodByYaml(ctx context.Context, req *model.CreatePodBy
 		return fmt.Errorf("YAML内容不能为空")
 	}
 
+	s.logger.Info("CreatePodByYaml: 开始通过YAML创建Pod",
+		zap.Int("clusterID", req.ClusterID))
+
 	// 解析YAML为Pod对象
 	pod, err := utils.YAMLToPod(req.YAML)
 	if err != nil {
 		s.logger.Error("CreatePodByYaml: 解析YAML失败",
 			zap.Error(err),
-			zap.Int("cluster_id", req.ClusterID))
+			zap.Int("clusterID", req.ClusterID))
 		return fmt.Errorf("解析YAML失败: %w", err)
+	}
+
+	// 如果YAML中没有指定namespace，使用default
+	if pod.Namespace == "" {
+		pod.Namespace = "default"
+	}
+
+	// YAML中必须包含name信息
+	if pod.Name == "" {
+		s.logger.Error("CreatePodByYaml: YAML中必须指定name",
+			zap.Int("clusterID", req.ClusterID))
+		return fmt.Errorf("YAML中必须指定name")
 	}
 
 	// 验证Pod配置
 	if err := utils.ValidatePod(pod); err != nil {
 		s.logger.Error("CreatePodByYaml: Pod配置验证失败",
 			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
 			zap.String("name", pod.Name))
 		return fmt.Errorf("Pod配置验证失败: %w", err)
 	}
@@ -848,6 +879,11 @@ func (s *podService) CreatePodByYaml(ctx context.Context, req *model.CreatePodBy
 			zap.String("name", pod.Name))
 		return fmt.Errorf("创建Pod失败: %w", err)
 	}
+
+	s.logger.Info("CreatePodByYaml: 创建Pod成功",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("namespace", pod.Namespace),
+		zap.String("name", pod.Name))
 
 	return nil
 }
@@ -866,19 +902,53 @@ func (s *podService) UpdatePodByYaml(ctx context.Context, req *model.UpdatePodBy
 		return fmt.Errorf("YAML内容不能为空")
 	}
 
+	s.logger.Info("UpdatePodByYaml: 开始通过YAML更新Pod",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
+
 	// 解析YAML为Pod对象
 	pod, err := utils.YAMLToPod(req.YAML)
 	if err != nil {
 		s.logger.Error("UpdatePodByYaml: 解析YAML失败",
 			zap.Error(err),
-			zap.Int("cluster_id", req.ClusterID))
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
 		return fmt.Errorf("解析YAML失败: %w", err)
+	}
+
+	// 确保YAML中的namespace和name与请求参数一致
+	if pod.Namespace != "" && pod.Namespace != req.Namespace {
+		s.logger.Error("UpdatePodByYaml: YAML中的namespace与请求参数不一致",
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("yamlNamespace", pod.Namespace),
+			zap.String("reqNamespace", req.Namespace))
+		return fmt.Errorf("YAML中的namespace (%s) 与请求参数不一致 (%s)", pod.Namespace, req.Namespace)
+	}
+
+	if pod.Name != "" && pod.Name != req.Name {
+		s.logger.Error("UpdatePodByYaml: YAML中的name与请求参数不一致",
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("yamlName", pod.Name),
+			zap.String("reqName", req.Name))
+		return fmt.Errorf("YAML中的name (%s) 与请求参数不一致 (%s)", pod.Name, req.Name)
+	}
+
+	// 如果YAML中没有指定，使用请求参数
+	if pod.Namespace == "" {
+		pod.Namespace = req.Namespace
+	}
+
+	if pod.Name == "" {
+		pod.Name = req.Name
 	}
 
 	// 验证Pod配置
 	if err := utils.ValidatePod(pod); err != nil {
 		s.logger.Error("UpdatePodByYaml: Pod配置验证失败",
 			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
 			zap.String("name", pod.Name))
 		return fmt.Errorf("Pod配置验证失败: %w", err)
 	}
@@ -893,6 +963,11 @@ func (s *podService) UpdatePodByYaml(ctx context.Context, req *model.UpdatePodBy
 			zap.String("name", pod.Name))
 		return fmt.Errorf("更新Pod失败: %w", err)
 	}
+
+	s.logger.Info("UpdatePodByYaml: 更新Pod成功",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", pod.Name))
 
 	return nil
 }
