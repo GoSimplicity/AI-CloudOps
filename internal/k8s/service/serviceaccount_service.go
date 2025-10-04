@@ -114,7 +114,7 @@ func (s *serviceAccountService) GetServiceAccountList(ctx context.Context, req *
 
 	// 分页
 	page := req.Page
-	pageSize := req.PageSize
+	pageSize := req.Size
 	if page <= 0 {
 		page = 1
 	}

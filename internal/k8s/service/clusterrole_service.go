@@ -102,7 +102,7 @@ func (s *clusterRoleService) GetClusterRoleList(ctx context.Context, req *model.
 
 	// 分页处理
 	page := req.Page
-	size := req.PageSize
+	size := req.Size
 	if page <= 0 {
 		page = 1
 	}

@@ -99,7 +99,7 @@ func (s *roleService) GetRoleList(ctx context.Context, req *model.GetRoleListReq
 	// 分页处理
 	total := int64(len(filteredRoles))
 	page := req.Page
-	size := req.PageSize
+	size := req.Size
 	if page <= 0 {
 		page = 1
 	}

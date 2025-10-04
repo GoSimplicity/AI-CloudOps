@@ -102,7 +102,7 @@ func (s *clusterRoleBindingService) GetClusterRoleBindingList(ctx context.Contex
 	// 简单分页
 	total := int64(len(filteredClusterRoleBindings))
 	page := req.Page
-	size := req.PageSize
+	size := req.Size
 	if page <= 0 {
 		page = 1
 	}

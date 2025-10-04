@@ -29,7 +29,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -85,26 +84,6 @@ func (s *eventService) GetEventList(ctx context.Context, req *model.GetEventList
 		if req.EventType != "" && event.Type != req.EventType {
 			continue
 		}
-		if req.Reason != "" && event.Reason != req.Reason {
-			continue
-		}
-		if req.Source != "" && event.Source.Component != req.Source {
-			continue
-		}
-		if req.InvolvedObjectKind != "" && event.InvolvedObject.Kind != req.InvolvedObjectKind {
-			continue
-		}
-		if req.InvolvedObjectName != "" && event.InvolvedObject.Name != req.InvolvedObjectName {
-			continue
-		}
-
-		// 时间过滤
-		if req.LimitDays > 0 {
-			limitTime := time.Now().AddDate(0, 0, -req.LimitDays)
-			if event.CreationTimestamp.Time.Before(limitTime) {
-				continue
-			}
-		}
 
 		events = append(events, eventEntity)
 	}
@@ -114,11 +93,31 @@ func (s *eventService) GetEventList(ctx context.Context, req *model.GetEventList
 		return events[i].LastTimestamp.After(events[j].LastTimestamp)
 	})
 
-	// 如果没有过滤条件，使用原始total；否则使用过滤后的数量
+	// 如果有过滤条件，使用过滤后的数量；否则使用原始total
 	filteredTotal := total
-	if req.EventType != "" || req.Reason != "" || req.Source != "" ||
-		req.InvolvedObjectKind != "" || req.InvolvedObjectName != "" || req.LimitDays > 0 {
+	if req.EventType != "" {
 		filteredTotal = int64(len(events))
+	}
+
+	// 分页处理
+	page := req.Page
+	size := req.Size
+	if page <= 0 {
+		page = 1
+	}
+	if size <= 0 {
+		size = 10 // 默认每页显示10条
+	}
+
+	start := (page - 1) * size
+	end := start + size
+
+	if start >= len(events) {
+		events = []*model.K8sEvent{}
+	} else if end > len(events) {
+		events = events[start:]
+	} else {
+		events = events[start:end]
 	}
 
 	return model.ListResp[*model.K8sEvent]{Items: events, Total: filteredTotal}, nil
@@ -147,10 +146,8 @@ func (s *eventService) GetEventsByObject(ctx context.Context, clusterID int, nam
 	}
 
 	eventReq := &model.GetEventListReq{
-		ClusterID:     clusterID,
-		Namespace:     namespace,
-		FieldSelector: fieldSelector,
-		LimitDays:     limitDays,
+		ClusterID: clusterID,
+		Namespace: namespace,
 	}
 
 	return s.GetEventList(ctx, eventReq)

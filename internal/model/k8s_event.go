@@ -175,18 +175,11 @@ type EventTimeline struct {
 
 // GetEventListReq 获取事件列表请求
 type GetEventListReq struct {
-	ClusterID          int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
-	Namespace          string `json:"namespace" form:"namespace" comment:"命名空间"`
-	LabelSelector      string `json:"label_selector" form:"label_selector" comment:"标签选择器"`
-	FieldSelector      string `json:"field_selector" form:"field_selector" comment:"字段选择器"`
-	EventType          string `json:"event_type" form:"event_type" comment:"事件类型：Normal,Warning"`
-	Reason             string `json:"reason" form:"reason" comment:"事件原因"`
-	Source             string `json:"source" form:"source" comment:"事件源组件"`
-	InvolvedObjectKind string `json:"involved_object_kind" form:"involved_object_kind" comment:"涉及对象类型"`
-	InvolvedObjectName string `json:"involved_object_name" form:"involved_object_name" comment:"涉及对象名称"`
-	LimitDays          int    `json:"limit_days" form:"limit_days" comment:"限制天数"`
-	Limit              int64  `json:"limit" form:"limit" comment:"限制结果数量"`
-	Continue           string `json:"continue" form:"continue" comment:"分页续订令牌"`
+	ListReq
+	ClusterID     int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
+	Namespace     string `json:"namespace" form:"namespace" comment:"命名空间"`
+	LabelSelector string `json:"label_selector" form:"label_selector" comment:"标签选择器"`
+	EventType     string `json:"event_type" form:"event_type" comment:"事件类型：Normal,Warning"`
 }
 
 // GetEventDetailReq 获取事件详情请求
