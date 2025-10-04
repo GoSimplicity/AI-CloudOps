@@ -79,7 +79,6 @@ func (s *ingressService) CreateIngress(ctx context.Context, req *model.CreateIng
 		return fmt.Errorf("命名空间不能为空")
 	}
 
-	// 构建Ingress对象
 	ingress, err := utils.BuildIngressFromSpec(req)
 	if err != nil {
 		s.logger.Error("CreateIngress: 构建Ingress对象失败",
@@ -88,7 +87,6 @@ func (s *ingressService) CreateIngress(ctx context.Context, req *model.CreateIng
 		return fmt.Errorf("构建Ingress对象失败: %w", err)
 	}
 
-	// 验证Ingress配置
 	if err := utils.ValidateIngress(ingress); err != nil {
 		s.logger.Error("CreateIngress: Ingress配置验证失败",
 			zap.Error(err),
@@ -96,7 +94,6 @@ func (s *ingressService) CreateIngress(ctx context.Context, req *model.CreateIng
 		return fmt.Errorf("Ingress配置验证失败: %w", err)
 	}
 
-	// 创建Ingress
 	err = s.ingressManager.CreateIngress(ctx, req.ClusterID, req.Namespace, ingress)
 	if err != nil {
 		s.logger.Error("CreateIngress: 创建Ingress失败",
@@ -124,7 +121,6 @@ func (s *ingressService) GetIngressList(ctx context.Context, req *model.GetIngre
 		return model.ListResp[*model.K8sIngress]{}, fmt.Errorf("集群ID不能为空")
 	}
 
-	// 构建查询选项
 	listOptions := utils.BuildIngressListOptions(req)
 
 	k8sIngresses, err := s.ingressManager.GetIngressList(ctx, req.ClusterID, req.Namespace, listOptions)
@@ -136,10 +132,8 @@ func (s *ingressService) GetIngressList(ctx context.Context, req *model.GetIngre
 		return model.ListResp[*model.K8sIngress]{}, fmt.Errorf("获取Ingress列表失败: %w", err)
 	}
 
-	// 根据状态过滤
 	var filteredIngresses []*model.K8sIngress
 	if req.Status != "" {
-		// 根据状态过滤
 		for _, k8sIngress := range k8sIngresses {
 			var statusStr string
 			switch k8sIngress.Status {
@@ -160,14 +154,13 @@ func (s *ingressService) GetIngressList(ctx context.Context, req *model.GetIngre
 		filteredIngresses = k8sIngresses
 	}
 
-	// 分页处理
 	page := req.Page
 	size := req.Size
 	if page <= 0 {
 		page = 1
 	}
 	if size <= 0 {
-		size = 10 // 默认每页显示10条
+		size = 10
 	}
 
 	pagedItems, total := utils.PaginateK8sIngresses(filteredIngresses, page, size)
@@ -237,7 +230,6 @@ func (s *ingressService) GetIngressYaml(ctx context.Context, req *model.GetIngre
 		return nil, fmt.Errorf("获取Ingress失败: %w", err)
 	}
 
-	// 转换为YAML
 	yamlContent, err := utils.IngressToYAML(ingress)
 	if err != nil {
 		s.logger.Error("GetIngressYaml: 转换为YAML失败",
@@ -269,7 +261,6 @@ func (s *ingressService) UpdateIngress(ctx context.Context, req *model.UpdateIng
 		return fmt.Errorf("命名空间不能为空")
 	}
 
-	// 获取现有Ingress
 	existingIngress, err := s.ingressManager.GetIngress(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		s.logger.Error("UpdateIngress: 获取现有Ingress失败",
@@ -282,18 +273,26 @@ func (s *ingressService) UpdateIngress(ctx context.Context, req *model.UpdateIng
 
 	updatedIngress := existingIngress.DeepCopy()
 
-	// 更新基本字段
-	if req.Labels != nil {
-		updatedIngress.Labels = req.Labels
+	if len(req.Labels) > 0 {
+		if updatedIngress.Labels == nil {
+			updatedIngress.Labels = make(map[string]string)
+		}
+		for k, v := range req.Labels {
+			updatedIngress.Labels[k] = v
+		}
 	}
-	if req.Annotations != nil {
-		updatedIngress.Annotations = req.Annotations
+	if len(req.Annotations) > 0 {
+		if updatedIngress.Annotations == nil {
+			updatedIngress.Annotations = make(map[string]string)
+		}
+		for k, v := range req.Annotations {
+			updatedIngress.Annotations[k] = v
+		}
 	}
 	if req.IngressClassName != nil {
 		updatedIngress.Spec.IngressClassName = req.IngressClassName
 	}
 
-	// 验证更新后的Ingress配置
 	if err := utils.ValidateIngress(updatedIngress); err != nil {
 		s.logger.Error("UpdateIngress: Ingress配置验证失败",
 			zap.Error(err),
@@ -365,16 +364,17 @@ func (s *ingressService) CreateIngressByYaml(ctx context.Context, req *model.Cre
 		return fmt.Errorf("YAML内容不能为空")
 	}
 
-	// 解析YAML为Ingress对象
+	s.logger.Info("开始通过YAML创建Ingress",
+		zap.Int("cluster_id", req.ClusterID))
+
 	ingress, err := utils.YAMLToIngress(req.YAML)
 	if err != nil {
-		s.logger.Error("CreateIngressByYaml: 解析YAML失败",
-			zap.Error(err),
-			zap.Int("cluster_id", req.ClusterID))
+		s.logger.Error("从YAML构建Ingress失败",
+			zap.Int("cluster_id", req.ClusterID),
+			zap.Error(err))
 		return fmt.Errorf("解析YAML失败: %w", err)
 	}
 
-	// 验证Ingress配置
 	if err := utils.ValidateIngress(ingress); err != nil {
 		s.logger.Error("CreateIngressByYaml: Ingress配置验证失败",
 			zap.Error(err),
@@ -382,20 +382,20 @@ func (s *ingressService) CreateIngressByYaml(ctx context.Context, req *model.Cre
 		return fmt.Errorf("Ingress配置验证失败: %w", err)
 	}
 
-	// 创建Ingress
 	err = s.ingressManager.CreateIngress(ctx, req.ClusterID, ingress.Namespace, ingress)
 	if err != nil {
-		s.logger.Error("CreateIngressByYaml: 创建Ingress失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
+		s.logger.Error("通过YAML创建Ingress失败",
+			zap.Int("cluster_id", req.ClusterID),
 			zap.String("namespace", ingress.Namespace),
-			zap.String("name", ingress.Name))
+			zap.String("name", ingress.Name),
+			zap.Error(err))
 		return fmt.Errorf("创建Ingress失败: %w", err)
 	}
 
-	s.logger.Info("CreateIngressByYaml: Ingress创建成功",
-		zap.String("name", ingress.Name),
-		zap.String("namespace", ingress.Namespace))
+	s.logger.Info("通过YAML创建Ingress成功",
+		zap.Int("cluster_id", req.ClusterID),
+		zap.String("namespace", ingress.Namespace),
+		zap.String("name", ingress.Name))
 
 	return nil
 }
@@ -414,16 +414,21 @@ func (s *ingressService) UpdateIngressByYaml(ctx context.Context, req *model.Upd
 		return fmt.Errorf("YAML内容不能为空")
 	}
 
-	// 解析YAML为Ingress对象
+	s.logger.Info("开始通过YAML更新Ingress",
+		zap.Int("cluster_id", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
+
 	ingress, err := utils.YAMLToIngress(req.YAML)
 	if err != nil {
-		s.logger.Error("UpdateIngressByYaml: 解析YAML失败",
-			zap.Error(err),
-			zap.Int("cluster_id", req.ClusterID))
+		s.logger.Error("从YAML构建Ingress失败",
+			zap.Int("cluster_id", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name),
+			zap.Error(err))
 		return fmt.Errorf("解析YAML失败: %w", err)
 	}
 
-	// 验证Ingress配置
 	if err := utils.ValidateIngress(ingress); err != nil {
 		s.logger.Error("UpdateIngressByYaml: Ingress配置验证失败",
 			zap.Error(err),
@@ -431,20 +436,20 @@ func (s *ingressService) UpdateIngressByYaml(ctx context.Context, req *model.Upd
 		return fmt.Errorf("Ingress配置验证失败: %w", err)
 	}
 
-	// 更新Ingress
 	err = s.ingressManager.UpdateIngress(ctx, req.ClusterID, ingress.Namespace, ingress)
 	if err != nil {
-		s.logger.Error("UpdateIngressByYaml: 更新Ingress失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
+		s.logger.Error("通过YAML更新Ingress失败",
+			zap.Int("cluster_id", req.ClusterID),
 			zap.String("namespace", ingress.Namespace),
-			zap.String("name", ingress.Name))
+			zap.String("name", ingress.Name),
+			zap.Error(err))
 		return fmt.Errorf("更新Ingress失败: %w", err)
 	}
 
-	s.logger.Info("UpdateIngressByYaml: Ingress更新成功",
-		zap.String("name", ingress.Name),
-		zap.String("namespace", ingress.Namespace))
+	s.logger.Info("通过YAML更新Ingress成功",
+		zap.Int("cluster_id", req.ClusterID),
+		zap.String("namespace", ingress.Namespace),
+		zap.String("name", ingress.Name))
 
 	return nil
 }

@@ -37,12 +37,12 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// ConvertToK8sIngress 将 Kubernetes Ingress 转换为内部 Ingress 模型
+// ConvertToK8sIngress 将Kubernetes Ingress转换为内部Ingress模型
 func ConvertToK8sIngress(ingress *networkingv1.Ingress, clusterID int) *model.K8sIngress {
 	if ingress == nil {
 		return nil
 	}
-	// 提取主机列表
+
 	hosts := make([]string, 0)
 	for _, rule := range ingress.Spec.Rules {
 		if rule.Host != "" {
@@ -50,19 +50,14 @@ func ConvertToK8sIngress(ingress *networkingv1.Ingress, clusterID int) *model.K8
 		}
 	}
 
-	// 计算年龄
 	age := pkg.GetAge(ingress.CreationTimestamp.Time)
-
-	// 确定状态
 	status := IngressStatus(ingress)
 
-	// 获取Ingress类名
 	ingressClassName := ""
 	if ingress.Spec.IngressClassName != nil {
 		ingressClassName = *ingress.Spec.IngressClassName
 	}
 
-	// 转换规则（简化处理）
 	rules := make([]model.IngressRule, 0, len(ingress.Spec.Rules))
 	for _, rule := range ingress.Spec.Rules {
 		ingressRule := model.IngressRule{
@@ -89,7 +84,6 @@ func ConvertToK8sIngress(ingress *networkingv1.Ingress, clusterID int) *model.K8
 		rules = append(rules, ingressRule)
 	}
 
-	// 转换TLS配置（简化处理）
 	tls := make([]model.IngressTLS, 0, len(ingress.Spec.TLS))
 	for _, tlsConfig := range ingress.Spec.TLS {
 		ingressTLS := model.IngressTLS{
@@ -99,7 +93,16 @@ func ConvertToK8sIngress(ingress *networkingv1.Ingress, clusterID int) *model.K8
 		tls = append(tls, ingressTLS)
 	}
 
-	// 负载均衡器信息（简化处理）
+	labels := ingress.Labels
+	if labels == nil {
+		labels = map[string]string{}
+	}
+
+	annotations := ingress.Annotations
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+
 	loadBalancer := model.IngressLoadBalancer{}
 
 	return &model.K8sIngress{
@@ -111,8 +114,8 @@ func ConvertToK8sIngress(ingress *networkingv1.Ingress, clusterID int) *model.K8
 		Rules:            rules,
 		TLS:              tls,
 		LoadBalancer:     loadBalancer,
-		Labels:           ingress.Labels,
-		Annotations:      ingress.Annotations,
+		Labels:           labels,
+		Annotations:      annotations,
 		CreatedAt:        ingress.CreationTimestamp.Time,
 		Age:              age,
 		Status:           convertIngressStatusToEnum(status),
@@ -180,7 +183,6 @@ func IngressToYAML(ingress *networkingv1.Ingress) (string, error) {
 		return "", fmt.Errorf("ingress不能为空")
 	}
 
-	// 清理不需要的字段
 	cleanIngress := ingress.DeepCopy()
 	cleanIngress.Status = networkingv1.IngressStatus{}
 	cleanIngress.ManagedFields = nil
@@ -188,6 +190,7 @@ func IngressToYAML(ingress *networkingv1.Ingress) (string, error) {
 	cleanIngress.UID = ""
 	cleanIngress.CreationTimestamp = metav1.Time{}
 	cleanIngress.Generation = 0
+	cleanIngress.SelfLink = ""
 
 	yamlBytes, err := yaml.Marshal(cleanIngress)
 	if err != nil {
@@ -238,12 +241,22 @@ func BuildIngressFromSpec(req *model.CreateIngressReq) (*networkingv1.Ingress, e
 		return nil, fmt.Errorf("请求不能为空")
 	}
 
+	labels := req.Labels
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+
+	annotations := req.Annotations
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        req.Name,
 			Namespace:   req.Namespace,
-			Labels:      req.Labels,
-			Annotations: req.Annotations,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: networkingv1.IngressSpec{
 			IngressClassName: req.IngressClassName,

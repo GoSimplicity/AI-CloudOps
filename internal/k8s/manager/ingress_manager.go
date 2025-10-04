@@ -58,7 +58,7 @@ func NewIngressManager(clientFactory client.K8sClient, logger *zap.Logger) Ingre
 	}
 }
 
-// getKubeClient 获取Kubernetes客户端
+// getKubeClient 私有方法：获取Kubernetes客户端
 func (m *ingressManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
 	kubeClient, err := m.clientFactory.GetKubeClient(clusterID)
 	if err != nil {

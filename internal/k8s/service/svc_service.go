@@ -29,7 +29,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -52,14 +51,12 @@ type SvcService interface {
 
 type svcService struct {
 	serviceManager manager.ServiceManager
-	client         client.K8sClient
 	logger         *zap.Logger
 }
 
-func NewSvcService(serviceManager manager.ServiceManager, client client.K8sClient, logger *zap.Logger) SvcService {
+func NewSvcService(serviceManager manager.ServiceManager, logger *zap.Logger) SvcService {
 	return &svcService{
 		serviceManager: serviceManager,
-		client:         client,
 		logger:         logger,
 	}
 }
@@ -82,7 +79,6 @@ func (s *svcService) CreateService(ctx context.Context, req *model.CreateService
 		return fmt.Errorf("命名空间不能为空")
 	}
 
-	// 从请求构建Service对象
 	service, err := utils.BuildServiceFromRequest(req)
 	if err != nil {
 		s.logger.Error("CreateService: 构建Service对象失败",
@@ -91,7 +87,11 @@ func (s *svcService) CreateService(ctx context.Context, req *model.CreateService
 		return fmt.Errorf("构建Service对象失败: %w", err)
 	}
 
-	// 验证Service配置
+	s.logger.Debug("CreateService: 构建的Service对象",
+		zap.String("name", req.Name),
+		zap.Any("labels", service.Labels),
+		zap.Any("annotations", service.Annotations))
+
 	if err := utils.ValidateService(service); err != nil {
 		s.logger.Error("CreateService: Service配置验证失败",
 			zap.Error(err),
@@ -99,7 +99,6 @@ func (s *svcService) CreateService(ctx context.Context, req *model.CreateService
 		return fmt.Errorf("Service配置验证失败: %w", err)
 	}
 
-	// 使用ServiceManager创建Service
 	_, err = s.serviceManager.CreateService(ctx, req.ClusterID, service)
 	if err != nil {
 		s.logger.Error("CreateService: 创建Service失败",
@@ -173,7 +172,6 @@ func (s *svcService) GetServiceDetails(ctx context.Context, req *model.GetServic
 		return nil, fmt.Errorf("命名空间不能为空")
 	}
 
-	// 使用ServiceManager获取Service
 	service, err := s.serviceManager.GetService(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		s.logger.Error("GetServiceDetails: 获取Service失败",
@@ -184,24 +182,17 @@ func (s *svcService) GetServiceDetails(ctx context.Context, req *model.GetServic
 		return nil, fmt.Errorf("获取Service失败: %w", err)
 	}
 
-	// 获取Kubernetes客户端
-	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("GetServiceDetails: 获取Kubernetes客户端失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
+	k8sService := utils.BuildK8sServiceFromCore(req.ClusterID, *service)
 
-	// 构建详细Service信息
-	k8sService, err := utils.BuildK8sService(ctx, req.ClusterID, *service, kubeClient)
+	endpoints, err := s.serviceManager.GetServiceEndpoints(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		s.logger.Error("GetServiceDetails: 构建Service详细信息失败",
+		s.logger.Warn("GetServiceDetails: 获取Service端点失败，使用空列表",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
 			zap.String("name", req.Name))
-		return nil, fmt.Errorf("构建Service详细信息失败: %w", err)
+	} else {
+		k8sService.Endpoints = utils.ConvertEndpointsToModel(endpoints)
 	}
 
 	return k8sService, nil
@@ -225,7 +216,6 @@ func (s *svcService) GetServiceEndpoints(ctx context.Context, req *model.GetServ
 		return nil, fmt.Errorf("命名空间不能为空")
 	}
 
-	// 使用ServiceManager获取Service端点
 	endpoints, err := s.serviceManager.GetServiceEndpoints(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		s.logger.Error("GetServiceEndpoints: 获取Service端点失败",
@@ -236,10 +226,8 @@ func (s *svcService) GetServiceEndpoints(ctx context.Context, req *model.GetServ
 		return nil, fmt.Errorf("获取Service端点失败: %w", err)
 	}
 
-	// 转换为响应格式
-	var serviceEndpoints []*model.K8sServiceEndpoint
+	serviceEndpoints := make([]*model.K8sServiceEndpoint, 0)
 
-	// 如果Endpoints为空或没有Subsets，返回空列表
 	if endpoints == nil || len(endpoints.Subsets) == 0 {
 		s.logger.Info("Service Endpoints为空，返回空列表",
 			zap.Int("clusterID", req.ClusterID),
@@ -261,7 +249,6 @@ func (s *svcService) GetServiceEndpoints(ctx context.Context, req *model.GetServ
 			}
 		}
 
-		// 处理未就绪的地址
 		for _, address := range subset.NotReadyAddresses {
 			for _, port := range subset.Ports {
 				endpoint := &model.K8sServiceEndpoint{
@@ -288,7 +275,6 @@ func (s *svcService) GetServiceList(ctx context.Context, req *model.GetServiceLi
 		return model.ListResp[*model.K8sService]{}, fmt.Errorf("集群ID不能为空")
 	}
 
-	// 使用ServiceManager获取Service列表
 	serviceList, err := s.serviceManager.ListServices(ctx, req.ClusterID, req.Namespace)
 	if err != nil {
 		s.logger.Error("GetServiceList: 获取Service列表失败",
@@ -300,33 +286,15 @@ func (s *svcService) GetServiceList(ctx context.Context, req *model.GetServiceLi
 
 	services := serviceList.Items
 
-	// 根据类型过滤
 	if req.Type != "" {
 		services = utils.FilterServicesByType(services, req.Type)
 	}
 
-	// 分页处理
 	pagedServices, total := utils.BuildServiceListPagination(services, req.Page, req.Size)
 
-	// 获取Kubernetes客户端
-	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
-	if err != nil {
-		s.logger.Error("GetServiceList: 获取Kubernetes客户端失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID))
-		return model.ListResp[*model.K8sService]{}, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
-	}
-
-	// 转换为响应格式
-	var items []*model.K8sService
+	items := make([]*model.K8sService, 0, len(pagedServices))
 	for _, service := range pagedServices {
-		k8sService, err := utils.BuildK8sService(ctx, req.ClusterID, service, kubeClient)
-		if err != nil {
-			s.logger.Warn("GetServiceList: 构建Service信息失败",
-				zap.Error(err),
-				zap.String("serviceName", service.Name))
-			continue
-		}
+		k8sService := utils.BuildK8sServiceFromCore(req.ClusterID, service)
 		items = append(items, k8sService)
 	}
 
@@ -365,7 +333,6 @@ func (s *svcService) GetServiceYaml(ctx context.Context, req *model.GetServiceYa
 		return nil, fmt.Errorf("获取Service失败: %w", err)
 	}
 
-	// 转换为YAML格式
 	yamlContent, err := utils.ServiceToYAML(service)
 	if err != nil {
 		s.logger.Error("GetServiceYaml: 转换为YAML失败",
@@ -397,7 +364,6 @@ func (s *svcService) UpdateService(ctx context.Context, req *model.UpdateService
 		return fmt.Errorf("命名空间不能为空")
 	}
 
-	// 获取现有Service
 	existingService, err := s.serviceManager.GetService(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		s.logger.Error("UpdateService: 获取现有Service失败",
@@ -410,7 +376,6 @@ func (s *svcService) UpdateService(ctx context.Context, req *model.UpdateService
 
 	updatedService := existingService.DeepCopy()
 
-	// 如果提供了YAML，使用YAML内容
 	if req.YAML != "" {
 		yamlService, err := utils.YAMLToService(req.YAML)
 		if err != nil {
@@ -423,7 +388,6 @@ func (s *svcService) UpdateService(ctx context.Context, req *model.UpdateService
 		updatedService.Labels = yamlService.Labels
 		updatedService.Annotations = yamlService.Annotations
 	} else {
-		// 更新基本字段
 		if req.Type != "" {
 			updatedService.Spec.Type = corev1.ServiceType(req.Type)
 		}
@@ -433,15 +397,24 @@ func (s *svcService) UpdateService(ctx context.Context, req *model.UpdateService
 		if req.Selector != nil {
 			updatedService.Spec.Selector = req.Selector
 		}
-		if req.Labels != nil {
-			updatedService.Labels = req.Labels
+		if len(req.Labels) > 0 {
+			if updatedService.Labels == nil {
+				updatedService.Labels = make(map[string]string)
+			}
+			for k, v := range req.Labels {
+				updatedService.Labels[k] = v
+			}
 		}
-		if req.Annotations != nil {
-			updatedService.Annotations = req.Annotations
+		if len(req.Annotations) > 0 {
+			if updatedService.Annotations == nil {
+				updatedService.Annotations = make(map[string]string)
+			}
+			for k, v := range req.Annotations {
+				updatedService.Annotations[k] = v
+			}
 		}
 	}
 
-	// 验证更新后的Service配置
 	if err := utils.ValidateService(updatedService); err != nil {
 		s.logger.Error("UpdateService: Service配置验证失败",
 			zap.Error(err),
@@ -449,7 +422,6 @@ func (s *svcService) UpdateService(ctx context.Context, req *model.UpdateService
 		return fmt.Errorf("Service配置验证失败: %w", err)
 	}
 
-	// 使用ServiceManager更新Service
 	_, err = s.serviceManager.UpdateService(ctx, req.ClusterID, updatedService)
 	if err != nil {
 		s.logger.Error("UpdateService: 更新Service失败",
@@ -480,26 +452,35 @@ func (s *svcService) CreateServiceByYaml(ctx context.Context, req *model.CreateS
 		return fmt.Errorf("YAML内容不能为空")
 	}
 
+	s.logger.Info("开始通过YAML创建Service",
+		zap.Int("cluster_id", req.ClusterID))
+
 	svc, err := utils.YAMLToService(req.YAML)
 	if err != nil {
-		s.logger.Error("CreateServiceByYaml: 解析YAML失败", zap.Error(err))
+		s.logger.Error("从YAML构建Service失败",
+			zap.Int("cluster_id", req.ClusterID),
+			zap.Error(err))
 		return fmt.Errorf("解析YAML失败: %w", err)
 	}
+
 	if err := utils.ValidateService(svc); err != nil {
-		s.logger.Error("CreateServiceByYaml: Service配置验证失败", zap.Error(err))
+		s.logger.Error("CreateServiceByYaml: Service配置验证失败",
+			zap.Error(err),
+			zap.String("name", svc.Name))
 		return fmt.Errorf("Service配置验证失败: %w", err)
 	}
+
 	if _, err := s.serviceManager.CreateService(ctx, req.ClusterID, svc); err != nil {
-		s.logger.Error("CreateServiceByYaml: 创建Service失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
+		s.logger.Error("通过YAML创建Service失败",
+			zap.Int("cluster_id", req.ClusterID),
 			zap.String("namespace", svc.Namespace),
-			zap.String("name", svc.Name))
+			zap.String("name", svc.Name),
+			zap.Error(err))
 		return fmt.Errorf("创建Service失败: %w", err)
 	}
 
-	s.logger.Info("CreateServiceByYaml: Service创建成功",
-		zap.Int("clusterID", req.ClusterID),
+	s.logger.Info("通过YAML创建Service成功",
+		zap.Int("cluster_id", req.ClusterID),
 		zap.String("namespace", svc.Namespace),
 		zap.String("name", svc.Name))
 	return nil
@@ -523,11 +504,21 @@ func (s *svcService) UpdateServiceByYaml(ctx context.Context, req *model.UpdateS
 		return fmt.Errorf("命名空间不能为空")
 	}
 
+	s.logger.Info("开始通过YAML更新Service",
+		zap.Int("cluster_id", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
+
 	desired, err := utils.YAMLToService(req.YAML)
 	if err != nil {
-		s.logger.Error("UpdateServiceByYaml: 解析YAML失败", zap.Error(err))
+		s.logger.Error("从YAML构建Service失败",
+			zap.Int("cluster_id", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name),
+			zap.Error(err))
 		return fmt.Errorf("解析YAML失败: %w", err)
 	}
+
 	if desired.Name == "" {
 		desired.Name = req.Name
 	}
@@ -537,21 +528,25 @@ func (s *svcService) UpdateServiceByYaml(ctx context.Context, req *model.UpdateS
 	if desired.Name != req.Name || desired.Namespace != req.Namespace {
 		return fmt.Errorf("请求的名称/命名空间与YAML不一致")
 	}
+
 	if err := utils.ValidateService(desired); err != nil {
-		s.logger.Error("UpdateServiceByYaml: Service配置验证失败", zap.Error(err))
+		s.logger.Error("UpdateServiceByYaml: Service配置验证失败",
+			zap.Error(err),
+			zap.String("name", req.Name))
 		return fmt.Errorf("Service配置验证失败: %w", err)
 	}
+
 	if _, err := s.serviceManager.UpdateService(ctx, req.ClusterID, desired); err != nil {
-		s.logger.Error("UpdateServiceByYaml: 更新Service失败",
-			zap.Error(err),
-			zap.Int("clusterID", req.ClusterID),
+		s.logger.Error("通过YAML更新Service失败",
+			zap.Int("cluster_id", req.ClusterID),
 			zap.String("namespace", req.Namespace),
-			zap.String("name", req.Name))
+			zap.String("name", req.Name),
+			zap.Error(err))
 		return fmt.Errorf("更新Service失败: %w", err)
 	}
 
-	s.logger.Info("UpdateServiceByYaml: Service更新成功",
-		zap.Int("clusterID", req.ClusterID),
+	s.logger.Info("通过YAML更新Service成功",
+		zap.Int("cluster_id", req.ClusterID),
 		zap.String("namespace", req.Namespace),
 		zap.String("name", req.Name))
 	return nil

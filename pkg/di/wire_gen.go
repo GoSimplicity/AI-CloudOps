@@ -94,7 +94,7 @@ func ProvideCmd() *Cmd {
 	taintService := service4.NewTaintService(taintManager, logger)
 	k8sNodeHandler := api4.NewK8sNodeHandler(nodeService, taintService)
 	serviceManager := manager.NewServiceManager(k8sClient, logger)
-	svcService := service4.NewSvcService(serviceManager, k8sClient, logger)
+	svcService := service4.NewSvcService(serviceManager, logger)
 	k8sSvcHandler := api4.NewK8sSvcHandler(svcService)
 	yamlTemplateDAO := dao3.NewYamlTemplateDAO(db, logger)
 	yamlTaskDAO := dao3.NewYamlTaskDAO(db, logger)

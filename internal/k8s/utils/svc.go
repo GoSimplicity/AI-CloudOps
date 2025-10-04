@@ -39,49 +39,50 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// BuildK8sService 构建详细的 K8sService 模型
-func BuildK8sService(ctx context.Context, clusterID int, service corev1.Service, kubeClient *kubernetes.Clientset) (*model.K8sService, error) {
-	if clusterID <= 0 {
-		return nil, fmt.Errorf("无效的集群ID: %d", clusterID)
-	}
-
-	// 获取Service状态
+// BuildK8sServiceFromCore 构建K8sService模型
+func BuildK8sServiceFromCore(clusterID int, service corev1.Service) *model.K8sService {
 	status := getServiceStatus(service)
-
-	// 获取Service年龄
 	age := getServiceAge(service)
-
-	// 构建端口配置
 	ports := buildServicePorts(service.Spec.Ports)
 
-	// 构建基础Service信息
-	k8sService := &model.K8sService{
+	externalIPs := service.Spec.ExternalIPs
+	if externalIPs == nil {
+		externalIPs = []string{}
+	}
+
+	selector := service.Spec.Selector
+	if selector == nil {
+		selector = map[string]string{}
+	}
+
+	labels := service.Labels
+	if labels == nil {
+		labels = map[string]string{}
+	}
+
+	annotations := service.Annotations
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+
+	return &model.K8sService{
 		Name:           service.Name,
 		Namespace:      service.Namespace,
 		ClusterID:      clusterID,
 		UID:            string(service.UID),
 		Type:           string(service.Spec.Type),
 		ClusterIP:      service.Spec.ClusterIP,
-		ExternalIPs:    service.Spec.ExternalIPs,
+		ExternalIPs:    externalIPs,
 		LoadBalancerIP: service.Spec.LoadBalancerIP,
 		Ports:          ports,
-		Selector:       service.Spec.Selector,
-		Labels:         service.Labels,
-		Annotations:    service.Annotations,
+		Selector:       selector,
+		Labels:         labels,
+		Annotations:    annotations,
 		CreatedAt:      service.CreationTimestamp.Time,
 		Age:            age,
 		Status:         status,
+		Endpoints:      []model.K8sServiceEndpoint{},
 	}
-
-	// 获取Service端点
-	if kubeClient != nil {
-		endpoints, err := getServiceEndpoints(ctx, kubeClient, service.Namespace, service.Name)
-		if err == nil {
-			k8sService.Endpoints = endpoints
-		}
-	}
-
-	return k8sService, nil
 }
 
 // BuildServiceFromRequest 从请求构建Service对象
@@ -90,18 +91,26 @@ func BuildServiceFromRequest(req *model.CreateServiceReq) (*corev1.Service, erro
 		return nil, fmt.Errorf("请求不能为空")
 	}
 
-	// 如果提供了YAML，优先使用YAML
 	if req.YAML != "" {
 		return YAMLToService(req.YAML)
 	}
 
-	// 否则从请求字段构建
+	labels := req.Labels
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+
+	annotations := req.Annotations
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        req.Name,
 			Namespace:   req.Namespace,
-			Labels:      req.Labels,
-			Annotations: req.Annotations,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceType(req.Type),
@@ -173,7 +182,16 @@ func ServiceToYAML(service *corev1.Service) (string, error) {
 		return "", fmt.Errorf("Service对象不能为空")
 	}
 
-	yamlBytes, err := yaml.Marshal(service)
+	cleanService := service.DeepCopy()
+	cleanService.Status = corev1.ServiceStatus{}
+	cleanService.ManagedFields = nil
+	cleanService.ResourceVersion = ""
+	cleanService.UID = ""
+	cleanService.CreationTimestamp = metav1.Time{}
+	cleanService.Generation = 0
+	cleanService.SelfLink = ""
+
+	yamlBytes, err := yaml.Marshal(cleanService)
 	if err != nil {
 		return "", fmt.Errorf("转换为YAML失败: %w", err)
 	}
@@ -280,7 +298,7 @@ func getServiceAge(service corev1.Service) string {
 
 // buildServicePorts 构建Service端口配置
 func buildServicePorts(ports []corev1.ServicePort) []model.ServicePort {
-	var servicePorts []model.ServicePort
+	servicePorts := make([]model.ServicePort, 0, len(ports))
 	for _, port := range ports {
 		servicePort := model.ServicePort{
 			Name:        port.Name,
@@ -312,18 +330,13 @@ func ConvertToCorePorts(ports []model.ServicePort) []corev1.ServicePort {
 	return corePorts
 }
 
-// getServiceEndpoints 获取Service端点
-func getServiceEndpoints(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, serviceName string) ([]model.K8sServiceEndpoint, error) {
-	endpoints, err := kubeClient.CoreV1().Endpoints(namespace).Get(ctx, serviceName, metav1.GetOptions{})
-	if err != nil {
-		// 如果Endpoints不存在，返回空列表而不是错误
-		if errors.IsNotFound(err) {
-			return []model.K8sServiceEndpoint{}, nil
-		}
-		return nil, err
+// ConvertEndpointsToModel 将Kubernetes Endpoints转换为模型格式
+func ConvertEndpointsToModel(endpoints *corev1.Endpoints) []model.K8sServiceEndpoint {
+	if endpoints == nil {
+		return []model.K8sServiceEndpoint{}
 	}
 
-	var serviceEndpoints []model.K8sServiceEndpoint
+	serviceEndpoints := make([]model.K8sServiceEndpoint, 0)
 	for _, subset := range endpoints.Subsets {
 		for _, address := range subset.Addresses {
 			for _, port := range subset.Ports {
@@ -337,7 +350,6 @@ func getServiceEndpoints(ctx context.Context, kubeClient *kubernetes.Clientset, 
 			}
 		}
 
-		// 处理未就绪的地址
 		for _, address := range subset.NotReadyAddresses {
 			for _, port := range subset.Ports {
 				endpoint := model.K8sServiceEndpoint{
@@ -351,5 +363,18 @@ func getServiceEndpoints(ctx context.Context, kubeClient *kubernetes.Clientset, 
 		}
 	}
 
-	return serviceEndpoints, nil
+	return serviceEndpoints
+}
+
+// getServiceEndpoints 获取Service端点
+func getServiceEndpoints(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, serviceName string) ([]model.K8sServiceEndpoint, error) {
+	endpoints, err := kubeClient.CoreV1().Endpoints(namespace).Get(ctx, serviceName, metav1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return []model.K8sServiceEndpoint{}, nil
+		}
+		return nil, err
+	}
+
+	return ConvertEndpointsToModel(endpoints), nil
 }

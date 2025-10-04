@@ -34,6 +34,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 // ServiceManager Service管理器接口
@@ -55,24 +56,35 @@ type ServiceManager interface {
 
 // serviceManager Service管理器实现
 type serviceManager struct {
-	client client.K8sClient
-	logger *zap.Logger
+	clientFactory client.K8sClient
+	logger        *zap.Logger
 }
 
 // NewServiceManager 创建Service管理器
-func NewServiceManager(client client.K8sClient, logger *zap.Logger) ServiceManager {
+func NewServiceManager(clientFactory client.K8sClient, logger *zap.Logger) ServiceManager {
 	return &serviceManager{
-		client: client,
-		logger: logger,
+		clientFactory: clientFactory,
+		logger:        logger,
 	}
+}
+
+// getKubeClient 私有方法：获取Kubernetes客户端
+func (m *serviceManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
+	kubeClient, err := m.clientFactory.GetKubeClient(clusterID)
+	if err != nil {
+		m.logger.Error("获取Kubernetes客户端失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	}
+	return kubeClient, nil
 }
 
 // GetService 获取单个Service
 func (m *serviceManager) GetService(ctx context.Context, clusterID int, namespace, name string) (*corev1.Service, error) {
-	clientset, err := m.client.GetKubeClient(clusterID)
+	clientset, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+		return nil, err
 	}
 
 	service, err := clientset.CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
@@ -87,10 +99,9 @@ func (m *serviceManager) GetService(ctx context.Context, clusterID int, namespac
 
 // ListServices 获取Service列表
 func (m *serviceManager) ListServices(ctx context.Context, clusterID int, namespace string) (*corev1.ServiceList, error) {
-	clientset, err := m.client.GetKubeClient(clusterID)
+	clientset, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+		return nil, err
 	}
 
 	services, err := clientset.CoreV1().Services(namespace).List(ctx, metav1.ListOptions{})
@@ -105,30 +116,39 @@ func (m *serviceManager) ListServices(ctx context.Context, clusterID int, namesp
 
 // CreateService 创建Service
 func (m *serviceManager) CreateService(ctx context.Context, clusterID int, service *corev1.Service) (*corev1.Service, error) {
-	clientset, err := m.client.GetKubeClient(clusterID)
-	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	if service == nil {
+		return nil, fmt.Errorf("service 不能为空")
 	}
 
-	createdService, err := clientset.CoreV1().Services(service.Namespace).Create(ctx, service, metav1.CreateOptions{})
+	clientset, err := m.getKubeClient(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	targetNamespace := service.Namespace
+	if targetNamespace == "" {
+		return nil, fmt.Errorf("namespace 不能为空")
+	}
+
+	createdService, err := clientset.CoreV1().Services(targetNamespace).Create(ctx, service, metav1.CreateOptions{})
 	if err != nil {
 		m.logger.Error("创建Service失败", zap.Error(err),
 			zap.Int("cluster_id", clusterID), zap.String("namespace", service.Namespace), zap.String("name", service.Name))
-		return nil, fmt.Errorf("创建Service %s/%s 失败: %w", service.Namespace, service.Name, err)
+		return nil, fmt.Errorf("创建Service %s/%s 失败: %w", targetNamespace, service.Name, err)
 	}
 
 	m.logger.Info("成功创建Service",
-		zap.Int("cluster_id", clusterID), zap.String("namespace", createdService.Namespace), zap.String("name", createdService.Name))
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", targetNamespace),
+		zap.String("name", createdService.Name))
 	return createdService, nil
 }
 
 // UpdateService 更新Service
 func (m *serviceManager) UpdateService(ctx context.Context, clusterID int, service *corev1.Service) (*corev1.Service, error) {
-	clientset, err := m.client.GetKubeClient(clusterID)
+	clientset, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+		return nil, err
 	}
 
 	updatedService, err := clientset.CoreV1().Services(service.Namespace).Update(ctx, service, metav1.UpdateOptions{})
@@ -139,16 +159,17 @@ func (m *serviceManager) UpdateService(ctx context.Context, clusterID int, servi
 	}
 
 	m.logger.Info("成功更新Service",
-		zap.Int("cluster_id", clusterID), zap.String("namespace", updatedService.Namespace), zap.String("name", updatedService.Name))
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", updatedService.Namespace),
+		zap.String("name", updatedService.Name))
 	return updatedService, nil
 }
 
 // DeleteService 删除Service
 func (m *serviceManager) DeleteService(ctx context.Context, clusterID int, namespace, name string, options metav1.DeleteOptions) error {
-	clientset, err := m.client.GetKubeClient(clusterID)
+	clientset, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+		return err
 	}
 
 	err = clientset.CoreV1().Services(namespace).Delete(ctx, name, options)
@@ -159,7 +180,9 @@ func (m *serviceManager) DeleteService(ctx context.Context, clusterID int, names
 	}
 
 	m.logger.Info("成功删除Service",
-		zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", name))
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", name))
 	return nil
 }
 
@@ -169,10 +192,9 @@ func (m *serviceManager) BatchDeleteServices(ctx context.Context, clusterID int,
 		return nil
 	}
 
-	clientset, err := m.client.GetKubeClient(clusterID)
+	clientset, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+		return err
 	}
 
 	var errors []error
@@ -183,7 +205,9 @@ func (m *serviceManager) BatchDeleteServices(ctx context.Context, clusterID int,
 			errors = append(errors, fmt.Errorf("删除Service %s/%s 失败: %w", namespace, serviceName, err))
 		} else {
 			m.logger.Info("成功删除Service",
-				zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", serviceName))
+				zap.Int("clusterID", clusterID),
+				zap.String("namespace", namespace),
+				zap.String("name", serviceName))
 		}
 	}
 
@@ -196,15 +220,13 @@ func (m *serviceManager) BatchDeleteServices(ctx context.Context, clusterID int,
 
 // GetServiceEndpoints 获取Service的Endpoints
 func (m *serviceManager) GetServiceEndpoints(ctx context.Context, clusterID int, namespace, serviceName string) (*corev1.Endpoints, error) {
-	clientset, err := m.client.GetKubeClient(clusterID)
+	clientset, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+		return nil, err
 	}
 
 	endpoints, err := clientset.CoreV1().Endpoints(namespace).Get(ctx, serviceName, metav1.GetOptions{})
 	if err != nil {
-		// 如果Endpoints不存在，返回空的Endpoints对象而不是错误
 		if errors.IsNotFound(err) {
 			m.logger.Info("Service Endpoints不存在，返回空Endpoints",
 				zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("service", serviceName))
@@ -227,10 +249,9 @@ func (m *serviceManager) GetServiceEndpoints(ctx context.Context, clusterID int,
 
 // ListServicesBySelector 根据选择器获取Service列表
 func (m *serviceManager) ListServicesBySelector(ctx context.Context, clusterID int, namespace string, selector string) (*corev1.ServiceList, error) {
-	clientset, err := m.client.GetKubeClient(clusterID)
+	clientset, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+		return nil, err
 	}
 
 	listOptions := metav1.ListOptions{}
