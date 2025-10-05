@@ -62,7 +62,6 @@ type K8sStatefulSet struct {
 	Status               K8sStatefulSetStatus   `json:"status"`                                     // StatefulSet状态
 	Conditions           []StatefulSetCondition `json:"conditions"`                                 // StatefulSet条件
 	CreatedAt            time.Time              `json:"created_at"`                                 // 创建时间
-	UpdatedAt            time.Time              `json:"updated_at"`                                 // 更新时间
 	RawStatefulSet       *appsv1.StatefulSet    `json:"-"`                                          // 原始 StatefulSet 对象，不序列化到 JSON
 }
 

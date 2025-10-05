@@ -73,6 +73,7 @@ func BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node, kubeClie
 	k8sNode := &model.K8sNode{
 		Name:             node.Name,
 		ClusterID:        clusterID,
+		UID:              string(node.UID),
 		Status:           status,
 		Schedulable:      schedulable,
 		Roles:            roles,
@@ -91,7 +92,6 @@ func BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node, kubeClie
 		Conditions:       node.Status.Conditions,
 		Taints:           node.Spec.Taints,
 		CreatedAt:        node.CreationTimestamp.Time,
-		UpdatedAt:        time.Now(),
 		RawNode:          &node,
 	}
 

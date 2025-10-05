@@ -94,15 +94,15 @@ type DeleteRoleReq struct {
 
 // K8sRole Role主model
 type K8sRole struct {
-	Name              string            `json:"name"`
-	Namespace         string            `json:"namespace"`
-	ClusterID         int               `json:"cluster_id"`
-	UID               string            `json:"uid"`
-	CreationTimestamp string            `json:"creation_timestamp"`
-	Labels            map[string]string `json:"labels"`
-	Annotations       map[string]string `json:"annotations"`
-	Rules             []PolicyRule      `json:"rules"`
-	ResourceVersion   string            `json:"resource_version"`
-	Age               string            `json:"age"`
-	RawRole           *rbacv1.Role      `json:"-"` // 原始Role对象，不序列化
+	Name            string            `json:"name"`
+	Namespace       string            `json:"namespace"`
+	ClusterID       int               `json:"cluster_id"`
+	UID             string            `json:"uid"`
+	CreatedAt       string            `json:"created_at"`
+	Labels          map[string]string `json:"labels"`
+	Annotations     map[string]string `json:"annotations"`
+	Rules           []PolicyRule      `json:"rules"`
+	ResourceVersion string            `json:"resource_version"`
+	Age             string            `json:"age"`
+	RawRole         *rbacv1.Role      `json:"-"` // 原始Role对象，不序列化
 }

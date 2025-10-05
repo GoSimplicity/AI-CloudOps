@@ -117,7 +117,7 @@ type K8sServiceAccount struct {
 	Namespace                    string                 `json:"namespace"`
 	ClusterID                    int                    `json:"cluster_id"`
 	UID                          string                 `json:"uid"`
-	CreationTimestamp            string                 `json:"creation_timestamp"`
+	CreatedAt                    string                 `json:"created_at"`
 	Labels                       map[string]string      `json:"labels"`
 	Annotations                  map[string]string      `json:"annotations"`
 	AutomountServiceAccountToken *bool                  `json:"automount_service_account_token"`
@@ -132,6 +132,6 @@ type K8sServiceAccount struct {
 type ServiceAccountTokenInfo struct {
 	Token             string `json:"token"`
 	ExpirationSeconds *int64 `json:"expiration_seconds"`
-	CreationTimestamp string `json:"creation_timestamp"`
+	CreatedAt         string `json:"created_at"`
 	ExpirationTime    string `json:"expiration_time"`
 }

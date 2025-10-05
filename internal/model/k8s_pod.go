@@ -33,34 +33,34 @@ import (
 
 // K8sPod Kubernetes Pod模型
 type K8sPod struct {
-	ClusterID         int64      `json:"cluster_id"`         // 集群ID
-	Name              string     `json:"name"`               // Pod名称
-	Namespace         string     `json:"namespace"`          // 所属命名空间
-	UID               string     `json:"uid"`                // Pod UID
-	Labels            string     `json:"labels"`             // 标签(JSON字符串)
-	Annotations       string     `json:"annotations"`        // 注解(JSON字符串)
-	Status            string     `json:"status"`             // Pod状态
-	Phase             string     `json:"phase"`              // Pod阶段
-	NodeName          string     `json:"node_name"`          // 所在节点
-	PodIP             string     `json:"pod_ip"`             // Pod IP地址
-	HostIP            string     `json:"host_ip"`            // 宿主机IP地址
-	QosClass          string     `json:"qos_class"`          // QoS等级
-	RestartCount      int32      `json:"restart_count"`      // 重启次数
-	Ready             string     `json:"ready"`              // 就绪状态(如"1/1")
-	ServiceAccount    string     `json:"service_account"`    // 服务账户
-	RestartPolicy     string     `json:"restart_policy"`     // 重启策略
-	DNSPolicy         string     `json:"dns_policy"`         // DNS策略
-	Conditions        string     `json:"conditions"`         // Pod条件(JSON字符串)
-	Containers        string     `json:"containers"`         // 容器列表(JSON字符串)
-	InitContainers    string     `json:"init_containers"`    // 初始化容器列表(JSON字符串)
-	Volumes           string     `json:"volumes"`            // 卷列表(JSON字符串)
-	CreationTimestamp time.Time  `json:"creation_timestamp"` // 创建时间
-	StartTime         *time.Time `json:"start_time"`         // 启动时间
-	DeletionTimestamp *time.Time `json:"deletion_timestamp"` // 删除时间戳
-	OwnerReferences   string     `json:"owner_references"`   // 所有者引用(JSON字符串)
-	ResourceVersion   string     `json:"resource_version"`   // 资源版本
-	Generation        int64      `json:"generation"`         // 生成版本号
-	Spec              string     `json:"spec"`               // Pod规格(JSON字符串)
+	ClusterID       int64      `json:"cluster_id"`       // 集群ID
+	Name            string     `json:"name"`             // Pod名称
+	Namespace       string     `json:"namespace"`        // 所属命名空间
+	UID             string     `json:"uid"`              // Pod UID
+	Labels          string     `json:"labels"`           // 标签(JSON字符串)
+	Annotations     string     `json:"annotations"`      // 注解(JSON字符串)
+	Status          string     `json:"status"`           // Pod状态
+	Phase           string     `json:"phase"`            // Pod阶段
+	NodeName        string     `json:"node_name"`        // 所在节点
+	PodIP           string     `json:"pod_ip"`           // Pod IP地址
+	HostIP          string     `json:"host_ip"`          // 宿主机IP地址
+	QosClass        string     `json:"qos_class"`        // QoS等级
+	RestartCount    int32      `json:"restart_count"`    // 重启次数
+	Ready           string     `json:"ready"`            // 就绪状态(如"1/1")
+	ServiceAccount  string     `json:"service_account"`  // 服务账户
+	RestartPolicy   string     `json:"restart_policy"`   // 重启策略
+	DNSPolicy       string     `json:"dns_policy"`       // DNS策略
+	Conditions      string     `json:"conditions"`       // Pod条件(JSON字符串)
+	Containers      string     `json:"containers"`       // 容器列表(JSON字符串)
+	InitContainers  string     `json:"init_containers"`  // 初始化容器列表(JSON字符串)
+	Volumes         string     `json:"volumes"`          // 卷列表(JSON字符串)
+	CreatedAt       time.Time  `json:"created_at"`       // 创建时间
+	StartTime       *time.Time `json:"start_time"`       // 启动时间
+	DeletedAt       *time.Time `json:"deleted_at"`       // 删除时间戳
+	OwnerReferences string     `json:"owner_references"` // 所有者引用(JSON字符串)
+	ResourceVersion string     `json:"resource_version"` // 资源版本
+	Generation      int64      `json:"generation"`       // 生成版本号
+	Spec            string     `json:"spec"`             // Pod规格(JSON字符串)
 }
 
 // PodContainer Pod容器信息

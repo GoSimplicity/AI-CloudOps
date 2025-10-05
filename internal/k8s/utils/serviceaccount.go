@@ -53,7 +53,7 @@ func BuildServiceAccountResponse(sa *corev1.ServiceAccount, clusterID int) *mode
 		ClusterID:                    clusterID,
 		Labels:                       sa.Labels,
 		Annotations:                  sa.Annotations,
-		CreationTimestamp:            sa.CreationTimestamp.Time.Format(time.RFC3339),
+		CreatedAt:                    sa.CreationTimestamp.Time.Format(time.RFC3339),
 		Age:                          utils.GetAge(sa.CreationTimestamp.Time),
 		AutomountServiceAccountToken: sa.AutomountServiceAccountToken,
 		ResourceVersion:              sa.ResourceVersion,
@@ -200,7 +200,7 @@ func GetServiceAccountToken(ctx context.Context, kubeClient *kubernetes.Clientse
 	resp := &model.ServiceAccountTokenInfo{
 		Token:             tr.Status.Token,
 		ExpirationSeconds: tr.Spec.ExpirationSeconds,
-		CreationTimestamp: time.Now().Format(time.RFC3339),
+		CreatedAt:         time.Now().Format(time.RFC3339),
 		ExpirationTime:    "",
 	}
 
@@ -235,7 +235,7 @@ func CreateServiceAccountToken(ctx context.Context, kubeClient *kubernetes.Clien
 	resp := &model.ServiceAccountTokenInfo{
 		Token:             tr.Status.Token,
 		ExpirationSeconds: tr.Spec.ExpirationSeconds,
-		CreationTimestamp: time.Now().Format(time.RFC3339),
+		CreatedAt:         time.Now().Format(time.RFC3339),
 		ExpirationTime:    "",
 	}
 

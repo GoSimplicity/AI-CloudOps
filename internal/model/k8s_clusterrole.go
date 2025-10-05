@@ -87,14 +87,14 @@ type DeleteClusterRoleReq struct {
 
 // K8sClusterRole ClusterRole主model
 type K8sClusterRole struct {
-	Name              string              `json:"name"`
-	ClusterID         int                 `json:"cluster_id"`
-	UID               string              `json:"uid"`
-	CreationTimestamp string              `json:"creation_timestamp"`
-	Labels            map[string]string   `json:"labels"`
-	Annotations       map[string]string   `json:"annotations"`
-	Rules             []PolicyRule        `json:"rules"`
-	ResourceVersion   string              `json:"resource_version"`
-	Age               string              `json:"age"`
-	RawClusterRole    *rbacv1.ClusterRole `json:"-"` // 原始ClusterRole对象，不序列化
+	Name            string              `json:"name"`
+	ClusterID       int                 `json:"cluster_id"`
+	UID             string              `json:"uid"`
+	CreatedAt       string              `json:"created_at"`
+	Labels          map[string]string   `json:"labels"`
+	Annotations     map[string]string   `json:"annotations"`
+	Rules           []PolicyRule        `json:"rules"`
+	ResourceVersion string              `json:"resource_version"`
+	Age             string              `json:"age"`
+	RawClusterRole  *rbacv1.ClusterRole `json:"-"` // 原始ClusterRole对象，不序列化
 }

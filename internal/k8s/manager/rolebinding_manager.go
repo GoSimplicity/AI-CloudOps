@@ -111,12 +111,12 @@ func (m *roleBindingManager) GetRoleBindingList(ctx context.Context, clusterID i
 	for _, rb := range roleBindings.Items {
 
 		k8sRoleBinding := &model.K8sRoleBinding{
-			ClusterID:         clusterID,
-			Name:              rb.Name,
-			Namespace:         rb.Namespace,
-			CreationTimestamp: rb.CreationTimestamp.Time.Format(time.RFC3339),
-			Labels:            rb.Labels,
-			Annotations:       rb.Annotations,
+			ClusterID:   clusterID,
+			Name:        rb.Name,
+			Namespace:   rb.Namespace,
+			CreatedAt:   rb.CreationTimestamp.Time.Format(time.RFC3339),
+			Labels:      rb.Labels,
+			Annotations: rb.Annotations,
 		}
 		k8sRoleBindings = append(k8sRoleBindings, k8sRoleBinding)
 	}

@@ -87,17 +87,17 @@ func ConvertK8sRoleToRoleInfo(role *rbacv1.Role, clusterID int) model.K8sRole {
 	age := formatAge(ageDuration)
 
 	return model.K8sRole{
-		Name:              role.Name,
-		Namespace:         role.Namespace,
-		ClusterID:         clusterID,
-		UID:               string(role.UID),
-		CreationTimestamp: role.CreationTimestamp.Time.Format(time.RFC3339),
-		Labels:            role.Labels,
-		Annotations:       role.Annotations,
-		Rules:             ConvertK8sPolicyRulesToModel(role.Rules),
-		ResourceVersion:   role.ResourceVersion,
-		Age:               age,
-		RawRole:           role,
+		Name:            role.Name,
+		Namespace:       role.Namespace,
+		ClusterID:       clusterID,
+		UID:             string(role.UID),
+		CreatedAt:       role.CreationTimestamp.Time.Format(time.RFC3339),
+		Labels:          role.Labels,
+		Annotations:     role.Annotations,
+		Rules:           ConvertK8sPolicyRulesToModel(role.Rules),
+		ResourceVersion: role.ResourceVersion,
+		Age:             age,
+		RawRole:         role,
 	}
 }
 

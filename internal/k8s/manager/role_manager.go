@@ -112,15 +112,15 @@ func (m *roleManager) GetRoleList(ctx context.Context, clusterID int, namespace 
 	var k8sRoles []*model.K8sRole
 	for _, role := range roles.Items {
 		k8sRole := &model.K8sRole{
-			ClusterID:         clusterID,
-			Name:              role.Name,
-			Namespace:         role.Namespace,
-			UID:               string(role.UID),
-			CreationTimestamp: role.CreationTimestamp.Time.Format(time.RFC3339),
-			Labels:            role.Labels,
-			Annotations:       role.Annotations,
-			ResourceVersion:   role.ResourceVersion,
-			RawRole:           &role,
+			ClusterID:       clusterID,
+			Name:            role.Name,
+			Namespace:       role.Namespace,
+			UID:             string(role.UID),
+			CreatedAt:       role.CreationTimestamp.Time.Format(time.RFC3339),
+			Labels:          role.Labels,
+			Annotations:     role.Annotations,
+			ResourceVersion: role.ResourceVersion,
+			RawRole:         &role,
 		}
 		k8sRoles = append(k8sRoles, k8sRole)
 	}

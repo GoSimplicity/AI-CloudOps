@@ -195,7 +195,6 @@ func (s *secretService) convertToK8sSecret(secret *corev1.Secret, clusterID int)
 		Size:        size,
 		Age:         time.Since(secret.CreationTimestamp.Time).String(),
 		CreatedAt:   secret.CreationTimestamp.Time,
-		UpdatedAt:   secret.CreationTimestamp.Time, // K8s doesn't track update time separately
 		RawSecret:   secret,
 	}
 }

@@ -324,15 +324,15 @@ func ConvertK8sClusterRoleToClusterRoleInfo(clusterRole *rbacv1.ClusterRole, clu
 	age := GetClusterRoleAge(*clusterRole)
 
 	return model.K8sClusterRole{
-		Name:              clusterRole.Name,
-		ClusterID:         clusterID,
-		UID:               string(clusterRole.UID),
-		CreationTimestamp: clusterRole.CreationTimestamp.Time.Format(time.RFC3339),
-		Labels:            clusterRole.Labels,
-		Annotations:       clusterRole.Annotations,
-		Rules:             ConvertK8sPolicyRulesToModel(clusterRole.Rules),
-		ResourceVersion:   clusterRole.ResourceVersion,
-		Age:               age,
+		Name:            clusterRole.Name,
+		ClusterID:       clusterID,
+		UID:             string(clusterRole.UID),
+		CreatedAt:       clusterRole.CreationTimestamp.Time.Format(time.RFC3339),
+		Labels:          clusterRole.Labels,
+		Annotations:     clusterRole.Annotations,
+		Rules:           ConvertK8sPolicyRulesToModel(clusterRole.Rules),
+		ResourceVersion: clusterRole.ResourceVersion,
+		Age:             age,
 	}
 }
 

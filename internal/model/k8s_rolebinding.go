@@ -96,16 +96,16 @@ type DeleteRoleBindingReq struct {
 
 // K8sRoleBinding RoleBinding主model
 type K8sRoleBinding struct {
-	Name              string              `json:"name"`
-	Namespace         string              `json:"namespace"`
-	ClusterID         int                 `json:"cluster_id"`
-	UID               string              `json:"uid"`
-	CreationTimestamp string              `json:"creation_timestamp"`
-	Labels            map[string]string   `json:"labels"`
-	Annotations       map[string]string   `json:"annotations"`
-	RoleRef           RoleRef             `json:"role_ref"`
-	Subjects          []Subject           `json:"subjects"`
-	ResourceVersion   string              `json:"resource_version"`
-	Age               string              `json:"age"`
-	RawRoleBinding    *rbacv1.RoleBinding `json:"-"` // 原始RoleBinding对象，不序列化
+	Name            string              `json:"name"`
+	Namespace       string              `json:"namespace"`
+	ClusterID       int                 `json:"cluster_id"`
+	UID             string              `json:"uid"`
+	CreatedAt       string              `json:"created_at"`
+	Labels          map[string]string   `json:"labels"`
+	Annotations     map[string]string   `json:"annotations"`
+	RoleRef         RoleRef             `json:"role_ref"`
+	Subjects        []Subject           `json:"subjects"`
+	ResourceVersion string              `json:"resource_version"`
+	Age             string              `json:"age"`
+	RawRoleBinding  *rbacv1.RoleBinding `json:"-"` // 原始RoleBinding对象，不序列化
 }

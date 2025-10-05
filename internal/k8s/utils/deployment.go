@@ -109,7 +109,6 @@ func BuildK8sDeployment(ctx context.Context, clusterID int, deployment appsv1.De
 		Status:            status,
 		Conditions:        conditions,
 		CreatedAt:         deployment.CreationTimestamp.Time,
-		UpdatedAt:         time.Now(),
 		RawDeployment:     &deployment,
 	}
 
@@ -527,7 +526,6 @@ func ConvertToK8sDeployment(deployment *appsv1.Deployment) *model.K8sDeployment 
 		Status:            status,
 		Conditions:        conditions,
 		CreatedAt:         deployment.CreationTimestamp.Time,
-		UpdatedAt:         time.Now(),
 		RawDeployment:     deployment,
 	}
 }

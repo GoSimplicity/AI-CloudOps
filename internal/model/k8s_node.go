@@ -53,6 +53,7 @@ type NodeTaint struct {
 type K8sNode struct {
 	Name             string               `json:"name"`                                         // 节点名称
 	ClusterID        int                  `json:"cluster_id"`                                   // 所属集群ID
+	UID              string               `json:"uid"`                                          // 节点UID
 	Status           NodeStatus           `json:"status"`                                       // 节点状态
 	Schedulable      int8                 `json:"schedulable" binding:"required,oneof=1 2"`     // 节点是否可调度
 	Roles            []string             `json:"roles" gorm:"type:text;serializer:json"`       // 节点角色，例如 master, worker
@@ -72,7 +73,6 @@ type K8sNode struct {
 	Conditions       []core.NodeCondition `json:"conditions" gorm:"type:text;serializer:json"`  // 节点条件
 	Taints           []core.Taint         `json:"taints" gorm:"type:text;serializer:json"`      // 节点污点
 	CreatedAt        time.Time            `json:"created_at"`                                   // 创建时间
-	UpdatedAt        time.Time            `json:"updated_at"`                                   // 更新时间
 	RawNode          *core.Node           `json:"-"`                                            // 原始 Node 对象，不序列化到 JSON
 }
 

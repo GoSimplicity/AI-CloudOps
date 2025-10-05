@@ -47,7 +47,6 @@ type K8sConfigMap struct {
 	DataCount    int               `json:"data_count"`                                 // 数据条目数量
 	Size         string            `json:"size"`                                       // 数据大小
 	CreatedAt    time.Time         `json:"created_at"`                                 // 创建时间
-	UpdatedAt    time.Time         `json:"updated_at"`                                 // 更新时间
 	Age          string            `json:"age"`                                        // 存在时间，前端计算使用
 	RawConfigMap *corev1.ConfigMap `json:"-"`                                          // 原始 ConfigMap 对象，不序列化到 JSON
 }

@@ -27,6 +27,7 @@ package utils
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -48,13 +49,13 @@ func ConvertToK8sClusterRoleBinding(crb *rbacv1.ClusterRoleBinding) *model.K8sCl
 	return &model.K8sClusterRoleBinding{
 		Name:                  crb.Name,
 		UID:                   string(crb.UID),
-		CreationTimestamp:     crb.CreationTimestamp.Time.Format("2006-01-02T15:04:05Z07:00"),
+		CreatedAt:             crb.CreationTimestamp.Time.Format("2006-01-02T15:04:05Z07:00"),
 		Labels:                crb.Labels,
 		Annotations:           crb.Annotations,
 		RoleRef:               ConvertK8sRoleRefToModel(crb.RoleRef),
 		Subjects:              ConvertK8sSubjectsToModel(crb.Subjects),
 		ResourceVersion:       crb.ResourceVersion,
-		Age:                   crb.CreationTimestamp.Time.Format("2006-01-02T15:04:05Z07:00"),
+		Age:                   crb.CreationTimestamp.Time.Format(time.RFC3339),
 		RawClusterRoleBinding: crb,
 	}
 }
@@ -87,16 +88,16 @@ func ConvertK8sClusterRoleBindingToClusterRoleBindingInfo(clusterRoleBinding *rb
 	age := clusterRoleBinding.CreationTimestamp.Time.Format("2006-01-02T15:04:05Z07:00")
 
 	return model.K8sClusterRoleBinding{
-		Name:              clusterRoleBinding.Name,
-		ClusterID:         clusterID,
-		UID:               string(clusterRoleBinding.UID),
-		CreationTimestamp: clusterRoleBinding.CreationTimestamp.Time.Format("2006-01-02T15:04:05Z07:00"),
-		Labels:            clusterRoleBinding.Labels,
-		Annotations:       clusterRoleBinding.Annotations,
-		RoleRef:           ConvertK8sRoleRefToModel(clusterRoleBinding.RoleRef),
-		Subjects:          ConvertK8sSubjectsToModel(clusterRoleBinding.Subjects),
-		ResourceVersion:   clusterRoleBinding.ResourceVersion,
-		Age:               age,
+		Name:            clusterRoleBinding.Name,
+		ClusterID:       clusterID,
+		UID:             string(clusterRoleBinding.UID),
+		CreatedAt:       clusterRoleBinding.CreationTimestamp.Time.Format(time.RFC3339),
+		Labels:          clusterRoleBinding.Labels,
+		Annotations:     clusterRoleBinding.Annotations,
+		RoleRef:         ConvertK8sRoleRefToModel(clusterRoleBinding.RoleRef),
+		Subjects:        ConvertK8sSubjectsToModel(clusterRoleBinding.Subjects),
+		ResourceVersion: clusterRoleBinding.ResourceVersion,
+		Age:             age,
 	}
 }
 

@@ -63,7 +63,6 @@ type K8sDeployment struct {
 	Status            K8sDeploymentStatus   `json:"status"`                                     // 部署状态
 	Conditions        []DeploymentCondition `json:"conditions"`                                 // 部署条件
 	CreatedAt         time.Time             `json:"created_at"`                                 // 创建时间
-	UpdatedAt         time.Time             `json:"updated_at"`                                 // 更新时间
 	RawDeployment     *appsv1.Deployment    `json:"-"`                                          // 原始 Deployment 对象，不序列化到 JSON
 }
 

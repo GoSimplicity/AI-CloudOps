@@ -334,7 +334,6 @@ func (s *configMapService) convertToK8sConfigMap(configMap *corev1.ConfigMap, cl
 		DataCount:    dataCount,
 		Size:         size,
 		CreatedAt:    configMap.CreationTimestamp.Time,
-		UpdatedAt:    configMap.CreationTimestamp.Time, // K8s doesn't track update time separately
 		Age:          time.Since(configMap.CreationTimestamp.Time).String(),
 		RawConfigMap: configMap,
 	}

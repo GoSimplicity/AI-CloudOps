@@ -62,7 +62,6 @@ type K8sDaemonSet struct {
 	Status                 K8sDaemonSetStatus   `json:"status"`                                     // DaemonSet状态
 	Conditions             []DaemonSetCondition `json:"conditions"`                                 // DaemonSet条件
 	CreatedAt              time.Time            `json:"created_at"`                                 // 创建时间
-	UpdatedAt              time.Time            `json:"updated_at"`                                 // 更新时间
 	RawDaemonSet           *appsv1.DaemonSet    `json:"-"`                                          // 原始 DaemonSet 对象，不序列化到 JSON
 }
 

@@ -110,14 +110,14 @@ func (m *clusterRoleManager) GetClusterRoleList(ctx context.Context, clusterID i
 	var k8sClusterRoles []*model.K8sClusterRole
 	for _, cr := range clusterRoles.Items {
 		k8sClusterRole := &model.K8sClusterRole{
-			ClusterID:         clusterID,
-			Name:              cr.Name,
-			UID:               string(cr.UID),
-			CreationTimestamp: cr.CreationTimestamp.Time.Format(time.RFC3339),
-			Labels:            cr.Labels,
-			Annotations:       cr.Annotations,
-			ResourceVersion:   cr.ResourceVersion,
-			RawClusterRole:    &cr,
+			ClusterID:       clusterID,
+			Name:            cr.Name,
+			UID:             string(cr.UID),
+			CreatedAt:       cr.CreationTimestamp.Time.Format(time.RFC3339),
+			Labels:          cr.Labels,
+			Annotations:     cr.Annotations,
+			ResourceVersion: cr.ResourceVersion,
+			RawClusterRole:  &cr,
 		}
 		k8sClusterRoles = append(k8sClusterRoles, k8sClusterRole)
 	}

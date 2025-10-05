@@ -31,7 +31,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	appsv1 "k8s.io/api/apps/v1"
@@ -88,7 +87,6 @@ func BuildK8sDaemonSet(ctx context.Context, clusterID int, daemonSet appsv1.Daem
 		Labels:                 daemonSet.Labels,
 		Annotations:            daemonSet.Annotations,
 		CreatedAt:              daemonSet.CreationTimestamp.Time,
-		UpdatedAt:              time.Now(),
 		Status:                 status,
 		DesiredNumberScheduled: daemonSet.Status.DesiredNumberScheduled,
 		CurrentNumberScheduled: daemonSet.Status.CurrentNumberScheduled,
@@ -498,7 +496,6 @@ func ConvertToK8sDaemonSet(daemonSet *appsv1.DaemonSet) *model.K8sDaemonSet {
 		Labels:                 daemonSet.Labels,
 		Annotations:            daemonSet.Annotations,
 		CreatedAt:              daemonSet.CreationTimestamp.Time,
-		UpdatedAt:              time.Now(),
 		Status:                 status,
 		DesiredNumberScheduled: daemonSet.Status.DesiredNumberScheduled,
 		CurrentNumberScheduled: daemonSet.Status.CurrentNumberScheduled,

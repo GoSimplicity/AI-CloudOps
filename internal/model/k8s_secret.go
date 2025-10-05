@@ -61,7 +61,6 @@ type K8sSecret struct {
 	Size        string            `json:"size"`                                       // 数据大小
 	Age         string            `json:"age"`                                        // 存在时间
 	CreatedAt   time.Time         `json:"created_at"`                                 // 创建时间
-	UpdatedAt   time.Time         `json:"updated_at"`                                 // 更新时间
 	RawSecret   *corev1.Secret    `json:"-"`                                          // 原始 Secret 对象，不序列化到 JSON
 }
 
