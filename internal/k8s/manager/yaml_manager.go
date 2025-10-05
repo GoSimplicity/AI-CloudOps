@@ -65,7 +65,6 @@ type yamlManager struct {
 	logger          *zap.Logger
 }
 
-// NewYamlManager 创建YamlManager实例
 func NewYamlManager(
 	yamlTemplateDao dao.YamlTemplateDAO,
 	yamlTaskDao dao.YamlTaskDAO,

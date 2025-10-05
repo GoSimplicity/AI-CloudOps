@@ -42,17 +42,14 @@ type SecretManager interface {
 	UpdateSecret(ctx context.Context, clusterID int, secret *corev1.Secret) (*corev1.Secret, error)
 	DeleteSecret(ctx context.Context, clusterID int, namespace, name string, options metav1.DeleteOptions) error
 
-	// 业务功能
 	ListSecretsBySelectors(ctx context.Context, clusterID int, namespace string, labelSelector string, fieldSelector string) (*corev1.SecretList, error)
 }
 
-// secretManager Secret管理器实现
 type secretManager struct {
 	client client.K8sClient
 	logger *zap.Logger
 }
 
-// NewSecretManager 创建Secret管理器
 func NewSecretManager(client client.K8sClient, logger *zap.Logger) SecretManager {
 	return &secretManager{
 		client: client,

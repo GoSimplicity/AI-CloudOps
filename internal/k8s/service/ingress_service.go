@@ -325,7 +325,6 @@ func (s *ingressService) UpdateIngress(ctx context.Context, req *model.UpdateIng
 		}
 	}
 
-	// 更新 TLS 配置
 	if len(req.TLS) > 0 {
 		updatedIngress.Spec.TLS = make([]networkingv1.IngressTLS, 0, len(req.TLS))
 		for _, tls := range req.TLS {

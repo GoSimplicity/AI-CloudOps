@@ -58,7 +58,6 @@ type secretService struct {
 	logger        *zap.Logger
 }
 
-// NewSecretService 创建新的Secret服务实例
 func NewSecretService(secretManager manager.SecretManager, logger *zap.Logger) SecretService {
 	return &secretService{
 		secretManager: secretManager,
@@ -266,7 +265,6 @@ func (s *secretService) UpdateSecret(ctx context.Context, req *model.UpdateSecre
 		return fmt.Errorf("获取Secret失败: %w", err)
 	}
 
-	// 创建新的Secret对象进行完全覆盖更新（参考Deployment模块）
 	// 只保留必要的元数据字段
 	updatedSecret := existingSecret.DeepCopy()
 

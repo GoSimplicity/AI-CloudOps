@@ -2,9 +2,10 @@ package retry
 
 import (
 	"context"
+	"time"
+
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"time"
 )
 
 var DefaultBackoff = wait.Backoff{

@@ -67,10 +67,10 @@ type K8sPV struct {
 // GetPVListReq 获取PV列表请求
 type GetPVListReq struct {
 	ListReq
-	ClusterID  int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
-	Status     string `json:"status" form:"status" comment:"PV状态过滤"`                          // PV状态过滤
-	AccessMode string `json:"access_mode" form:"access_mode" comment:"访问模式过滤"`                // 访问模式过滤
-	VolumeType string `json:"volume_type" form:"volume_type" comment:"卷类型过滤"`                 // 卷类型过滤
+	ClusterID  int         `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Status     K8sPVStatus `json:"status" form:"status" comment:"PV状态过滤"`                          // PV状态过滤 (0表示不过滤，1-5对应具体状态)
+	AccessMode string      `json:"access_mode" form:"access_mode" comment:"访问模式过滤"`                // 访问模式过滤
+	VolumeType string      `json:"volume_type" form:"volume_type" comment:"卷类型过滤"`                 // 卷类型过滤
 }
 
 // GetPVDetailsReq 获取PV详情请求

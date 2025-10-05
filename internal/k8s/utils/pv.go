@@ -27,7 +27,6 @@ package utils
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -81,7 +80,6 @@ func ConvertToPVEntity(pv *corev1.PersistentVolume, clusterID int) *model.K8sPV 
 		claimRef["uid"] = string(pv.Spec.ClaimRef.UID)
 	}
 
-	// 获取卷源配置
 	volumeSource := make(map[string]interface{})
 	if pv.Spec.PersistentVolumeSource.HostPath != nil {
 		volumeSource["hostPath"] = map[string]interface{}{
@@ -90,7 +88,6 @@ func ConvertToPVEntity(pv *corev1.PersistentVolume, clusterID int) *model.K8sPV 
 		}
 	}
 
-	// 获取节点亲和性
 	nodeAffinity := make(map[string]interface{})
 	if pv.Spec.NodeAffinity != nil && pv.Spec.NodeAffinity.Required != nil {
 		nodeAffinity["required"] = "true"
@@ -151,36 +148,11 @@ func ConvertToPVEntities(pvs []corev1.PersistentVolume, clusterID int) []*model.
 func BuildPVListOptions(req *model.GetPVListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
 
-	var fieldSelectors []string
-	if req.Status != "" {
-		// 将状态字符串转换为Kubernetes状态值
-		k8sStatus := convertStatusStringToK8sStatus(req.Status)
-		if k8sStatus != "" {
-			fieldSelectors = append(fieldSelectors, fmt.Sprintf("status.phase=%s", k8sStatus))
-		}
-	}
-
-	if len(fieldSelectors) > 0 {
-		options.FieldSelector = strings.Join(fieldSelectors, ",")
-	}
+	// 注意：PV资源不支持通过 status.phase 进行 field selector 过滤
+	// Kubernetes API 只支持 metadata.name 和 metadata.namespace
+	// 状态过滤必须在应用层（service层）完成
 
 	return options
-}
-
-// convertStatusStringToK8sStatus 将状态字符串转换为Kubernetes状态
-func convertStatusStringToK8sStatus(status string) string {
-	switch strings.ToLower(status) {
-	case "available":
-		return string(corev1.VolumeAvailable)
-	case "bound":
-		return string(corev1.VolumeBound)
-	case "released":
-		return string(corev1.VolumeReleased)
-	case "failed":
-		return string(corev1.VolumeFailed)
-	default:
-		return ""
-	}
 }
 
 func ValidatePV(pv *corev1.PersistentVolume) error {
@@ -196,11 +168,49 @@ func ValidatePV(pv *corev1.PersistentVolume) error {
 		return fmt.Errorf("PV 访问模式不能为空")
 	}
 
+	// 检查 ReadWriteOncePod 不能与其他访问模式混用
+	hasReadWriteOncePod := false
+	for _, mode := range pv.Spec.AccessModes {
+		if mode == corev1.ReadWriteOncePod {
+			hasReadWriteOncePod = true
+			break
+		}
+	}
+	if hasReadWriteOncePod && len(pv.Spec.AccessModes) > 1 {
+		return fmt.Errorf("ReadWriteOncePod 不能与其他访问模式一起使用")
+	}
+
 	if len(pv.Spec.Capacity) == 0 {
 		return fmt.Errorf("PV 容量不能为空")
 	}
 
+	// 检查必须指定卷类型
+	if !hasVolumeSource(&pv.Spec.PersistentVolumeSource) {
+		return fmt.Errorf("必须指定一个卷类型（如 HostPath, NFS, CephFS 等）")
+	}
+
 	return nil
+}
+
+// hasVolumeSource 检查是否指定了卷源
+func hasVolumeSource(source *corev1.PersistentVolumeSource) bool {
+	if source == nil {
+		return false
+	}
+
+	return source.HostPath != nil ||
+		source.NFS != nil ||
+		source.CephFS != nil ||
+		source.RBD != nil ||
+		source.Glusterfs != nil ||
+		source.ISCSI != nil ||
+		source.FC != nil ||
+		source.AWSElasticBlockStore != nil ||
+		source.GCEPersistentDisk != nil ||
+		source.AzureDisk != nil ||
+		source.AzureFile != nil ||
+		source.CSI != nil ||
+		source.Local != nil
 }
 
 // PVToYAML 将 PV 转换为 YAML
@@ -325,13 +335,119 @@ func ConvertCreatePVReqToPV(req *model.CreatePVReq) *corev1.PersistentVolume {
 		}
 	}
 
-	// 设置卷源 - 这里简化处理，实际可能需要更复杂的转换逻辑
-	if len(req.VolumeSource) > 0 {
-		// 这里需要根据具体的卷源类型进行转换
-		// 暂时留空，需要根据实际需求实现
+	return pv
+}
+
+// ConvertCreatePVReqToPVWithValidation 将请求转换为PV对象并验证卷源
+func ConvertCreatePVReqToPVWithValidation(req *model.CreatePVReq) (*corev1.PersistentVolume, error) {
+	if req == nil {
+		return nil, fmt.Errorf("请求不能为空")
 	}
 
-	return pv
+	pv := ConvertCreatePVReqToPV(req)
+	if pv == nil {
+		return nil, fmt.Errorf("转换PV失败")
+	}
+
+	// 设置并验证卷源
+	if len(req.VolumeSource) > 0 {
+		if err := convertVolumeSource(&pv.Spec.PersistentVolumeSource, req.VolumeSource); err != nil {
+			return nil, fmt.Errorf("卷源配置无效: %w", err)
+		}
+	}
+
+	return pv, nil
+}
+
+// convertVolumeSource 将 map 转换为 PersistentVolumeSource
+func convertVolumeSource(pvSource *corev1.PersistentVolumeSource, source map[string]interface{}) error {
+	// HostPath 类型
+	if hostPath, ok := source["hostPath"].(map[string]interface{}); ok {
+		path, pathOk := hostPath["path"].(string)
+		if !pathOk || path == "" {
+			return fmt.Errorf("hostPath.path 是必填字段")
+		}
+
+		pvSource.HostPath = &corev1.HostPathVolumeSource{
+			Path: path,
+		}
+
+		if typeStr, ok := hostPath["type"].(string); ok && typeStr != "" {
+			hostPathType := corev1.HostPathType(typeStr)
+			pvSource.HostPath.Type = &hostPathType
+		}
+		return nil
+	}
+
+	// NFS 类型
+	if nfs, ok := source["nfs"].(map[string]interface{}); ok {
+		server, serverOk := nfs["server"].(string)
+		path, pathOk := nfs["path"].(string)
+
+		if !serverOk || server == "" {
+			return fmt.Errorf("nfs.server 是必填字段")
+		}
+		if !pathOk || path == "" {
+			return fmt.Errorf("nfs.path 是必填字段")
+		}
+
+		pvSource.NFS = &corev1.NFSVolumeSource{
+			Server: server,
+			Path:   path,
+		}
+
+		if readOnly, ok := nfs["readOnly"].(bool); ok {
+			pvSource.NFS.ReadOnly = readOnly
+		}
+		return nil
+	}
+
+	// Local 类型
+	if local, ok := source["local"].(map[string]interface{}); ok {
+		path, pathOk := local["path"].(string)
+		if !pathOk || path == "" {
+			return fmt.Errorf("local.path 是必填字段")
+		}
+
+		pvSource.Local = &corev1.LocalVolumeSource{
+			Path: path,
+		}
+		return nil
+	}
+
+	// CSI 类型
+	if csi, ok := source["csi"].(map[string]interface{}); ok {
+		driver, driverOk := csi["driver"].(string)
+		volumeHandle, handleOk := csi["volumeHandle"].(string)
+
+		if !driverOk || driver == "" {
+			return fmt.Errorf("csi.driver 是必填字段")
+		}
+		if !handleOk || volumeHandle == "" {
+			return fmt.Errorf("csi.volumeHandle 是必填字段")
+		}
+
+		pvSource.CSI = &corev1.CSIPersistentVolumeSource{
+			Driver:       driver,
+			VolumeHandle: volumeHandle,
+		}
+
+		if readOnly, ok := csi["readOnly"].(bool); ok {
+			pvSource.CSI.ReadOnly = readOnly
+		}
+		if volumeAttributes, ok := csi["volumeAttributes"].(map[string]interface{}); ok {
+			pvSource.CSI.VolumeAttributes = make(map[string]string)
+			for k, v := range volumeAttributes {
+				if strVal, ok := v.(string); ok {
+					pvSource.CSI.VolumeAttributes[k] = strVal
+				}
+			}
+		}
+		return nil
+	}
+
+	// 可以继续添加其他卷类型的支持...
+	return fmt.Errorf("未识别的卷源类型，支持的类型：hostPath, nfs, local, csi")
 }
 
 // 基于现有PV对象更新可变字段，保留不可变字段

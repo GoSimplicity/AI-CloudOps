@@ -67,13 +67,11 @@ type EventManager interface {
 	ConvertEventToK8sEvent(event *corev1.Event, clusterID int) *model.K8sEvent
 }
 
-// eventManager Event管理器实现
 type eventManager struct {
 	client client.K8sClient
 	logger *zap.Logger
 }
 
-// NewEventManager 创建Event管理器
 func NewEventManager(client client.K8sClient, logger *zap.Logger) EventManager {
 	return &eventManager{
 		client: client,

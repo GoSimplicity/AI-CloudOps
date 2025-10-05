@@ -34,7 +34,6 @@ type pvManager struct {
 	client client.K8sClient
 }
 
-// NewPVManager 创建新的 PVManager 实例
 func NewPVManager(logger *zap.Logger, client client.K8sClient) PVManager {
 	return &pvManager{
 		logger: logger,
@@ -295,7 +294,6 @@ func (m *pvManager) GetPVByStorageClass(ctx context.Context, clusterID int, stor
 
 // ReclaimPV 回收PersistentVolume
 func (m *pvManager) ReclaimPV(ctx context.Context, clusterID int, name string) error {
-	// 获取PV
 	pv, err := m.GetPV(ctx, clusterID, name)
 	if err != nil {
 		return err
@@ -304,7 +302,6 @@ func (m *pvManager) ReclaimPV(ctx context.Context, clusterID int, name string) e
 	// 清空ClaimRef以回收PV
 	pv.Spec.ClaimRef = nil
 
-	// 更新PV
 	err = m.UpdatePV(ctx, clusterID, pv)
 	if err != nil {
 		m.logger.Error("回收PersistentVolume失败",

@@ -27,9 +27,7 @@ package service
 
 import (
 	"context"
-
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
+	"fmt"
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
@@ -38,20 +36,18 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type PVService interface {
-	// 获取PV列表
 	GetPVList(ctx context.Context, req *model.GetPVListReq) (model.ListResp[*model.K8sPV], error)
 	GetPVsByCluster(ctx context.Context, clusterID int) ([]*model.K8sPV, error)
 
-	// 获取PV详情
-	GetPV(ctx context.Context, clusterID int, name string) (*model.K8sPV, error)
-	GetPVYaml(ctx context.Context, clusterID int, name string) (*model.K8sYaml, error)
+	GetPVDetails(ctx context.Context, req *model.GetPVDetailsReq) (*model.K8sPV, error)
+	GetPVYaml(ctx context.Context, req *model.GetPVYamlReq) (*model.K8sYaml, error)
 
 	CreatePV(ctx context.Context, req *model.CreatePVReq) error
 	UpdatePV(ctx context.Context, req *model.UpdatePVReq) error
@@ -71,7 +67,6 @@ type pvService struct {
 	logger    *zap.Logger
 }
 
-// NewPVService 创建新的 PVService 实例
 func NewPVService(dao dao.ClusterDAO, client client.K8sClient, pvManager manager.PVManager, logger *zap.Logger) PVService {
 	return &pvService{
 		dao:       dao,
@@ -82,9 +77,19 @@ func NewPVService(dao dao.ClusterDAO, client client.K8sClient, pvManager manager
 }
 
 func (s *pvService) GetPVList(ctx context.Context, req *model.GetPVListReq) (model.ListResp[*model.K8sPV], error) {
+	if req == nil {
+		return model.ListResp[*model.K8sPV]{}, fmt.Errorf("获取PV列表请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return model.ListResp[*model.K8sPV]{}, fmt.Errorf("集群ID不能为空")
+	}
+
 	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
+		s.logger.Error("获取Kubernetes客户端失败",
+			zap.Int("clusterID", req.ClusterID),
+			zap.Error(err))
 		return model.ListResp[*model.K8sPV]{}, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
@@ -92,7 +97,9 @@ func (s *pvService) GetPVList(ctx context.Context, req *model.GetPVListReq) (mod
 
 	pvs, err := kubeClient.CoreV1().PersistentVolumes().List(ctx, listOptions)
 	if err != nil {
-		s.logger.Error("获取PV列表失败", zap.Error(err))
+		s.logger.Error("获取PV列表失败",
+			zap.Int("clusterID", req.ClusterID),
+			zap.Error(err))
 		return model.ListResp[*model.K8sPV]{}, pkg.NewBusinessError(constants.ErrK8sResourceList, "获取PV列表失败")
 	}
 
@@ -106,12 +113,9 @@ func (s *pvService) GetPVList(ctx context.Context, req *model.GetPVListReq) (mod
 	// optional filters
 	filtered := make([]*model.K8sPV, 0, len(entities))
 	for _, e := range entities {
-		// 过滤状态
-		if req.Status != "" {
-			statusStr := s.pvStatusToString(e.Status)
-			if !strings.EqualFold(statusStr, req.Status) {
-				continue
-			}
+		// 过滤状态 (0表示不过滤，其他值表示具体状态)
+		if req.Status != 0 && req.Status != e.Status {
+			continue
 		}
 		// 过滤访问模式
 		if req.AccessMode != "" {
@@ -175,57 +179,131 @@ func (s *pvService) GetPVsByCluster(ctx context.Context, clusterID int) ([]*mode
 	return entities, nil
 }
 
-func (s *pvService) GetPV(ctx context.Context, clusterID int, name string) (*model.K8sPV, error) {
-	kubeClient, err := s.client.GetKubeClient(clusterID)
+func (s *pvService) GetPVDetails(ctx context.Context, req *model.GetPVDetailsReq) (*model.K8sPV, error) {
+	if req == nil {
+		return nil, fmt.Errorf("获取PV详情请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return nil, fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Name == "" {
+		return nil, fmt.Errorf("PV名称不能为空")
+	}
+
+	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
-	pv, err := kubeClient.CoreV1().PersistentVolumes().Get(ctx, name, metav1.GetOptions{})
+	pv, err := kubeClient.CoreV1().PersistentVolumes().Get(ctx, req.Name, metav1.GetOptions{})
 	if err != nil {
 		s.logger.Error("获取PV详情失败",
-			zap.String("name", name),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("name", req.Name),
 			zap.Error(err))
 		return nil, pkg.NewBusinessError(constants.ErrK8sResourceGet, "获取PV详情失败")
 	}
 
-	return s.convertPVToEntity(pv, clusterID), nil
+	return s.convertPVToEntity(pv, req.ClusterID), nil
 }
 
-func (s *pvService) GetPVYaml(ctx context.Context, clusterID int, name string) (*model.K8sYaml, error) {
-	kubeClient, err := s.client.GetKubeClient(clusterID)
+func (s *pvService) GetPVYaml(ctx context.Context, req *model.GetPVYamlReq) (*model.K8sYaml, error) {
+	if req == nil {
+		return nil, fmt.Errorf("获取PV YAML请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return nil, fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Name == "" {
+		return nil, fmt.Errorf("PV名称不能为空")
+	}
+
+	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
 		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
-	pv, err := kubeClient.CoreV1().PersistentVolumes().Get(ctx, name, metav1.GetOptions{})
+	pv, err := kubeClient.CoreV1().PersistentVolumes().Get(ctx, req.Name, metav1.GetOptions{})
 	if err != nil {
 		s.logger.Error("获取PV失败",
-			zap.String("name", name),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("name", req.Name),
 			zap.Error(err))
 		return nil, pkg.NewBusinessError(constants.ErrK8sResourceGet, "获取PV失败")
 	}
 
-	yamlData, err := yaml.Marshal(pv)
+	yamlContent, err := utils.PVToYAML(pv)
 	if err != nil {
-		s.logger.Error("序列化PV为YAML失败", zap.Error(err))
-		return nil, pkg.NewBusinessError(constants.ErrK8sResourceOperation, "序列化PV为YAML失败")
+		s.logger.Error("转换为YAML失败",
+			zap.Error(err),
+			zap.String("pvName", pv.Name))
+		return nil, fmt.Errorf("转换为YAML失败: %w", err)
 	}
 
 	return &model.K8sYaml{
-		YAML: string(yamlData),
+		YAML: yamlContent,
 	}, nil
 }
 
 func (s *pvService) CreatePV(ctx context.Context, req *model.CreatePVReq) error {
-	// 将请求转换为 Kubernetes PV 对象
-	pv := utils.ConvertCreatePVReqToPV(req)
-	return s.pvManager.CreatePV(ctx, req.ClusterID, pv)
+	if req == nil {
+		return fmt.Errorf("创建PV请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("PV名称不能为空")
+	}
+
+	// 将请求转换为 Kubernetes PV 对象并验证卷源
+	pv, err := utils.ConvertCreatePVReqToPVWithValidation(req)
+	if err != nil {
+		s.logger.Error("构建PV对象失败",
+			zap.Error(err),
+			zap.String("name", req.Name))
+		return fmt.Errorf("构建PV对象失败: %w", err)
+	}
+
+	if err := utils.ValidatePV(pv); err != nil {
+		s.logger.Error("PV配置验证失败",
+			zap.Error(err),
+			zap.String("name", req.Name))
+		return fmt.Errorf("PV配置验证失败: %w", err)
+	}
+
+	err = s.pvManager.CreatePV(ctx, req.ClusterID, pv)
+	if err != nil {
+		s.logger.Error("创建PV失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("name", req.Name))
+		return fmt.Errorf("创建PV失败: %w", err)
+	}
+
+	return nil
 }
 
 func (s *pvService) UpdatePV(ctx context.Context, req *model.UpdatePVReq) error {
+	if req == nil {
+		return fmt.Errorf("更新PV请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("PV名称不能为空")
+	}
 
 	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
@@ -245,28 +323,64 @@ func (s *pvService) UpdatePV(ctx context.Context, req *model.UpdatePVReq) error 
 	// 基于现有PV对象更新可变字段
 	pv := utils.ConvertUpdatePVReqToPV(req, existingPV)
 	if pv == nil {
+		s.logger.Error("转换PV更新请求失败",
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("name", req.Name))
 		return pkg.NewBusinessError(constants.ErrInvalidParam, "无效的更新请求")
 	}
 
-	return s.pvManager.UpdatePV(ctx, req.ClusterID, pv)
+	if err := utils.ValidatePV(pv); err != nil {
+		s.logger.Error("PV配置验证失败",
+			zap.Error(err),
+			zap.String("name", req.Name))
+		return fmt.Errorf("PV配置验证失败: %w", err)
+	}
+
+	err = s.pvManager.UpdatePV(ctx, req.ClusterID, pv)
+	if err != nil {
+		s.logger.Error("更新PV失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("name", req.Name))
+		return fmt.Errorf("更新PV失败: %w", err)
+	}
+
+	return nil
 }
 
 func (s *pvService) DeletePV(ctx context.Context, req *model.DeletePVReq) error {
+	if req == nil {
+		return fmt.Errorf("删除PV请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("PV名称不能为空")
+	}
+
 	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
+		s.logger.Error("获取Kubernetes客户端失败",
+			zap.Int("clusterID", req.ClusterID),
+			zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
 	err = kubeClient.CoreV1().PersistentVolumes().Delete(ctx, req.Name, metav1.DeleteOptions{})
 	if err != nil {
 		s.logger.Error("删除PV失败",
+			zap.Int("clusterID", req.ClusterID),
 			zap.String("name", req.Name),
 			zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, "删除PV失败")
 	}
 
-	s.logger.Info("成功删除PV", zap.String("name", req.Name))
+	s.logger.Info("成功删除PV",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("name", req.Name))
 	return nil
 }
 
@@ -323,7 +437,6 @@ func (s *pvService) convertPVToEntity(pv *corev1.PersistentVolume, clusterID int
 		claimRef["uid"] = string(pv.Spec.ClaimRef.UID)
 	}
 
-	// 获取卷源配置
 	volumeSource := make(map[string]interface{})
 	if pv.Spec.PersistentVolumeSource.HostPath != nil {
 		volumeSource["hostPath"] = map[string]interface{}{
@@ -333,7 +446,6 @@ func (s *pvService) convertPVToEntity(pv *corev1.PersistentVolume, clusterID int
 	}
 	// 其他卷源类型可以根据需要添加
 
-	// 获取节点亲和性
 	nodeAffinity := make(map[string]interface{})
 	if pv.Spec.NodeAffinity != nil && pv.Spec.NodeAffinity.Required != nil {
 		// 简化节点亲和性处理，可根据需要扩展

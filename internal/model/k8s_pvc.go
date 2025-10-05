@@ -89,7 +89,7 @@ type GetPVCListReq struct {
 	ListReq
 	ClusterID  int               `json:"cluster_id" form:"cluster_id" comment:"集群ID"`   // 集群ID
 	Namespace  string            `json:"namespace" form:"namespace" comment:"命名空间"`     // 命名空间
-	Status     string            `json:"status" form:"status" comment:"PVC状态"`          // PVC状态
+	Status     K8sPVCStatus      `json:"status" form:"status" comment:"PVC状态"`          // PVC状态 (0表示不过滤，1-5对应具体状态)
 	Labels     map[string]string `json:"labels" form:"labels" comment:"标签"`             // 标签
 	AccessMode string            `json:"access_mode" form:"access_mode" comment:"访问模式"` // 访问模式
 }

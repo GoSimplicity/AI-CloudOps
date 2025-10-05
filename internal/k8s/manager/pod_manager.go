@@ -536,7 +536,6 @@ func (m *podManager) PodPortForward(ctx context.Context, clusterID int, namespac
 		Name(podName).
 		SubResource("portforward")
 
-	// 创建SPDY升级器和拨号器
 	transport, upgrader, err := spdy.RoundTripperFor(restConfig)
 	if err != nil {
 		m.logger.Error("创建SPDY升级器失败",

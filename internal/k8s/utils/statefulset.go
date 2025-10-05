@@ -297,7 +297,6 @@ func GetStatefulSetPods(ctx context.Context, kubeClient *kubernetes.Clientset, n
 	}
 	labelSelector := strings.Join(labelSelectors, ",")
 
-	// 获取Pod列表
 	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: labelSelector,
 	})

@@ -67,7 +67,6 @@ func BuildK8sDeployment(ctx context.Context, clusterID int, deployment appsv1.De
 		}
 	}
 
-	// 获取容器镜像列表
 	var images []string
 	for _, container := range deployment.Spec.Template.Spec.Containers {
 		images = append(images, container.Image)
@@ -214,7 +213,6 @@ func GetDeploymentPods(ctx context.Context, kubeClient *kubernetes.Clientset, na
 	}
 	labelSelector := strings.Join(labelSelectors, ",")
 
-	// 获取Pod列表
 	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: labelSelector,
 	})
@@ -250,7 +248,6 @@ func GetDeploymentHistory(ctx context.Context, kubeClient *kubernetes.Clientset,
 		return nil, 0, fmt.Errorf("获取ReplicaSet列表失败: %w", err)
 	}
 
-	// 获取Deployment信息
 	_, err = kubeClient.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
 	if err != nil {
 		return nil, 0, fmt.Errorf("获取部署信息失败: %w", err)
@@ -485,7 +482,6 @@ func ConvertToK8sDeployment(deployment *appsv1.Deployment) *model.K8sDeployment 
 		}
 	}
 
-	// 获取容器镜像列表
 	var images []string
 	for _, container := range deployment.Spec.Template.Spec.Containers {
 		images = append(images, container.Image)

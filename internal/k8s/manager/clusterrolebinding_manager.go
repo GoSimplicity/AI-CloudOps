@@ -52,7 +52,6 @@ type clusterRoleBindingManager struct {
 	logger *zap.Logger
 }
 
-// NewClusterRoleBindingManager 创建ClusterRoleBinding管理器
 func NewClusterRoleBindingManager(client client.K8sClient, logger *zap.Logger) ClusterRoleBindingManager {
 	return &clusterRoleBindingManager{
 		client: client,

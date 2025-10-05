@@ -48,7 +48,6 @@ type rbacService struct {
 	logger                    *zap.Logger
 }
 
-// NewRBACService 创建新的RBAC服务实例
 func NewRBACService(
 	roleService RoleService,
 	clusterRoleService ClusterRoleService,

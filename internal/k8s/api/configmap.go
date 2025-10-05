@@ -37,7 +37,6 @@ type K8sConfigMapHandler struct {
 	configMapService service.ConfigMapService
 }
 
-// NewK8sConfigMapHandler 创建ConfigMap处理器
 func NewK8sConfigMapHandler(configMapService service.ConfigMapService) *K8sConfigMapHandler {
 	return &K8sConfigMapHandler{
 		configMapService: configMapService,

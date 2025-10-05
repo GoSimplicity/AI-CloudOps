@@ -139,15 +139,6 @@ func ConvertToPVCEntities(pvcs []corev1.PersistentVolumeClaim, clusterID int) []
 func BuildPVCListOptions(req *model.GetPVCListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
 
-	var fieldSelectors []string
-	if req.Status != "" {
-		// 将状态字符串转换为Kubernetes状态值
-		k8sStatus := convertStatusStringToK8sPVCStatus(req.Status)
-		if k8sStatus != "" {
-			fieldSelectors = append(fieldSelectors, fmt.Sprintf("status.phase=%s", k8sStatus))
-		}
-	}
-
 	var labelSelectors []string
 	for key, value := range req.Labels {
 		labelSelectors = append(labelSelectors, fmt.Sprintf("%s=%s", key, value))
@@ -156,25 +147,7 @@ func BuildPVCListOptions(req *model.GetPVCListReq) metav1.ListOptions {
 		options.LabelSelector = strings.Join(labelSelectors, ",")
 	}
 
-	if len(fieldSelectors) > 0 {
-		options.FieldSelector = strings.Join(fieldSelectors, ",")
-	}
-
 	return options
-}
-
-// convertStatusStringToK8sPVCStatus 将状态字符串转换为Kubernetes状态
-func convertStatusStringToK8sPVCStatus(status string) string {
-	switch strings.ToLower(status) {
-	case "pending":
-		return string(corev1.ClaimPending)
-	case "bound":
-		return string(corev1.ClaimBound)
-	case "lost":
-		return string(corev1.ClaimLost)
-	default:
-		return ""
-	}
 }
 
 func ValidatePVC(pvc *corev1.PersistentVolumeClaim) error {
@@ -192,6 +165,18 @@ func ValidatePVC(pvc *corev1.PersistentVolumeClaim) error {
 
 	if len(pvc.Spec.AccessModes) == 0 {
 		return fmt.Errorf("PVC 访问模式不能为空")
+	}
+
+	// 检查 ReadWriteOncePod 不能与其他访问模式混用
+	hasReadWriteOncePod := false
+	for _, mode := range pvc.Spec.AccessModes {
+		if mode == corev1.ReadWriteOncePod {
+			hasReadWriteOncePod = true
+			break
+		}
+	}
+	if hasReadWriteOncePod && len(pvc.Spec.AccessModes) > 1 {
+		return fmt.Errorf("ReadWriteOncePod 不能与其他访问模式一起使用")
 	}
 
 	if len(pvc.Spec.Resources.Requests) == 0 {

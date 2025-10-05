@@ -59,7 +59,6 @@ type configMapService struct {
 	logger           *zap.Logger
 }
 
-// NewConfigMapService 创建新的ConfigMap服务实例
 func NewConfigMapService(k8sClient client.K8sClient, configMapManager manager.ConfigMapManager, logger *zap.Logger) ConfigMapService {
 	return &configMapService{
 		k8sClient:        k8sClient,
@@ -210,7 +209,6 @@ func (s *configMapService) UpdateConfigMap(ctx context.Context, req *model.Updat
 		return fmt.Errorf("获取ConfigMap失败: %w", err)
 	}
 
-	// 创建新的ConfigMap对象进行完全覆盖更新（参考Deployment模块）
 	// 只保留必要的元数据字段
 	updatedConfigMap := existingConfigMap.DeepCopy()
 

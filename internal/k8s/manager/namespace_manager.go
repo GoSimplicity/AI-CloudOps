@@ -46,13 +46,11 @@ type NamespaceManager interface {
 	DeleteNamespace(ctx context.Context, clusterID int, name string, options metav1.DeleteOptions) error
 }
 
-// namespaceManager Namespace资源管理器实现
 type namespaceManager struct {
 	clientFactory client.K8sClient
 	logger        *zap.Logger
 }
 
-// NewNamespaceManager 创建新的Namespace管理器实例
 func NewNamespaceManager(clientFactory client.K8sClient, logger *zap.Logger) NamespaceManager {
 	return &namespaceManager{
 		clientFactory: clientFactory,

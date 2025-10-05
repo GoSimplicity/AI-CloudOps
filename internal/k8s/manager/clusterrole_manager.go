@@ -50,7 +50,6 @@ type clusterRoleManager struct {
 	logger *zap.Logger
 }
 
-// NewClusterRoleManager 创建ClusterRole管理器
 func NewClusterRoleManager(client client.K8sClient, logger *zap.Logger) ClusterRoleManager {
 	return &clusterRoleManager{
 		client: client,

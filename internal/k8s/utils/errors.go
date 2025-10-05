@@ -51,7 +51,6 @@ func (e *K8sError) Error() string {
 		e.Operation, e.Resource, e.Name, e.ClusterID, e.Err)
 }
 
-// NewK8sError 创建新的Kubernetes错误
 func NewK8sError(operation, resource, name, namespace string, clusterID int, err error) *K8sError {
 	return &K8sError{
 		Operation: operation,

@@ -36,7 +36,6 @@ type pvcManager struct {
 	client client.K8sClient
 }
 
-// NewPVCManager 创建新的 PVCManager 实例
 func NewPVCManager(logger *zap.Logger, client client.K8sClient) PVCManager {
 	return &pvcManager{
 		logger: logger,
@@ -323,7 +322,6 @@ func (m *pvcManager) GetBoundPVCs(ctx context.Context, clusterID int, namespace 
 
 // ExpandPVC 扩容PersistentVolumeClaim
 func (m *pvcManager) ExpandPVC(ctx context.Context, clusterID int, namespace, name, newSize string) error {
-	// 获取PVC
 	pvc, err := m.GetPVC(ctx, clusterID, namespace, name)
 	if err != nil {
 		return err
@@ -341,13 +339,11 @@ func (m *pvcManager) ExpandPVC(ctx context.Context, clusterID int, namespace, na
 		return err
 	}
 
-	// 更新PVC的存储请求
 	if pvc.Spec.Resources.Requests == nil {
 		pvc.Spec.Resources.Requests = make(corev1.ResourceList)
 	}
 	pvc.Spec.Resources.Requests[corev1.ResourceStorage] = newQuantity
 
-	// 更新PVC
 	err = m.UpdatePVC(ctx, clusterID, namespace, pvc)
 	if err != nil {
 		m.logger.Error("扩容PersistentVolumeClaim失败",

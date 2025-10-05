@@ -37,7 +37,6 @@ type K8sSecretHandler struct {
 	secretService service.SecretService
 }
 
-// NewK8sSecretHandler 创建Secret处理器
 func NewK8sSecretHandler(secretService service.SecretService) *K8sSecretHandler {
 	return &K8sSecretHandler{
 		secretService: secretService,

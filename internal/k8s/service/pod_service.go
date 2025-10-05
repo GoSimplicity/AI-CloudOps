@@ -305,7 +305,6 @@ func (s *podService) UpdatePod(ctx context.Context, req *model.UpdatePodReq) err
 		return fmt.Errorf("pod配置验证失败: %w", err)
 	}
 
-	// 更新Pod
 	_, err = s.podManager.UpdatePod(ctx, req.ClusterID, req.Namespace, currentPod)
 	if err != nil {
 		s.logger.Error("更新Pod失败",
@@ -844,7 +843,6 @@ func (s *podService) CreatePodByYaml(ctx context.Context, req *model.CreatePodBy
 		return fmt.Errorf("Pod配置验证失败: %w", err)
 	}
 
-	// 创建Pod
 	_, err = s.podManager.CreatePod(ctx, req.ClusterID, pod.Namespace, pod)
 	if err != nil {
 		s.logger.Error("创建Pod失败",
@@ -926,7 +924,6 @@ func (s *podService) UpdatePodByYaml(ctx context.Context, req *model.UpdatePodBy
 		return fmt.Errorf("Pod配置验证失败: %w", err)
 	}
 
-	// 更新Pod
 	_, err = s.podManager.UpdatePod(ctx, req.ClusterID, req.Namespace, pod)
 	if err != nil {
 		s.logger.Error("更新Pod失败",

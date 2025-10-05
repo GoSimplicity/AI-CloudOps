@@ -57,7 +57,6 @@ type eventService struct {
 	logger       *zap.Logger
 }
 
-// NewEventService 创建新的 EventService 实例
 func NewEventService(eventManager manager.EventManager, logger *zap.Logger) EventService {
 	return &eventService{
 		eventManager: eventManager,

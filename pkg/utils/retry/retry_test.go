@@ -3,10 +3,11 @@ package retry
 import (
 	"context"
 	"errors"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 // 自定义错误类型

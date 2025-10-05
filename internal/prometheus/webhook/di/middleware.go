@@ -26,12 +26,13 @@
 package di
 
 import (
+	"strings"
+	"time"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/middleware"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"strings"
-	"time"
 )
 
 // InitMiddlewares 初始化中间件

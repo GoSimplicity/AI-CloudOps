@@ -37,7 +37,6 @@ type K8sRBACHandler struct {
 	rbacService service.RBACService
 }
 
-// NewK8sRBACHandler 创建新的RBAC处理器
 func NewK8sRBACHandler(rbacService service.RBACService) *K8sRBACHandler {
 	return &K8sRBACHandler{
 		rbacService: rbacService,

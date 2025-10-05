@@ -91,7 +91,6 @@ func (s *namespaceService) CreateNamespace(ctx context.Context, req *model.K8sNa
 	labelsMap := utils.ConvertKeyValueListToLabels(req.Labels)
 	annotationsMap := utils.ConvertKeyValueListToLabels(req.Annotations)
 
-	// 创建命名空间对象
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        req.Name,
@@ -203,7 +202,6 @@ func (s *namespaceService) UpdateNamespace(ctx context.Context, req *model.K8sNa
 		return fmt.Errorf("注解验证失败: %w", err)
 	}
 
-	// 获取现有命名空间
 	namespace, err := s.namespaceManager.GetNamespace(ctx, req.ClusterID, req.Name)
 	if err != nil {
 		s.logger.Error("获取命名空间失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("name", req.Name))
@@ -213,7 +211,6 @@ func (s *namespaceService) UpdateNamespace(ctx context.Context, req *model.K8sNa
 	labelsMap := utils.ConvertKeyValueListToLabels(req.Labels)
 	annotationsMap := utils.ConvertKeyValueListToLabels(req.Annotations)
 
-	// 更新命名空间标签和注释
 	namespace.Labels = labelsMap
 	namespace.Annotations = annotationsMap
 

@@ -50,7 +50,6 @@ func BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node, kubeClie
 		return nil, fmt.Errorf("无效的集群ID: %d", clusterID)
 	}
 
-	// 获取节点状态
 	status := getNodeStatus(node)
 
 	// 判断是否可调度
@@ -59,15 +58,12 @@ func BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node, kubeClie
 		schedulable = int8(2)
 	}
 
-	// 获取节点角色
 	roles := getNodeRoles(node)
 
-	// 获取节点 IP 和主机名
 	internalIP := getNodeInternalIP(node)
 	externalIP := getNodeExternalIP(node)
 	hostname := getNodeHostname(node)
 
-	// 获取节点的年龄
 	age := calculateAge(node.CreationTimestamp.Time)
 
 	k8sNode := &model.K8sNode{

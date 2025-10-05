@@ -56,13 +56,11 @@ type DeploymentManager interface {
 	GetDeploymentPods(ctx context.Context, clusterID int, namespace, deploymentName string) ([]*model.K8sPod, int64, error)
 }
 
-// deploymentManager Deployment资源管理器实现
 type deploymentManager struct {
 	clientFactory client.K8sClient
 	logger        *zap.Logger
 }
 
-// NewDeploymentManager 创建新的Deployment管理器实例
 func NewDeploymentManager(clientFactory client.K8sClient, logger *zap.Logger) DeploymentManager {
 	return &deploymentManager{
 		clientFactory: clientFactory,
@@ -70,7 +68,6 @@ func NewDeploymentManager(clientFactory client.K8sClient, logger *zap.Logger) De
 	}
 }
 
-// getKubeClient 私有方法：获取Kubernetes客户端
 func (m *deploymentManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
 	kubeClient, err := m.clientFactory.GetKubeClient(clusterID)
 	if err != nil {
@@ -417,7 +414,6 @@ func (m *deploymentManager) RollbackDeployment(ctx context.Context, clusterID in
 	}
 	deployment.Annotations["kubernetes.io/change-cause"] = fmt.Sprintf("Rollback to revision %d", revision)
 
-	// 更新 Deployment
 	_, err = kubeClient.AppsV1().Deployments(namespace).Update(ctx, deployment, metav1.UpdateOptions{})
 	if err != nil {
 		m.logger.Error("回滚 Deployment 失败",
@@ -444,7 +440,6 @@ func (m *deploymentManager) PauseDeployment(ctx context.Context, clusterID int, 
 		return err
 	}
 
-	// 获取当前 Deployment
 	deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		m.logger.Error("获取 Deployment 失败",
@@ -466,7 +461,6 @@ func (m *deploymentManager) PauseDeployment(ctx context.Context, clusterID int, 
 	// 设置暂停状态
 	deployment.Spec.Paused = true
 
-	// 更新 Deployment
 	_, err = kubeClient.AppsV1().Deployments(namespace).Update(ctx, deployment, metav1.UpdateOptions{})
 	if err != nil {
 		m.logger.Error("暂停 Deployment 失败",
@@ -490,7 +484,6 @@ func (m *deploymentManager) ResumeDeployment(ctx context.Context, clusterID int,
 		return err
 	}
 
-	// 获取当前 Deployment
 	deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		m.logger.Error("获取 Deployment 失败",
@@ -512,7 +505,6 @@ func (m *deploymentManager) ResumeDeployment(ctx context.Context, clusterID int,
 	// 设置恢复状态
 	deployment.Spec.Paused = false
 
-	// 更新 Deployment
 	_, err = kubeClient.AppsV1().Deployments(namespace).Update(ctx, deployment, metav1.UpdateOptions{})
 	if err != nil {
 		m.logger.Error("恢复 Deployment 失败",

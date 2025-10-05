@@ -35,7 +35,6 @@ type serviceAccountManager struct {
 	client client.K8sClient
 }
 
-// NewServiceAccountManager 创建新的 ServiceAccountManager 实例
 func NewServiceAccountManager(logger *zap.Logger, client client.K8sClient) ServiceAccountManager {
 	return &serviceAccountManager{
 		logger: logger,

@@ -51,7 +51,6 @@ type roleManager struct {
 	logger *zap.Logger
 }
 
-// NewRoleManager 创建Role管理器
 func NewRoleManager(client client.K8sClient, logger *zap.Logger) RoleManager {
 	return &roleManager{
 		client: client,

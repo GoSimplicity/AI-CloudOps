@@ -148,7 +148,6 @@ func (s *clusterService) CreateCluster(ctx context.Context, req *model.CreateClu
 		return fmt.Errorf("资源配置验证失败: %w", err)
 	}
 
-	// 创建集群记录
 	if err := s.dao.CreateCluster(ctx, cluster); err != nil {
 		s.logger.Error("创建集群记录失败", zap.Error(err))
 		return fmt.Errorf("创建集群记录失败: %w", err)
@@ -217,7 +216,6 @@ func (s *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClu
 		return fmt.Errorf("资源配置验证失败: %w", err)
 	}
 
-	// 更新集群记录
 	if err := s.dao.UpdateCluster(ctx, cluster); err != nil {
 		s.logger.Error("更新集群失败", zap.Error(err), zap.Int("clusterID", cluster.ID))
 		return fmt.Errorf("更新集群失败: %w", err)
@@ -253,7 +251,6 @@ func (s *clusterService) DeleteCluster(ctx context.Context, req *model.DeleteClu
 	// 删除集群客户端
 	s.client.RemoveCluster(req.ID)
 
-	// 删除集群记录
 	if err := s.dao.DeleteCluster(ctx, req.ID); err != nil {
 		s.logger.Error("删除集群失败", zap.Error(err), zap.Int("clusterID", req.ID))
 		return fmt.Errorf("删除集群失败: %w", err)

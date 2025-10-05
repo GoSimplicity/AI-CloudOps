@@ -55,13 +55,11 @@ type DeploymentService interface {
 	GetDeploymentHistory(ctx context.Context, req *model.GetDeploymentHistoryReq) (model.ListResp[*model.K8sDeploymentHistory], error)
 }
 
-// deploymentService Deployment业务服务实现
 type deploymentService struct {
 	deploymentManager manager.DeploymentManager
 	logger            *zap.Logger
 }
 
-// NewDeploymentService 创建新的Deployment业务服务实例
 func NewDeploymentService(deploymentManager manager.DeploymentManager, logger *zap.Logger) DeploymentService {
 	return &deploymentService{
 		deploymentManager: deploymentManager,

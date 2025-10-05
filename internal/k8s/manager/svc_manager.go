@@ -46,18 +46,15 @@ type ServiceManager interface {
 
 	BatchDeleteServices(ctx context.Context, clusterID int, namespace string, serviceNames []string, options metav1.DeleteOptions) error
 
-	// 业务功能
 	GetServiceEndpoints(ctx context.Context, clusterID int, namespace, serviceName string) (*corev1.Endpoints, error)
 	ListServicesBySelector(ctx context.Context, clusterID int, namespace string, selector string) (*corev1.ServiceList, error)
 }
 
-// serviceManager Service管理器实现
 type serviceManager struct {
 	clientFactory client.K8sClient
 	logger        *zap.Logger
 }
 
-// NewServiceManager 创建Service管理器
 func NewServiceManager(clientFactory client.K8sClient, logger *zap.Logger) ServiceManager {
 	return &serviceManager{
 		clientFactory: clientFactory,
@@ -65,7 +62,6 @@ func NewServiceManager(clientFactory client.K8sClient, logger *zap.Logger) Servi
 	}
 }
 
-// getKubeClient 私有方法：获取Kubernetes客户端
 func (m *serviceManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
 	kubeClient, err := m.clientFactory.GetKubeClient(clusterID)
 	if err != nil {

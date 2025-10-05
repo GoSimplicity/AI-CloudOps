@@ -127,7 +127,6 @@ func ApplySingleDocument(ctx context.Context, document string, restMapper meta.R
 		return fmt.Errorf("无法找到对应的资源: %w", err)
 	}
 
-	// 设置默认命名空间
 	if mapping.Scope.Name() == meta.RESTScopeNameNamespace && obj.GetNamespace() == "" {
 		obj.SetNamespace("default")
 	}

@@ -92,7 +92,7 @@ func (h *K8sPVHandler) GetPVDetails(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.pvService.GetPV(ctx, req.ClusterID, req.Name)
+		return h.pvService.GetPVDetails(ctx, &req)
 	})
 }
 
@@ -115,7 +115,7 @@ func (h *K8sPVHandler) GetPVYaml(ctx *gin.Context) {
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.pvService.GetPVYaml(ctx, req.ClusterID, req.Name)
+		return h.pvService.GetPVYaml(ctx, &req)
 	})
 }
 

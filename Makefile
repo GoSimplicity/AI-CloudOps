@@ -1,6 +1,40 @@
 generate:
 	go generate ./...
 
+# 格式化代码
+fmt:
+	@echo "🎨 正在格式化代码..."
+	@go fmt ./...
+	@echo "✅ 代码格式化完成"
+
+# 格式化代码并整理导入 (需要安装 goimports)
+fmt-imports:
+	@echo "🎨 正在格式化代码并整理导入..."
+	@if ! command -v goimports &> /dev/null; then \
+		echo "⚠️  goimports 未安装，正在安装..."; \
+		go install golang.org/x/tools/cmd/goimports@latest; \
+	fi
+	@goimports -w -local github.com/yourusername ./
+	@echo "✅ 代码格式化和导入整理完成"
+
+# 检查代码格式 (用于 CI)
+fmt-check:
+	@echo "🔍 检查代码格式..."
+	@unformatted=$$(gofmt -l .); \
+	if [ -n "$$unformatted" ]; then \
+		echo "❌ 以下文件需要格式化:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	else \
+		echo "✅ 所有文件格式正确"; \
+	fi
+
+# 代码检查和格式化 (包含 go vet)
+lint:
+	@echo "🔍 正在进行代码检查..."
+	@go vet ./...
+	@echo "✅ 代码检查完成"
+
 # 生成 Swagger API 文档 (传统方式，需要手动注释)
 swagger-manual:
 	@echo "正在生成API文档（传统方式）..."
@@ -107,6 +141,10 @@ dev-setup: install-dev-tools
 	@echo ""
 	@echo "可用命令:"
 	@echo "  make dev-air           # 使用 Air 热重载启动"
+	@echo "  make fmt               # 格式化代码"
+	@echo "  make fmt-imports       # 格式化代码并整理导入"
+	@echo "  make fmt-check         # 检查代码格式"
+	@echo "  make lint              # 代码检查 (go vet)"
 	@echo "  make swagger           # 手动生成 Swagger 文档"
 	@echo "  make swagger-manual    # 使用传统方式生成"
 	@echo "  make swagger-validate  # 验证生成的文档"

@@ -81,7 +81,6 @@ func (cm *clusterManager) CreateCluster(ctx context.Context, cluster *model.K8sC
 		cm.logger.Warn("添加集群资源限制失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
 	}
 
-	// 更新集群状态为运行中
 	if err := cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusRunning); err != nil {
 		cm.logger.Error("更新集群状态失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
 		return fmt.Errorf("更新集群状态失败: %w", err)
@@ -115,7 +114,6 @@ func (cm *clusterManager) UpdateCluster(ctx context.Context, cluster *model.K8sC
 		cm.logger.Warn("添加集群资源限制失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
 	}
 
-	// 更新集群状态为运行中
 	if err := cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusRunning); err != nil {
 		cm.logger.Error("更新集群状态失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
 		return fmt.Errorf("更新集群状态失败: %w", err)
@@ -141,7 +139,6 @@ func (cm *clusterManager) RefreshCluster(ctx context.Context, clusterID int) err
 		return fmt.Errorf("集群连接检查失败: %w", err)
 	}
 
-	// 更新集群状态
 	if err := cm.dao.UpdateClusterStatus(ctx, clusterID, model.StatusRunning); err != nil {
 		cm.logger.Error("更新集群状态失败", zap.Int("clusterID", clusterID), zap.Error(err))
 		return fmt.Errorf("更新集群状态失败: %w", err)
@@ -197,7 +194,6 @@ func (cm *clusterManager) InitializeAllClusters(ctx context.Context) error {
 					zap.Int("clusterID", cluster.ID),
 					zap.String("clusterName", cluster.Name),
 					zap.Error(err))
-				// 更新失败集群的状态
 				cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusError)
 				continue
 			}

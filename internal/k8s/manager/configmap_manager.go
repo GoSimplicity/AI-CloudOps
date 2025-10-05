@@ -42,17 +42,14 @@ type ConfigMapManager interface {
 	UpdateConfigMap(ctx context.Context, clusterID int, configMap *corev1.ConfigMap) (*corev1.ConfigMap, error)
 	DeleteConfigMap(ctx context.Context, clusterID int, namespace, name string, options metav1.DeleteOptions) error
 
-	// 业务功能
 	ListConfigMapsBySelector(ctx context.Context, clusterID int, namespace string, selector string) (*corev1.ConfigMapList, error)
 }
 
-// configMapManager ConfigMap管理器实现
 type configMapManager struct {
 	client client.K8sClient
 	logger *zap.Logger
 }
 
-// NewConfigMapManager 创建ConfigMap管理器
 func NewConfigMapManager(client client.K8sClient, logger *zap.Logger) ConfigMapManager {
 	return &configMapManager{
 		client: client,
