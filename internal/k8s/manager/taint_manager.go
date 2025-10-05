@@ -76,7 +76,6 @@ func (tm *taintManager) CheckTaintYaml(ctx context.Context, clusterID int, nodeN
 		return fmt.Errorf("解析 Taint YAML 配置失败: %w", err)
 	}
 
-	// 检查重复 Taint 键
 	taintsKey := make(map[string]struct{})
 	for _, taint := range taintsToProcess {
 		if _, exists := taintsKey[taint.Key]; exists {

@@ -146,7 +146,6 @@ func (m *nodeManager) DrainNode(ctx context.Context, clusterID int, nodeName str
 			continue
 		}
 
-		// 使用Eviction API而不是直接删除，这样会遵守PDB
 		deleteOptions := utils.BuildDeleteOptions(options.GracePeriodSeconds)
 
 		eviction := &policyv1.Eviction{
@@ -253,7 +252,6 @@ func (m *nodeManager) UncordonNode(ctx context.Context, clusterID int, nodeName 
 	return nil
 }
 
-// UpdateNodeLabels 更新节点标签
 func (m *nodeManager) UpdateNodeLabels(ctx context.Context, clusterID int, nodeName string, labels map[string]string) error {
 	if err := utils.ValidateNodeName(nodeName); err != nil {
 		return err

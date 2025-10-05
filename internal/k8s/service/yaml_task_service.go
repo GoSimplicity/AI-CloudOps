@@ -59,7 +59,6 @@ func NewYamlTaskService(manager manager.YamlManager, logger *zap.Logger) YamlTas
 	}
 }
 
-// GetYamlTaskList 获取 YAML 任务列表
 func (s *yamlTaskService) GetYamlTaskList(ctx context.Context, req *model.YamlTaskListReq) (model.ListResp[*model.K8sYamlTask], error) {
 	list, err := s.manager.GetYamlTaskList(ctx, req)
 	if err != nil {
@@ -71,7 +70,6 @@ func (s *yamlTaskService) GetYamlTaskList(ctx context.Context, req *model.YamlTa
 	}, nil
 }
 
-// CreateYamlTask 创建 YAML 任务
 func (s *yamlTaskService) CreateYamlTask(ctx context.Context, req *model.YamlTaskCreateReq) error {
 	task := &model.K8sYamlTask{
 		Name:       req.Name,
@@ -84,7 +82,6 @@ func (s *yamlTaskService) CreateYamlTask(ctx context.Context, req *model.YamlTas
 	return s.manager.CreateYamlTask(ctx, task)
 }
 
-// UpdateYamlTask 更新 YAML 任务
 func (s *yamlTaskService) UpdateYamlTask(ctx context.Context, req *model.YamlTaskUpdateReq) error {
 	// 将请求转换为任务模型
 	task := &model.K8sYamlTask{
@@ -98,12 +95,10 @@ func (s *yamlTaskService) UpdateYamlTask(ctx context.Context, req *model.YamlTas
 	return s.manager.UpdateYamlTask(ctx, task)
 }
 
-// DeleteYamlTask 删除 YAML 任务
 func (s *yamlTaskService) DeleteYamlTask(ctx context.Context, req *model.YamlTaskDeleteReq) error {
 	return s.manager.DeleteYamlTask(ctx, req.ID)
 }
 
-// ApplyYamlTask 应用 YAML 任务
 func (s *yamlTaskService) ApplyYamlTask(ctx context.Context, req *model.YamlTaskExecuteReq) error {
 	return s.manager.ApplyYamlTask(ctx, req.ID)
 }

@@ -37,9 +37,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ClusterRoleManager ClusterRole管理器接口
 type ClusterRoleManager interface {
-	// 基础 CRUD 操作
 	CreateClusterRole(ctx context.Context, clusterID int, clusterRole *rbacv1.ClusterRole) error
 	GetClusterRole(ctx context.Context, clusterID int, name string) (*rbacv1.ClusterRole, error)
 	GetClusterRoleList(ctx context.Context, clusterID int, listOptions metav1.ListOptions) ([]*model.K8sClusterRole, error)
@@ -60,7 +58,6 @@ func NewClusterRoleManager(client client.K8sClient, logger *zap.Logger) ClusterR
 	}
 }
 
-// CreateClusterRole 创建ClusterRole
 func (m *clusterRoleManager) CreateClusterRole(ctx context.Context, clusterID int, clusterRole *rbacv1.ClusterRole) error {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -80,7 +77,6 @@ func (m *clusterRoleManager) CreateClusterRole(ctx context.Context, clusterID in
 	return nil
 }
 
-// GetClusterRole 获取单个ClusterRole
 func (m *clusterRoleManager) GetClusterRole(ctx context.Context, clusterID int, name string) (*rbacv1.ClusterRole, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -98,7 +94,6 @@ func (m *clusterRoleManager) GetClusterRole(ctx context.Context, clusterID int, 
 	return clusterRole, nil
 }
 
-// GetClusterRoleList 获取ClusterRole列表
 func (m *clusterRoleManager) GetClusterRoleList(ctx context.Context, clusterID int, listOptions metav1.ListOptions) ([]*model.K8sClusterRole, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -112,7 +107,6 @@ func (m *clusterRoleManager) GetClusterRoleList(ctx context.Context, clusterID i
 		return nil, fmt.Errorf("获取ClusterRole列表失败: %w", err)
 	}
 
-	// 转换为模型格式 - 简化实现
 	var k8sClusterRoles []*model.K8sClusterRole
 	for _, cr := range clusterRoles.Items {
 		k8sClusterRole := &model.K8sClusterRole{
@@ -134,7 +128,6 @@ func (m *clusterRoleManager) GetClusterRoleList(ctx context.Context, clusterID i
 	return k8sClusterRoles, nil
 }
 
-// UpdateClusterRole 更新ClusterRole
 func (m *clusterRoleManager) UpdateClusterRole(ctx context.Context, clusterID int, clusterRole *rbacv1.ClusterRole) error {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -154,7 +147,6 @@ func (m *clusterRoleManager) UpdateClusterRole(ctx context.Context, clusterID in
 	return nil
 }
 
-// DeleteClusterRole 删除ClusterRole
 func (m *clusterRoleManager) DeleteClusterRole(ctx context.Context, clusterID int, name string, deleteOptions metav1.DeleteOptions) error {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {

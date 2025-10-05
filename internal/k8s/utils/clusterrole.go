@@ -35,15 +35,11 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// ConvertClusterRoleToModel 将 Kubernetes ClusterRole 转换为内部 ClusterRole 模型
 func ConvertClusterRoleToModel(clusterRole *rbacv1.ClusterRole, clusterID int) *model.K8sClusterRole {
 	if clusterRole == nil {
 		return nil
 	}
 
-	// 转换标签和注解
-
-	// 转换规则为model格式
 	var rules []model.PolicyRule
 	for _, rule := range clusterRole.Rules {
 		rules = append(rules, model.PolicyRule{
@@ -55,13 +51,11 @@ func ConvertClusterRoleToModel(clusterRole *rbacv1.ClusterRole, clusterID int) *
 		})
 	}
 
-	// 转换标签
 	labels := make(map[string]string)
 	if clusterRole.Labels != nil {
 		labels = clusterRole.Labels
 	}
 
-	// 转换注解
 	annotations := make(map[string]string)
 	if clusterRole.Annotations != nil {
 		annotations = clusterRole.Annotations
@@ -77,7 +71,6 @@ func ConvertClusterRoleToModel(clusterRole *rbacv1.ClusterRole, clusterID int) *
 	}
 }
 
-// ConvertClusterRolesToModel 批量转换 ClusterRole 列表
 func ConvertClusterRolesToModel(clusterRoles []rbacv1.ClusterRole, clusterID int) []*model.K8sClusterRole {
 	if len(clusterRoles) == 0 {
 		return nil
@@ -92,7 +85,6 @@ func ConvertClusterRolesToModel(clusterRoles []rbacv1.ClusterRole, clusterID int
 	return results
 }
 
-// BuildClusterRoleListQueryOptions 构建 ClusterRole 列表查询选项
 func BuildClusterRoleListQueryOptions(req *model.GetClusterRoleListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
 
@@ -101,7 +93,6 @@ func BuildClusterRoleListQueryOptions(req *model.GetClusterRoleListReq) metav1.L
 	return options
 }
 
-// ValidateClusterRole 验证 ClusterRole 配置
 func ValidateClusterRole(clusterRole *rbacv1.ClusterRole) error {
 	if clusterRole == nil {
 		return fmt.Errorf("ClusterRole 不能为空")
@@ -111,7 +102,6 @@ func ValidateClusterRole(clusterRole *rbacv1.ClusterRole) error {
 		return fmt.Errorf("ClusterRole 名称不能为空")
 	}
 
-	// 验证规则
 	for i, rule := range clusterRole.Rules {
 		if err := validatePolicyRule(rule, i); err != nil {
 			return fmt.Errorf("ClusterRole 规则验证失败: %w", err)
@@ -140,7 +130,6 @@ func validatePolicyRule(rule rbacv1.PolicyRule, index int) error {
 	return nil
 }
 
-// ConvertClusterRoleToYAML 将 ClusterRole 转换为 YAML
 func ConvertClusterRoleToYAML(clusterRole *rbacv1.ClusterRole) (string, error) {
 	if clusterRole == nil {
 		return "", fmt.Errorf("ClusterRole 不能为空")
@@ -193,7 +182,6 @@ func FilterClusterRolesByName(clusterRoles []rbacv1.ClusterRole, nameFilter stri
 	return filtered
 }
 
-// GetClusterRoleAge 获取 ClusterRole 年龄
 func GetClusterRoleAge(clusterRole rbacv1.ClusterRole) string {
 	age := time.Since(clusterRole.CreationTimestamp.Time)
 	days := int(age.Hours() / 24)
@@ -227,7 +215,6 @@ func IsSystemClusterRole(clusterRole rbacv1.ClusterRole) bool {
 	return false
 }
 
-// GetClusterRolePermissions 获取 ClusterRole 权限摘要
 func GetClusterRolePermissions(clusterRole rbacv1.ClusterRole) map[string][]string {
 	permissions := make(map[string][]string)
 
@@ -286,16 +273,12 @@ func removeDuplicates(slice []string) []string {
 	return result
 }
 
-// BuildClusterRoleListOptions 构建ClusterRole列表选项
 func BuildClusterRoleListOptions(req *model.GetClusterRoleListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
-
-	// 构建选项的逻辑可以在这里添加
 
 	return options
 }
 
-// ConvertToK8sClusterRole 将内部模型转换为Kubernetes ClusterRole对象
 func ConvertToK8sClusterRole(req *model.CreateClusterRoleReq) *rbacv1.ClusterRole {
 	return &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
@@ -333,7 +316,6 @@ func PaginateK8sClusterRoles(clusterRoles []*model.K8sClusterRole, page, pageSiz
 	return clusterRoles[start:end], total
 }
 
-// ConvertK8sClusterRoleToClusterRoleInfo 将K8s ClusterRole转换为K8sClusterRole
 func ConvertK8sClusterRoleToClusterRoleInfo(clusterRole *rbacv1.ClusterRole, clusterID int) model.K8sClusterRole {
 	if clusterRole == nil {
 		return model.K8sClusterRole{}
@@ -354,7 +336,6 @@ func ConvertK8sClusterRoleToClusterRoleInfo(clusterRole *rbacv1.ClusterRole, clu
 	}
 }
 
-// BuildK8sClusterRole 构建K8s ClusterRole对象
 func BuildK8sClusterRole(name string, labels, annotations model.KeyValueList, rules []model.PolicyRule) *rbacv1.ClusterRole {
 	return &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
@@ -366,7 +347,6 @@ func BuildK8sClusterRole(name string, labels, annotations model.KeyValueList, ru
 	}
 }
 
-// ConvertPolicyRulesToK8s 将模型PolicyRule转换为K8s PolicyRule
 func ConvertPolicyRulesToK8s(rules []model.PolicyRule) []rbacv1.PolicyRule {
 	if len(rules) == 0 {
 		return nil
@@ -385,7 +365,6 @@ func ConvertPolicyRulesToK8s(rules []model.PolicyRule) []rbacv1.PolicyRule {
 	return k8sRules
 }
 
-// ConvertK8sPolicyRulesToModel 将K8s PolicyRule转换为模型PolicyRule
 func ConvertK8sPolicyRulesToModel(rules []rbacv1.PolicyRule) []model.PolicyRule {
 	if len(rules) == 0 {
 		return nil

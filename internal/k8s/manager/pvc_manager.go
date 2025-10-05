@@ -13,21 +13,18 @@ import (
 
 // PVCManager PersistentVolumeClaim 资源管理器
 type PVCManager interface {
-	// 基础 CRUD 操作
 	CreatePVC(ctx context.Context, clusterID int, namespace string, pvc *corev1.PersistentVolumeClaim) error
 	GetPVC(ctx context.Context, clusterID int, namespace, name string) (*corev1.PersistentVolumeClaim, error)
 	GetPVCList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*corev1.PersistentVolumeClaimList, error)
 	UpdatePVC(ctx context.Context, clusterID int, namespace string, pvc *corev1.PersistentVolumeClaim) error
 	DeletePVC(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error
 
-	// 批量操作
 	BatchDeletePVCs(ctx context.Context, clusterID int, namespace string, pvcNames []string) error
 
 	// 高级功能
 	PatchPVC(ctx context.Context, clusterID int, namespace, name string, data []byte, patchType string) (*corev1.PersistentVolumeClaim, error)
 	UpdatePVCStatus(ctx context.Context, clusterID int, namespace string, pvc *corev1.PersistentVolumeClaim) error
 
-	// PVC 特定操作
 	GetPVCsByStorageClass(ctx context.Context, clusterID int, namespace, storageClass string) (*corev1.PersistentVolumeClaimList, error)
 	GetPendingPVCs(ctx context.Context, clusterID int, namespace string) (*corev1.PersistentVolumeClaimList, error)
 	GetBoundPVCs(ctx context.Context, clusterID int, namespace string) (*corev1.PersistentVolumeClaimList, error)
@@ -47,7 +44,6 @@ func NewPVCManager(logger *zap.Logger, client client.K8sClient) PVCManager {
 	}
 }
 
-// CreatePVC 创建PersistentVolumeClaim
 func (m *pvcManager) CreatePVC(ctx context.Context, clusterID int, namespace string, pvc *corev1.PersistentVolumeClaim) error {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -75,7 +71,6 @@ func (m *pvcManager) CreatePVC(ctx context.Context, clusterID int, namespace str
 	return nil
 }
 
-// GetPVC 获取指定PersistentVolumeClaim
 func (m *pvcManager) GetPVC(ctx context.Context, clusterID int, namespace, name string) (*corev1.PersistentVolumeClaim, error) {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -98,7 +93,6 @@ func (m *pvcManager) GetPVC(ctx context.Context, clusterID int, namespace, name 
 	return pvc, nil
 }
 
-// GetPVCList 获取PersistentVolumeClaim列表
 func (m *pvcManager) GetPVCList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*corev1.PersistentVolumeClaimList, error) {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -125,7 +119,6 @@ func (m *pvcManager) GetPVCList(ctx context.Context, clusterID int, namespace st
 	return pvcList, nil
 }
 
-// UpdatePVC 更新PersistentVolumeClaim
 func (m *pvcManager) UpdatePVC(ctx context.Context, clusterID int, namespace string, pvc *corev1.PersistentVolumeClaim) error {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -153,7 +146,6 @@ func (m *pvcManager) UpdatePVC(ctx context.Context, clusterID int, namespace str
 	return nil
 }
 
-// DeletePVC 删除PersistentVolumeClaim
 func (m *pvcManager) DeletePVC(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -237,7 +229,6 @@ func (m *pvcManager) PatchPVC(ctx context.Context, clusterID int, namespace, nam
 		return nil, err
 	}
 
-	// 转换 patch 类型
 	pt := types.PatchType(patchType)
 	pvc, err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).Patch(ctx, name, pt, data, metav1.PatchOptions{})
 	if err != nil {
@@ -258,7 +249,6 @@ func (m *pvcManager) PatchPVC(ctx context.Context, clusterID int, namespace, nam
 	return pvc, nil
 }
 
-// UpdatePVCStatus 更新PersistentVolumeClaim状态
 func (m *pvcManager) UpdatePVCStatus(ctx context.Context, clusterID int, namespace string, pvc *corev1.PersistentVolumeClaim) error {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -286,7 +276,6 @@ func (m *pvcManager) UpdatePVCStatus(ctx context.Context, clusterID int, namespa
 	return nil
 }
 
-// GetPVCsByStorageClass 根据存储类获取PersistentVolumeClaim
 func (m *pvcManager) GetPVCsByStorageClass(ctx context.Context, clusterID int, namespace, storageClass string) (*corev1.PersistentVolumeClaimList, error) {
 	pvcList, err := m.GetPVCList(ctx, clusterID, namespace, metav1.ListOptions{})
 	if err != nil {
@@ -316,7 +305,6 @@ func (m *pvcManager) GetPVCsByStorageClass(ctx context.Context, clusterID int, n
 	return filteredList, nil
 }
 
-// GetPendingPVCs 获取Pending状态的PersistentVolumeClaim
 func (m *pvcManager) GetPendingPVCs(ctx context.Context, clusterID int, namespace string) (*corev1.PersistentVolumeClaimList, error) {
 	listOptions := metav1.ListOptions{
 		FieldSelector: "status.phase=Pending",
@@ -325,7 +313,6 @@ func (m *pvcManager) GetPendingPVCs(ctx context.Context, clusterID int, namespac
 	return m.GetPVCList(ctx, clusterID, namespace, listOptions)
 }
 
-// GetBoundPVCs 获取Bound状态的PersistentVolumeClaim
 func (m *pvcManager) GetBoundPVCs(ctx context.Context, clusterID int, namespace string) (*corev1.PersistentVolumeClaimList, error) {
 	listOptions := metav1.ListOptions{
 		FieldSelector: "status.phase=Bound",

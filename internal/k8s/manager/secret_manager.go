@@ -35,9 +35,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// SecretManager Secret管理器接口
 type SecretManager interface {
-	// 基础CRUD操作
 	GetSecret(ctx context.Context, clusterID int, namespace, name string) (*corev1.Secret, error)
 	ListSecrets(ctx context.Context, clusterID int, namespace string) (*corev1.SecretList, error)
 	CreateSecret(ctx context.Context, clusterID int, secret *corev1.Secret) (*corev1.Secret, error)
@@ -62,7 +60,6 @@ func NewSecretManager(client client.K8sClient, logger *zap.Logger) SecretManager
 	}
 }
 
-// GetSecret 获取单个Secret
 func (m *secretManager) GetSecret(ctx context.Context, clusterID int, namespace, name string) (*corev1.Secret, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -80,7 +77,6 @@ func (m *secretManager) GetSecret(ctx context.Context, clusterID int, namespace,
 	return secret, nil
 }
 
-// ListSecrets 获取Secret列表
 func (m *secretManager) ListSecrets(ctx context.Context, clusterID int, namespace string) (*corev1.SecretList, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -98,7 +94,6 @@ func (m *secretManager) ListSecrets(ctx context.Context, clusterID int, namespac
 	return secrets, nil
 }
 
-// CreateSecret 创建Secret
 func (m *secretManager) CreateSecret(ctx context.Context, clusterID int, secret *corev1.Secret) (*corev1.Secret, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -118,7 +113,6 @@ func (m *secretManager) CreateSecret(ctx context.Context, clusterID int, secret 
 	return createdSecret, nil
 }
 
-// UpdateSecret 更新Secret
 func (m *secretManager) UpdateSecret(ctx context.Context, clusterID int, secret *corev1.Secret) (*corev1.Secret, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -138,7 +132,6 @@ func (m *secretManager) UpdateSecret(ctx context.Context, clusterID int, secret 
 	return updatedSecret, nil
 }
 
-// DeleteSecret 删除Secret
 func (m *secretManager) DeleteSecret(ctx context.Context, clusterID int, namespace, name string, options metav1.DeleteOptions) error {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -161,10 +154,8 @@ func (m *secretManager) DeleteSecret(ctx context.Context, clusterID int, namespa
 // BatchDeleteSecrets 批量删除Secret
 // 删除未使用的批量删除接口以简化实现
 
-// ListSecretsBySelector 根据选择器获取Secret列表
 // 删除未使用的单一选择器方法，保留复合选择器方法
 
-// ListSecretsBySelectors 根据 label 与 field 选择器获取Secret列表
 func (m *secretManager) ListSecretsBySelectors(ctx context.Context, clusterID int, namespace string, labelSelector string, fieldSelector string) (*corev1.SecretList, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -191,11 +182,8 @@ func (m *secretManager) ListSecretsBySelectors(ctx context.Context, clusterID in
 	return secrets, nil
 }
 
-// ListSecretsByType 根据类型获取Secret列表
 // 删除未使用的按类型过滤方法
 
-// GetSecretData 获取Secret中特定键的数据
 // 删除未使用的数据读取方法
 
-// UpdateSecretData 更新Secret的数据
 // 删除未使用的数据更新方法

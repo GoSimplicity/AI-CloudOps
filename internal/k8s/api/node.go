@@ -47,22 +47,19 @@ func NewK8sNodeHandler(nodeService service.NodeService, taintService service.Tai
 func (h *K8sNodeHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		// Node管理
-		k8sGroup.GET("/node/:cluster_id/list", h.GetNodeList)                           // 获取Node列表
-		k8sGroup.GET("/node/:cluster_id/:node_name/detail", h.GetNodeDetail)            // 获取Node详情
-		k8sGroup.POST("/node/:cluster_id/:node_name/labels/update", h.UpdateNodeLabels) // 更新Node标签（完全覆盖）
-		k8sGroup.POST("/node/:cluster_id/:node_name/drain", h.DrainNode)                // 驱逐Node
-		k8sGroup.POST("/node/:cluster_id/:node_name/cordon", h.CordonNode)              // 封锁Node（禁止调度）
-		k8sGroup.POST("/node/:cluster_id/:node_name/uncordon", h.UncordonNode)          // 解封Node（允许调度）
-		// 污点管理
-		k8sGroup.GET("/node/:cluster_id/:node_name/taints/list", h.GetNodeTaints)         // 获取Node污点
-		k8sGroup.POST("/node/:cluster_id/:node_name/taints/add", h.AddNodeTaints)         // 添加Node污点
-		k8sGroup.DELETE("/node/:cluster_id/:node_name/taints/delete", h.DeleteNodeTaints) // 删除Node污点
-		k8sGroup.POST("/node/:cluster_id/:node_name/taints/check", h.CheckTaintYaml)      // 检查污点YAML
+		k8sGroup.GET("/node/:cluster_id/list", h.GetNodeList)
+		k8sGroup.GET("/node/:cluster_id/:node_name/detail", h.GetNodeDetail)
+		k8sGroup.POST("/node/:cluster_id/:node_name/labels/update", h.UpdateNodeLabels)
+		k8sGroup.POST("/node/:cluster_id/:node_name/drain", h.DrainNode)
+		k8sGroup.POST("/node/:cluster_id/:node_name/cordon", h.CordonNode)
+		k8sGroup.POST("/node/:cluster_id/:node_name/uncordon", h.UncordonNode)
+		k8sGroup.GET("/node/:cluster_id/:node_name/taints/list", h.GetNodeTaints)
+		k8sGroup.POST("/node/:cluster_id/:node_name/taints/add", h.AddNodeTaints)
+		k8sGroup.DELETE("/node/:cluster_id/:node_name/taints/delete", h.DeleteNodeTaints)
+		k8sGroup.POST("/node/:cluster_id/:node_name/taints/check", h.CheckTaintYaml)
 	}
 }
 
-// GetNodeList 获取Node列表
 func (h *K8sNodeHandler) GetNodeList(ctx *gin.Context) {
 	var req model.GetNodeListReq
 
@@ -102,7 +99,6 @@ func (h *K8sNodeHandler) GetNodeDetail(ctx *gin.Context) {
 	})
 }
 
-// UpdateNodeLabels 更新节点标签
 func (h *K8sNodeHandler) UpdateNodeLabels(ctx *gin.Context) {
 	var req model.UpdateNodeLabelsReq
 
@@ -126,7 +122,6 @@ func (h *K8sNodeHandler) UpdateNodeLabels(ctx *gin.Context) {
 	})
 }
 
-// DrainNode 驱逐节点上的所有Pod
 func (h *K8sNodeHandler) DrainNode(ctx *gin.Context) {
 	var req model.DrainNodeReq
 
@@ -150,7 +145,6 @@ func (h *K8sNodeHandler) DrainNode(ctx *gin.Context) {
 	})
 }
 
-// CordonNode 禁止节点调度新的Pod
 func (h *K8sNodeHandler) CordonNode(ctx *gin.Context) {
 	var req model.NodeCordonReq
 
@@ -174,7 +168,6 @@ func (h *K8sNodeHandler) CordonNode(ctx *gin.Context) {
 	})
 }
 
-// UncordonNode 解除节点调度限制
 func (h *K8sNodeHandler) UncordonNode(ctx *gin.Context) {
 	var req model.NodeUncordonReq
 
@@ -198,7 +191,6 @@ func (h *K8sNodeHandler) UncordonNode(ctx *gin.Context) {
 	})
 }
 
-// GetNodeTaints 获取节点污点列表
 func (h *K8sNodeHandler) GetNodeTaints(ctx *gin.Context) {
 	var req model.GetNodeTaintsReq
 
@@ -222,7 +214,6 @@ func (h *K8sNodeHandler) GetNodeTaints(ctx *gin.Context) {
 	})
 }
 
-// AddNodeTaints 添加节点污点
 func (h *K8sNodeHandler) AddNodeTaints(ctx *gin.Context) {
 	var req model.AddNodeTaintsReq
 
@@ -246,7 +237,6 @@ func (h *K8sNodeHandler) AddNodeTaints(ctx *gin.Context) {
 	})
 }
 
-// DeleteNodeTaints 删除节点污点
 func (h *K8sNodeHandler) DeleteNodeTaints(ctx *gin.Context) {
 	var req model.DeleteNodeTaintsReq
 
@@ -270,7 +260,6 @@ func (h *K8sNodeHandler) DeleteNodeTaints(ctx *gin.Context) {
 	})
 }
 
-// CheckTaintYaml 检查污点YAML配置
 func (h *K8sNodeHandler) CheckTaintYaml(ctx *gin.Context) {
 	var req model.CheckTaintYamlReq
 

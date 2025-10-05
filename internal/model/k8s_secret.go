@@ -52,7 +52,7 @@ type K8sSecret struct {
 	ClusterID   int               `json:"cluster_id" gorm:"index;not null"`           // 所属集群ID
 	UID         string            `json:"uid" gorm:"size:100"`                        // Secret UID
 	Type        K8sSecretType     `json:"type"`                                       // Secret类型
-	Data        map[string][]byte `json:"data"`                                       // 加密数据
+	Data        BinaryDataMap     `json:"data"`                                       // 加密数据
 	StringData  map[string]string `json:"string_data"`                                // 明文数据
 	Labels      map[string]string `json:"labels"`                                     // 标签
 	Annotations map[string]string `json:"annotations"`                                // 注解
@@ -94,7 +94,7 @@ type CreateSecretReq struct {
 	Name        string            `json:"name" form:"name" binding:"required" comment:"Secret名称"`         // Secret名称
 	Namespace   string            `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
 	Type        K8sSecretType     `json:"type" comment:"Secret类型"`                                        // Secret类型
-	Data        map[string][]byte `json:"data" comment:"加密数据"`                                            // 加密数据
+	Data        BinaryDataMap     `json:"data" comment:"加密数据"`                                            // 加密数据
 	StringData  map[string]string `json:"string_data" comment:"明文数据"`                                     // 明文数据
 	Labels      map[string]string `json:"labels" comment:"标签"`                                            // 标签
 	Annotations map[string]string `json:"annotations" comment:"注解"`                                       // 注解
@@ -106,7 +106,7 @@ type UpdateSecretReq struct {
 	ClusterID   int               `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
 	Name        string            `json:"name" form:"name" binding:"required" comment:"Secret名称"`         // Secret名称
 	Namespace   string            `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
-	Data        map[string][]byte `json:"data" comment:"加密数据"`                                            // 加密数据
+	Data        BinaryDataMap     `json:"data" comment:"加密数据"`                                            // 加密数据
 	StringData  map[string]string `json:"string_data" comment:"明文数据"`                                     // 明文数据
 	Labels      map[string]string `json:"labels" comment:"标签"`                                            // 标签
 	Annotations map[string]string `json:"annotations" comment:"注解"`                                       // 注解

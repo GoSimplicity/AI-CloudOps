@@ -33,7 +33,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// RBACService RBAC权限管理服务接口
 type RBACService interface {
 	// 权限分析和检查
 	AnalyzeRBACPermissions(ctx context.Context, req *model.AnalyzeRBACPermissionsReq) (*model.EffectivePermissions, error)
@@ -94,7 +93,6 @@ func (s *rbacService) AnalyzeRBACPermissions(ctx context.Context, req *model.Ana
 	return result, nil
 }
 
-// CheckRBACPermission 检查特定权限
 func (s *rbacService) CheckRBACPermission(ctx context.Context, req *model.CheckRBACPermissionReq) (*model.PermissionCheckResult, error) {
 	if req == nil {
 		return nil, fmt.Errorf("检查RBAC权限请求不能为空")

@@ -34,13 +34,11 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// BuildSecretFromRequest 从请求构建secret
 func BuildSecretFromRequest(req *model.CreateSecretReq) (*corev1.Secret, error) {
 	if req == nil {
 		return nil, fmt.Errorf("创建请求不能为空")
 	}
 
-	// 构建 Secret 对象
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        req.Name,
@@ -66,7 +64,6 @@ func BuildSecretFromRequest(req *model.CreateSecretReq) (*corev1.Secret, error) 
 	return secret, nil
 }
 
-// UpdateSecretFromRequest 从更新请求更新 Kubernetes Secret
 func UpdateSecretFromRequest(existing *corev1.Secret, req *model.UpdateSecretReq) (*corev1.Secret, error) {
 	if existing == nil {
 		return nil, fmt.Errorf("现有Secret不能为空")
@@ -144,7 +141,6 @@ func YAMLToSecret(y string) (*corev1.Secret, error) {
 	return &sec, nil
 }
 
-// ValidateSecretData 验证 Secret 数据的有效性
 func ValidateSecretData(secretType corev1.SecretType, data map[string][]byte, stringData map[string]string) error {
 	switch secretType {
 	case corev1.SecretTypeServiceAccountToken:

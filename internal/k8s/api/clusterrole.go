@@ -56,7 +56,6 @@ func (h *K8sClusterRoleHandler) RegisterRouters(server *gin.Engine) {
 	}
 }
 
-// GetClusterRoleList 获取ClusterRole列表
 func (h *K8sClusterRoleHandler) GetClusterRoleList(ctx *gin.Context) {
 	var req model.GetClusterRoleListReq
 
@@ -73,7 +72,6 @@ func (h *K8sClusterRoleHandler) GetClusterRoleList(ctx *gin.Context) {
 	})
 }
 
-// GetClusterRoleDetails 获取ClusterRole详情
 func (h *K8sClusterRoleHandler) GetClusterRoleDetails(ctx *gin.Context) {
 	var req model.GetClusterRoleDetailsReq
 
@@ -97,7 +95,6 @@ func (h *K8sClusterRoleHandler) GetClusterRoleDetails(ctx *gin.Context) {
 	})
 }
 
-// GetClusterRoleYaml 获取ClusterRole的YAML配置
 func (h *K8sClusterRoleHandler) GetClusterRoleYaml(ctx *gin.Context) {
 	var req model.GetClusterRoleYamlReq
 
@@ -121,7 +118,6 @@ func (h *K8sClusterRoleHandler) GetClusterRoleYaml(ctx *gin.Context) {
 	})
 }
 
-// CreateClusterRole 创建ClusterRole
 func (h *K8sClusterRoleHandler) CreateClusterRole(ctx *gin.Context) {
 	var req model.CreateClusterRoleReq
 
@@ -138,7 +134,6 @@ func (h *K8sClusterRoleHandler) CreateClusterRole(ctx *gin.Context) {
 	})
 }
 
-// CreateClusterRoleByYaml 通过YAML创建ClusterRole
 func (h *K8sClusterRoleHandler) CreateClusterRoleByYaml(ctx *gin.Context) {
 	var req model.CreateClusterRoleByYamlReq
 
@@ -155,7 +150,6 @@ func (h *K8sClusterRoleHandler) CreateClusterRoleByYaml(ctx *gin.Context) {
 	})
 }
 
-// UpdateClusterRole 更新ClusterRole
 func (h *K8sClusterRoleHandler) UpdateClusterRole(ctx *gin.Context) {
 	var req model.UpdateClusterRoleReq
 
@@ -179,7 +173,6 @@ func (h *K8sClusterRoleHandler) UpdateClusterRole(ctx *gin.Context) {
 	})
 }
 
-// UpdateClusterRoleYaml 通过YAML更新ClusterRole
 func (h *K8sClusterRoleHandler) UpdateClusterRoleByYaml(ctx *gin.Context) {
 	var req model.UpdateClusterRoleByYamlReq
 
@@ -203,7 +196,6 @@ func (h *K8sClusterRoleHandler) UpdateClusterRoleByYaml(ctx *gin.Context) {
 	})
 }
 
-// DeleteClusterRole 删除ClusterRole
 func (h *K8sClusterRoleHandler) DeleteClusterRole(ctx *gin.Context) {
 	var req model.DeleteClusterRoleReq
 

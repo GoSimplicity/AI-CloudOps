@@ -37,7 +37,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// DrainOptions 驱逐节点选项
 type DrainOptions struct {
 	Force              int8 // 是否强制驱逐
 	IgnoreDaemonSets   int8 // 是否忽略DaemonSet
@@ -46,7 +45,6 @@ type DrainOptions struct {
 	TimeoutSeconds     int  // 超时时间(秒)
 }
 
-// BuildK8sNode 构建详细的 K8sNode 模型
 func BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node, kubeClient *kubernetes.Clientset, metricsClient interface{}) (*model.K8sNode, error) {
 	if clusterID <= 0 {
 		return nil, fmt.Errorf("无效的集群ID: %d", clusterID)
@@ -72,7 +70,6 @@ func BuildK8sNode(ctx context.Context, clusterID int, node corev1.Node, kubeClie
 	// 获取节点的年龄
 	age := calculateAge(node.CreationTimestamp.Time)
 
-	// 构建基础节点信息
 	k8sNode := &model.K8sNode{
 		Name:             node.Name,
 		ClusterID:        clusterID,
@@ -181,7 +178,6 @@ func calculateAge(creationTime time.Time) string {
 	return fmt.Sprintf("%dm", minutes)
 }
 
-// ValidateNodeLabels 验证节点标签
 func ValidateNodeLabels(labels map[string]string) error {
 	for key, value := range labels {
 		if key == "" {
@@ -197,7 +193,6 @@ func ValidateNodeLabels(labels map[string]string) error {
 	return nil
 }
 
-// BuildNodeListOptions 构建节点列表查询选项
 func BuildNodeListOptions(req *model.GetNodeListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
 
@@ -276,7 +271,6 @@ func FilterNodesByRoles(nodes []corev1.Node, roles []string) []corev1.Node {
 	return filtered
 }
 
-// GetNodeStatusMessage 获取节点状态描述信息
 func GetNodeStatusMessage(node corev1.Node) string {
 	if node.Spec.Unschedulable {
 		return "调度已禁用"
@@ -306,7 +300,6 @@ func IsNodeReady(node corev1.Node) bool {
 	return false
 }
 
-// BuildNodeListPagination 构建节点列表分页逻辑
 func BuildNodeListPagination(nodes []corev1.Node, page, size int) ([]corev1.Node, int64) {
 	total := int64(len(nodes))
 	if total == 0 {
@@ -341,7 +334,6 @@ func IsActivePod(pod corev1.Pod) bool {
 	return pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed
 }
 
-// BuildDeleteOptions 构建删除选项
 func BuildDeleteOptions(gracePeriodSeconds int) metav1.DeleteOptions {
 	deleteOptions := metav1.DeleteOptions{}
 	if gracePeriodSeconds > 0 {
@@ -383,7 +375,6 @@ func ShouldSkipPodDrain(pod corev1.Pod, options *DrainOptions) bool {
 	return false
 }
 
-// ValidateBasicParams 验证基础参数
 func ValidateBasicParams(clusterID int, nodeName string) error {
 	if clusterID <= 0 {
 		return fmt.Errorf("集群 ID 不能为空")
@@ -394,7 +385,6 @@ func ValidateBasicParams(clusterID int, nodeName string) error {
 	return nil
 }
 
-// ValidateNodeName 验证节点名称
 func ValidateNodeName(nodeName string) error {
 	if nodeName == "" {
 		return fmt.Errorf("节点名称不能为空")
@@ -402,7 +392,6 @@ func ValidateNodeName(nodeName string) error {
 	return nil
 }
 
-// ValidateNodeLabelsMap 验证节点标签映射
 func ValidateNodeLabelsMap(labels map[string]string) error {
 	if len(labels) == 0 {
 		return fmt.Errorf("标签不能为空")
@@ -410,7 +399,6 @@ func ValidateNodeLabelsMap(labels map[string]string) error {
 	return ValidateNodeLabels(labels)
 }
 
-// ValidateLabelKeys 验证标签键
 func ValidateLabelKeys(labelKeys []string) error {
 	if len(labelKeys) == 0 {
 		return fmt.Errorf("标签键不能为空")
@@ -418,7 +406,6 @@ func ValidateLabelKeys(labelKeys []string) error {
 	return nil
 }
 
-// BuildNodeTaints 构建节点污点列表
 func BuildNodeTaints(taints []corev1.Taint) ([]*model.NodeTaint, int64) {
 	var taintEntities []*model.NodeTaint
 	for _, taint := range taints {

@@ -58,7 +58,6 @@ func (h *K8sServiceAccountHandler) RegisterRouters(server *gin.Engine) {
 	}
 }
 
-// GetServiceAccountList 获取 ServiceAccount 列表
 func (h *K8sServiceAccountHandler) GetServiceAccountList(ctx *gin.Context) {
 	var req model.GetServiceAccountListReq
 
@@ -75,7 +74,6 @@ func (h *K8sServiceAccountHandler) GetServiceAccountList(ctx *gin.Context) {
 	})
 }
 
-// GetServiceAccountDetails 获取 ServiceAccount 详情
 func (h *K8sServiceAccountHandler) GetServiceAccountDetails(ctx *gin.Context) {
 	var req model.GetServiceAccountDetailsReq
 
@@ -106,7 +104,6 @@ func (h *K8sServiceAccountHandler) GetServiceAccountDetails(ctx *gin.Context) {
 	})
 }
 
-// CreateServiceAccount 创建 ServiceAccount
 func (h *K8sServiceAccountHandler) CreateServiceAccount(ctx *gin.Context) {
 	var req model.CreateServiceAccountReq
 
@@ -123,7 +120,6 @@ func (h *K8sServiceAccountHandler) CreateServiceAccount(ctx *gin.Context) {
 	})
 }
 
-// CreateServiceAccountByYaml 通过YAML创建 ServiceAccount
 func (h *K8sServiceAccountHandler) CreateServiceAccountByYaml(ctx *gin.Context) {
 	var req model.CreateServiceAccountByYamlReq
 
@@ -140,7 +136,6 @@ func (h *K8sServiceAccountHandler) CreateServiceAccountByYaml(ctx *gin.Context) 
 	})
 }
 
-// UpdateServiceAccount 更新 ServiceAccount
 func (h *K8sServiceAccountHandler) UpdateServiceAccount(ctx *gin.Context) {
 	var req model.UpdateServiceAccountReq
 
@@ -171,7 +166,6 @@ func (h *K8sServiceAccountHandler) UpdateServiceAccount(ctx *gin.Context) {
 	})
 }
 
-// DeleteServiceAccount 删除 ServiceAccount
 func (h *K8sServiceAccountHandler) DeleteServiceAccount(ctx *gin.Context) {
 	var req model.DeleteServiceAccountReq
 
@@ -202,7 +196,6 @@ func (h *K8sServiceAccountHandler) DeleteServiceAccount(ctx *gin.Context) {
 	})
 }
 
-// GetServiceAccountYaml 获取 ServiceAccount YAML
 func (h *K8sServiceAccountHandler) GetServiceAccountYaml(ctx *gin.Context) {
 	var req model.GetServiceAccountYamlReq
 
@@ -233,7 +226,6 @@ func (h *K8sServiceAccountHandler) GetServiceAccountYaml(ctx *gin.Context) {
 	})
 }
 
-// UpdateServiceAccountYaml 更新 ServiceAccount YAML
 func (h *K8sServiceAccountHandler) UpdateServiceAccountYaml(ctx *gin.Context) {
 	var req model.UpdateServiceAccountByYamlReq
 
@@ -264,7 +256,6 @@ func (h *K8sServiceAccountHandler) UpdateServiceAccountYaml(ctx *gin.Context) {
 	})
 }
 
-// GetServiceAccountToken 获取 ServiceAccount 令牌
 func (h *K8sServiceAccountHandler) GetServiceAccountToken(ctx *gin.Context) {
 	var req model.GetServiceAccountTokenReq
 
@@ -295,7 +286,6 @@ func (h *K8sServiceAccountHandler) GetServiceAccountToken(ctx *gin.Context) {
 	})
 }
 
-// CreateServiceAccountToken 创建 ServiceAccount 令牌
 func (h *K8sServiceAccountHandler) CreateServiceAccountToken(ctx *gin.Context) {
 	var req model.CreateServiceAccountTokenReq
 

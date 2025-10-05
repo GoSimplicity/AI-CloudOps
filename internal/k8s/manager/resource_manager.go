@@ -48,7 +48,6 @@ package manager
 // 	GetClusterHealth(ctx context.Context, clusterID int) (*model.ClusterHealth, error)
 // 	GetResourceIssues(ctx context.Context, clusterID int) ([]model.ResourceIssue, error)
 
-// 	// 多集群管理
 // 	CompareMultiClusterResources(ctx context.Context, clusterIDs []int) (*model.ResourceComparisonChart, error)
 // 	GetAllClustersOverview(ctx context.Context, clusterIDs []int) (*model.AllClustersSummary, error)
 
@@ -56,7 +55,6 @@ package manager
 // 	PredictResourceTrend(ctx context.Context, clusterID int, period string) (*model.ResourceTrend, error)
 // 	GenerateOptimizationAdvice(ctx context.Context, clusterID int) ([]model.UtilizationAdvice, error)
 
-// 	// 缓存操作
 // 	RefreshResourceCache(ctx context.Context, clusterID int) error
 // 	ClearResourceCache(ctx context.Context, clusterID int) error
 // }
@@ -100,7 +98,7 @@ package manager
 // 	return kubeClient, nil
 // }
 
-// // GetClusterResourceOverview 获取集群资源概览
+// // GetClusterResourceOverview
 // func (r *resourceManager) GetClusterResourceOverview(ctx context.Context, clusterID int) (*model.ClusterStats, error) {
 // 	// 尝试从缓存获取
 // 	if stats := r.getCachedStats(clusterID); stats != nil {
@@ -169,7 +167,7 @@ package manager
 // 	wg.Wait()
 // 	close(errChan)
 
-// 	// 检查错误
+//
 // 	var errors []error
 // 	for err := range errChan {
 // 		if err != nil {
@@ -195,7 +193,7 @@ package manager
 // 	return stats, nil
 // }
 
-// // GetResourceDistribution 获取资源分布信息
+// // GetResourceDistribution
 // func (r *resourceManager) GetResourceDistribution(ctx context.Context, clusterID int) (*model.ResourceDistribution, error) {
 // 	// 获取k8s客户端
 // 	kubeClient, err := r.getKubeClient(clusterID)
@@ -250,7 +248,7 @@ package manager
 // 	wg.Wait()
 // 	close(errChan)
 
-// 	// 检查错误
+//
 // 	var errors []error
 // 	for err := range errChan {
 // 		if err != nil {
@@ -274,7 +272,7 @@ package manager
 // 	return distribution, nil
 // }
 
-// // GetResourceUtilization 获取资源利用率
+// // GetResourceUtilization
 // func (r *resourceManager) GetResourceUtilization(ctx context.Context, clusterID int) (*model.ResourceUtilization, error) {
 // 	// 获取基本统计信息
 // 	stats, err := r.GetClusterResourceOverview(ctx, clusterID)
@@ -330,7 +328,7 @@ package manager
 // 	wg.Wait()
 // 	close(errChan)
 
-// 	// 检查错误
+//
 // 	for err := range errChan {
 // 		if err != nil {
 // 			r.logger.Warn("获取利用率信息时出错", zap.Error(err))
@@ -349,7 +347,7 @@ package manager
 // 	return utilization, nil
 // }
 
-// // GetClusterHealth 获取集群健康状态
+// // GetClusterHealth
 // func (r *resourceManager) GetClusterHealth(ctx context.Context, clusterID int) (*model.ClusterHealth, error) {
 // 	// 获取基本统计信息
 // 	stats, err := r.GetClusterResourceOverview(ctx, clusterID)
@@ -375,7 +373,7 @@ package manager
 // 	// 识别问题
 // 	issues := r.identifyHealthIssues(stats)
 
-// 	// 转换组件健康状态
+//
 // 	componentStatuses := make([]model.ComponentHealthStatus, len(components))
 // 	for i, comp := range components {
 // 		componentStatuses[i] = *comp
@@ -396,7 +394,7 @@ package manager
 // 	return health, nil
 // }
 
-// // GetResourceIssues 获取资源问题
+// // GetResourceIssues
 // func (r *resourceManager) GetResourceIssues(ctx context.Context, clusterID int) ([]model.ResourceIssue, error) {
 // 	// 获取统计信息
 // 	stats, err := r.GetClusterResourceOverview(ctx, clusterID)
@@ -406,7 +404,7 @@ package manager
 
 // 	issues := make([]model.ResourceIssue, 0)
 
-// 	// 检查节点问题
+//
 // 	if stats.NodeStats.NotReadyNodes > 0 {
 // 		issues = append(issues, model.ResourceIssue{
 // 			Type:        "node",
@@ -418,7 +416,7 @@ package manager
 // 		})
 // 	}
 
-// 	// 检查Pod问题
+//
 // 	if stats.PodStats.FailedPods > 0 {
 // 		issues = append(issues, model.ResourceIssue{
 // 			Type:        "pod",
@@ -430,7 +428,7 @@ package manager
 // 		})
 // 	}
 
-// 	// 检查资源利用率问题
+//
 // 	if stats.ResourceStats.CPUUtilization > 90 {
 // 		issues = append(issues, model.ResourceIssue{
 // 			Type:        "resource",
@@ -518,7 +516,7 @@ package manager
 // 	return comparison, nil
 // }
 
-// // GetAllClustersOverview 获取所有集群概览
+// // GetAllClustersOverview
 // func (r *resourceManager) GetAllClustersOverview(ctx context.Context, clusterIDs []int) (*model.AllClustersSummary, error) {
 // 	summary := &model.AllClustersSummary{
 // 		TotalClusters:    len(clusterIDs),
@@ -610,13 +608,13 @@ package manager
 
 // // PredictResourceTrend 预测资源趋势（模拟实现）
 // func (r *resourceManager) PredictResourceTrend(ctx context.Context, clusterID int, period string) (*model.ResourceTrend, error) {
-// 	// 验证时间周期
+//
 // 	duration, err := r.parsePeriod(period)
 // 	if err != nil {
 // 		return nil, fmt.Errorf("无效的时间周期: %w", err)
 // 	}
 
-// 	// 验证集群存在
+//
 // 	_, err = r.getKubeClient(clusterID)
 // 	if err != nil {
 // 		return nil, err

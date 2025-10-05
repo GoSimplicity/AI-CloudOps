@@ -87,7 +87,6 @@ func (d *yamlTemplateDAO) ListAllYamlTemplates(ctx context.Context, req *model.Y
 	return yamls, nil
 }
 
-// CreateYamlTemplate 创建 YAML 模板
 func (d *yamlTemplateDAO) CreateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error {
 	if err := d.db.WithContext(ctx).Create(&yaml).Error; err != nil {
 		d.l.Error("CreateYamlTemplate 创建Yaml模板失败", zap.Error(err), zap.Any("yaml", yaml))
@@ -97,7 +96,6 @@ func (d *yamlTemplateDAO) CreateYamlTemplate(ctx context.Context, yaml *model.K8
 	return nil
 }
 
-// UpdateYamlTemplate 更新 YAML 模板
 func (d *yamlTemplateDAO) UpdateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error {
 	if yaml.ID == 0 {
 		d.l.Error("UpdateYamlTemplate ID 不能为空", zap.Any("yaml", yaml))
@@ -112,7 +110,6 @@ func (d *yamlTemplateDAO) UpdateYamlTemplate(ctx context.Context, yaml *model.K8
 	return nil
 }
 
-// DeleteYamlTemplate 删除 YAML 模板
 func (d *yamlTemplateDAO) DeleteYamlTemplate(ctx context.Context, id int, clusterId int) error {
 	if id == 0 {
 		d.l.Error("DeleteYamlTemplate ID 不能为空", zap.Int("id", id))
@@ -127,7 +124,6 @@ func (d *yamlTemplateDAO) DeleteYamlTemplate(ctx context.Context, id int, cluste
 	return nil
 }
 
-// GetYamlTemplateByID 根据 ID 查询 YAML 模板
 func (d *yamlTemplateDAO) GetYamlTemplateByID(ctx context.Context, id int, clusterId int) (*model.K8sYamlTemplate, error) {
 	if id == 0 {
 		d.l.Error("GetYamlTemplateByID ID 不能为空", zap.Int("id", id))

@@ -45,16 +45,15 @@ func NewK8sClusterHandler(clusterService service.ClusterService) *K8sClusterHand
 func (h *K8sClusterHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/cluster/list", h.GetClusterList)                  // 获取集群列表
-		k8sGroup.GET("/cluster/:cluster_id/detail", h.GetCluster)        // 获取集群详情
-		k8sGroup.POST("/cluster/create", h.CreateCluster)                // 创建集群
-		k8sGroup.PUT("/cluster/:cluster_id/update", h.UpdateCluster)     // 更新集群
-		k8sGroup.DELETE("/cluster/:cluster_id/delete", h.DeleteCluster)  // 删除集群
-		k8sGroup.POST("/clusters/:cluster_id/refresh", h.RefreshCluster) // 刷新集群状态
+		k8sGroup.GET("/cluster/list", h.GetClusterList)
+		k8sGroup.GET("/cluster/:cluster_id/detail", h.GetCluster)
+		k8sGroup.POST("/cluster/create", h.CreateCluster)
+		k8sGroup.PUT("/cluster/:cluster_id/update", h.UpdateCluster)
+		k8sGroup.DELETE("/cluster/:cluster_id/delete", h.DeleteCluster)
+		k8sGroup.POST("/clusters/:cluster_id/refresh", h.RefreshCluster)
 	}
 }
 
-// GetClusterList 获取集群列表
 func (h *K8sClusterHandler) GetClusterList(ctx *gin.Context) {
 	var req model.ListClustersReq
 
@@ -63,7 +62,6 @@ func (h *K8sClusterHandler) GetClusterList(ctx *gin.Context) {
 	})
 }
 
-// GetCluster 获取集群详情
 func (h *K8sClusterHandler) GetCluster(ctx *gin.Context) {
 	var req model.GetClusterReq
 
@@ -80,7 +78,6 @@ func (h *K8sClusterHandler) GetCluster(ctx *gin.Context) {
 	})
 }
 
-// CreateCluster 创建集群
 func (h *K8sClusterHandler) CreateCluster(ctx *gin.Context) {
 	var req model.CreateClusterReq
 
@@ -94,7 +91,6 @@ func (h *K8sClusterHandler) CreateCluster(ctx *gin.Context) {
 	})
 }
 
-// UpdateCluster 更新集群
 func (h *K8sClusterHandler) UpdateCluster(ctx *gin.Context) {
 	var req model.UpdateClusterReq
 
@@ -111,7 +107,6 @@ func (h *K8sClusterHandler) UpdateCluster(ctx *gin.Context) {
 	})
 }
 
-// DeleteCluster 删除集群
 func (h *K8sClusterHandler) DeleteCluster(ctx *gin.Context) {
 	var req model.DeleteClusterReq
 

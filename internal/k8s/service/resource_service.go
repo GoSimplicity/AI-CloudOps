@@ -81,7 +81,7 @@ package service
 // 	}
 // }
 
-// // GetResourceOverview 获取集群资源概览
+// // GetResourceOverview
 // func (r *resourceService) GetResourceOverview(ctx context.Context, clusterID int) (*model.ResourceOverview, error) {
 // 	// 获取集群信息
 // 	cluster, err := s.dao.GetClusterByID(ctx, clusterID)
@@ -148,7 +148,7 @@ package service
 // 		// 不返回错误，使用部分数据
 // 	}
 
-// 	// 转换为ResourceOverview格式
+//
 // 	overview := &model.ResourceOverview{
 // 		ClusterID:   clusterID,
 // 		ClusterName: cluster.Name,
@@ -206,7 +206,7 @@ package service
 // 	return overview, nil
 // }
 
-// // GetResourceStatistics 获取资源统计信息
+// // GetResourceStatistics
 // func (r *resourceService) GetResourceStatistics(ctx context.Context, clusterID int) (*model.ClusterStats, error) {
 // 	// 获取集群信息
 // 	cluster, err := s.dao.GetClusterByID(ctx, clusterID)
@@ -285,7 +285,7 @@ package service
 // 	return stats, nil
 // }
 
-// // GetResourceDistribution 获取资源分布信息
+// // GetResourceDistribution
 // func (r *resourceService) GetResourceDistribution(ctx context.Context, clusterID int) (*model.ResourceDistribution, error) {
 // 	// 获取k8s客户端
 // 	kubeClient, err := s.client.GetKubeClient(clusterID)
@@ -329,9 +329,9 @@ package service
 // 	return distribution, nil
 // }
 
-// // GetResourceTrend 获取资源趋势（模拟实现）
+// // GetResourceTrend
 // func (r *resourceService) GetResourceTrend(ctx context.Context, req *model.ResourceTrendReq) (*model.ResourceTrend, error) {
-// 	// 验证时间周期
+//
 // 	if req.Period == "" {
 // 		req.Period = "24h"
 // 	}
@@ -370,7 +370,7 @@ package service
 // 	return trend, nil
 // }
 
-// // GetResourceUtilization 获取资源利用率
+// // GetResourceUtilization
 // func (r *resourceService) GetResourceUtilization(ctx context.Context, clusterID int) (*model.ResourceUtilization, error) {
 // 	// 获取k8s客户端
 // 	kubeClient, err := s.client.GetKubeClient(clusterID)
@@ -424,7 +424,7 @@ package service
 // 	return utilization, nil
 // }
 
-// // GetResourceHealth 获取资源健康状态
+// // GetResourceHealth
 // func (r *resourceService) GetResourceHealth(ctx context.Context, clusterID int) (*model.ResourceHealth, error) {
 // 	// 获取k8s客户端
 // 	kubeClient, err := s.client.GetKubeClient(clusterID)
@@ -467,7 +467,7 @@ package service
 // 	return health, nil
 // }
 
-// // GetWorkloadDistribution 获取工作负载分布
+// // GetWorkloadDistribution
 // func (r *resourceService) GetWorkloadDistribution(ctx context.Context, clusterID int) (*model.WorkloadDistribution, error) {
 // 	// 获取k8s客户端
 // 	kubeClient, err := s.client.GetKubeClient(clusterID)
@@ -479,7 +479,7 @@ package service
 // 	return s.getDetailedWorkloadDistribution(ctx, kubeClient)
 // }
 
-// // GetNamespaceResources 获取命名空间资源信息
+// // GetNamespaceResources
 // func (r *resourceService) GetNamespaceResources(ctx context.Context, clusterID int) ([]*model.NamespaceUsage, error) {
 // 	// 获取k8s客户端
 // 	kubeClient, err := s.client.GetKubeClient(clusterID)
@@ -529,7 +529,7 @@ package service
 // 		}
 // 	}
 
-// 	// 转换为切片并排序
+//
 // 	var result []*model.NamespaceUsage
 // 	for _, nsUsage := range nsResources {
 // 		result = append(result, nsUsage)
@@ -546,7 +546,7 @@ package service
 // 	return result, nil
 // }
 
-// // GetStorageOverview 获取存储概览
+// // GetStorageOverview
 // func (r *resourceService) GetStorageOverview(ctx context.Context, clusterID int) (*model.StorageStats, error) {
 // 	// 获取k8s客户端
 // 	kubeClient, err := s.client.GetKubeClient(clusterID)
@@ -567,7 +567,7 @@ package service
 // 	return &stats.StorageStats, nil
 // }
 
-// // GetNetworkOverview 获取网络概览
+// // GetNetworkOverview
 // func (r *resourceService) GetNetworkOverview(ctx context.Context, clusterID int) (*model.NetworkStats, error) {
 // 	// 获取k8s客户端
 // 	kubeClient, err := s.client.GetKubeClient(clusterID)
@@ -639,7 +639,7 @@ package service
 // 	return comparison, nil
 // }
 
-// // GetAllClustersSummary 获取所有集群资源汇总
+// // GetAllClustersSummary
 // func (r *resourceService) GetAllClustersSummary(ctx context.Context) (*model.AllClustersSummary, error) {
 // 	// 获取所有集群
 // 	clusters, total, err := s.dao.GetClusterList(ctx, &model.ListClustersReq{

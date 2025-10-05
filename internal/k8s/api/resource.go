@@ -69,7 +69,7 @@ package api
 // 	}
 // }
 
-// // GetResourceOverview 获取集群资源总览
+// // GetResourceOverview
 // func (k *K8sResourceHandler) GetResourceOverview(ctx *gin.Context) {
 // 	var req model.ResourceOverviewReq
 // 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -82,7 +82,7 @@ package api
 // 	})
 // }
 
-// // GetResourceStatistics 获取资源统计信息
+// // GetResourceStatistics
 // func (k *K8sResourceHandler) GetResourceStatistics(ctx *gin.Context) {
 // 	var req model.ResourceStatisticsReq
 // 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -95,7 +95,7 @@ package api
 // 	})
 // }
 
-// // GetResourceDistribution 获取资源分布信息
+// // GetResourceDistribution
 // func (k *K8sResourceHandler) GetResourceDistribution(ctx *gin.Context) {
 // 	var req model.ResourceDistributionReq
 // 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -108,7 +108,7 @@ package api
 // 	})
 // }
 
-// // GetResourceTrend 获取资源趋势信息
+// // GetResourceTrend
 // func (k *K8sResourceHandler) GetResourceTrend(ctx *gin.Context) {
 // 	var req model.ResourceTrendReq
 // 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -125,7 +125,7 @@ package api
 // 	})
 // }
 
-// // GetResourceUtilization 获取资源利用率信息
+// // GetResourceUtilization
 // func (k *K8sResourceHandler) GetResourceUtilization(ctx *gin.Context) {
 // 	var req model.ResourceUtilizationReq
 // 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -138,7 +138,7 @@ package api
 // 	})
 // }
 
-// // GetResourceHealth 获取资源健康状态
+// // GetResourceHealth
 // func (k *K8sResourceHandler) GetResourceHealth(ctx *gin.Context) {
 // 	var req model.ResourceHealthReq
 // 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -151,7 +151,7 @@ package api
 // 	})
 // }
 
-// // GetWorkloadDistribution 获取工作负载分布
+// // GetWorkloadDistribution
 // func (k *K8sResourceHandler) GetWorkloadDistribution(ctx *gin.Context) {
 // 	var req model.WorkloadDistributionReq
 // 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -164,7 +164,7 @@ package api
 // 	})
 // }
 
-// // GetNamespaceResources 获取命名空间资源信息
+// // GetNamespaceResources
 // func (k *K8sResourceHandler) GetNamespaceResources(ctx *gin.Context) {
 // 	var req model.NamespaceResourcesReq
 // 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -177,7 +177,7 @@ package api
 // 	})
 // }
 
-// // GetStorageOverview 获取存储概览
+// // GetStorageOverview
 // func (k *K8sResourceHandler) GetStorageOverview(ctx *gin.Context) {
 // 	var req model.StorageOverviewReq
 // 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -190,7 +190,7 @@ package api
 // 	})
 // }
 
-// // GetNetworkOverview 获取网络概览
+// // GetNetworkOverview
 // func (k *K8sResourceHandler) GetNetworkOverview(ctx *gin.Context) {
 // 	var req model.NetworkOverviewReq
 // 	if err := ctx.ShouldBindUri(&req); err != nil {
@@ -212,7 +212,7 @@ package api
 // 	})
 // }
 
-// // GetAllClustersSummary 获取所有集群资源汇总
+// // GetAllClustersSummary
 // func (k *K8sResourceHandler) GetAllClustersSummary(ctx *gin.Context) {
 // 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
 // 		return h.resourceService.GetAllClustersSummary(ctx)

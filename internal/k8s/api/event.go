@@ -45,24 +45,22 @@ func NewK8sEventHandler(eventService service.EventService) *K8sEventHandler {
 func (h *K8sEventHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		// Event基础管理
-		k8sGroup.GET("/clusters/:cluster_id/events", h.GetEventList)                                                  // 获取事件列表
-		k8sGroup.GET("/clusters/:cluster_id/events/:namespace/:name", h.GetEventDetail)                               // 获取单个事件详情
-		k8sGroup.DELETE("/clusters/:cluster_id/events/:namespace/:name", h.DeleteEvent)                               // 删除单个事件
-		k8sGroup.GET("/clusters/:cluster_id/events/:namespace/pods/:pod_name", h.GetEventsByPod)                      // 获取Pod相关事件
-		k8sGroup.GET("/clusters/:cluster_id/events/:namespace/deployments/:deployment_name", h.GetEventsByDeployment) // 获取Deployment相关事件
-		k8sGroup.GET("/clusters/:cluster_id/events/:namespace/services/:service_name", h.GetEventsByService)          // 获取Service相关事件
-		k8sGroup.GET("/clusters/:cluster_id/events/nodes/:node_name", h.GetEventsByNode)                              // 获取Node相关事件
-		k8sGroup.GET("/clusters/:cluster_id/events/statistics", h.GetEventStatistics)                                 // 获取事件统计信息
-		k8sGroup.GET("/clusters/:cluster_id/events/summary", h.GetEventSummary)                                       // 获取事件汇总
-		k8sGroup.GET("/clusters/:cluster_id/events/timeline", h.GetEventTimeline)                                     // 获取事件时间线
-		k8sGroup.GET("/clusters/:cluster_id/events/trends", h.GetEventTrends)                                         // 获取事件趋势
-		k8sGroup.GET("/clusters/:cluster_id/events/groups", h.GetEventGroupData)                                      // 获取事件分组数据
-		k8sGroup.POST("/clusters/:cluster_id/events/cleanup", h.CleanupOldEvents)                                     // 清理旧事件
+		k8sGroup.GET("/clusters/:cluster_id/events", h.GetEventList)
+		k8sGroup.GET("/clusters/:cluster_id/events/:namespace/:name", h.GetEventDetail)
+		k8sGroup.DELETE("/clusters/:cluster_id/events/:namespace/:name", h.DeleteEvent)
+		k8sGroup.GET("/clusters/:cluster_id/events/:namespace/pods/:pod_name", h.GetEventsByPod)
+		k8sGroup.GET("/clusters/:cluster_id/events/:namespace/deployments/:deployment_name", h.GetEventsByDeployment)
+		k8sGroup.GET("/clusters/:cluster_id/events/:namespace/services/:service_name", h.GetEventsByService)
+		k8sGroup.GET("/clusters/:cluster_id/events/nodes/:node_name", h.GetEventsByNode)
+		k8sGroup.GET("/clusters/:cluster_id/events/statistics", h.GetEventStatistics)
+		k8sGroup.GET("/clusters/:cluster_id/events/summary", h.GetEventSummary)
+		k8sGroup.GET("/clusters/:cluster_id/events/timeline", h.GetEventTimeline)
+		k8sGroup.GET("/clusters/:cluster_id/events/trends", h.GetEventTrends)
+		k8sGroup.GET("/clusters/:cluster_id/events/groups", h.GetEventGroupData)
+		k8sGroup.POST("/clusters/:cluster_id/events/cleanup", h.CleanupOldEvents)
 	}
 }
 
-// GetEventList 获取Event列表
 func (h *K8sEventHandler) GetEventList(ctx *gin.Context) {
 	var req model.GetEventListReq
 
@@ -79,7 +77,6 @@ func (h *K8sEventHandler) GetEventList(ctx *gin.Context) {
 	})
 }
 
-// GetEventDetail 获取Event详情
 func (h *K8sEventHandler) GetEventDetail(ctx *gin.Context) {
 	var req model.GetEventDetailReq
 
@@ -110,7 +107,6 @@ func (h *K8sEventHandler) GetEventDetail(ctx *gin.Context) {
 	})
 }
 
-// GetEventsByPod 获取Pod相关事件
 func (h *K8sEventHandler) GetEventsByPod(ctx *gin.Context) {
 	var req model.GetEventsByPodReq
 
@@ -141,7 +137,6 @@ func (h *K8sEventHandler) GetEventsByPod(ctx *gin.Context) {
 	})
 }
 
-// GetEventsByDeployment 获取Deployment相关事件
 func (h *K8sEventHandler) GetEventsByDeployment(ctx *gin.Context) {
 	var req model.GetEventsByDeploymentReq
 
@@ -172,7 +167,6 @@ func (h *K8sEventHandler) GetEventsByDeployment(ctx *gin.Context) {
 	})
 }
 
-// GetEventsByService 获取Service相关事件
 func (h *K8sEventHandler) GetEventsByService(ctx *gin.Context) {
 	var req model.GetEventsByServiceReq
 
@@ -203,7 +197,6 @@ func (h *K8sEventHandler) GetEventsByService(ctx *gin.Context) {
 	})
 }
 
-// GetEventsByNode 获取Node相关事件
 func (h *K8sEventHandler) GetEventsByNode(ctx *gin.Context) {
 	var req model.GetEventsByNodeReq
 
@@ -227,7 +220,6 @@ func (h *K8sEventHandler) GetEventsByNode(ctx *gin.Context) {
 	})
 }
 
-// GetEventStatistics 获取事件统计
 func (h *K8sEventHandler) GetEventStatistics(ctx *gin.Context) {
 	var req model.GetEventStatisticsReq
 
@@ -236,7 +228,6 @@ func (h *K8sEventHandler) GetEventStatistics(ctx *gin.Context) {
 	})
 }
 
-// GetEventSummary 获取事件汇总
 func (h *K8sEventHandler) GetEventSummary(ctx *gin.Context) {
 	var req model.GetEventSummaryReq
 
@@ -245,7 +236,6 @@ func (h *K8sEventHandler) GetEventSummary(ctx *gin.Context) {
 	})
 }
 
-// GetEventTimeline 获取事件时间线
 func (h *K8sEventHandler) GetEventTimeline(ctx *gin.Context) {
 	var req model.GetEventTimelineReq
 
@@ -254,7 +244,6 @@ func (h *K8sEventHandler) GetEventTimeline(ctx *gin.Context) {
 	})
 }
 
-// GetEventTrends 获取事件趋势
 func (h *K8sEventHandler) GetEventTrends(ctx *gin.Context) {
 	var req model.GetEventTrendsReq
 
@@ -263,7 +252,6 @@ func (h *K8sEventHandler) GetEventTrends(ctx *gin.Context) {
 	})
 }
 
-// GetEventGroupData 获取事件分组数据
 func (h *K8sEventHandler) GetEventGroupData(ctx *gin.Context) {
 	var req model.GetEventGroupDataReq
 
@@ -272,7 +260,6 @@ func (h *K8sEventHandler) GetEventGroupData(ctx *gin.Context) {
 	})
 }
 
-// DeleteEvent 删除单个事件
 func (h *K8sEventHandler) DeleteEvent(ctx *gin.Context) {
 	var req model.DeleteEventReq
 

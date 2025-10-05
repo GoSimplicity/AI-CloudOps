@@ -42,7 +42,6 @@ var (
 	kubernetesLabelRegex = regexp.MustCompile(`^[a-z]([-a-z0-9]*[a-z0-9])?$`)
 )
 
-// ValidateKubernetesName 验证Kubernetes资源名称
 func ValidateKubernetesName(name string) error {
 	if name == "" {
 		return fmt.Errorf("name cannot be empty")
@@ -59,7 +58,6 @@ func ValidateKubernetesName(name string) error {
 	return nil
 }
 
-// ValidateNamespaceName 验证命名空间名称
 func ValidateNamespaceName(name string) error {
 	if err := ValidateKubernetesName(name); err != nil {
 		return fmt.Errorf("invalid namespace name: %w", err)
@@ -70,7 +68,6 @@ func ValidateNamespaceName(name string) error {
 		return fmt.Errorf("namespace name length cannot exceed 63 characters")
 	}
 
-	// 检查保留命名空间名称
 	reservedNames := []string{
 		"kube-system",
 		"kube-public",
@@ -87,7 +84,6 @@ func ValidateNamespaceName(name string) error {
 	return nil
 }
 
-// ValidateLabels 验证标签
 func ValidateLabels(labels []model.KeyValue) error {
 	if len(labels) == 0 {
 		return nil // 标签是可选的
@@ -106,27 +102,24 @@ func ValidateLabels(labels []model.KeyValue) error {
 	return nil
 }
 
-// ValidateLabelKey 验证标签键
 func ValidateLabelKey(key string) error {
 	if key == "" {
 		return fmt.Errorf("label key cannot be empty")
 	}
 
-	// 检查是否包含前缀
 	if strings.Contains(key, "/") {
 		parts := strings.SplitN(key, "/", 2)
 		prefix, name := parts[0], parts[1]
 
-		// 验证前缀
 		if err := ValidateLabelPrefix(prefix); err != nil {
 			return err
 		}
-		// 验证名称部分
+
 		if err := validateLabelNamePart(name); err != nil {
 			return err
 		}
 	} else {
-		// 验证名称部分
+
 		if err := validateLabelNamePart(key); err != nil {
 			return err
 		}
@@ -149,7 +142,6 @@ func validateLabelNamePart(name string) error {
 	return nil
 }
 
-// ValidateLabelPrefix 验证标签前缀
 func ValidateLabelPrefix(prefix string) error {
 	if prefix == "" {
 		return nil
@@ -167,7 +159,6 @@ func ValidateLabelPrefix(prefix string) error {
 	return nil
 }
 
-// ValidateLabelValue 验证标签值
 func ValidateLabelValue(value string) error {
 	if len(value) > 63 {
 		return fmt.Errorf("label value length cannot exceed 63 characters")
@@ -187,7 +178,6 @@ func ValidateLabelValue(value string) error {
 	return nil
 }
 
-// ValidateAnnotations 验证注解
 func ValidateAnnotations(annotations []model.KeyValue) error {
 	if len(annotations) == 0 {
 		return nil // 注解是可选的
@@ -206,7 +196,6 @@ func ValidateAnnotations(annotations []model.KeyValue) error {
 	return nil
 }
 
-// ValidateAnnotationKey 验证注解键
 func ValidateAnnotationKey(key string) error {
 	if key == "" {
 		return fmt.Errorf("annotation key cannot be empty")
@@ -216,7 +205,6 @@ func ValidateAnnotationKey(key string) error {
 	return ValidateLabelKey(key)
 }
 
-// ValidateAnnotationValue 验证注解值
 func ValidateAnnotationValue(value string) error {
 	// 注解值没有长度限制，但建议不要太长
 	if len(value) > 262144 { // 256KB
@@ -226,7 +214,6 @@ func ValidateAnnotationValue(value string) error {
 	return nil
 }
 
-// ConvertKeyValueListToLabels 将KeyValue列表转换为map[string]string
 func ConvertKeyValueListToLabels(keyValues []model.KeyValue) map[string]string {
 	if len(keyValues) == 0 {
 		return nil
@@ -242,7 +229,6 @@ func ConvertKeyValueListToLabels(keyValues []model.KeyValue) map[string]string {
 	return result
 }
 
-// ValidateResourceQuota 验证资源配额
 func ValidateResourceQuota(resources map[string]string) error {
 	if len(resources) == 0 {
 		return nil
@@ -273,7 +259,6 @@ func ValidateResourceQuota(resources map[string]string) error {
 	return nil
 }
 
-// ValidateContainerName 验证容器名称
 func ValidateContainerName(name string) error {
 	if name == "" {
 		return fmt.Errorf("container name cannot be empty")
@@ -292,7 +277,6 @@ func ValidateContainerName(name string) error {
 	return nil
 }
 
-// ValidateImageName 验证镜像名称
 func ValidateImageName(image string) error {
 	if image == "" {
 		return fmt.Errorf("image name cannot be empty")
@@ -307,7 +291,6 @@ func ValidateImageName(image string) error {
 	return nil
 }
 
-// ValidateClusterCreateParams 验证创建集群的参数
 func ValidateClusterCreateParams(name, apiServerAddr, kubeConfigContent string) error {
 	if name == "" {
 		return fmt.Errorf("集群名称不能为空")
@@ -324,7 +307,6 @@ func ValidateClusterCreateParams(name, apiServerAddr, kubeConfigContent string) 
 	return nil
 }
 
-// ValidateClusterUpdateParams 验证更新集群的参数
 func ValidateClusterUpdateParams(id int) error {
 	if id <= 0 {
 		return fmt.Errorf("集群 ID 不能为空")

@@ -45,23 +45,21 @@ func NewK8sDaemonSetHandler(daemonSetService service.DaemonSetService) *K8sDaemo
 func (h *K8sDaemonSetHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		// DaemonSet基础管理
-		k8sGroup.GET("/daemonset/:cluster_id/list", h.GetDaemonSetList)                              // 获取DaemonSet列表
-		k8sGroup.GET("/daemonset/:cluster_id/:namespace/:name/detail", h.GetDaemonSetDetails)        // 获取DaemonSet详情
-		k8sGroup.GET("/daemonset/:cluster_id/:namespace/:name/detail/yaml", h.GetDaemonSetYaml)      // 获取DaemonSet YAML
-		k8sGroup.POST("/daemonset/:cluster_id/create", h.CreateDaemonSet)                            // 创建DaemonSet
-		k8sGroup.POST("/daemonset/:cluster_id/create/yaml", h.CreateDaemonSetByYaml)                 // 通过YAML创建DaemonSet
-		k8sGroup.PUT("/daemonset/:cluster_id/:namespace/:name/update", h.UpdateDaemonSet)            // 更新DaemonSet
-		k8sGroup.PUT("/daemonset/:cluster_id/:namespace/:name/update/yaml", h.UpdateDaemonSetByYaml) // 通过YAML更新DaemonSet
-		k8sGroup.DELETE("/daemonset/:cluster_id/:namespace/:name/delete", h.DeleteDaemonSet)         // 删除DaemonSet
-		k8sGroup.POST("/daemonset/:cluster_id/:namespace/:name/restart", h.RestartDaemonSet)         // 重启DaemonSet
-		k8sGroup.POST("/daemonset/:cluster_id/:namespace/:name/rollback", h.RollbackDaemonSet)       // 回滚DaemonSet
-		k8sGroup.GET("/daemonset/:cluster_id/:namespace/:name/pods", h.GetDaemonSetPods)             // 获取DaemonSet Pod列表
-		k8sGroup.GET("/daemonset/:cluster_id/:namespace/:name/history", h.GetDaemonSetHistory)       // 获取DaemonSet版本历史
+		k8sGroup.GET("/daemonset/:cluster_id/list", h.GetDaemonSetList)
+		k8sGroup.GET("/daemonset/:cluster_id/:namespace/:name/detail", h.GetDaemonSetDetails)
+		k8sGroup.GET("/daemonset/:cluster_id/:namespace/:name/detail/yaml", h.GetDaemonSetYaml)
+		k8sGroup.POST("/daemonset/:cluster_id/create", h.CreateDaemonSet)
+		k8sGroup.POST("/daemonset/:cluster_id/create/yaml", h.CreateDaemonSetByYaml)
+		k8sGroup.PUT("/daemonset/:cluster_id/:namespace/:name/update", h.UpdateDaemonSet)
+		k8sGroup.PUT("/daemonset/:cluster_id/:namespace/:name/update/yaml", h.UpdateDaemonSetByYaml)
+		k8sGroup.DELETE("/daemonset/:cluster_id/:namespace/:name/delete", h.DeleteDaemonSet)
+		k8sGroup.POST("/daemonset/:cluster_id/:namespace/:name/restart", h.RestartDaemonSet)
+		k8sGroup.POST("/daemonset/:cluster_id/:namespace/:name/rollback", h.RollbackDaemonSet)
+		k8sGroup.GET("/daemonset/:cluster_id/:namespace/:name/pods", h.GetDaemonSetPods)
+		k8sGroup.GET("/daemonset/:cluster_id/:namespace/:name/history", h.GetDaemonSetHistory)
 	}
 }
 
-// GetDaemonSetList 获取DaemonSet列表
 func (h *K8sDaemonSetHandler) GetDaemonSetList(ctx *gin.Context) {
 	var req model.GetDaemonSetListReq
 
@@ -78,7 +76,6 @@ func (h *K8sDaemonSetHandler) GetDaemonSetList(ctx *gin.Context) {
 	})
 }
 
-// GetDaemonSetDetails 获取DaemonSet详情
 func (h *K8sDaemonSetHandler) GetDaemonSetDetails(ctx *gin.Context) {
 	var req model.GetDaemonSetDetailsReq
 
@@ -109,7 +106,6 @@ func (h *K8sDaemonSetHandler) GetDaemonSetDetails(ctx *gin.Context) {
 	})
 }
 
-// GetDaemonSetYaml 获取DaemonSet YAML
 func (h *K8sDaemonSetHandler) GetDaemonSetYaml(ctx *gin.Context) {
 	var req model.GetDaemonSetYamlReq
 
@@ -140,7 +136,6 @@ func (h *K8sDaemonSetHandler) GetDaemonSetYaml(ctx *gin.Context) {
 	})
 }
 
-// CreateDaemonSet 创建DaemonSet
 func (h *K8sDaemonSetHandler) CreateDaemonSet(ctx *gin.Context) {
 	var req model.CreateDaemonSetReq
 
@@ -157,7 +152,6 @@ func (h *K8sDaemonSetHandler) CreateDaemonSet(ctx *gin.Context) {
 	})
 }
 
-// CreateDaemonSetByYaml 通过YAML创建DaemonSet
 func (h *K8sDaemonSetHandler) CreateDaemonSetByYaml(ctx *gin.Context) {
 	var req model.CreateDaemonSetByYamlReq
 
@@ -174,7 +168,6 @@ func (h *K8sDaemonSetHandler) CreateDaemonSetByYaml(ctx *gin.Context) {
 	})
 }
 
-// UpdateDaemonSet 更新DaemonSet
 func (h *K8sDaemonSetHandler) UpdateDaemonSet(ctx *gin.Context) {
 	var req model.UpdateDaemonSetReq
 
@@ -205,7 +198,6 @@ func (h *K8sDaemonSetHandler) UpdateDaemonSet(ctx *gin.Context) {
 	})
 }
 
-// UpdateDaemonSetByYaml 通过YAML更新DaemonSet
 func (h *K8sDaemonSetHandler) UpdateDaemonSetByYaml(ctx *gin.Context) {
 	var req model.UpdateDaemonSetByYamlReq
 
@@ -236,7 +228,6 @@ func (h *K8sDaemonSetHandler) UpdateDaemonSetByYaml(ctx *gin.Context) {
 	})
 }
 
-// DeleteDaemonSet 删除DaemonSet
 func (h *K8sDaemonSetHandler) DeleteDaemonSet(ctx *gin.Context) {
 	var req model.DeleteDaemonSetReq
 
@@ -267,7 +258,6 @@ func (h *K8sDaemonSetHandler) DeleteDaemonSet(ctx *gin.Context) {
 	})
 }
 
-// RestartDaemonSet 重启DaemonSet
 func (h *K8sDaemonSetHandler) RestartDaemonSet(ctx *gin.Context) {
 	var req model.RestartDaemonSetReq
 
@@ -298,7 +288,6 @@ func (h *K8sDaemonSetHandler) RestartDaemonSet(ctx *gin.Context) {
 	})
 }
 
-// GetDaemonSetPods 获取DaemonSet下的Pod列表
 func (h *K8sDaemonSetHandler) GetDaemonSetPods(ctx *gin.Context) {
 	var req model.GetDaemonSetPodsReq
 
@@ -329,7 +318,6 @@ func (h *K8sDaemonSetHandler) GetDaemonSetPods(ctx *gin.Context) {
 	})
 }
 
-// GetDaemonSetHistory 获取DaemonSet历史
 func (h *K8sDaemonSetHandler) GetDaemonSetHistory(ctx *gin.Context) {
 	var req model.GetDaemonSetHistoryReq
 
@@ -360,7 +348,6 @@ func (h *K8sDaemonSetHandler) GetDaemonSetHistory(ctx *gin.Context) {
 	})
 }
 
-// RollbackDaemonSet 回滚DaemonSet
 func (h *K8sDaemonSetHandler) RollbackDaemonSet(ctx *gin.Context) {
 	var req model.RollbackDaemonSetReq
 

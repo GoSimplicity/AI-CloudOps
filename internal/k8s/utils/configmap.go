@@ -33,7 +33,6 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// BuildConfigMapListOptions 构建 ConfigMap 列表查询参数
 func BuildConfigMapListOptions(labelSelector string) metav1.ListOptions {
 	options := metav1.ListOptions{}
 	if labelSelector != "" {
@@ -80,4 +79,17 @@ func YAMLToConfigMap(y string) (*corev1.ConfigMap, error) {
 		return nil, fmt.Errorf("解析YAML失败: %w", err)
 	}
 	return &cm, nil
+}
+
+func FormatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }

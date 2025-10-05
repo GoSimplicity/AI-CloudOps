@@ -45,15 +45,14 @@ func NewK8sYamlTaskHandler(yamlTaskService service.YamlTaskService) *K8sYamlTask
 func (h *K8sYamlTaskHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/yaml_task/:cluster_id/list", h.GetYamlTaskList)         // 获取 YAML 任务列表
-		k8sGroup.POST("/yaml_task/:cluster_id/create", h.CreateYamlTask)       // 创建新的 YAML 任务
-		k8sGroup.POST("/yaml_task/:cluster_id/:id/update", h.UpdateYamlTask)   // 更新指定 ID 的 YAML 任务
-		k8sGroup.POST("/yaml_task/:cluster_id/:id/apply", h.ApplyYamlTask)     // 应用指定 ID 的 YAML 任务
-		k8sGroup.DELETE("/yaml_task/:cluster_id/:id/delete", h.DeleteYamlTask) // 删除指定 ID 的 YAML 任务
+		k8sGroup.GET("/yaml_task/:cluster_id/list", h.GetYamlTaskList)
+		k8sGroup.POST("/yaml_task/:cluster_id/create", h.CreateYamlTask)
+		k8sGroup.POST("/yaml_task/:cluster_id/:id/update", h.UpdateYamlTask)
+		k8sGroup.POST("/yaml_task/:cluster_id/:id/apply", h.ApplyYamlTask)
+		k8sGroup.DELETE("/yaml_task/:cluster_id/:id/delete", h.DeleteYamlTask)
 	}
 }
 
-// GetYamlTaskList 获取 YAML 任务列表
 func (h *K8sYamlTaskHandler) GetYamlTaskList(ctx *gin.Context) {
 	var req model.YamlTaskListReq
 
@@ -70,7 +69,6 @@ func (h *K8sYamlTaskHandler) GetYamlTaskList(ctx *gin.Context) {
 	})
 }
 
-// CreateYamlTask 创建新的 YAML 任务
 func (h *K8sYamlTaskHandler) CreateYamlTask(ctx *gin.Context) {
 	var req model.YamlTaskCreateReq
 
@@ -89,7 +87,6 @@ func (h *K8sYamlTaskHandler) CreateYamlTask(ctx *gin.Context) {
 	})
 }
 
-// UpdateYamlTask 更新指定 ID 的 YAML 任务
 func (h *K8sYamlTaskHandler) UpdateYamlTask(ctx *gin.Context) {
 	var req model.YamlTaskUpdateReq
 
@@ -115,7 +112,6 @@ func (h *K8sYamlTaskHandler) UpdateYamlTask(ctx *gin.Context) {
 	})
 }
 
-// ApplyYamlTask 应用指定 ID 的 YAML 任务
 func (h *K8sYamlTaskHandler) ApplyYamlTask(ctx *gin.Context) {
 	var req model.YamlTaskExecuteReq
 
@@ -139,7 +135,6 @@ func (h *K8sYamlTaskHandler) ApplyYamlTask(ctx *gin.Context) {
 	})
 }
 
-// DeleteYamlTask 删除指定 ID 的 YAML 任务
 func (h *K8sYamlTaskHandler) DeleteYamlTask(ctx *gin.Context) {
 	var req model.YamlTaskDeleteReq
 

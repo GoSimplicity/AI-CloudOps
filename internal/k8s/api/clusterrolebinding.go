@@ -102,7 +102,6 @@ func (h *K8sClusterRoleBindingHandler) CreateClusterRoleBinding(ctx *gin.Context
 	})
 }
 
-// CreateClusterRoleBindingByYaml 通过YAML创建ClusterRoleBinding
 func (h *K8sClusterRoleBindingHandler) CreateClusterRoleBindingByYaml(ctx *gin.Context) {
 	var req model.CreateClusterRoleBindingByYamlReq
 

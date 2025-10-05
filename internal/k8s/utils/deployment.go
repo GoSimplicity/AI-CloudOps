@@ -44,7 +44,6 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// BuildK8sDeployment 构建K8sDeployment模型
 func BuildK8sDeployment(ctx context.Context, clusterID int, deployment appsv1.Deployment) (*model.K8sDeployment, error) {
 	if clusterID <= 0 {
 		return nil, fmt.Errorf("无效的集群ID: %d", clusterID)
@@ -74,7 +73,6 @@ func BuildK8sDeployment(ctx context.Context, clusterID int, deployment appsv1.De
 		images = append(images, container.Image)
 	}
 
-	// 构建条件列表
 	var conditions []model.DeploymentCondition
 	for _, condition := range deployment.Status.Conditions {
 		conditions = append(conditions, model.DeploymentCondition{
@@ -87,13 +85,11 @@ func BuildK8sDeployment(ctx context.Context, clusterID int, deployment appsv1.De
 		})
 	}
 
-	// 构建标签选择器
 	selector := make(map[string]string)
 	if deployment.Spec.Selector != nil && deployment.Spec.Selector.MatchLabels != nil {
 		selector = deployment.Spec.Selector.MatchLabels
 	}
 
-	// 构建基础部署信息
 	k8sDeployment := &model.K8sDeployment{
 		Name:              deployment.Name,
 		Namespace:         deployment.Namespace,
@@ -132,7 +128,6 @@ func getDeploymentStatus(deployment appsv1.Deployment) model.K8sDeploymentStatus
 		return model.K8sDeploymentStatusStopped
 	}
 
-	// 检查部署条件
 	for _, condition := range deployment.Status.Conditions {
 		if condition.Type == appsv1.DeploymentProgressing {
 			if condition.Status == corev1.ConditionFalse {
@@ -155,7 +150,6 @@ func getDeploymentStatus(deployment appsv1.Deployment) model.K8sDeploymentStatus
 	return model.K8sDeploymentStatusRunning
 }
 
-// GetInt32Value 安全获取int32指针的值
 func GetInt32Value(ptr *int32) int32 {
 	if ptr == nil {
 		return 0
@@ -163,11 +157,9 @@ func GetInt32Value(ptr *int32) int32 {
 	return *ptr
 }
 
-// BuildDeploymentListOptions 构建部署列表查询选项
 func BuildDeploymentListOptions(req *model.GetDeploymentListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
 
-	// 构建标签选择器
 	var labelSelectors []string
 	for key, value := range req.Labels {
 		labelSelectors = append(labelSelectors, fmt.Sprintf("%s=%s", key, value))
@@ -210,7 +202,6 @@ func FilterDeploymentsByStatus(deployments []appsv1.Deployment, status string) [
 	return filtered
 }
 
-// GetDeploymentPods 获取部署关联的Pod列表
 func GetDeploymentPods(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, deploymentName string) ([]*model.K8sPod, int64, error) {
 	// 首先获取Deployment的标签选择器
 	deployment, err := kubeClient.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
@@ -218,7 +209,6 @@ func GetDeploymentPods(ctx context.Context, kubeClient *kubernetes.Clientset, na
 		return nil, 0, fmt.Errorf("获取部署信息失败: %w", err)
 	}
 
-	// 构建标签选择器
 	var labelSelectors []string
 	for key, value := range deployment.Spec.Selector.MatchLabels {
 		labelSelectors = append(labelSelectors, fmt.Sprintf("%s=%s", key, value))
@@ -236,7 +226,7 @@ func GetDeploymentPods(ctx context.Context, kubeClient *kubernetes.Clientset, na
 	total := int64(len(podList.Items))
 	var pods []*model.K8sPod
 	for _, pod := range podList.Items {
-		// 转换标签和注解为JSON字符串
+
 		labelsJSON, _ := json.Marshal(pod.Labels)
 		annotationsJSON, _ := json.Marshal(pod.Annotations)
 
@@ -254,7 +244,6 @@ func GetDeploymentPods(ctx context.Context, kubeClient *kubernetes.Clientset, na
 	return pods, total, nil
 }
 
-// GetDeploymentHistory 获取部署历史版本
 func GetDeploymentHistory(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, deploymentName string) ([]*model.K8sDeploymentHistory, int64, error) {
 	// 获取ReplicaSet列表
 	replicaSets, err := kubeClient.AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{})
@@ -270,7 +259,7 @@ func GetDeploymentHistory(ctx context.Context, kubeClient *kubernetes.Clientset,
 
 	var history []*model.K8sDeploymentHistory
 	for _, rs := range replicaSets.Items {
-		// 检查ReplicaSet是否属于该Deployment
+
 		for _, ownerRef := range rs.OwnerReferences {
 			if ownerRef.Kind == "Deployment" && ownerRef.Name == deploymentName {
 				if revisionStr, ok := rs.Annotations["deployment.kubernetes.io/revision"]; ok {
@@ -334,7 +323,6 @@ func YAMLToDeployment(yamlContent string) (*appsv1.Deployment, error) {
 	return &deployment, nil
 }
 
-// ValidateDeployment 验证Deployment配置
 func ValidateDeployment(deployment *appsv1.Deployment) error {
 	if deployment == nil {
 		return fmt.Errorf("deployment不能为空")
@@ -368,13 +356,11 @@ func ValidateDeployment(deployment *appsv1.Deployment) error {
 	return nil
 }
 
-// BuildDeploymentFromRequest 从请求构建Deployment对象
 func BuildDeploymentFromRequest(req *model.CreateDeploymentReq) (*appsv1.Deployment, error) {
 	if req == nil {
 		return nil, fmt.Errorf("请求不能为空")
 	}
 
-	// 从请求字段构建
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        req.Name,
@@ -396,7 +382,6 @@ func BuildDeploymentFromRequest(req *model.CreateDeploymentReq) (*appsv1.Deploym
 		},
 	}
 
-	// 构建容器列表
 	var containers []corev1.Container
 	for i, image := range req.Images {
 		container := corev1.Container{
@@ -416,7 +401,6 @@ func IsDeploymentReady(deployment appsv1.Deployment) bool {
 		deployment.Status.UpdatedReplicas == GetInt32Value(deployment.Spec.Replicas)
 }
 
-// GetDeploymentAge 获取Deployment年龄
 func GetDeploymentAge(deployment appsv1.Deployment) string {
 	age := time.Since(deployment.CreationTimestamp.Time)
 	days := int(age.Hours() / 24)
@@ -431,7 +415,6 @@ func GetDeploymentAge(deployment appsv1.Deployment) string {
 	return fmt.Sprintf("%dm", minutes)
 }
 
-// BuildDeploymentListPagination 构建部署列表分页逻辑
 func BuildDeploymentListPagination(deployments []appsv1.Deployment, page, size int) ([]appsv1.Deployment, int64) {
 	total := int64(len(deployments))
 	if total == 0 {
@@ -480,10 +463,6 @@ func PaginateK8sDeployments(deployments []*model.K8sDeployment, page, size int) 
 
 	return deployments[start:end], total
 }
-
-// CalculateDeploymentMetrics 计算 Deployment 指标
-
-// ConvertToK8sDeployment 将 appsv1.Deployment 转换为 model.K8sDeployment
 func ConvertToK8sDeployment(deployment *appsv1.Deployment) *model.K8sDeployment {
 	if deployment == nil {
 		return nil
@@ -513,7 +492,6 @@ func ConvertToK8sDeployment(deployment *appsv1.Deployment) *model.K8sDeployment 
 		images = append(images, container.Image)
 	}
 
-	// 构建条件列表
 	var conditions []model.DeploymentCondition
 	for _, condition := range deployment.Status.Conditions {
 		conditions = append(conditions, model.DeploymentCondition{
@@ -526,7 +504,6 @@ func ConvertToK8sDeployment(deployment *appsv1.Deployment) *model.K8sDeployment 
 		})
 	}
 
-	// 构建标签选择器
 	selector := make(map[string]string)
 	if deployment.Spec.Selector != nil && deployment.Spec.Selector.MatchLabels != nil {
 		selector = deployment.Spec.Selector.MatchLabels
@@ -555,7 +532,6 @@ func ConvertToK8sDeployment(deployment *appsv1.Deployment) *model.K8sDeployment 
 	}
 }
 
-// BuildDeploymentFromYaml 从YAML构建Deployment对象
 func BuildDeploymentFromYaml(req *model.CreateDeploymentByYamlReq) (*appsv1.Deployment, error) {
 	if req == nil {
 		return nil, fmt.Errorf("请求不能为空")
@@ -583,7 +559,6 @@ func BuildDeploymentFromYaml(req *model.CreateDeploymentByYamlReq) (*appsv1.Depl
 	return deployment, nil
 }
 
-// BuildDeploymentFromYamlForUpdate 从YAML构建Deployment对象用于更新
 func BuildDeploymentFromYamlForUpdate(req *model.UpdateDeploymentByYamlReq) (*appsv1.Deployment, error) {
 	if req == nil {
 		return nil, fmt.Errorf("请求不能为空")

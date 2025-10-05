@@ -37,9 +37,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// RoleManager Role管理器接口
 type RoleManager interface {
-	// 基础 CRUD 操作
 	CreateRole(ctx context.Context, clusterID int, namespace string, role *rbacv1.Role) error
 	GetRole(ctx context.Context, clusterID int, namespace, name string) (*rbacv1.Role, error)
 	GetRoleList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sRole, error)
@@ -61,7 +59,6 @@ func NewRoleManager(client client.K8sClient, logger *zap.Logger) RoleManager {
 	}
 }
 
-// CreateRole 创建Role
 func (m *roleManager) CreateRole(ctx context.Context, clusterID int, namespace string, role *rbacv1.Role) error {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -81,7 +78,6 @@ func (m *roleManager) CreateRole(ctx context.Context, clusterID int, namespace s
 	return nil
 }
 
-// GetRole 获取单个Role
 func (m *roleManager) GetRole(ctx context.Context, clusterID int, namespace, name string) (*rbacv1.Role, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -99,7 +95,6 @@ func (m *roleManager) GetRole(ctx context.Context, clusterID int, namespace, nam
 	return role, nil
 }
 
-// GetRoleList 获取Role列表（转换为模型）
 func (m *roleManager) GetRoleList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sRole, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -114,7 +109,6 @@ func (m *roleManager) GetRoleList(ctx context.Context, clusterID int, namespace 
 		return nil, fmt.Errorf("获取Role列表失败: %w", err)
 	}
 
-	// 转换为模型格式
 	var k8sRoles []*model.K8sRole
 	for _, role := range roles.Items {
 		k8sRole := &model.K8sRole{
@@ -137,7 +131,6 @@ func (m *roleManager) GetRoleList(ctx context.Context, clusterID int, namespace 
 	return k8sRoles, nil
 }
 
-// GetRoleListRaw 获取Role原始列表
 func (m *roleManager) GetRoleListRaw(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*rbacv1.RoleList, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -158,7 +151,6 @@ func (m *roleManager) GetRoleListRaw(ctx context.Context, clusterID int, namespa
 	return roles, nil
 }
 
-// UpdateRole 更新Role
 func (m *roleManager) UpdateRole(ctx context.Context, clusterID int, namespace string, role *rbacv1.Role) error {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -178,7 +170,6 @@ func (m *roleManager) UpdateRole(ctx context.Context, clusterID int, namespace s
 	return nil
 }
 
-// DeleteRole 删除Role
 func (m *roleManager) DeleteRole(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {

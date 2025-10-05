@@ -39,13 +39,11 @@ import (
 	"k8s.io/client-go/restmapper"
 )
 
-// ValidateYamlContent 验证YAML格式
 func ValidateYamlContent(content string) error {
 	if strings.TrimSpace(content) == "" {
 		return fmt.Errorf("YAML 内容不能为空")
 	}
 
-	// 验证 YAML 格式
 	_, err := yaml.ToJSON([]byte(content))
 	if err != nil {
 		return fmt.Errorf("YAML 格式错误: %w", err)
@@ -54,7 +52,6 @@ func ValidateYamlContent(content string) error {
 	return nil
 }
 
-// ParseYamlTemplate 解析模板变量
 func ParseYamlTemplate(templateContent string, variables []string) (string, error) {
 	yamlContent := templateContent
 
@@ -71,7 +68,6 @@ func ParseYamlTemplate(templateContent string, variables []string) (string, erro
 	return yamlContent, nil
 }
 
-// ApplyYamlToCluster 应用YAML到集群
 func ApplyYamlToCluster(ctx context.Context, discoveryClient discovery.DiscoveryInterface, dynamicClient dynamic.Interface, yamlContent string) error {
 	// 分割多文档YAML
 	documents := strings.Split(yamlContent, "---")
@@ -106,9 +102,8 @@ func ApplyYamlToCluster(ctx context.Context, discoveryClient discovery.Discovery
 	return nil
 }
 
-// ApplySingleDocument 应用单个YAML文档到集群
 func ApplySingleDocument(ctx context.Context, document string, restMapper meta.RESTMapper, dynamicClient dynamic.Interface, docIndex int) error {
-	// 转换 YAML 为 JSON
+
 	jsonData, err := yaml.ToJSON([]byte(document))
 	if err != nil {
 		return fmt.Errorf("YAML 转换 JSON 失败: %w", err)
@@ -137,7 +132,6 @@ func ApplySingleDocument(ctx context.Context, document string, restMapper meta.R
 		obj.SetNamespace("default")
 	}
 
-	// 构建资源接口
 	var dr dynamic.ResourceInterface
 	if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
 		dr = dynamicClient.Resource(mapping.Resource).Namespace(obj.GetNamespace())
@@ -158,14 +152,12 @@ func ApplySingleDocument(ctx context.Context, document string, restMapper meta.R
 	return nil
 }
 
-// ValidateYamlWithCluster 使用Kubernetes API验证YAML内容
 func ValidateYamlWithCluster(ctx context.Context, discoveryClient discovery.DiscoveryInterface, dynamicClient dynamic.Interface, yamlContent string) error {
 	// 基础格式验证
 	if err := ValidateYamlContent(yamlContent); err != nil {
 		return err
 	}
 
-	// 转换 YAML 为 JSON
 	jsonData, err := yaml.ToJSON([]byte(yamlContent))
 	if err != nil {
 		return fmt.Errorf("YAML 格式错误: %w", err)
@@ -177,13 +169,11 @@ func ValidateYamlWithCluster(ctx context.Context, discoveryClient discovery.Disc
 		return fmt.Errorf("JSON 解析错误: %w", err)
 	}
 
-	// 检查必要字段
 	gvk := obj.GroupVersionKind()
 	if gvk.Kind == "" || gvk.Version == "" {
 		return fmt.Errorf("YAML 内容缺少必要的 apiVersion 或 kind 字段")
 	}
 
-	// 构建 REST mapper
 	apiGroupResources, err := restmapper.GetAPIGroupResources(discoveryClient)
 	if err != nil {
 		return fmt.Errorf("获取 API 组资源失败: %w", err)
@@ -197,7 +187,6 @@ func ValidateYamlWithCluster(ctx context.Context, discoveryClient discovery.Disc
 		return fmt.Errorf("无法找到对应的资源: %w", err)
 	}
 
-	// 构建资源接口
 	var dr dynamic.ResourceInterface
 	if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
 		if obj.GetNamespace() == "" {

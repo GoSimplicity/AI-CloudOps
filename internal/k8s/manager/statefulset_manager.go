@@ -80,7 +80,6 @@ func (m *statefulSetManager) getKubeClient(clusterID int) (*kubernetes.Clientset
 	return kubeClient, nil
 }
 
-// CreateStatefulSet 创建 StatefulSet
 func (m *statefulSetManager) CreateStatefulSet(ctx context.Context, clusterID int, namespace string, statefulSet *appsv1.StatefulSet) error {
 	if statefulSet == nil {
 		return fmt.Errorf("statefulSet 不能为空")
@@ -109,7 +108,6 @@ func (m *statefulSetManager) CreateStatefulSet(ctx context.Context, clusterID in
 	return nil
 }
 
-// GetStatefulSet 获取单个 StatefulSet
 func (m *statefulSetManager) GetStatefulSet(ctx context.Context, clusterID int, namespace, name string) (*appsv1.StatefulSet, error) {
 	if name == "" {
 		return nil, fmt.Errorf("StatefulSet name 不能为空")
@@ -133,7 +131,6 @@ func (m *statefulSetManager) GetStatefulSet(ctx context.Context, clusterID int, 
 	return statefulSet, nil
 }
 
-// GetStatefulSetList 获取 StatefulSet 列表
 func (m *statefulSetManager) GetStatefulSetList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sStatefulSet, error) {
 	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
@@ -164,7 +161,6 @@ func (m *statefulSetManager) GetStatefulSetList(ctx context.Context, clusterID i
 	return k8sStatefulSets, nil
 }
 
-// UpdateStatefulSet 更新 StatefulSet
 func (m *statefulSetManager) UpdateStatefulSet(ctx context.Context, clusterID int, namespace string, statefulSet *appsv1.StatefulSet) error {
 	if statefulSet == nil {
 		return fmt.Errorf("statefulSet 不能为空")
@@ -193,7 +189,6 @@ func (m *statefulSetManager) UpdateStatefulSet(ctx context.Context, clusterID in
 	return nil
 }
 
-// DeleteStatefulSet 删除 StatefulSet
 func (m *statefulSetManager) DeleteStatefulSet(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
 	if name == "" {
 		return fmt.Errorf("StatefulSet name 不能为空")
@@ -222,7 +217,6 @@ func (m *statefulSetManager) DeleteStatefulSet(ctx context.Context, clusterID in
 	return nil
 }
 
-// RestartStatefulSet 重启 StatefulSet
 func (m *statefulSetManager) RestartStatefulSet(ctx context.Context, clusterID int, namespace, name string) error {
 	if name == "" {
 		return fmt.Errorf("StatefulSet name 不能为空")
@@ -254,7 +248,6 @@ func (m *statefulSetManager) RestartStatefulSet(ctx context.Context, clusterID i
 	return nil
 }
 
-// ScaleStatefulSet 扩缩容 StatefulSet
 func (m *statefulSetManager) ScaleStatefulSet(ctx context.Context, clusterID int, namespace, name string, replicas int32) error {
 	if name == "" {
 		return fmt.Errorf("StatefulSet name 不能为空")
@@ -268,7 +261,6 @@ func (m *statefulSetManager) ScaleStatefulSet(ctx context.Context, clusterID int
 		return err
 	}
 
-	// 使用 Scale subresource API 进行扩缩容
 	scale, err := kubeClient.AppsV1().StatefulSets(namespace).GetScale(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		m.logger.Error("获取 StatefulSet Scale 失败",
@@ -404,7 +396,6 @@ func (m *statefulSetManager) BatchRestartStatefulSets(ctx context.Context, clust
 	return nil
 }
 
-// GetStatefulSetHistory 获取 StatefulSet 历史版本
 func (m *statefulSetManager) GetStatefulSetHistory(ctx context.Context, clusterID int, namespace, statefulSetName string) ([]*model.K8sStatefulSetHistory, int64, error) {
 	if statefulSetName == "" {
 		return nil, 0, fmt.Errorf("StatefulSet name 不能为空")
@@ -415,7 +406,6 @@ func (m *statefulSetManager) GetStatefulSetHistory(ctx context.Context, clusterI
 		return nil, 0, err
 	}
 
-	// 先获取 StatefulSet 本身以获取其 UID
 	statefulSet, err := kubeClient.AppsV1().StatefulSets(namespace).Get(ctx, statefulSetName, metav1.GetOptions{})
 	if err != nil {
 		m.logger.Error("获取 StatefulSet 失败",
@@ -440,7 +430,7 @@ func (m *statefulSetManager) GetStatefulSetHistory(ctx context.Context, clusterI
 
 	var history []*model.K8sStatefulSetHistory
 	for _, revision := range revisionList.Items {
-		// 检查是否属于指定的 StatefulSet
+
 		belongsToStatefulSet := false
 		if revision.OwnerReferences != nil {
 			for _, owner := range revision.OwnerReferences {
@@ -471,7 +461,6 @@ func (m *statefulSetManager) GetStatefulSetHistory(ctx context.Context, clusterI
 	return history, int64(len(history)), nil
 }
 
-// GetStatefulSetPods 获取 StatefulSet 管理的 Pods
 func (m *statefulSetManager) GetStatefulSetPods(ctx context.Context, clusterID int, namespace, statefulSetName string) ([]*model.K8sPod, int64, error) {
 	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
@@ -491,7 +480,6 @@ func (m *statefulSetManager) GetStatefulSetPods(ctx context.Context, clusterID i
 	return pods, total, nil
 }
 
-// RollbackStatefulSet 回滚 StatefulSet 到指定版本
 func (m *statefulSetManager) RollbackStatefulSet(ctx context.Context, clusterID int, namespace, name string, revision int64) error {
 	if name == "" {
 		return fmt.Errorf("StatefulSet name 不能为空")
@@ -531,9 +519,9 @@ func (m *statefulSetManager) RollbackStatefulSet(ctx context.Context, clusterID 
 	// 查找指定版本的 ControllerRevision
 	var targetRevision *appsv1.ControllerRevision
 	for _, rev := range revisionList.Items {
-		// 检查是否属于指定的 StatefulSet 并且版本匹配
+
 		if rev.Revision == revision {
-			// 验证 ControllerRevision 是否属于当前 StatefulSet
+
 			if rev.OwnerReferences != nil {
 				for _, owner := range rev.OwnerReferences {
 					if owner.Kind == "StatefulSet" && owner.Name == name && owner.UID == currentStatefulSet.UID {
@@ -557,7 +545,6 @@ func (m *statefulSetManager) RollbackStatefulSet(ctx context.Context, clusterID 
 		return fmt.Errorf("找不到版本 %d 的 ControllerRevision", revision)
 	}
 
-	// 从 ControllerRevision 中提取 StatefulSet 模板
 	var statefulSetTemplate appsv1.StatefulSet
 	err = utils.ExtractStatefulSetFromRevision(targetRevision, &statefulSetTemplate)
 	if err != nil {

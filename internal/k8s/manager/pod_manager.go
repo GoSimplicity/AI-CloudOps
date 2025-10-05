@@ -96,7 +96,6 @@ func (m *podManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error)
 	return kubeClient, nil
 }
 
-// GetPod 获取单个 Pod
 func (m *podManager) GetPod(ctx context.Context, clusterID int, namespace, name string) (*corev1.Pod, error) {
 	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
@@ -120,7 +119,6 @@ func (m *podManager) GetPod(ctx context.Context, clusterID int, namespace, name 
 	return pod, nil
 }
 
-// GetPodList 获取Pod列表
 func (m *podManager) GetPodList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sPod, error) {
 	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
@@ -136,7 +134,6 @@ func (m *podManager) GetPodList(ctx context.Context, clusterID int, namespace st
 		return nil, fmt.Errorf("获取Pod列表失败: %w", err)
 	}
 
-	// 转换为model结构
 	var k8sPods []*model.K8sPod
 	for _, pod := range podList.Items {
 		k8sPod := utils.ConvertToK8sPod(&pod)
@@ -153,7 +150,6 @@ func (m *podManager) GetPodList(ctx context.Context, clusterID int, namespace st
 	return k8sPods, nil
 }
 
-// GetPodsByNodeName 获取指定节点上的Pod列表
 func (m *podManager) GetPodsByNodeName(ctx context.Context, clusterID int, nodeName string) ([]*model.K8sPod, error) {
 	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
@@ -173,7 +169,6 @@ func (m *podManager) GetPodsByNodeName(ctx context.Context, clusterID int, nodeN
 		return nil, fmt.Errorf("获取节点Pod列表失败: %w", err)
 	}
 
-	// 转换为model结构
 	var k8sPods []*model.K8sPod
 	for _, pod := range pods.Items {
 		k8sPod := utils.ConvertToK8sPod(&pod)
@@ -190,7 +185,6 @@ func (m *podManager) GetPodsByNodeName(ctx context.Context, clusterID int, nodeN
 	return k8sPods, nil
 }
 
-// DeletePod 删除 Pod
 func (m *podManager) DeletePod(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
 	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
@@ -214,7 +208,6 @@ func (m *podManager) DeletePod(ctx context.Context, clusterID int, namespace, na
 	return nil
 }
 
-// GetPodLogs 获取 Pod 日志
 func (m *podManager) GetPodLogs(ctx context.Context, clusterID int, namespace, name string, logOptions *corev1.PodLogOptions) (io.ReadCloser, error) {
 	kubeClient, err := m.getKubeClient(clusterID)
 
@@ -237,6 +230,8 @@ func (m *podManager) GetPodLogs(ctx context.Context, clusterID int, namespace, n
 }
 
 // BatchDeletePods 批量删除 Pod
+// 使用并发+重试机制提高批量操作的效率和可靠性
+// 并发度为3是经过测试的平衡值：既能提高性能，又不会对API Server造成过大压力
 func (m *podManager) BatchDeletePods(ctx context.Context, clusterID int, namespace string, podNames []string, deleteOpts metav1.DeleteOptions) error {
 	kubeClient, err := m.getKubeClient(clusterID)
 
@@ -259,6 +254,7 @@ func (m *podManager) BatchDeletePods(ctx context.Context, clusterID int, namespa
 				}
 				return nil
 			},
+			// 只对临时性错误进行重试，永久性错误（如NotFound）不重试
 			RetryCheck: func(err error) bool {
 				return k8serrors.IsTimeout(err) ||
 					k8serrors.IsTooManyRequests(err) ||
@@ -305,7 +301,7 @@ func (m *podManager) PodTerminalSession(
 }
 
 func (m *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace, pod, container, filePath string) error {
-	// 参数验证
+
 	if namespace == "" {
 		return fmt.Errorf("命名空间不能为空")
 	}
@@ -327,7 +323,6 @@ func (m *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace,
 		return fmt.Errorf("获取集群配置失败: %w", err)
 	}
 
-	// 验证Pod是否存在并且正在运行
 	podObj, err := kubeClient.CoreV1().Pods(namespace).Get(ctx.Request.Context(), pod, metav1.GetOptions{})
 	if err != nil {
 		m.logger.Error("获取Pod信息失败",
@@ -341,7 +336,6 @@ func (m *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace,
 		return fmt.Errorf("Pod状态不是Running，当前状态: %s", podObj.Status.Phase)
 	}
 
-	// 验证容器是否存在
 	var containerExists bool
 	for _, c := range podObj.Spec.Containers {
 		if c.Name == container {
@@ -387,7 +381,6 @@ func (m *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace,
 		}
 	}()
 
-	// 检查目标目录是否存在，如果不存在则创建
 	createDirReq := kubeClient.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(pod).
@@ -524,7 +517,6 @@ func (m *podManager) PodPortForward(ctx context.Context, clusterID int, namespac
 		return fmt.Errorf("获取集群配置失败: %w", err)
 	}
 
-	// 验证Pod是否存在
 	pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		m.logger.Error("获取Pod失败",
@@ -538,7 +530,6 @@ func (m *podManager) PodPortForward(ctx context.Context, clusterID int, namespac
 		return fmt.Errorf("Pod状态不是Running，当前状态: %s", pod.Status.Phase)
 	}
 
-	// 构建端口转发URL
 	req := kubeClient.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Namespace(namespace).
@@ -555,7 +546,6 @@ func (m *podManager) PodPortForward(ctx context.Context, clusterID int, namespac
 
 	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, req.URL())
 
-	// 构建端口映射字符串
 	portSpecs := make([]string, len(ports))
 	for i, port := range ports {
 		portSpecs[i] = fmt.Sprintf("%d:%d", port.LocalPort, port.RemotePort)
@@ -567,7 +557,6 @@ func (m *podManager) PodPortForward(ctx context.Context, clusterID int, namespac
 		zap.String("podName", podName),
 		zap.Strings("ports", portSpecs))
 
-	// 调用底层端口转发方法
 	err = m.PortForward(ctx, portSpecs, dialer)
 	if err != nil {
 		m.logger.Error("端口转发失败",
@@ -586,7 +575,7 @@ func (m *podManager) PodPortForward(ctx context.Context, clusterID int, namespac
 }
 
 func (m *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespace, pod, container, filePath string) (*k8sutils.PodFileStreamPipe, error) {
-	// 参数验证
+
 	if namespace == "" {
 		return nil, fmt.Errorf("命名空间不能为空")
 	}
@@ -611,7 +600,6 @@ func (m *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespa
 		return nil, fmt.Errorf("获取集群配置失败: %w", err)
 	}
 
-	// 验证Pod是否存在并且正在运行
 	podObj, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, pod, metav1.GetOptions{})
 	if err != nil {
 		m.logger.Error("获取Pod信息失败",
@@ -625,7 +613,6 @@ func (m *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespa
 		return nil, fmt.Errorf("Pod状态不是Running，当前状态: %s", podObj.Status.Phase)
 	}
 
-	// 验证容器是否存在
 	var containerExists bool
 	for _, c := range podObj.Spec.Containers {
 		if c.Name == container {
@@ -665,7 +652,6 @@ func (m *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespa
 	return reader, nil
 }
 
-// CreatePod 创建Pod
 func (m *podManager) CreatePod(ctx context.Context, clusterID int, namespace string, pod *corev1.Pod) (*corev1.Pod, error) {
 	if pod == nil {
 		return nil, fmt.Errorf("pod不能为空")
@@ -700,7 +686,6 @@ func (m *podManager) CreatePod(ctx context.Context, clusterID int, namespace str
 	return createdPod, nil
 }
 
-// UpdatePod 更新Pod
 func (m *podManager) UpdatePod(ctx context.Context, clusterID int, namespace string, pod *corev1.Pod) (*corev1.Pod, error) {
 	if pod == nil {
 		return nil, fmt.Errorf("pod不能为空")
@@ -749,13 +734,11 @@ func parseMultipartFiles(ctx *gin.Context) ([]fileWithHeader, error) {
 			return nil, fmt.Errorf("解析文件 %s 失败: %w", name, err)
 		}
 
-		// 验证文件大小
 		if header.Size > 100<<20 { // 100MB per file limit
 			file.Close()
 			return nil, fmt.Errorf("文件 %s 太大，最大允许100MB", header.Filename)
 		}
 
-		// 验证文件名
 		if header.Filename == "" {
 			file.Close()
 			return nil, fmt.Errorf("文件名不能为空")
@@ -787,7 +770,6 @@ func writeFilesToTar(files []fileWithHeader, w io.Writer) error {
 				}
 			}()
 
-			// 验证文件名，避免路径遍历攻击
 			filename := fileInfo.header.Filename
 			if strings.Contains(filename, "..") || strings.Contains(filename, "/") {
 				return fmt.Errorf("文件名包含非法字符: %s", filename)
@@ -795,7 +777,7 @@ func writeFilesToTar(files []fileWithHeader, w io.Writer) error {
 
 			hdr := &tar.Header{
 				Name: filename,
-				Mode: 0644, // 使用更安全的权限
+				Mode: 0644,
 				Size: fileInfo.header.Size,
 			}
 

@@ -45,26 +45,24 @@ func NewK8sDeploymentHandler(deploymentService service.DeploymentService) *K8sDe
 func (h *K8sDeploymentHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		// Deployment基础管理
-		k8sGroup.GET("/deployment/:cluster_id/list", h.GetDeploymentList)                              // 获取Deployment列表
-		k8sGroup.GET("/deployment/:cluster_id/:namespace/:name/detail", h.GetDeploymentDetails)        // 获取Deployment详情
-		k8sGroup.GET("/deployment/:cluster_id/:namespace/:name/detail/yaml", h.GetDeploymentYaml)      // 获取Deployment YAML
-		k8sGroup.POST("/deployment/:cluster_id/create", h.CreateDeployment)                            // 创建Deployment
-		k8sGroup.POST("/deployment/:cluster_id/create/yaml", h.CreateDeploymentByYaml)                 // 通过YAML创建Deployment
-		k8sGroup.PUT("/deployment/:cluster_id/:namespace/:name/update", h.UpdateDeployment)            // 更新Deployment
-		k8sGroup.PUT("/deployment/:cluster_id/:namespace/:name/update/yaml", h.UpdateDeploymentByYaml) // 通过YAML更新Deployment
-		k8sGroup.DELETE("/deployment/:cluster_id/:namespace/:name/delete", h.DeleteDeployment)         // 删除Deployment
-		k8sGroup.POST("/deployment/:cluster_id/:namespace/:name/restart", h.RestartDeployment)         // 重启Deployment
-		k8sGroup.POST("/deployment/:cluster_id/:namespace/:name/scale", h.ScaleDeployment)             // 扩缩容Deployment
-		k8sGroup.POST("/deployment/:cluster_id/:namespace/:name/pause", h.PauseDeployment)             // 暂停Deployment
-		k8sGroup.POST("/deployment/:cluster_id/:namespace/:name/resume", h.ResumeDeployment)           // 恢复Deployment
-		k8sGroup.POST("/deployment/:cluster_id/:namespace/:name/rollback", h.RollbackDeployment)       // 回滚Deployment
-		k8sGroup.GET("/deployment/:cluster_id/:namespace/:name/pods", h.GetDeploymentPods)             // 获取Deployment Pod列表
-		k8sGroup.GET("/deployment/:cluster_id/:namespace/:name/history", h.GetDeploymentHistory)       // 获取Deployment版本历史
+		k8sGroup.GET("/deployment/:cluster_id/list", h.GetDeploymentList)
+		k8sGroup.GET("/deployment/:cluster_id/:namespace/:name/detail", h.GetDeploymentDetails)
+		k8sGroup.GET("/deployment/:cluster_id/:namespace/:name/detail/yaml", h.GetDeploymentYaml)
+		k8sGroup.POST("/deployment/:cluster_id/create", h.CreateDeployment)
+		k8sGroup.POST("/deployment/:cluster_id/create/yaml", h.CreateDeploymentByYaml)
+		k8sGroup.PUT("/deployment/:cluster_id/:namespace/:name/update", h.UpdateDeployment)
+		k8sGroup.PUT("/deployment/:cluster_id/:namespace/:name/update/yaml", h.UpdateDeploymentByYaml)
+		k8sGroup.DELETE("/deployment/:cluster_id/:namespace/:name/delete", h.DeleteDeployment)
+		k8sGroup.POST("/deployment/:cluster_id/:namespace/:name/restart", h.RestartDeployment)
+		k8sGroup.POST("/deployment/:cluster_id/:namespace/:name/scale", h.ScaleDeployment)
+		k8sGroup.POST("/deployment/:cluster_id/:namespace/:name/pause", h.PauseDeployment)
+		k8sGroup.POST("/deployment/:cluster_id/:namespace/:name/resume", h.ResumeDeployment)
+		k8sGroup.POST("/deployment/:cluster_id/:namespace/:name/rollback", h.RollbackDeployment)
+		k8sGroup.GET("/deployment/:cluster_id/:namespace/:name/pods", h.GetDeploymentPods)
+		k8sGroup.GET("/deployment/:cluster_id/:namespace/:name/history", h.GetDeploymentHistory)
 	}
 }
 
-// GetDeploymentList 获取Deployment列表
 func (h *K8sDeploymentHandler) GetDeploymentList(ctx *gin.Context) {
 	var req model.GetDeploymentListReq
 
@@ -81,7 +79,6 @@ func (h *K8sDeploymentHandler) GetDeploymentList(ctx *gin.Context) {
 	})
 }
 
-// GetDeploymentDetails 获取Deployment详情
 func (h *K8sDeploymentHandler) GetDeploymentDetails(ctx *gin.Context) {
 	var req model.GetDeploymentDetailsReq
 
@@ -112,7 +109,6 @@ func (h *K8sDeploymentHandler) GetDeploymentDetails(ctx *gin.Context) {
 	})
 }
 
-// GetDeploymentYaml 获取Deployment YAML
 func (h *K8sDeploymentHandler) GetDeploymentYaml(ctx *gin.Context) {
 	var req model.GetDeploymentYamlReq
 
@@ -143,7 +139,6 @@ func (h *K8sDeploymentHandler) GetDeploymentYaml(ctx *gin.Context) {
 	})
 }
 
-// CreateDeployment 创建Deployment
 func (h *K8sDeploymentHandler) CreateDeployment(ctx *gin.Context) {
 	var req model.CreateDeploymentReq
 
@@ -160,7 +155,6 @@ func (h *K8sDeploymentHandler) CreateDeployment(ctx *gin.Context) {
 	})
 }
 
-// UpdateDeployment 更新Deployment
 func (h *K8sDeploymentHandler) UpdateDeployment(ctx *gin.Context) {
 	var req model.UpdateDeploymentReq
 
@@ -191,7 +185,6 @@ func (h *K8sDeploymentHandler) UpdateDeployment(ctx *gin.Context) {
 	})
 }
 
-// DeleteDeployment 删除Deployment
 func (h *K8sDeploymentHandler) DeleteDeployment(ctx *gin.Context) {
 	var req model.DeleteDeploymentReq
 
@@ -222,7 +215,6 @@ func (h *K8sDeploymentHandler) DeleteDeployment(ctx *gin.Context) {
 	})
 }
 
-// RestartDeployment 重启Deployment
 func (h *K8sDeploymentHandler) RestartDeployment(ctx *gin.Context) {
 	var req model.RestartDeploymentReq
 
@@ -253,7 +245,6 @@ func (h *K8sDeploymentHandler) RestartDeployment(ctx *gin.Context) {
 	})
 }
 
-// ScaleDeployment 伸缩Deployment
 func (h *K8sDeploymentHandler) ScaleDeployment(ctx *gin.Context) {
 	var req model.ScaleDeploymentReq
 
@@ -284,7 +275,6 @@ func (h *K8sDeploymentHandler) ScaleDeployment(ctx *gin.Context) {
 	})
 }
 
-// GetDeploymentPods 获取Deployment的Pod列表
 func (h *K8sDeploymentHandler) GetDeploymentPods(ctx *gin.Context) {
 	var req model.GetDeploymentPodsReq
 
@@ -315,7 +305,6 @@ func (h *K8sDeploymentHandler) GetDeploymentPods(ctx *gin.Context) {
 	})
 }
 
-// GetDeploymentHistory 获取Deployment版本历史
 func (h *K8sDeploymentHandler) GetDeploymentHistory(ctx *gin.Context) {
 	var req model.GetDeploymentHistoryReq
 
@@ -346,7 +335,6 @@ func (h *K8sDeploymentHandler) GetDeploymentHistory(ctx *gin.Context) {
 	})
 }
 
-// RollbackDeployment 回滚Deployment
 func (h *K8sDeploymentHandler) RollbackDeployment(ctx *gin.Context) {
 	var req model.RollbackDeploymentReq
 
@@ -377,7 +365,6 @@ func (h *K8sDeploymentHandler) RollbackDeployment(ctx *gin.Context) {
 	})
 }
 
-// PauseDeployment 暂停Deployment
 func (h *K8sDeploymentHandler) PauseDeployment(ctx *gin.Context) {
 	var req model.PauseDeploymentReq
 
@@ -408,7 +395,6 @@ func (h *K8sDeploymentHandler) PauseDeployment(ctx *gin.Context) {
 	})
 }
 
-// ResumeDeployment 恢复Deployment
 func (h *K8sDeploymentHandler) ResumeDeployment(ctx *gin.Context) {
 	var req model.ResumeDeploymentReq
 
@@ -439,9 +425,6 @@ func (h *K8sDeploymentHandler) ResumeDeployment(ctx *gin.Context) {
 	})
 }
 
-// YAML操作方法
-
-// CreateDeploymentByYaml 通过YAML创建deployment
 func (h *K8sDeploymentHandler) CreateDeploymentByYaml(ctx *gin.Context) {
 	var req model.CreateDeploymentByYamlReq
 
@@ -458,7 +441,6 @@ func (h *K8sDeploymentHandler) CreateDeploymentByYaml(ctx *gin.Context) {
 	})
 }
 
-// UpdateDeploymentByYaml 通过YAML更新deployment
 func (h *K8sDeploymentHandler) UpdateDeploymentByYaml(ctx *gin.Context) {
 	var req model.UpdateDeploymentByYamlReq
 

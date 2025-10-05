@@ -37,13 +37,11 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// ConvertToPVCEntity 将 Kubernetes PVC 转换为内部 PVC 模型
 func ConvertToPVCEntity(pvc *corev1.PersistentVolumeClaim, clusterID int) *model.K8sPVC {
 	if pvc == nil {
 		return nil
 	}
 
-	// 转换访问模式
 	var accessModes []string
 	for _, mode := range pvc.Spec.AccessModes {
 		accessModes = append(accessModes, string(mode))
@@ -80,7 +78,6 @@ func ConvertToPVCEntity(pvc *corev1.PersistentVolumeClaim, clusterID int) *model
 		volumeMode = string(*pvc.Spec.VolumeMode)
 	}
 
-	// 转换状态为枚举
 	status := convertPVCStatusToEnum(pvc.Status.Phase)
 
 	// 获取选择器
@@ -125,7 +122,6 @@ func convertPVCStatusToEnum(phase corev1.PersistentVolumeClaimPhase) model.K8sPV
 	}
 }
 
-// ConvertToPVCEntities 批量转换 PVC 列表
 func ConvertToPVCEntities(pvcs []corev1.PersistentVolumeClaim, clusterID int) []*model.K8sPVC {
 	if len(pvcs) == 0 {
 		return nil
@@ -140,11 +136,9 @@ func ConvertToPVCEntities(pvcs []corev1.PersistentVolumeClaim, clusterID int) []
 	return results
 }
 
-// BuildPVCListOptions 构建 PVC 列表查询选项
 func BuildPVCListOptions(req *model.GetPVCListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
 
-	// 构建字段选择器用于状态过滤
 	var fieldSelectors []string
 	if req.Status != "" {
 		// 将状态字符串转换为Kubernetes状态值
@@ -154,7 +148,6 @@ func BuildPVCListOptions(req *model.GetPVCListReq) metav1.ListOptions {
 		}
 	}
 
-	// 构建标签选择器
 	var labelSelectors []string
 	for key, value := range req.Labels {
 		labelSelectors = append(labelSelectors, fmt.Sprintf("%s=%s", key, value))
@@ -184,7 +177,6 @@ func convertStatusStringToK8sPVCStatus(status string) string {
 	}
 }
 
-// ValidatePVC 验证 PVC 配置
 func ValidatePVC(pvc *corev1.PersistentVolumeClaim) error {
 	if pvc == nil {
 		return fmt.Errorf("PVC 不能为空")
@@ -232,19 +224,16 @@ func PVCToYAML(pvc *corev1.PersistentVolumeClaim) (string, error) {
 	return string(yamlBytes), nil
 }
 
-// ConvertCreatePVCReqToPVC 将创建PVC请求转换为Kubernetes PVC对象
 func ConvertCreatePVCReqToPVC(req *model.CreatePVCReq) *corev1.PersistentVolumeClaim {
 	if req == nil {
 		return nil
 	}
 
-	// 转换访问模式
 	var accessModes []corev1.PersistentVolumeAccessMode
 	for _, mode := range req.Spec.AccessModes {
 		accessModes = append(accessModes, corev1.PersistentVolumeAccessMode(mode))
 	}
 
-	// 转换卷模式
 	var volumeMode *corev1.PersistentVolumeMode
 	if req.Spec.VolumeMode != "" {
 		vm := corev1.PersistentVolumeMode(req.Spec.VolumeMode)
@@ -293,19 +282,16 @@ func ConvertCreatePVCReqToPVC(req *model.CreatePVCReq) *corev1.PersistentVolumeC
 	return pvc
 }
 
-// ConvertUpdatePVCReqToPVC 将更新PVC请求转换为Kubernetes PVC对象
 func ConvertUpdatePVCReqToPVC(req *model.UpdatePVCReq) *corev1.PersistentVolumeClaim {
 	if req == nil {
 		return nil
 	}
 
-	// 转换访问模式
 	var accessModes []corev1.PersistentVolumeAccessMode
 	for _, mode := range req.Spec.AccessModes {
 		accessModes = append(accessModes, corev1.PersistentVolumeAccessMode(mode))
 	}
 
-	// 转换卷模式
 	var volumeMode *corev1.PersistentVolumeMode
 	if req.Spec.VolumeMode != "" {
 		vm := corev1.PersistentVolumeMode(req.Spec.VolumeMode)
@@ -385,7 +371,6 @@ func FilterPVCsByStatus(pvcs []corev1.PersistentVolumeClaim, status string) []co
 	return filtered
 }
 
-// GetPVCAge 获取 PVC 年龄
 func GetPVCAge(pvc corev1.PersistentVolumeClaim) string {
 	age := time.Since(pvc.CreationTimestamp.Time)
 	days := int(age.Hours() / 24)
@@ -410,7 +395,6 @@ func IsPVCPending(pvc corev1.PersistentVolumeClaim) bool {
 	return pvc.Status.Phase == corev1.ClaimPending
 }
 
-// GetPVCStorageSize 获取 PVC 存储大小（请求大小）
 func GetPVCStorageSize(pvc corev1.PersistentVolumeClaim) string {
 	if storage, ok := pvc.Spec.Resources.Requests[corev1.ResourceStorage]; ok {
 		return storage.String()
@@ -418,7 +402,6 @@ func GetPVCStorageSize(pvc corev1.PersistentVolumeClaim) string {
 	return ""
 }
 
-// GetPVCActualStorageSize 获取 PVC 实际存储大小
 func GetPVCActualStorageSize(pvc corev1.PersistentVolumeClaim) string {
 	if storage, ok := pvc.Status.Capacity[corev1.ResourceStorage]; ok {
 		return storage.String()
@@ -486,7 +469,6 @@ func FilterPVCsByStorageClass(pvcs []corev1.PersistentVolumeClaim, storageClass 
 	return filtered
 }
 
-// GetPVCCapacity 获取PVC容量信息
 func GetPVCCapacity(pvc corev1.PersistentVolumeClaim) (string, int64) {
 	if pvc.Spec.Resources.Requests == nil {
 		return "", 0
@@ -500,7 +482,6 @@ func GetPVCCapacity(pvc corev1.PersistentVolumeClaim) (string, int64) {
 	return storage.String(), storage.Value()
 }
 
-// ValidatePVCUpdate 验证PVC更新请求
 func ValidatePVCUpdate(req *model.UpdatePVCReq) error {
 	if req == nil {
 		return fmt.Errorf("更新PVC请求不能为空")
@@ -521,7 +502,6 @@ func ValidatePVCUpdate(req *model.UpdatePVCReq) error {
 	return nil
 }
 
-// ValidatePVCCreate 验证PVC创建请求
 func ValidatePVCCreate(req *model.CreatePVCReq) error {
 	if req == nil {
 		return fmt.Errorf("创建PVC请求不能为空")
@@ -586,12 +566,11 @@ func ComparePVCs(pvc1, pvc2 *corev1.PersistentVolumeClaim) bool {
 
 // IsPVCExpandable 判断PVC是否支持扩容
 func IsPVCExpandable(pvc corev1.PersistentVolumeClaim) bool {
-	// 检查存储类是否支持扩容
+
 	// 这里简化处理，实际情况下需要查询StorageClass的AllowVolumeExpansion字段
 	return pvc.Spec.StorageClassName != nil && pvc.Status.Phase == corev1.ClaimBound
 }
 
-// GetPVCAccessModes 获取PVC访问模式的字符串列表
 func GetPVCAccessModes(pvc corev1.PersistentVolumeClaim) []string {
 	modes := make([]string, 0, len(pvc.Spec.AccessModes))
 	for _, mode := range pvc.Spec.AccessModes {
@@ -600,7 +579,6 @@ func GetPVCAccessModes(pvc corev1.PersistentVolumeClaim) []string {
 	return modes
 }
 
-// CalculatePVCStorageUsage 计算PVC存储使用率
 func CalculatePVCStorageUsage(pvc corev1.PersistentVolumeClaim) (float64, error) {
 	// 获取请求大小
 	requestedStorage, exists := pvc.Spec.Resources.Requests[corev1.ResourceStorage]

@@ -39,9 +39,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EventManager Event管理器接口
 type EventManager interface {
-	// 基础操作
 	GetEvent(ctx context.Context, clusterID int, namespace, name string) (*corev1.Event, error)
 	ListEvents(ctx context.Context, clusterID int, namespace string) (*corev1.EventList, error)
 	ListEventsWithTotal(ctx context.Context, clusterID int, namespace string) (*corev1.EventList, int64, error)
@@ -83,7 +81,6 @@ func NewEventManager(client client.K8sClient, logger *zap.Logger) EventManager {
 	}
 }
 
-// GetEvent 获取单个Event
 func (m *eventManager) GetEvent(ctx context.Context, clusterID int, namespace, name string) (*corev1.Event, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -101,7 +98,6 @@ func (m *eventManager) GetEvent(ctx context.Context, clusterID int, namespace, n
 	return event, nil
 }
 
-// ListEvents 获取指定命名空间的Event列表
 func (m *eventManager) ListEvents(ctx context.Context, clusterID int, namespace string) (*corev1.EventList, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -119,7 +115,6 @@ func (m *eventManager) ListEvents(ctx context.Context, clusterID int, namespace 
 	return events, nil
 }
 
-// ListEventsWithTotal 获取指定命名空间的Event列表及总数
 func (m *eventManager) ListEventsWithTotal(ctx context.Context, clusterID int, namespace string) (*corev1.EventList, int64, error) {
 	events, err := m.ListEvents(ctx, clusterID, namespace)
 	if err != nil {
@@ -130,7 +125,6 @@ func (m *eventManager) ListEventsWithTotal(ctx context.Context, clusterID int, n
 	return events, total, nil
 }
 
-// ListAllEvents 获取所有命名空间的Event列表
 func (m *eventManager) ListAllEvents(ctx context.Context, clusterID int) (*corev1.EventList, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -147,7 +141,6 @@ func (m *eventManager) ListAllEvents(ctx context.Context, clusterID int) (*corev
 	return events, nil
 }
 
-// ListAllEventsWithTotal 获取所有命名空间的Event列表及总数
 func (m *eventManager) ListAllEventsWithTotal(ctx context.Context, clusterID int) (*corev1.EventList, int64, error) {
 	events, err := m.ListAllEvents(ctx, clusterID)
 	if err != nil {
@@ -158,7 +151,6 @@ func (m *eventManager) ListAllEventsWithTotal(ctx context.Context, clusterID int
 	return events, total, nil
 }
 
-// DeleteEvent 删除Event
 func (m *eventManager) DeleteEvent(ctx context.Context, clusterID int, namespace, name string, options metav1.DeleteOptions) error {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -178,7 +170,6 @@ func (m *eventManager) DeleteEvent(ctx context.Context, clusterID int, namespace
 	return nil
 }
 
-// ListEventsByObject 根据对象获取Event列表
 func (m *eventManager) ListEventsByObject(ctx context.Context, clusterID int, namespace string, objectKind, objectName string) (*corev1.EventList, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -200,7 +191,6 @@ func (m *eventManager) ListEventsByObject(ctx context.Context, clusterID int, na
 	return events, nil
 }
 
-// ListEventsByObjectWithTotal 根据对象获取Event列表及总数
 func (m *eventManager) ListEventsByObjectWithTotal(ctx context.Context, clusterID int, namespace string, objectKind, objectName string) (*corev1.EventList, int64, error) {
 	events, err := m.ListEventsByObject(ctx, clusterID, namespace, objectKind, objectName)
 	if err != nil {
@@ -211,7 +201,6 @@ func (m *eventManager) ListEventsByObjectWithTotal(ctx context.Context, clusterI
 	return events, total, nil
 }
 
-// ListEventsBySelector 根据标签选择器获取Event列表
 func (m *eventManager) ListEventsBySelector(ctx context.Context, clusterID int, namespace string, selector string) (*corev1.EventList, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -234,7 +223,6 @@ func (m *eventManager) ListEventsBySelector(ctx context.Context, clusterID int, 
 	return events, nil
 }
 
-// ListEventsBySelectorWithTotal 根据标签选择器获取Event列表及总数
 func (m *eventManager) ListEventsBySelectorWithTotal(ctx context.Context, clusterID int, namespace string, selector string) (*corev1.EventList, int64, error) {
 	events, err := m.ListEventsBySelector(ctx, clusterID, namespace, selector)
 	if err != nil {
@@ -245,7 +233,6 @@ func (m *eventManager) ListEventsBySelectorWithTotal(ctx context.Context, cluste
 	return events, total, nil
 }
 
-// ListEventsByFieldSelector 根据字段选择器获取Event列表
 func (m *eventManager) ListEventsByFieldSelector(ctx context.Context, clusterID int, namespace string, fieldSelector string) (*corev1.EventList, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -268,7 +255,6 @@ func (m *eventManager) ListEventsByFieldSelector(ctx context.Context, clusterID 
 	return events, nil
 }
 
-// ListEventsByFieldSelectorWithTotal 根据字段选择器获取Event列表及总数
 func (m *eventManager) ListEventsByFieldSelectorWithTotal(ctx context.Context, clusterID int, namespace string, fieldSelector string) (*corev1.EventList, int64, error) {
 	events, err := m.ListEventsByFieldSelector(ctx, clusterID, namespace, fieldSelector)
 	if err != nil {
@@ -279,7 +265,6 @@ func (m *eventManager) ListEventsByFieldSelectorWithTotal(ctx context.Context, c
 	return events, total, nil
 }
 
-// ListRecentEvents 获取最近的Event列表
 func (m *eventManager) ListRecentEvents(ctx context.Context, clusterID int, namespace string, limitSeconds int64) (*corev1.EventList, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -302,7 +287,6 @@ func (m *eventManager) ListRecentEvents(ctx context.Context, clusterID int, name
 	return events, nil
 }
 
-// ListRecentEventsWithTotal 获取最近的Event列表及总数
 func (m *eventManager) ListRecentEventsWithTotal(ctx context.Context, clusterID int, namespace string, limitSeconds int64) (*corev1.EventList, int64, error) {
 	events, err := m.ListRecentEvents(ctx, clusterID, namespace, limitSeconds)
 	if err != nil {
@@ -313,7 +297,6 @@ func (m *eventManager) ListRecentEventsWithTotal(ctx context.Context, clusterID 
 	return events, total, nil
 }
 
-// GetEventStatistics 获取事件统计
 func (m *eventManager) GetEventStatistics(ctx context.Context, clusterID int, namespace string, startTime, endTime time.Time) (*model.EventStatistics, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -361,7 +344,6 @@ func (m *eventManager) GetEventStatistics(ctx context.Context, clusterID int, na
 		}
 	}
 
-	// 转换为排序列表 - Top原因
 	for reason, count := range reasonCounts {
 		percentage := float64(count) / float64(summary.TotalEvents) * 100
 		summary.TopReasons = append(summary.TopReasons, model.CountItem{
@@ -388,7 +370,6 @@ func (m *eventManager) GetEventStatistics(ctx context.Context, clusterID int, na
 	return stats, nil
 }
 
-// GetEventSummary 获取事件汇总
 func (m *eventManager) GetEventSummary(ctx context.Context, clusterID int, namespace string, startTime, endTime time.Time) (*model.EventSummary, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -509,7 +490,6 @@ func (m *eventManager) GetEventSummary(ctx context.Context, clusterID int, names
 	return summary, nil
 }
 
-// GetEventTimeline 获取事件时间线
 func (m *eventManager) GetEventTimeline(ctx context.Context, clusterID int, namespace, objectKind, objectName string) ([]*model.EventTimelineItem, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -549,7 +529,6 @@ func (m *eventManager) GetEventTimeline(ctx context.Context, clusterID int, name
 	return timelineItems, nil
 }
 
-// GetEventTrends 获取事件趋势
 func (m *eventManager) GetEventTrends(ctx context.Context, clusterID int, namespace, eventType, interval string, startTime, endTime time.Time) ([]*model.EventTrend, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -579,13 +558,13 @@ func (m *eventManager) GetEventTrends(ctx context.Context, clusterID int, namesp
 	case "1d":
 		intervalDuration = 24 * time.Hour
 	default:
-		intervalDuration = time.Hour // 默认1小时
+		intervalDuration = time.Hour
 	}
 
 	// 计算时间范围
 	now := time.Now()
 	if startTime.IsZero() {
-		startTime = now.Add(-24 * time.Hour) // 默认过去24小时
+		startTime = now.Add(-24 * time.Hour)
 	}
 	if endTime.IsZero() {
 		endTime = now
@@ -614,7 +593,6 @@ func (m *eventManager) GetEventTrends(ctx context.Context, clusterID int, namesp
 		buckets[bucketTime]++
 	}
 
-	// 转换为趋势数据
 	var trends []*model.EventTrend
 	for timestamp, count := range buckets {
 		trends = append(trends, &model.EventTrend{
@@ -632,7 +610,6 @@ func (m *eventManager) GetEventTrends(ctx context.Context, clusterID int, namesp
 	return trends, nil
 }
 
-// GetEventGroupData 获取事件分组数据
 func (m *eventManager) GetEventGroupData(ctx context.Context, clusterID int, namespace, groupBy string, startTime, endTime time.Time, limit int) ([]*model.EventGroupData, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -683,10 +660,9 @@ func (m *eventManager) GetEventGroupData(ctx context.Context, clusterID int, nam
 		groups[groupKey] = append(groups[groupKey], event)
 	}
 
-	// 转换为分组数据
 	var groupData []*model.EventGroupData
 	for group, eventList := range groups {
-		// 转换事件为K8sEvent格式（如果需要包含事件样本）
+
 		var k8sEvents []model.K8sEvent
 		for i, event := range eventList {
 			if limit > 0 && i >= limit {
@@ -785,9 +761,8 @@ func (m *eventManager) CleanupOldEvents(ctx context.Context, clusterID int, name
 	return nil
 }
 
-// ConvertEventToK8sEvent 将Kubernetes Event对象转换为K8sEvent模型
 func (m *eventManager) ConvertEventToK8sEvent(event *corev1.Event, clusterID int) *model.K8sEvent {
-	// 转换事件类型
+
 	var eventType model.EventType
 	if event.Type == "Warning" {
 		eventType = model.EventTypeWarning
@@ -795,8 +770,7 @@ func (m *eventManager) ConvertEventToK8sEvent(event *corev1.Event, clusterID int
 		eventType = model.EventTypeNormal
 	}
 
-	// 转换事件原因
-	eventReason := model.EventReasonOther // 默认值
+	eventReason := model.EventReasonOther
 	switch event.Reason {
 	case "BackOff":
 		eventReason = model.EventReasonBackOff
@@ -873,8 +847,8 @@ func (m *eventManager) ConvertEventToK8sEvent(event *corev1.Event, clusterID int
 			Host:      event.Source.Host,
 		},
 		Action:             event.Action,
-		ReportingComponent: event.Source.Component, // 使用Source.Component作为ReportingComponent
-		ReportingInstance:  event.Source.Host,      // 使用Source.Host作为ReportingInstance
+		ReportingComponent: event.Source.Component,
+		ReportingInstance:  event.Source.Host,
 		Labels:             event.Labels,
 		Annotations:        event.Annotations,
 	}

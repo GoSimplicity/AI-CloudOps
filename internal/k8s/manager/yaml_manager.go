@@ -43,7 +43,6 @@ const (
 	TaskSucceeded = "Succeeded"
 )
 
-// YamlManager YAML模板和任务管理
 type YamlManager interface {
 	GetYamlTemplateList(ctx context.Context, req *model.YamlTemplateListReq) ([]*model.K8sYamlTemplate, error)
 	CreateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error
@@ -83,7 +82,6 @@ func NewYamlManager(
 	}
 }
 
-// GetYamlTemplateList 获取模板列表
 func (ym *yamlManager) GetYamlTemplateList(ctx context.Context, req *model.YamlTemplateListReq) ([]*model.K8sYamlTemplate, error) {
 	templates, err := ym.yamlTemplateDao.ListAllYamlTemplates(ctx, req)
 	if err != nil {
@@ -96,7 +94,6 @@ func (ym *yamlManager) GetYamlTemplateList(ctx context.Context, req *model.YamlT
 	return templates, nil
 }
 
-// CreateYamlTemplate 创建模板
 func (ym *yamlManager) CreateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error {
 	// 校验 YAML 格式
 	if err := utils.ValidateYamlContent(template.Content); err != nil {
@@ -118,7 +115,6 @@ func (ym *yamlManager) CreateYamlTemplate(ctx context.Context, template *model.K
 	return nil
 }
 
-// CheckYamlTemplate 检查模板格式
 func (ym *yamlManager) CheckYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error {
 	// 基础校验
 	if template == nil {
@@ -142,11 +138,9 @@ func (ym *yamlManager) CheckYamlTemplate(ctx context.Context, template *model.K8
 		return fmt.Errorf("获取动态客户端失败: %w", err)
 	}
 
-	// 使用工具方法验证YAML
 	return utils.ValidateYamlWithCluster(ctx, discoveryClient, dynamicClient, template.Content)
 }
 
-// UpdateYamlTemplate 更新模板
 func (ym *yamlManager) UpdateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error {
 	// 校验 YAML 格式
 	if err := utils.ValidateYamlContent(template.Content); err != nil {
@@ -168,9 +162,8 @@ func (ym *yamlManager) UpdateYamlTemplate(ctx context.Context, template *model.K
 	return nil
 }
 
-// DeleteYamlTemplate 删除模板
 func (ym *yamlManager) DeleteYamlTemplate(ctx context.Context, templateID int, clusterID int) error {
-	// 检查是否有任务正在使用该模板
+
 	tasks, err := ym.yamlTaskDao.GetYamlTaskByTemplateID(ctx, templateID)
 	if err != nil {
 		ym.logger.Error("检查模板使用情况失败",
@@ -203,7 +196,6 @@ func (ym *yamlManager) DeleteYamlTemplate(ctx context.Context, templateID int, c
 	return nil
 }
 
-// GetYamlTemplateDetail 获取模板详情
 func (ym *yamlManager) GetYamlTemplateDetail(ctx context.Context, templateID int, clusterID int) (*model.K8sYamlTemplate, error) {
 	template, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, templateID, clusterID)
 	if err != nil {
@@ -217,7 +209,6 @@ func (ym *yamlManager) GetYamlTemplateDetail(ctx context.Context, templateID int
 	return template, nil
 }
 
-// GetYamlTaskList 获取任务列表
 func (ym *yamlManager) GetYamlTaskList(ctx context.Context, req *model.YamlTaskListReq) ([]*model.K8sYamlTask, error) {
 	tasks, err := ym.yamlTaskDao.ListAllYamlTasks(ctx, req)
 	if err != nil {
@@ -228,14 +219,12 @@ func (ym *yamlManager) GetYamlTaskList(ctx context.Context, req *model.YamlTaskL
 	return tasks, nil
 }
 
-// CreateYamlTask 创建任务
 func (ym *yamlManager) CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
-	// 验证模板存在
+
 	if _, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, task.TemplateID, task.ClusterID); err != nil {
 		return fmt.Errorf("YAML 模板不存在: %w", err)
 	}
 
-	// 验证集群存在
 	if _, err := ym.clusterDao.GetClusterByID(ctx, task.ClusterID); err != nil {
 		return fmt.Errorf("集群不存在: %w", err)
 	}
@@ -255,9 +244,8 @@ func (ym *yamlManager) CreateYamlTask(ctx context.Context, task *model.K8sYamlTa
 	return nil
 }
 
-// UpdateYamlTask 更新任务
 func (ym *yamlManager) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
-	// 验证任务存在
+
 	if _, err := ym.yamlTaskDao.GetYamlTaskByID(ctx, task.ID); err != nil {
 		return fmt.Errorf("YAML 任务不存在: %w", err)
 	}
@@ -295,7 +283,6 @@ func (ym *yamlManager) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTa
 	return nil
 }
 
-// DeleteYamlTask 删除任务
 func (ym *yamlManager) DeleteYamlTask(ctx context.Context, taskID int) error {
 	if err := ym.yamlTaskDao.DeleteYamlTask(ctx, taskID); err != nil {
 		ym.logger.Error("删除 YAML 任务失败",
@@ -308,7 +295,6 @@ func (ym *yamlManager) DeleteYamlTask(ctx context.Context, taskID int) error {
 	return nil
 }
 
-// ApplyYamlTask 应用任务
 func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int) error {
 	// 获取任务信息
 	task, err := ym.yamlTaskDao.GetYamlTaskByID(ctx, taskID)

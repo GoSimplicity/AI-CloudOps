@@ -79,7 +79,6 @@ func (m *daemonSetManager) getKubeClient(clusterID int) (*kubernetes.Clientset, 
 	return kubeClient, nil
 }
 
-// CreateDaemonSet 创建 DaemonSet
 func (m *daemonSetManager) CreateDaemonSet(ctx context.Context, clusterID int, namespace string, daemonSet *appsv1.DaemonSet) error {
 	if daemonSet == nil {
 		return fmt.Errorf("daemonSet 不能为空")
@@ -108,7 +107,6 @@ func (m *daemonSetManager) CreateDaemonSet(ctx context.Context, clusterID int, n
 	return nil
 }
 
-// GetDaemonSet 获取单个 DaemonSet
 func (m *daemonSetManager) GetDaemonSet(ctx context.Context, clusterID int, namespace, name string) (*appsv1.DaemonSet, error) {
 	if name == "" {
 		return nil, fmt.Errorf("DaemonSet name 不能为空")
@@ -132,7 +130,6 @@ func (m *daemonSetManager) GetDaemonSet(ctx context.Context, clusterID int, name
 	return daemonSet, nil
 }
 
-// GetDaemonSetList 获取 DaemonSet 列表
 func (m *daemonSetManager) GetDaemonSetList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sDaemonSet, error) {
 	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
@@ -163,7 +160,6 @@ func (m *daemonSetManager) GetDaemonSetList(ctx context.Context, clusterID int, 
 	return k8sDaemonSets, nil
 }
 
-// UpdateDaemonSet 更新 DaemonSet
 func (m *daemonSetManager) UpdateDaemonSet(ctx context.Context, clusterID int, namespace string, daemonSet *appsv1.DaemonSet) error {
 	if daemonSet == nil {
 		return fmt.Errorf("daemonSet 不能为空")
@@ -192,7 +188,6 @@ func (m *daemonSetManager) UpdateDaemonSet(ctx context.Context, clusterID int, n
 	return nil
 }
 
-// DeleteDaemonSet 删除 DaemonSet
 func (m *daemonSetManager) DeleteDaemonSet(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
 	if name == "" {
 		return fmt.Errorf("DaemonSet name 不能为空")
@@ -221,7 +216,6 @@ func (m *daemonSetManager) DeleteDaemonSet(ctx context.Context, clusterID int, n
 	return nil
 }
 
-// RestartDaemonSet 重启 DaemonSet
 func (m *daemonSetManager) RestartDaemonSet(ctx context.Context, clusterID int, namespace, name string) error {
 	if name == "" {
 		return fmt.Errorf("DaemonSet name 不能为空")
@@ -354,7 +348,6 @@ func (m *daemonSetManager) BatchRestartDaemonSets(ctx context.Context, clusterID
 	return nil
 }
 
-// GetDaemonSetHistory 获取 DaemonSet 历史版本
 func (m *daemonSetManager) GetDaemonSetHistory(ctx context.Context, clusterID int, namespace, daemonSetName string) ([]*model.K8sDaemonSetHistory, int64, error) {
 	if daemonSetName == "" {
 		return nil, 0, fmt.Errorf("DaemonSet name 不能为空")
@@ -365,7 +358,6 @@ func (m *daemonSetManager) GetDaemonSetHistory(ctx context.Context, clusterID in
 		return nil, 0, err
 	}
 
-	// 先获取 DaemonSet 本身以获取其标签选择器
 	daemonSet, err := kubeClient.AppsV1().DaemonSets(namespace).Get(ctx, daemonSetName, metav1.GetOptions{})
 	if err != nil {
 		m.logger.Error("获取 DaemonSet 失败",
@@ -390,7 +382,7 @@ func (m *daemonSetManager) GetDaemonSetHistory(ctx context.Context, clusterID in
 
 	var history []*model.K8sDaemonSetHistory
 	for _, revision := range revisionList.Items {
-		// 检查是否属于指定的 DaemonSet
+
 		belongsToDaemonSet := false
 		if revision.OwnerReferences != nil {
 			for _, owner := range revision.OwnerReferences {
@@ -421,7 +413,6 @@ func (m *daemonSetManager) GetDaemonSetHistory(ctx context.Context, clusterID in
 	return history, int64(len(history)), nil
 }
 
-// GetDaemonSetPods 获取 DaemonSet 管理的 Pods
 func (m *daemonSetManager) GetDaemonSetPods(ctx context.Context, clusterID int, namespace, daemonSetName string) ([]*model.K8sPod, int64, error) {
 	if daemonSetName == "" {
 		return nil, 0, fmt.Errorf("DaemonSet name 不能为空")
@@ -443,7 +434,6 @@ func (m *daemonSetManager) GetDaemonSetPods(ctx context.Context, clusterID int, 
 		return nil, 0, fmt.Errorf("获取 DaemonSet 失败: %w", err)
 	}
 
-	// 构建标签选择器
 	labelSelector := metav1.FormatLabelSelector(daemonSet.Spec.Selector)
 
 	listOptions := metav1.ListOptions{
@@ -470,7 +460,6 @@ func (m *daemonSetManager) GetDaemonSetPods(ctx context.Context, clusterID int, 
 	return pods, int64(len(pods)), nil
 }
 
-// RollbackDaemonSet 回滚 DaemonSet 到指定版本
 func (m *daemonSetManager) RollbackDaemonSet(ctx context.Context, clusterID int, namespace, name string, revision int64) error {
 	if name == "" {
 		return fmt.Errorf("DaemonSet name 不能为空")
@@ -498,7 +487,7 @@ func (m *daemonSetManager) RollbackDaemonSet(ctx context.Context, clusterID int,
 	// 获取与当前 DaemonSet 相关的所有 ControllerRevision
 	labelSelector := "controller-revision-hash"
 	if currentDaemonSet.Spec.Selector != nil && currentDaemonSet.Spec.Selector.MatchLabels != nil {
-		// 构建更精确的标签选择器
+
 		var selectorParts []string
 		for key, value := range currentDaemonSet.Spec.Selector.MatchLabels {
 			selectorParts = append(selectorParts, fmt.Sprintf("%s=%s", key, value))
@@ -525,9 +514,9 @@ func (m *daemonSetManager) RollbackDaemonSet(ctx context.Context, clusterID int,
 	// 查找指定版本的 ControllerRevision
 	var targetRevision *appsv1.ControllerRevision
 	for _, rev := range revisionList.Items {
-		// 检查是否属于指定的 DaemonSet 并且版本匹配
+
 		if rev.Revision == revision {
-			// 验证 ControllerRevision 是否属于当前 DaemonSet
+
 			if rev.OwnerReferences != nil {
 				for _, owner := range rev.OwnerReferences {
 					if owner.Kind == "DaemonSet" && owner.Name == name {
@@ -551,7 +540,6 @@ func (m *daemonSetManager) RollbackDaemonSet(ctx context.Context, clusterID int,
 		return fmt.Errorf("找不到版本 %d 的 ControllerRevision", revision)
 	}
 
-	// 从 ControllerRevision 中提取 DaemonSet 模板
 	var daemonSetTemplate appsv1.DaemonSet
 	err = utils.ExtractDaemonSetFromRevision(targetRevision, &daemonSetTemplate)
 	if err != nil {

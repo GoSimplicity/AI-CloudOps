@@ -37,9 +37,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// RoleBindingManager RoleBinding管理器接口
 type RoleBindingManager interface {
-	// 基础 CRUD 操作
 	CreateRoleBinding(ctx context.Context, clusterID int, namespace string, roleBinding *rbacv1.RoleBinding) error
 	GetRoleBinding(ctx context.Context, clusterID int, namespace, name string) (*rbacv1.RoleBinding, error)
 	GetRoleBindingList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sRoleBinding, error)
@@ -52,7 +50,6 @@ type roleBindingManager struct {
 	logger *zap.Logger
 }
 
-// NewRoleBindingManager 创建RoleBinding管理器
 func NewRoleBindingManager(client client.K8sClient, logger *zap.Logger) RoleBindingManager {
 	return &roleBindingManager{
 		client: client,
@@ -60,7 +57,6 @@ func NewRoleBindingManager(client client.K8sClient, logger *zap.Logger) RoleBind
 	}
 }
 
-// CreateRoleBinding 创建RoleBinding
 func (m *roleBindingManager) CreateRoleBinding(ctx context.Context, clusterID int, namespace string, roleBinding *rbacv1.RoleBinding) error {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -80,7 +76,6 @@ func (m *roleBindingManager) CreateRoleBinding(ctx context.Context, clusterID in
 	return nil
 }
 
-// GetRoleBinding 获取单个RoleBinding
 func (m *roleBindingManager) GetRoleBinding(ctx context.Context, clusterID int, namespace, name string) (*rbacv1.RoleBinding, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -98,7 +93,6 @@ func (m *roleBindingManager) GetRoleBinding(ctx context.Context, clusterID int, 
 	return roleBinding, nil
 }
 
-// GetRoleBindingList 获取RoleBinding列表
 func (m *roleBindingManager) GetRoleBindingList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sRoleBinding, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -113,10 +107,9 @@ func (m *roleBindingManager) GetRoleBindingList(ctx context.Context, clusterID i
 		return nil, fmt.Errorf("获取RoleBinding列表失败: %w", err)
 	}
 
-	// 转换为模型格式 - 这里简化实现，实际项目中需要根据具体转换逻辑实现
 	var k8sRoleBindings []*model.K8sRoleBinding
 	for _, rb := range roleBindings.Items {
-		// 简化的转换逻辑，实际项目中需要完整的转换实现
+
 		k8sRoleBinding := &model.K8sRoleBinding{
 			ClusterID:         clusterID,
 			Name:              rb.Name,
@@ -134,7 +127,6 @@ func (m *roleBindingManager) GetRoleBindingList(ctx context.Context, clusterID i
 	return k8sRoleBindings, nil
 }
 
-// UpdateRoleBinding 更新RoleBinding
 func (m *roleBindingManager) UpdateRoleBinding(ctx context.Context, clusterID int, namespace string, roleBinding *rbacv1.RoleBinding) error {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -154,7 +146,6 @@ func (m *roleBindingManager) UpdateRoleBinding(ctx context.Context, clusterID in
 	return nil
 }
 
-// DeleteRoleBinding 删除RoleBinding
 func (m *roleBindingManager) DeleteRoleBinding(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {

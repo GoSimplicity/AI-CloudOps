@@ -45,19 +45,17 @@ func NewK8sIngressHandler(ingressService service.IngressService) *K8sIngressHand
 func (h *K8sIngressHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		// Ingress基础管理
-		k8sGroup.GET("/ingress/:cluster_id/list", h.GetIngressList)                              // 获取Ingress列表
-		k8sGroup.GET("/ingress/:cluster_id/:namespace/:name/detail", h.GetIngressDetails)        // 获取Ingress详情
-		k8sGroup.GET("/ingress/:cluster_id/:namespace/:name/detail/yaml", h.GetIngressYaml)      // 获取Ingress YAML
-		k8sGroup.POST("/ingress/:cluster_id/create", h.CreateIngress)                            // 创建Ingress
-		k8sGroup.POST("/ingress/:cluster_id/create/yaml", h.CreateIngressByYaml)                 // 通过YAML创建Ingress
-		k8sGroup.PUT("/ingress/:cluster_id/:namespace/:name/update", h.UpdateIngress)            // 更新Ingress
-		k8sGroup.PUT("/ingress/:cluster_id/:namespace/:name/update/yaml", h.UpdateIngressByYaml) // 通过YAML更新Ingress
-		k8sGroup.DELETE("/ingress/:cluster_id/:namespace/:name/delete", h.DeleteIngress)         // 删除Ingress
+		k8sGroup.GET("/ingress/:cluster_id/list", h.GetIngressList)
+		k8sGroup.GET("/ingress/:cluster_id/:namespace/:name/detail", h.GetIngressDetails)
+		k8sGroup.GET("/ingress/:cluster_id/:namespace/:name/detail/yaml", h.GetIngressYaml)
+		k8sGroup.POST("/ingress/:cluster_id/create", h.CreateIngress)
+		k8sGroup.POST("/ingress/:cluster_id/create/yaml", h.CreateIngressByYaml)
+		k8sGroup.PUT("/ingress/:cluster_id/:namespace/:name/update", h.UpdateIngress)
+		k8sGroup.PUT("/ingress/:cluster_id/:namespace/:name/update/yaml", h.UpdateIngressByYaml)
+		k8sGroup.DELETE("/ingress/:cluster_id/:namespace/:name/delete", h.DeleteIngress)
 	}
 }
 
-// GetIngressList 获取Ingress列表
 func (h *K8sIngressHandler) GetIngressList(ctx *gin.Context) {
 	var req model.GetIngressListReq
 
@@ -74,7 +72,6 @@ func (h *K8sIngressHandler) GetIngressList(ctx *gin.Context) {
 	})
 }
 
-// GetIngressDetails 获取Ingress详情
 func (h *K8sIngressHandler) GetIngressDetails(ctx *gin.Context) {
 	var req model.GetIngressDetailsReq
 
@@ -105,7 +102,6 @@ func (h *K8sIngressHandler) GetIngressDetails(ctx *gin.Context) {
 	})
 }
 
-// GetIngressYaml 获取Ingress的YAML配置
 func (h *K8sIngressHandler) GetIngressYaml(ctx *gin.Context) {
 	var req model.GetIngressYamlReq
 
@@ -136,7 +132,6 @@ func (h *K8sIngressHandler) GetIngressYaml(ctx *gin.Context) {
 	})
 }
 
-// CreateIngress 创建Ingress
 func (h *K8sIngressHandler) CreateIngress(ctx *gin.Context) {
 	var req model.CreateIngressReq
 
@@ -153,7 +148,6 @@ func (h *K8sIngressHandler) CreateIngress(ctx *gin.Context) {
 	})
 }
 
-// CreateIngressByYaml 通过YAML创建Ingress
 func (h *K8sIngressHandler) CreateIngressByYaml(ctx *gin.Context) {
 	var req model.CreateIngressByYamlReq
 
@@ -170,7 +164,6 @@ func (h *K8sIngressHandler) CreateIngressByYaml(ctx *gin.Context) {
 	})
 }
 
-// UpdateIngress 更新Ingress
 func (h *K8sIngressHandler) UpdateIngress(ctx *gin.Context) {
 	var req model.UpdateIngressReq
 
@@ -201,7 +194,6 @@ func (h *K8sIngressHandler) UpdateIngress(ctx *gin.Context) {
 	})
 }
 
-// UpdateIngressByYaml 通过YAML更新Ingress
 func (h *K8sIngressHandler) UpdateIngressByYaml(ctx *gin.Context) {
 	var req model.UpdateIngressByYamlReq
 
@@ -232,7 +224,6 @@ func (h *K8sIngressHandler) UpdateIngressByYaml(ctx *gin.Context) {
 	})
 }
 
-// DeleteIngress 删除Ingress
 func (h *K8sIngressHandler) DeleteIngress(ctx *gin.Context) {
 	var req model.DeleteIngressReq
 

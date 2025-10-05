@@ -35,9 +35,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ConfigMapManager ConfigMap管理器接口
 type ConfigMapManager interface {
-	// 基础CRUD操作
 	GetConfigMap(ctx context.Context, clusterID int, namespace, name string) (*corev1.ConfigMap, error)
 	ListConfigMaps(ctx context.Context, clusterID int, namespace string) (*corev1.ConfigMapList, error)
 	CreateConfigMap(ctx context.Context, clusterID int, configMap *corev1.ConfigMap) (*corev1.ConfigMap, error)
@@ -62,7 +60,6 @@ func NewConfigMapManager(client client.K8sClient, logger *zap.Logger) ConfigMapM
 	}
 }
 
-// GetConfigMap 获取单个ConfigMap
 func (m *configMapManager) GetConfigMap(ctx context.Context, clusterID int, namespace, name string) (*corev1.ConfigMap, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -80,7 +77,6 @@ func (m *configMapManager) GetConfigMap(ctx context.Context, clusterID int, name
 	return configMap, nil
 }
 
-// ListConfigMaps 获取ConfigMap列表
 func (m *configMapManager) ListConfigMaps(ctx context.Context, clusterID int, namespace string) (*corev1.ConfigMapList, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -98,7 +94,6 @@ func (m *configMapManager) ListConfigMaps(ctx context.Context, clusterID int, na
 	return configMaps, nil
 }
 
-// CreateConfigMap 创建ConfigMap
 func (m *configMapManager) CreateConfigMap(ctx context.Context, clusterID int, configMap *corev1.ConfigMap) (*corev1.ConfigMap, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -118,7 +113,6 @@ func (m *configMapManager) CreateConfigMap(ctx context.Context, clusterID int, c
 	return createdConfigMap, nil
 }
 
-// UpdateConfigMap 更新ConfigMap
 func (m *configMapManager) UpdateConfigMap(ctx context.Context, clusterID int, configMap *corev1.ConfigMap) (*corev1.ConfigMap, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -138,7 +132,6 @@ func (m *configMapManager) UpdateConfigMap(ctx context.Context, clusterID int, c
 	return updatedConfigMap, nil
 }
 
-// DeleteConfigMap 删除ConfigMap
 func (m *configMapManager) DeleteConfigMap(ctx context.Context, clusterID int, namespace, name string, options metav1.DeleteOptions) error {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -158,7 +151,6 @@ func (m *configMapManager) DeleteConfigMap(ctx context.Context, clusterID int, n
 	return nil
 }
 
-// ListConfigMapsBySelector 根据选择器获取ConfigMap列表
 func (m *configMapManager) ListConfigMapsBySelector(ctx context.Context, clusterID int, namespace string, selector string) (*corev1.ConfigMapList, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {

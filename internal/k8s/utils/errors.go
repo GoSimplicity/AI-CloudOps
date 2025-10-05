@@ -63,7 +63,6 @@ func NewK8sError(operation, resource, name, namespace string, clusterID int, err
 	}
 }
 
-// ValidateRequest 通用请求验证
 func ValidateRequest(req interface{}) error {
 	if req == nil {
 		return fmt.Errorf("request cannot be empty")
@@ -71,7 +70,6 @@ func ValidateRequest(req interface{}) error {
 	return nil
 }
 
-// ValidateClusterID 验证集群ID
 func ValidateClusterID(clusterID int) error {
 	if clusterID <= 0 {
 		return fmt.Errorf("cluster ID must be positive, got %d", clusterID)
@@ -79,7 +77,6 @@ func ValidateClusterID(clusterID int) error {
 	return nil
 }
 
-// ValidateName 验证资源名称
 func ValidateName(name string, resource string) error {
 	if name == "" {
 		return fmt.Errorf("%s name cannot be empty", resource)
@@ -87,7 +84,6 @@ func ValidateName(name string, resource string) error {
 	return nil
 }
 
-// ValidateNamespace 验证命名空间
 func ValidateNamespace(namespace string) error {
 	if namespace == "" {
 		return fmt.Errorf("namespace cannot be empty")
@@ -121,7 +117,6 @@ func IsForbiddenError(err error) bool {
 	return errors.IsForbidden(err)
 }
 
-// HandleK8sError 处理Kubernetes API错误
 func HandleK8sError(err error, operation, resource, name, namespace string, clusterID int) error {
 	if err == nil {
 		return nil

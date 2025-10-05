@@ -12,21 +12,18 @@ import (
 
 // PVManager PersistentVolume 资源管理器
 type PVManager interface {
-	// 基础 CRUD 操作
 	CreatePV(ctx context.Context, clusterID int, pv *corev1.PersistentVolume) error
 	GetPV(ctx context.Context, clusterID int, name string) (*corev1.PersistentVolume, error)
 	GetPVList(ctx context.Context, clusterID int, listOptions metav1.ListOptions) (*corev1.PersistentVolumeList, error)
 	UpdatePV(ctx context.Context, clusterID int, pv *corev1.PersistentVolume) error
 	DeletePV(ctx context.Context, clusterID int, name string, deleteOptions metav1.DeleteOptions) error
 
-	// 批量操作
 	BatchDeletePVs(ctx context.Context, clusterID int, pvNames []string) error
 
 	// 高级功能
 	PatchPV(ctx context.Context, clusterID int, name string, data []byte, patchType string) (*corev1.PersistentVolume, error)
 	UpdatePVStatus(ctx context.Context, clusterID int, pv *corev1.PersistentVolume) error
 
-	// PV 特定操作
 	GetAvailablePVs(ctx context.Context, clusterID int) (*corev1.PersistentVolumeList, error)
 	GetPVByStorageClass(ctx context.Context, clusterID int, storageClass string) (*corev1.PersistentVolumeList, error)
 	ReclaimPV(ctx context.Context, clusterID int, name string) error
@@ -45,7 +42,6 @@ func NewPVManager(logger *zap.Logger, client client.K8sClient) PVManager {
 	}
 }
 
-// CreatePV 创建PersistentVolume
 func (m *pvManager) CreatePV(ctx context.Context, clusterID int, pv *corev1.PersistentVolume) error {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -71,7 +67,6 @@ func (m *pvManager) CreatePV(ctx context.Context, clusterID int, pv *corev1.Pers
 	return nil
 }
 
-// GetPV 获取指定PersistentVolume
 func (m *pvManager) GetPV(ctx context.Context, clusterID int, name string) (*corev1.PersistentVolume, error) {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -93,7 +88,6 @@ func (m *pvManager) GetPV(ctx context.Context, clusterID int, name string) (*cor
 	return pv, nil
 }
 
-// GetPVList 获取PersistentVolume列表
 func (m *pvManager) GetPVList(ctx context.Context, clusterID int, listOptions metav1.ListOptions) (*corev1.PersistentVolumeList, error) {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -118,7 +112,6 @@ func (m *pvManager) GetPVList(ctx context.Context, clusterID int, listOptions me
 	return pvList, nil
 }
 
-// UpdatePV 更新PersistentVolume
 func (m *pvManager) UpdatePV(ctx context.Context, clusterID int, pv *corev1.PersistentVolume) error {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -144,7 +137,6 @@ func (m *pvManager) UpdatePV(ctx context.Context, clusterID int, pv *corev1.Pers
 	return nil
 }
 
-// DeletePV 删除PersistentVolume
 func (m *pvManager) DeletePV(ctx context.Context, clusterID int, name string, deleteOptions metav1.DeleteOptions) error {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -222,7 +214,6 @@ func (m *pvManager) PatchPV(ctx context.Context, clusterID int, name string, dat
 		return nil, err
 	}
 
-	// 转换 patch 类型
 	pt := types.PatchType(patchType)
 	pv, err := kubeClient.CoreV1().PersistentVolumes().Patch(ctx, name, pt, data, metav1.PatchOptions{})
 	if err != nil {
@@ -241,7 +232,6 @@ func (m *pvManager) PatchPV(ctx context.Context, clusterID int, name string, dat
 	return pv, nil
 }
 
-// UpdatePVStatus 更新PersistentVolume状态
 func (m *pvManager) UpdatePVStatus(ctx context.Context, clusterID int, pv *corev1.PersistentVolume) error {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -267,7 +257,6 @@ func (m *pvManager) UpdatePVStatus(ctx context.Context, clusterID int, pv *corev
 	return nil
 }
 
-// GetAvailablePVs 获取可用的PersistentVolume
 func (m *pvManager) GetAvailablePVs(ctx context.Context, clusterID int) (*corev1.PersistentVolumeList, error) {
 	listOptions := metav1.ListOptions{
 		FieldSelector: "status.phase=Available",
@@ -276,7 +265,6 @@ func (m *pvManager) GetAvailablePVs(ctx context.Context, clusterID int) (*corev1
 	return m.GetPVList(ctx, clusterID, listOptions)
 }
 
-// GetPVByStorageClass 根据存储类获取PersistentVolume
 func (m *pvManager) GetPVByStorageClass(ctx context.Context, clusterID int, storageClass string) (*corev1.PersistentVolumeList, error) {
 	pvList, err := m.GetPVList(ctx, clusterID, metav1.ListOptions{})
 	if err != nil {

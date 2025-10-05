@@ -54,7 +54,6 @@ func NewYamlTemplateService(manager manager.YamlManager, logger *zap.Logger) Yam
 	}
 }
 
-// GetYamlTemplateList 获取 YAML 模板列表
 func (s *yamlTemplateService) GetYamlTemplateList(ctx context.Context, req *model.YamlTemplateListReq) (model.ListResp[*model.K8sYamlTemplate], error) {
 	list, err := s.manager.GetYamlTemplateList(ctx, req)
 	if err != nil {
@@ -66,7 +65,6 @@ func (s *yamlTemplateService) GetYamlTemplateList(ctx context.Context, req *mode
 	}, nil
 }
 
-// CreateYamlTemplate 创建 YAML 模板
 func (s *yamlTemplateService) CreateYamlTemplate(ctx context.Context, req *model.YamlTemplateCreateReq) error {
 	template := &model.K8sYamlTemplate{
 		Name:      req.Name,
@@ -77,7 +75,6 @@ func (s *yamlTemplateService) CreateYamlTemplate(ctx context.Context, req *model
 	return s.manager.CreateYamlTemplate(ctx, template)
 }
 
-// CheckYamlTemplate 检查 YAML 模板是否正确
 func (s *yamlTemplateService) CheckYamlTemplate(ctx context.Context, req *model.YamlTemplateCheckReq) error {
 	template := &model.K8sYamlTemplate{
 		Name:      req.Name,
@@ -87,7 +84,6 @@ func (s *yamlTemplateService) CheckYamlTemplate(ctx context.Context, req *model.
 	return s.manager.CheckYamlTemplate(ctx, template)
 }
 
-// UpdateYamlTemplate 更新 YAML 模板
 func (s *yamlTemplateService) UpdateYamlTemplate(ctx context.Context, req *model.YamlTemplateUpdateReq) error {
 	template := &model.K8sYamlTemplate{
 		Model:     model.Model{ID: req.ID},
@@ -99,7 +95,6 @@ func (s *yamlTemplateService) UpdateYamlTemplate(ctx context.Context, req *model
 	return s.manager.UpdateYamlTemplate(ctx, template)
 }
 
-// DeleteYamlTemplate 删除 YAML 模板
 func (s *yamlTemplateService) DeleteYamlTemplate(ctx context.Context, req *model.YamlTemplateDeleteReq) error {
 	return s.manager.DeleteYamlTemplate(ctx, req.ID, req.ClusterID)
 }

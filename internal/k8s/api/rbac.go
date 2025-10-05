@@ -71,7 +71,6 @@ func (h *K8sRBACHandler) AnalyzeRBACPermissions(ctx *gin.Context) {
 	})
 }
 
-// CheckRBACPermission 检查RBAC权限
 func (h *K8sRBACHandler) CheckRBACPermission(ctx *gin.Context) {
 	var req model.CheckRBACPermissionReq
 

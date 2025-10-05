@@ -41,7 +41,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 )
 
-// BuildServiceAccountResponse 构建ServiceAccount响应结构
 func BuildServiceAccountResponse(sa *corev1.ServiceAccount, clusterID int) *model.K8sServiceAccount {
 	if sa == nil {
 		return nil
@@ -61,7 +60,6 @@ func BuildServiceAccountResponse(sa *corev1.ServiceAccount, clusterID int) *mode
 		RawServiceAccount:            sa,
 	}
 
-	// 转换Secrets列表
 	if len(sa.Secrets) > 0 {
 		response.Secrets = make([]string, 0, len(sa.Secrets))
 		for _, secret := range sa.Secrets {
@@ -69,7 +67,6 @@ func BuildServiceAccountResponse(sa *corev1.ServiceAccount, clusterID int) *mode
 		}
 	}
 
-	// 转换ImagePullSecrets列表
 	if len(sa.ImagePullSecrets) > 0 {
 		response.ImagePullSecrets = make([]string, 0, len(sa.ImagePullSecrets))
 		for _, secret := range sa.ImagePullSecrets {
@@ -80,11 +77,8 @@ func BuildServiceAccountResponse(sa *corev1.ServiceAccount, clusterID int) *mode
 	return response
 }
 
-// BuildServiceAccountListOptions 构建ServiceAccount列表选项
 func BuildServiceAccountListOptions(req *model.GetServiceAccountListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
-
-	// 构建选项的逻辑可以在这里添加
 
 	return options
 }
@@ -112,7 +106,6 @@ func PaginateK8sServiceAccounts(serviceAccounts []corev1.ServiceAccount, page, p
 	return serviceAccounts[start:end]
 }
 
-// ConvertToK8sServiceAccount 将内部模型转换为Kubernetes ServiceAccount对象
 func ConvertToK8sServiceAccount(req *model.CreateServiceAccountReq) *corev1.ServiceAccount {
 	sa := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -144,7 +137,6 @@ func ConvertToK8sServiceAccount(req *model.CreateServiceAccountReq) *corev1.Serv
 	return sa
 }
 
-// BuildK8sServiceAccount 构建K8s ServiceAccount对象
 func BuildK8sServiceAccount(name, namespace string, labels, annotations model.KeyValueList) *corev1.ServiceAccount {
 	return &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -185,7 +177,6 @@ func YAMLToServiceAccount(yamlStr string) (*corev1.ServiceAccount, error) {
 	return &serviceAccount, nil
 }
 
-// GetServiceAccountToken 使用 TokenRequest API 获取 ServiceAccount 的短期令牌
 func GetServiceAccountToken(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, name string) (*model.ServiceAccountTokenInfo, error) {
 	if kubeClient == nil {
 		return nil, fmt.Errorf("kubeClient 不能为空")
@@ -220,7 +211,6 @@ func GetServiceAccountToken(ctx context.Context, kubeClient *kubernetes.Clientse
 	return resp, nil
 }
 
-// CreateServiceAccountToken 为 ServiceAccount 创建指定过期时间的令牌
 func CreateServiceAccountToken(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, name string, expiryTime *int64) (*model.ServiceAccountTokenInfo, error) {
 	if kubeClient == nil {
 		return nil, fmt.Errorf("kubeClient 不能为空")

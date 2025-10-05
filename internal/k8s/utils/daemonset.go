@@ -40,7 +40,6 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// BuildK8sDaemonSet 构建详细的 K8sDaemonSet 模型
 func BuildK8sDaemonSet(ctx context.Context, clusterID int, daemonSet appsv1.DaemonSet) (*model.K8sDaemonSet, error) {
 	if clusterID <= 0 {
 		return nil, fmt.Errorf("无效的集群ID: %d", clusterID)
@@ -131,7 +130,6 @@ func getDaemonSetStatus(daemonSet appsv1.DaemonSet) model.K8sDaemonSetStatus {
 	return model.K8sDaemonSetStatusError
 }
 
-// BuildDaemonSetFromRequest 从请求构建DaemonSet对象
 func BuildDaemonSetFromRequest(req *model.CreateDaemonSetReq) (*appsv1.DaemonSet, error) {
 	if req == nil {
 		return nil, fmt.Errorf("请求不能为空")
@@ -142,7 +140,6 @@ func BuildDaemonSetFromRequest(req *model.CreateDaemonSetReq) (*appsv1.DaemonSet
 		return YAMLToDaemonSet(req.YAML)
 	}
 
-	// 构建基础DaemonSet
 	daemonSet := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        req.Name,
@@ -163,7 +160,6 @@ func BuildDaemonSetFromRequest(req *model.CreateDaemonSetReq) (*appsv1.DaemonSet
 		},
 	}
 
-	// 构建容器
 	var containers []corev1.Container
 	for i, image := range req.Images {
 		containerName := fmt.Sprintf("container-%d", i)
@@ -221,7 +217,6 @@ func DaemonSetToYAML(daemonSet *appsv1.DaemonSet) (string, error) {
 	return string(yamlBytes), nil
 }
 
-// ValidateDaemonSet 验证DaemonSet配置
 func ValidateDaemonSet(daemonSet *appsv1.DaemonSet) error {
 	if daemonSet == nil {
 		return fmt.Errorf("DaemonSet对象不能为空")
@@ -251,7 +246,6 @@ func ValidateDaemonSet(daemonSet *appsv1.DaemonSet) error {
 	return nil
 }
 
-// BuildDaemonSetListOptions 构建DaemonSet列表查询选项
 func BuildDaemonSetListOptions(req *model.GetDaemonSetListReq) metav1.ListOptions {
 	return metav1.ListOptions{}
 }
@@ -281,7 +275,6 @@ func PaginateK8sDaemonSets(daemonSets []*model.K8sDaemonSet, page, size int) ([]
 	return daemonSets[start:end], total
 }
 
-// BuildK8sDaemonSetHistory 构建DaemonSet历史版本模型
 func BuildK8sDaemonSetHistory(revision appsv1.ControllerRevision) (*model.K8sDaemonSetHistory, error) {
 	return &model.K8sDaemonSetHistory{
 		Revision: revision.Revision,
@@ -340,7 +333,6 @@ func ExtractDaemonSetFromRevision(revision *appsv1.ControllerRevision, daemonSet
 	return nil
 }
 
-// GetChangeReason 从annotations中获取变更原因
 func GetChangeReason(annotations map[string]string) string {
 	if annotations == nil {
 		return ""
@@ -401,7 +393,6 @@ func getDaemonSetStatusString(status model.K8sDaemonSetStatus) string {
 	}
 }
 
-// BuildDaemonSetFromYaml 从YAML构建DaemonSet对象
 func BuildDaemonSetFromYaml(req *model.CreateDaemonSetByYamlReq) (*appsv1.DaemonSet, error) {
 	if req == nil {
 		return nil, fmt.Errorf("请求不能为空")
@@ -427,7 +418,6 @@ func BuildDaemonSetFromYaml(req *model.CreateDaemonSetByYamlReq) (*appsv1.Daemon
 	return daemonSet, nil
 }
 
-// BuildDaemonSetFromYamlForUpdate 构建用于更新的DaemonSet对象
 func BuildDaemonSetFromYamlForUpdate(req *model.UpdateDaemonSetByYamlReq) (*appsv1.DaemonSet, error) {
 	if req == nil {
 		return nil, fmt.Errorf("请求不能为空")
@@ -461,7 +451,6 @@ func BuildDaemonSetFromYamlForUpdate(req *model.UpdateDaemonSetByYamlReq) (*apps
 	return daemonSet, nil
 }
 
-// ConvertToK8sDaemonSet 将 appsv1.DaemonSet 转换为 model.K8sDaemonSet
 func ConvertToK8sDaemonSet(daemonSet *appsv1.DaemonSet) *model.K8sDaemonSet {
 	if daemonSet == nil {
 		return nil

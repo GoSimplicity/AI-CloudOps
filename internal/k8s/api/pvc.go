@@ -43,16 +43,16 @@ func NewK8sPVCHandler(pvcService service.PVCService) *K8sPVCHandler {
 func (h *K8sPVCHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/pvc/:cluster_id/list", h.GetPVCList)                              // 获取PVC列表
-		k8sGroup.GET("/pvc/:cluster_id/:namespace/:name/detail", h.GetPVCDetails)        // 获取PVC详情
-		k8sGroup.GET("/pvc/:cluster_id/:namespace/:name/detail/yaml", h.GetPVCYaml)      // 获取PVC YAML
-		k8sGroup.POST("/pvc/:cluster_id/create", h.CreatePVC)                            // 创建PVC
-		k8sGroup.POST("/pvc/:cluster_id/create/yaml", h.CreatePVCByYaml)                 // 通过YAML创建PVC
-		k8sGroup.PUT("/pvc/:cluster_id/:namespace/:name/update", h.UpdatePVC)            // 更新PVC
-		k8sGroup.PUT("/pvc/:cluster_id/:namespace/:name/update/yaml", h.UpdatePVCByYaml) // 通过YAML更新PVC
-		k8sGroup.DELETE("/pvc/:cluster_id/:namespace/:name/delete", h.DeletePVC)         // 删除PVC
-		k8sGroup.POST("/pvc/:cluster_id/:namespace/:name/expand", h.ExpandPVC)           // 扩容PVC
-		k8sGroup.GET("/pvc/:cluster_id/:namespace/:name/pods", h.GetPVCPods)             // 获取使用PVC的Pod列表
+		k8sGroup.GET("/pvc/:cluster_id/list", h.GetPVCList)
+		k8sGroup.GET("/pvc/:cluster_id/:namespace/:name/detail", h.GetPVCDetails)
+		k8sGroup.GET("/pvc/:cluster_id/:namespace/:name/detail/yaml", h.GetPVCYaml)
+		k8sGroup.POST("/pvc/:cluster_id/create", h.CreatePVC)
+		k8sGroup.POST("/pvc/:cluster_id/create/yaml", h.CreatePVCByYaml)
+		k8sGroup.PUT("/pvc/:cluster_id/:namespace/:name/update", h.UpdatePVC)
+		k8sGroup.PUT("/pvc/:cluster_id/:namespace/:name/update/yaml", h.UpdatePVCByYaml)
+		k8sGroup.DELETE("/pvc/:cluster_id/:namespace/:name/delete", h.DeletePVC)
+		k8sGroup.POST("/pvc/:cluster_id/:namespace/:name/expand", h.ExpandPVC)
+		k8sGroup.GET("/pvc/:cluster_id/:namespace/:name/pods", h.GetPVCPods)
 	}
 }
 

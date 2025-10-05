@@ -34,16 +34,12 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// BuildRoleBindingListOptions 构建RoleBinding列表选项
 func BuildRoleBindingListOptions(req *model.GetRoleBindingListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
-
-	// 构建选项的逻辑可以在这里添加
 
 	return options
 }
 
-// ConvertToK8sRoleBinding 将内部模型转换为Kubernetes RoleBinding对象
 func ConvertToK8sRoleBinding(req *model.CreateRoleBindingReq) *rbacv1.RoleBinding {
 	return &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -84,7 +80,6 @@ func PaginateK8sRoleBindings(roleBindings []*model.K8sRoleBinding, page, pageSiz
 	return resp, nil
 }
 
-// BuildK8sRoleBinding 构建K8s RoleBinding对象
 func BuildK8sRoleBinding(name, namespace string, labels, annotations model.KeyValueList, roleRef model.RoleRef, subjects []model.Subject) *rbacv1.RoleBinding {
 	return &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -98,7 +93,6 @@ func BuildK8sRoleBinding(name, namespace string, labels, annotations model.KeyVa
 	}
 }
 
-// ConvertRoleRefToK8s 将模型RoleRef转换为K8s RoleRef
 func ConvertRoleRefToK8s(roleRef model.RoleRef) rbacv1.RoleRef {
 	return rbacv1.RoleRef{
 		APIGroup: roleRef.APIGroup,
@@ -107,7 +101,6 @@ func ConvertRoleRefToK8s(roleRef model.RoleRef) rbacv1.RoleRef {
 	}
 }
 
-// ConvertSubjectsToK8s 将模型Subject列表转换为K8s Subject列表
 func ConvertSubjectsToK8s(subjects []model.Subject) []rbacv1.Subject {
 	if len(subjects) == 0 {
 		return nil
@@ -155,7 +148,6 @@ func YAMLToRoleBinding(yamlStr string) (*rbacv1.RoleBinding, error) {
 	return &roleBinding, nil
 }
 
-// ConvertK8sRoleBindingToRoleBindingInfo 将K8s RoleBinding转换为RoleBindingInfo
 func ConvertK8sRoleBindingToRoleBindingInfo(roleBinding *rbacv1.RoleBinding, clusterID int) *model.K8sRoleBinding {
 	if roleBinding == nil {
 		return nil

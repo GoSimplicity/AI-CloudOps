@@ -57,7 +57,6 @@ func NewClusterDAO(db *gorm.DB, l *zap.Logger) ClusterDAO {
 	}
 }
 
-// GetClusterList 获取集群列表
 func (d *clusterDAO) GetClusterList(ctx context.Context, req *model.ListClustersReq) ([]*model.K8sCluster, int64, error) {
 	if req == nil {
 		d.l.Error("GetClusterList: 请求参数不能为空")
@@ -67,7 +66,6 @@ func (d *clusterDAO) GetClusterList(ctx context.Context, req *model.ListClusters
 	var clusters []*model.K8sCluster
 	var total int64
 
-	// 构建基础查询
 	query := d.db.WithContext(ctx).Model(&model.K8sCluster{})
 
 	// 应用过滤条件
@@ -117,7 +115,6 @@ func (d *clusterDAO) GetClusterList(ctx context.Context, req *model.ListClusters
 	return clusters, total, nil
 }
 
-// CreateCluster 创建集群
 func (d *clusterDAO) CreateCluster(ctx context.Context, cluster *model.K8sCluster) error {
 	if cluster == nil {
 		d.l.Error("CreateCluster: 集群信息不能为空")
@@ -140,7 +137,6 @@ func (d *clusterDAO) CreateCluster(ctx context.Context, cluster *model.K8sCluste
 	return nil
 }
 
-// UpdateCluster 更新集群
 func (d *clusterDAO) UpdateCluster(ctx context.Context, cluster *model.K8sCluster) error {
 	if cluster == nil {
 		d.l.Error("UpdateCluster: 集群信息不能为空")
@@ -157,7 +153,6 @@ func (d *clusterDAO) UpdateCluster(ctx context.Context, cluster *model.K8sCluste
 		return errors.New("集群名称不能为空")
 	}
 
-	// 使用普通更新而非事务，除非必要
 	result := d.db.WithContext(ctx).Model(cluster).Where("id = ?", cluster.ID).Updates(cluster)
 	if result.Error != nil {
 		d.l.Error("UpdateCluster: 更新集群失败",
@@ -175,7 +170,6 @@ func (d *clusterDAO) UpdateCluster(ctx context.Context, cluster *model.K8sCluste
 	return nil
 }
 
-// UpdateClusterStatus 更新集群状态
 func (d *clusterDAO) UpdateClusterStatus(ctx context.Context, id int, status model.ClusterStatus) error {
 	if id <= 0 {
 		d.l.Error("UpdateClusterStatus: 集群ID不有效", zap.Int("id", id))
@@ -207,7 +201,6 @@ func (d *clusterDAO) UpdateClusterStatus(ctx context.Context, id int, status mod
 	return nil
 }
 
-// DeleteCluster 删除集群
 func (d *clusterDAO) DeleteCluster(ctx context.Context, id int) error {
 	if id <= 0 {
 		d.l.Error("DeleteCluster: 集群ID不有效", zap.Int("id", id))
@@ -230,7 +223,6 @@ func (d *clusterDAO) DeleteCluster(ctx context.Context, id int) error {
 	return nil
 }
 
-// GetClusterByID 根据ID获取集群
 func (d *clusterDAO) GetClusterByID(ctx context.Context, id int) (*model.K8sCluster, error) {
 	if id <= 0 {
 		d.l.Error("GetClusterByID: 集群ID不有效", zap.Int("id", id))
@@ -252,7 +244,6 @@ func (d *clusterDAO) GetClusterByID(ctx context.Context, id int) (*model.K8sClus
 	return &cluster, nil
 }
 
-// GetClusterByName 根据名称获取集群
 func (d *clusterDAO) GetClusterByName(ctx context.Context, name string) (*model.K8sCluster, error) {
 	if name == "" {
 		d.l.Error("GetClusterByName: 集群名称不能为空")

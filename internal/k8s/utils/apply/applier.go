@@ -128,7 +128,6 @@ func (a *applier) ApplyResourceOne(info *resource.Info) error {
 		return info.Refresh(obj, true)
 	}
 
-	// 检查 last-applied annotation
 	metadata, _ := meta.Accessor(info.Object)
 	annotationMap := metadata.GetAnnotations()
 

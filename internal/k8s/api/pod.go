@@ -48,7 +48,6 @@ func NewK8sPodHandler(podService service.PodService) *K8sPodHandler {
 func (h *K8sPodHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		// Pod相关接口
 		k8sGroup.GET("/pod/:cluster_id/list", h.GetPodList)
 		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/detail", h.GetPodDetails)
 		k8sGroup.GET("/pod/:cluster_id/:namespace/:name/detail/yaml", h.GetPodYaml)
@@ -66,7 +65,6 @@ func (h *K8sPodHandler) RegisterRouters(server *gin.Engine) {
 	}
 }
 
-// GetPodDetails 获取Pod详情
 func (h *K8sPodHandler) GetPodDetails(ctx *gin.Context) {
 	var req model.GetPodDetailsReq
 
@@ -97,7 +95,6 @@ func (h *K8sPodHandler) GetPodDetails(ctx *gin.Context) {
 	})
 }
 
-// GetPodList 获取Pod列表
 func (h *K8sPodHandler) GetPodList(ctx *gin.Context) {
 	var req model.GetPodListReq
 
@@ -114,11 +111,9 @@ func (h *K8sPodHandler) GetPodList(ctx *gin.Context) {
 	})
 }
 
-// GetPodContainers 获取Pod容器列表
 func (h *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
 	var req model.GetPodContainersReq
 
-	// 绑定路径参数
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, "参数绑定失败: "+err.Error())
 		return
@@ -129,37 +124,33 @@ func (h *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
 	})
 }
 
-// GetPodLogs 获取容器日志
 func (h *K8sPodHandler) GetPodLogs(ctx *gin.Context) {
 	var req model.GetPodLogsReq
 
-	// 绑定路径参数
 	if err := ctx.ShouldBindUri(&req); err != nil {
 		utils.BadRequestError(ctx, "参数绑定失败: "+err.Error())
 		return
 	}
 
-	// 绑定查询参数
 	if err := ctx.ShouldBindQuery(&req); err != nil {
 		utils.BadRequestError(ctx, "查询参数绑定失败: "+err.Error())
 		return
 	}
 
-	// 设置SSE响应头
+	// SSE (Server-Sent Events) 响应头配置
+	// 用于实现日志的实时流式推送，避免轮询带来的性能问题
 	ctx.Header("Content-Type", "text/event-stream")
 	ctx.Header("Cache-Control", "no-cache")
 	ctx.Header("Connection", "keep-alive")
 	ctx.Header("Access-Control-Allow-Origin", "*")
 	ctx.Header("Access-Control-Allow-Headers", "Cache-Control")
 
-	// 调用service层进行流式推送
 	if err := h.podService.GetPodLogs(ctx, &req); err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
 	}
 }
 
-// GetPodYaml 获取Pod的YAML配置
 func (h *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
 	var req model.GetPodYamlReq
 
@@ -190,7 +181,6 @@ func (h *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
 	})
 }
 
-// CreatePod 创建Pod
 func (h *K8sPodHandler) CreatePod(ctx *gin.Context) {
 	var req model.CreatePodReq
 
@@ -207,7 +197,6 @@ func (h *K8sPodHandler) CreatePod(ctx *gin.Context) {
 	})
 }
 
-// CreatePodByYaml 通过YAML创建Pod
 func (h *K8sPodHandler) CreatePodByYaml(ctx *gin.Context) {
 	var req model.CreatePodByYamlReq
 
@@ -224,7 +213,6 @@ func (h *K8sPodHandler) CreatePodByYaml(ctx *gin.Context) {
 	})
 }
 
-// UpdatePod 更新Pod
 func (h *K8sPodHandler) UpdatePod(ctx *gin.Context) {
 	var req model.UpdatePodReq
 
@@ -255,7 +243,6 @@ func (h *K8sPodHandler) UpdatePod(ctx *gin.Context) {
 	})
 }
 
-// UpdatePodByYaml 通过YAML更新Pod
 func (h *K8sPodHandler) UpdatePodByYaml(ctx *gin.Context) {
 	var req model.UpdatePodByYamlReq
 
@@ -286,7 +273,6 @@ func (h *K8sPodHandler) UpdatePodByYaml(ctx *gin.Context) {
 	})
 }
 
-// DeletePod 删除Pod
 func (h *K8sPodHandler) DeletePod(ctx *gin.Context) {
 	var req model.DeletePodReq
 
@@ -317,11 +303,9 @@ func (h *K8sPodHandler) DeletePod(ctx *gin.Context) {
 	})
 }
 
-// PodExec Pod终端连接
 func (h *K8sPodHandler) PodExec(ctx *gin.Context) {
 	var req model.PodExecReq
 
-	// 获取路径参数
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
 		utils.BadRequestError(ctx, "集群ID参数错误: "+err.Error())
@@ -346,10 +330,8 @@ func (h *K8sPodHandler) PodExec(ctx *gin.Context) {
 		return
 	}
 
-	// 获取shell类型
 	shell := ctx.DefaultQuery("shell", "sh")
 
-	// 参数验证
 	if clusterID <= 0 {
 		utils.BadRequestError(ctx, "集群ID必须大于0")
 		return
@@ -370,7 +352,7 @@ func (h *K8sPodHandler) PodExec(ctx *gin.Context) {
 		return
 	}
 
-	// 验证shell类型
+	// 安全性：只允许常见的安全shell，防止命令注入
 	validShells := []string{"sh", "bash", "zsh", "fish", "ash"}
 	isValidShell := false
 	for _, validShell := range validShells {
@@ -390,14 +372,12 @@ func (h *K8sPodHandler) PodExec(ctx *gin.Context) {
 	req.Container = container
 	req.Shell = shell
 
-	// 建立WebSocket连接
 	if err := h.podService.PodExec(ctx, &req); err != nil {
 		utils.BadRequestError(ctx, "建立终端连接失败: "+err.Error())
 		return
 	}
 }
 
-// PodPortForward Pod端口转发
 func (h *K8sPodHandler) PodPortForward(ctx *gin.Context) {
 	var req model.PodPortForwardReq
 
@@ -428,11 +408,9 @@ func (h *K8sPodHandler) PodPortForward(ctx *gin.Context) {
 	})
 }
 
-// PodFileUpload 上传文件到Pod
 func (h *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
 	var req model.PodFileUploadReq
 
-	// 获取路径参数
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
 		utils.BadRequestError(ctx, "集群ID参数错误: "+err.Error())
@@ -457,16 +435,14 @@ func (h *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
 		return
 	}
 
-	// 获取目标路径
 	filePath := ctx.Query("file_path")
 	if filePath == "" {
 		filePath = ctx.PostForm("file_path")
 	}
 	if filePath == "" {
-		filePath = "/tmp" // 默认路径
+		filePath = "/tmp"
 	}
 
-	// 参数验证
 	if clusterID <= 0 {
 		utils.BadRequestError(ctx, "集群ID必须大于0")
 		return
@@ -487,20 +463,13 @@ func (h *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
 		return
 	}
 
-	if filePath == "" {
-		utils.BadRequestError(ctx, "上传路径不能为空")
-		return
-	}
-
-	// 验证路径格式
 	if !isValidPath(filePath) {
 		utils.BadRequestError(ctx, "无效的文件路径格式")
 		return
 	}
 
-	// 检查是否有文件上传
 	if ctx.Request.MultipartForm == nil {
-		if err := ctx.Request.ParseMultipartForm(32 << 20); err != nil { // 32MB max
+		if err := ctx.Request.ParseMultipartForm(32 << 20); err != nil {
 			utils.BadRequestError(ctx, "解析上传文件失败: "+err.Error())
 			return
 		}
@@ -517,7 +486,6 @@ func (h *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
 	req.ContainerName = container
 	req.FilePath = filePath
 
-	// 调用文件上传服务
 	if err := h.podService.PodFileUpload(ctx, &req); err != nil {
 		utils.BadRequestError(ctx, "文件上传失败: "+err.Error())
 		return
@@ -526,11 +494,9 @@ func (h *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
 	utils.Success(ctx)
 }
 
-// PodFileDownload 从Pod下载文件
 func (h *K8sPodHandler) PodFileDownload(ctx *gin.Context) {
 	var req model.PodFileDownloadReq
 
-	// 获取路径参数
 	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
 		utils.BadRequestError(ctx, "集群ID参数错误: "+err.Error())
@@ -555,10 +521,8 @@ func (h *K8sPodHandler) PodFileDownload(ctx *gin.Context) {
 		return
 	}
 
-	// 获取文件路径
 	filePath := ctx.Query("file_path")
 
-	// 参数验证
 	if clusterID <= 0 {
 		utils.BadRequestError(ctx, "集群ID必须大于0")
 		return
@@ -584,7 +548,6 @@ func (h *K8sPodHandler) PodFileDownload(ctx *gin.Context) {
 		return
 	}
 
-	// 验证路径格式
 	if !isValidPath(filePath) {
 		utils.BadRequestError(ctx, "无效的文件路径格式")
 		return
@@ -596,29 +559,27 @@ func (h *K8sPodHandler) PodFileDownload(ctx *gin.Context) {
 	req.ContainerName = container
 	req.FilePath = filePath
 
-	// 调用文件下载服务
 	if err := h.podService.PodFileDownload(ctx, &req); err != nil {
 		utils.BadRequestError(ctx, "文件下载失败: "+err.Error())
 		return
 	}
 }
 
-// isValidPath 验证文件路径安全性
+// isValidPath 验证文件路径的安全性，防止路径遍历等安全攻击
+// 关键安全检查：
+// 1. 路径遍历攻击 (..)
+// 2. 注入攻击 (\n, \r)
+// 3. 空字节注入 (\x00)
+// 4. 缓冲区溢出 (长度限制)
+// 5. 用户主目录访问 (~)
 func isValidPath(path string) bool {
 	if path == "" {
 		return false
 	}
 
-	// 清理路径
 	cleanPath := filepath.Clean(path)
 
-	// 只检查最关键的安全问题
-	dangerousPatterns := []string{
-		"..",   // 路径遍历
-		"\n",   // 换行符
-		"\r",   // 回车符
-		"\x00", // 空字节
-	}
+	dangerousPatterns := []string{"..", "\n", "\r", "\x00"}
 
 	for _, pattern := range dangerousPatterns {
 		if strings.Contains(cleanPath, pattern) {
@@ -626,12 +587,10 @@ func isValidPath(path string) bool {
 		}
 	}
 
-	// 长度限制
 	if len(cleanPath) > 4096 {
 		return false
 	}
 
-	// 拒绝以某些特殊字符开头的路径
 	if strings.HasPrefix(cleanPath, "~") {
 		return false
 	}

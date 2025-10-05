@@ -41,7 +41,6 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// BuildK8sStatefulSet 构建详细的 K8sStatefulSet 模型
 func BuildK8sStatefulSet(ctx context.Context, clusterID int, statefulSet appsv1.StatefulSet) (*model.K8sStatefulSet, error) {
 	if clusterID <= 0 {
 		return nil, fmt.Errorf("无效的集群ID: %d", clusterID)
@@ -144,7 +143,6 @@ func getStatefulSetStatus(statefulSet appsv1.StatefulSet) model.K8sStatefulSetSt
 	return model.K8sStatefulSetStatusError
 }
 
-// BuildStatefulSetFromRequest 从请求构建StatefulSet对象
 func BuildStatefulSetFromRequest(req *model.CreateStatefulSetReq) (*appsv1.StatefulSet, error) {
 	if req == nil {
 		return nil, fmt.Errorf("请求不能为空")
@@ -155,7 +153,6 @@ func BuildStatefulSetFromRequest(req *model.CreateStatefulSetReq) (*appsv1.State
 		return YAMLToStatefulSet(req.YAML)
 	}
 
-	// 构建基础StatefulSet
 	statefulSet := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        req.Name,
@@ -177,7 +174,6 @@ func BuildStatefulSetFromRequest(req *model.CreateStatefulSetReq) (*appsv1.State
 		},
 	}
 
-	// 构建容器
 	var containers []corev1.Container
 	for i, image := range req.Images {
 		containerName := fmt.Sprintf("container-%d", i)
@@ -242,7 +238,6 @@ func StatefulSetToYAML(statefulSet *appsv1.StatefulSet) (string, error) {
 	return string(yamlBytes), nil
 }
 
-// ValidateStatefulSet 验证StatefulSet配置
 func ValidateStatefulSet(statefulSet *appsv1.StatefulSet) error {
 	if statefulSet == nil {
 		return fmt.Errorf("StatefulSet对象不能为空")
@@ -276,11 +271,9 @@ func ValidateStatefulSet(statefulSet *appsv1.StatefulSet) error {
 	return nil
 }
 
-// BuildStatefulSetListOptions 构建StatefulSet列表查询选项
 func BuildStatefulSetListOptions(req *model.GetStatefulSetListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
 
-	// 构建标签选择器
 	var labelSelectors []string
 	for key, value := range req.Labels {
 		labelSelectors = append(labelSelectors, fmt.Sprintf("%s=%s", key, value))
@@ -292,7 +285,6 @@ func BuildStatefulSetListOptions(req *model.GetStatefulSetListReq) metav1.ListOp
 	return options
 }
 
-// GetStatefulSetPods 获取StatefulSet关联的Pod列表
 func GetStatefulSetPods(ctx context.Context, kubeClient *kubernetes.Clientset, namespace, statefulSetName string) ([]*model.K8sPod, int64, error) {
 	// 首先获取StatefulSet的标签选择器
 	statefulSet, err := kubeClient.AppsV1().StatefulSets(namespace).Get(ctx, statefulSetName, metav1.GetOptions{})
@@ -300,7 +292,6 @@ func GetStatefulSetPods(ctx context.Context, kubeClient *kubernetes.Clientset, n
 		return nil, 0, fmt.Errorf("获取StatefulSet信息失败: %w", err)
 	}
 
-	// 构建标签选择器
 	var labelSelectors []string
 	for key, value := range statefulSet.Spec.Selector.MatchLabels {
 		labelSelectors = append(labelSelectors, fmt.Sprintf("%s=%s", key, value))
@@ -318,7 +309,7 @@ func GetStatefulSetPods(ctx context.Context, kubeClient *kubernetes.Clientset, n
 	total := int64(len(podList.Items))
 	var pods []*model.K8sPod
 	for _, pod := range podList.Items {
-		// 转换标签和注解为JSON字符串
+
 		labelsJSON, _ := json.Marshal(pod.Labels)
 		annotationsJSON, _ := json.Marshal(pod.Annotations)
 
@@ -367,7 +358,6 @@ func FilterStatefulSetsByStatus(statefulSets []appsv1.StatefulSet, status string
 	return filtered
 }
 
-// BuildStatefulSetListPagination 构建StatefulSet列表分页逻辑
 func BuildStatefulSetListPagination(statefulSets []appsv1.StatefulSet, page, size int) ([]appsv1.StatefulSet, int64) {
 	total := int64(len(statefulSets))
 	if total == 0 {
@@ -427,7 +417,6 @@ func IsStatefulSetReady(statefulSet appsv1.StatefulSet) bool {
 		statefulSet.Status.UpdatedReplicas == replicas
 }
 
-// GetStatefulSetAge 获取StatefulSet年龄
 func GetStatefulSetAge(statefulSet appsv1.StatefulSet) string {
 	age := time.Since(statefulSet.CreationTimestamp.Time)
 	days := int(age.Hours() / 24)
@@ -442,7 +431,6 @@ func GetStatefulSetAge(statefulSet appsv1.StatefulSet) string {
 	return fmt.Sprintf("%dm", minutes)
 }
 
-// BuildK8sStatefulSetHistory 构建StatefulSet历史版本模型
 func BuildK8sStatefulSetHistory(revision appsv1.ControllerRevision) (*model.K8sStatefulSetHistory, error) {
 	return &model.K8sStatefulSetHistory{
 		Revision: revision.Revision,
@@ -511,7 +499,6 @@ func SortStatefulSetsByCreationTime(statefulSets []*model.K8sStatefulSet, desc b
 	})
 }
 
-// BuildStatefulSetFromYaml 从YAML构建StatefulSet对象
 func BuildStatefulSetFromYaml(req *model.CreateStatefulSetByYamlReq) (*appsv1.StatefulSet, error) {
 	if req == nil {
 		return nil, fmt.Errorf("请求不能为空")
@@ -537,7 +524,6 @@ func BuildStatefulSetFromYaml(req *model.CreateStatefulSetByYamlReq) (*appsv1.St
 	return statefulSet, nil
 }
 
-// BuildStatefulSetFromYamlForUpdate 构建用于更新的StatefulSet对象
 func BuildStatefulSetFromYamlForUpdate(req *model.UpdateStatefulSetByYamlReq) (*appsv1.StatefulSet, error) {
 	if req == nil {
 		return nil, fmt.Errorf("请求不能为空")
@@ -571,7 +557,6 @@ func BuildStatefulSetFromYamlForUpdate(req *model.UpdateStatefulSetByYamlReq) (*
 	return statefulSet, nil
 }
 
-// ConvertToK8sStatefulSet 将 appsv1.StatefulSet 转换为 model.K8sStatefulSet
 func ConvertToK8sStatefulSet(statefulSet *appsv1.StatefulSet) *model.K8sStatefulSet {
 	if statefulSet == nil {
 		return nil

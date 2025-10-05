@@ -65,10 +65,8 @@ func (pfs *PodFileStreamPipe) startFileDownload() error {
 	// 创建管道
 	pfs.readerStream, pfs.writerStream = io.Pipe()
 
-	// 构建tar命令，直接打包文件或目录
 	cmd := fmt.Sprintf("tar cf - '%s' 2>/dev/null || echo 'Error: file not found'", pfs.filePath)
 
-	// 构建exec请求
 	req := pfs.client.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(pfs.podName).
@@ -120,7 +118,6 @@ func (pfs *PodFileStreamPipe) executeDownload(exec remotecommand.Executor) {
 	}
 }
 
-// Read 实现io.Reader接口
 func (pfs *PodFileStreamPipe) Read(p []byte) (int, error) {
 	return pfs.readerStream.Read(p)
 }

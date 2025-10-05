@@ -14,7 +14,6 @@ import (
 
 // ServiceAccountManager ServiceAccount 资源管理器
 type ServiceAccountManager interface {
-	// 基础 CRUD 操作
 	CreateServiceAccount(ctx context.Context, clusterID int, namespace string, sa *corev1.ServiceAccount) error
 	GetServiceAccount(ctx context.Context, clusterID int, namespace, name string) (*corev1.ServiceAccount, error)
 	GetServiceAccountList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*corev1.ServiceAccountList, error)
@@ -24,7 +23,6 @@ type ServiceAccountManager interface {
 	// 高级功能
 	PatchServiceAccount(ctx context.Context, clusterID int, namespace, name string, data []byte, patchType string) (*corev1.ServiceAccount, error)
 
-	// ServiceAccount 特定操作
 	GetServiceAccountSecrets(ctx context.Context, clusterID int, namespace, name string) ([]corev1.Secret, error)
 	GetServiceAccountTokens(ctx context.Context, clusterID int, namespace, name string) ([]string, error)
 	CreateServiceAccountToken(ctx context.Context, clusterID int, namespace, name string, tokenRequest *authv1.TokenRequest) (*authv1.TokenRequest, error)
@@ -45,7 +43,6 @@ func NewServiceAccountManager(logger *zap.Logger, client client.K8sClient) Servi
 	}
 }
 
-// CreateServiceAccount 创建ServiceAccount
 func (m *serviceAccountManager) CreateServiceAccount(ctx context.Context, clusterID int, namespace string, sa *corev1.ServiceAccount) error {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -73,7 +70,6 @@ func (m *serviceAccountManager) CreateServiceAccount(ctx context.Context, cluste
 	return nil
 }
 
-// GetServiceAccount 获取指定ServiceAccount
 func (m *serviceAccountManager) GetServiceAccount(ctx context.Context, clusterID int, namespace, name string) (*corev1.ServiceAccount, error) {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -96,7 +92,6 @@ func (m *serviceAccountManager) GetServiceAccount(ctx context.Context, clusterID
 	return sa, nil
 }
 
-// GetServiceAccountList 获取ServiceAccount列表
 func (m *serviceAccountManager) GetServiceAccountList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*corev1.ServiceAccountList, error) {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -123,7 +118,6 @@ func (m *serviceAccountManager) GetServiceAccountList(ctx context.Context, clust
 	return saList, nil
 }
 
-// UpdateServiceAccount 更新ServiceAccount
 func (m *serviceAccountManager) UpdateServiceAccount(ctx context.Context, clusterID int, namespace string, sa *corev1.ServiceAccount) error {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -151,7 +145,6 @@ func (m *serviceAccountManager) UpdateServiceAccount(ctx context.Context, cluste
 	return nil
 }
 
-// DeleteServiceAccount 删除ServiceAccount
 func (m *serviceAccountManager) DeleteServiceAccount(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -189,7 +182,6 @@ func (m *serviceAccountManager) PatchServiceAccount(ctx context.Context, cluster
 		return nil, err
 	}
 
-	// 转换 patch 类型
 	pt := types.PatchType(patchType)
 	sa, err := kubeClient.CoreV1().ServiceAccounts(namespace).Patch(ctx, name, pt, data, metav1.PatchOptions{})
 	if err != nil {
@@ -210,7 +202,6 @@ func (m *serviceAccountManager) PatchServiceAccount(ctx context.Context, cluster
 	return sa, nil
 }
 
-// GetServiceAccountSecrets 获取ServiceAccount关联的Secrets
 func (m *serviceAccountManager) GetServiceAccountSecrets(ctx context.Context, clusterID int, namespace, name string) ([]corev1.Secret, error) {
 	sa, err := m.GetServiceAccount(ctx, clusterID, namespace, name)
 	if err != nil {
@@ -248,7 +239,6 @@ func (m *serviceAccountManager) GetServiceAccountSecrets(ctx context.Context, cl
 	return secrets, nil
 }
 
-// GetServiceAccountTokens 获取ServiceAccount的Token
 func (m *serviceAccountManager) GetServiceAccountTokens(ctx context.Context, clusterID int, namespace, name string) ([]string, error) {
 	secrets, err := m.GetServiceAccountSecrets(ctx, clusterID, namespace, name)
 	if err != nil {
@@ -273,7 +263,6 @@ func (m *serviceAccountManager) GetServiceAccountTokens(ctx context.Context, clu
 	return tokens, nil
 }
 
-// CreateServiceAccountToken 为ServiceAccount创建Token
 func (m *serviceAccountManager) CreateServiceAccountToken(ctx context.Context, clusterID int, namespace, name string, tokenRequest *authv1.TokenRequest) (*authv1.TokenRequest, error) {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {

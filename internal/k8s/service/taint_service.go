@@ -55,7 +55,6 @@ func NewTaintService(manager manager.TaintManager, logger *zap.Logger) TaintServ
 	}
 }
 
-// AddNodeTaint 添加节点污点
 func (s *taintService) AddNodeTaint(ctx context.Context, req *model.AddNodeTaintsReq) error {
 	if req.ClusterID <= 0 {
 		return fmt.Errorf("集群ID不能为空")
@@ -67,7 +66,6 @@ func (s *taintService) AddNodeTaint(ctx context.Context, req *model.AddNodeTaint
 		return fmt.Errorf("污点列表不能为空")
 	}
 
-	// 构建污点YAML
 	yamlData, err := utils.BuildTaintYamlFromK8sTaints(req.Taints)
 	if err != nil {
 		s.logger.Error("构建污点YAML失败",
@@ -88,7 +86,6 @@ func (s *taintService) AddNodeTaint(ctx context.Context, req *model.AddNodeTaint
 	return nil
 }
 
-// DeleteNodeTaint 删除节点污点
 func (s *taintService) DeleteNodeTaint(ctx context.Context, req *model.DeleteNodeTaintsReq) error {
 	if req.ClusterID <= 0 {
 		return fmt.Errorf("集群ID不能为空")
@@ -112,7 +109,6 @@ func (s *taintService) DeleteNodeTaint(ctx context.Context, req *model.DeleteNod
 	return nil
 }
 
-// AddOrUpdateNodeTaint 添加或更新节点污点
 func (s *taintService) AddOrUpdateNodeTaint(ctx context.Context, req *model.AddNodeTaintsReq) error {
 	if req.ClusterID <= 0 {
 		return fmt.Errorf("集群ID不能为空")
@@ -124,7 +120,6 @@ func (s *taintService) AddOrUpdateNodeTaint(ctx context.Context, req *model.AddN
 		return fmt.Errorf("污点列表不能为空")
 	}
 
-	// 构建污点YAML
 	yamlData, err := utils.BuildTaintYamlFromK8sTaints(req.Taints)
 	if err != nil {
 		s.logger.Error("构建污点YAML失败",
@@ -145,7 +140,6 @@ func (s *taintService) AddOrUpdateNodeTaint(ctx context.Context, req *model.AddN
 	return nil
 }
 
-// CheckTaintYaml 检查污点YAML配置
 func (s *taintService) CheckTaintYaml(ctx context.Context, req *model.CheckTaintYamlReq) error {
 	if req.ClusterID <= 0 {
 		return fmt.Errorf("集群ID不能为空")
@@ -168,7 +162,6 @@ func (s *taintService) CheckTaintYaml(ctx context.Context, req *model.CheckTaint
 	return nil
 }
 
-// DrainPods 驱逐节点Pod
 func (s *taintService) DrainPods(ctx context.Context, req *model.DrainNodeReq) error {
 	if req.ClusterID <= 0 {
 		return fmt.Errorf("集群ID不能为空")

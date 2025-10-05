@@ -45,16 +45,15 @@ func NewK8sYamlTemplateHandler(yamlTemplateService service.YamlTemplateService) 
 func (h *K8sYamlTemplateHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/yaml_template/:cluster_id/list", h.GetYamlTemplateList)         // 获取 YAML 模板列表
-		k8sGroup.POST("/yaml_template/:cluster_id/create", h.CreateYamlTemplate)       // 创建新的 YAML 模板
-		k8sGroup.POST("/yaml_template/:cluster_id/check", h.CheckYamlTemplate)         // 检查 YAML 模板是否可用
-		k8sGroup.POST("/yaml_template/:cluster_id/:id/update", h.UpdateYamlTemplate)   // 更新指定 ID 的 YAML 模板
-		k8sGroup.DELETE("/yaml_template/:cluster_id/:id/delete", h.DeleteYamlTemplate) // 删除指定 ID 的 YAML 模板
+		k8sGroup.GET("/yaml_template/:cluster_id/list", h.GetYamlTemplateList)
+		k8sGroup.POST("/yaml_template/:cluster_id/create", h.CreateYamlTemplate)
+		k8sGroup.POST("/yaml_template/:cluster_id/check", h.CheckYamlTemplate)
+		k8sGroup.POST("/yaml_template/:cluster_id/:id/update", h.UpdateYamlTemplate)
+		k8sGroup.DELETE("/yaml_template/:cluster_id/:id/delete", h.DeleteYamlTemplate)
 		k8sGroup.GET("/yaml_template/:cluster_id/:id/yaml", h.GetYamlTemplateDetail)
 	}
 }
 
-// GetYamlTemplateList 获取 YAML 模板列表
 func (h *K8sYamlTemplateHandler) GetYamlTemplateList(ctx *gin.Context) {
 	var req model.YamlTemplateListReq
 
@@ -71,7 +70,6 @@ func (h *K8sYamlTemplateHandler) GetYamlTemplateList(ctx *gin.Context) {
 	})
 }
 
-// CreateYamlTemplate 创建新的 YAML 模板
 func (h *K8sYamlTemplateHandler) CreateYamlTemplate(ctx *gin.Context) {
 	var req model.YamlTemplateCreateReq
 
@@ -90,7 +88,6 @@ func (h *K8sYamlTemplateHandler) CreateYamlTemplate(ctx *gin.Context) {
 	})
 }
 
-// UpdateYamlTemplate 更新指定 ID 的 YAML 模板
 func (h *K8sYamlTemplateHandler) UpdateYamlTemplate(ctx *gin.Context) {
 	var req model.YamlTemplateUpdateReq
 
@@ -116,7 +113,6 @@ func (h *K8sYamlTemplateHandler) UpdateYamlTemplate(ctx *gin.Context) {
 	})
 }
 
-// DeleteYamlTemplate 删除指定 ID 的 YAML 模板
 func (h *K8sYamlTemplateHandler) DeleteYamlTemplate(ctx *gin.Context) {
 	var req model.YamlTemplateDeleteReq
 
@@ -140,7 +136,6 @@ func (h *K8sYamlTemplateHandler) DeleteYamlTemplate(ctx *gin.Context) {
 	})
 }
 
-// CheckYamlTemplate 检查 YAML 模板
 func (h *K8sYamlTemplateHandler) CheckYamlTemplate(ctx *gin.Context) {
 	var req model.YamlTemplateCheckReq
 
@@ -157,7 +152,6 @@ func (h *K8sYamlTemplateHandler) CheckYamlTemplate(ctx *gin.Context) {
 	})
 }
 
-// GetYamlTemplateDetail 获取 YAML 模板详情
 func (h *K8sYamlTemplateHandler) GetYamlTemplateDetail(ctx *gin.Context) {
 	var req model.YamlTemplateDetailReq
 

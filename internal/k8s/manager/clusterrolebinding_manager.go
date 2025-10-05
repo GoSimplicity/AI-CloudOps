@@ -38,9 +38,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ClusterRoleBindingManager ClusterRoleBinding管理器接口
 type ClusterRoleBindingManager interface {
-	// 基础 CRUD 操作
 	CreateClusterRoleBinding(ctx context.Context, clusterID int, clusterRoleBinding *rbacv1.ClusterRoleBinding) error
 	GetClusterRoleBinding(ctx context.Context, clusterID int, name string) (*rbacv1.ClusterRoleBinding, error)
 	GetClusterRoleBindingList(ctx context.Context, clusterID int, listOptions metav1.ListOptions) ([]*model.K8sClusterRoleBinding, error)
@@ -62,7 +60,6 @@ func NewClusterRoleBindingManager(client client.K8sClient, logger *zap.Logger) C
 	}
 }
 
-// CreateClusterRoleBinding 创建ClusterRoleBinding
 func (m *clusterRoleBindingManager) CreateClusterRoleBinding(ctx context.Context, clusterID int, clusterRoleBinding *rbacv1.ClusterRoleBinding) error {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -82,7 +79,6 @@ func (m *clusterRoleBindingManager) CreateClusterRoleBinding(ctx context.Context
 	return nil
 }
 
-// GetClusterRoleBinding 获取单个ClusterRoleBinding
 func (m *clusterRoleBindingManager) GetClusterRoleBinding(ctx context.Context, clusterID int, name string) (*rbacv1.ClusterRoleBinding, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -100,7 +96,6 @@ func (m *clusterRoleBindingManager) GetClusterRoleBinding(ctx context.Context, c
 	return clusterRoleBinding, nil
 }
 
-// GetClusterRoleBindingList 获取ClusterRoleBinding列表（转换为模型）
 func (m *clusterRoleBindingManager) GetClusterRoleBindingList(ctx context.Context, clusterID int, listOptions metav1.ListOptions) ([]*model.K8sClusterRoleBinding, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -114,10 +109,9 @@ func (m *clusterRoleBindingManager) GetClusterRoleBindingList(ctx context.Contex
 		return nil, fmt.Errorf("获取ClusterRoleBinding列表失败: %w", err)
 	}
 
-	// 转换为模型格式
 	var k8sClusterRoleBindings []*model.K8sClusterRoleBinding
 	for _, crb := range clusterRoleBindings.Items {
-		// 使用 utils 中的转换函数，确保所有字段都被正确填充
+
 		k8sClusterRoleBinding := k8sutils.ConvertK8sClusterRoleBindingToClusterRoleBindingInfo(&crb, clusterID)
 		// 添加原始对象引用
 		k8sClusterRoleBinding.RawClusterRoleBinding = &crb
@@ -132,7 +126,6 @@ func (m *clusterRoleBindingManager) GetClusterRoleBindingList(ctx context.Contex
 	return k8sClusterRoleBindings, nil
 }
 
-// GetClusterRoleBindingListRaw 获取ClusterRoleBinding原始列表
 func (m *clusterRoleBindingManager) GetClusterRoleBindingListRaw(ctx context.Context, clusterID int, listOptions metav1.ListOptions) (*rbacv1.ClusterRoleBindingList, error) {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -152,7 +145,6 @@ func (m *clusterRoleBindingManager) GetClusterRoleBindingListRaw(ctx context.Con
 	return clusterRoleBindings, nil
 }
 
-// UpdateClusterRoleBinding 更新ClusterRoleBinding
 func (m *clusterRoleBindingManager) UpdateClusterRoleBinding(ctx context.Context, clusterID int, clusterRoleBinding *rbacv1.ClusterRoleBinding) error {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -172,7 +164,6 @@ func (m *clusterRoleBindingManager) UpdateClusterRoleBinding(ctx context.Context
 	return nil
 }
 
-// DeleteClusterRoleBinding 删除ClusterRoleBinding
 func (m *clusterRoleBindingManager) DeleteClusterRoleBinding(ctx context.Context, clusterID int, name string, deleteOptions metav1.DeleteOptions) error {
 	clientset, err := m.client.GetKubeClient(clusterID)
 	if err != nil {

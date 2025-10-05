@@ -37,16 +37,13 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// ServiceManager Service管理器接口
 type ServiceManager interface {
-	// 基础CRUD操作
 	GetService(ctx context.Context, clusterID int, namespace, name string) (*corev1.Service, error)
 	ListServices(ctx context.Context, clusterID int, namespace string) (*corev1.ServiceList, error)
 	CreateService(ctx context.Context, clusterID int, service *corev1.Service) (*corev1.Service, error)
 	UpdateService(ctx context.Context, clusterID int, service *corev1.Service) (*corev1.Service, error)
 	DeleteService(ctx context.Context, clusterID int, namespace, name string, options metav1.DeleteOptions) error
 
-	// 批量操作
 	BatchDeleteServices(ctx context.Context, clusterID int, namespace string, serviceNames []string, options metav1.DeleteOptions) error
 
 	// 业务功能
@@ -80,7 +77,6 @@ func (m *serviceManager) getKubeClient(clusterID int) (*kubernetes.Clientset, er
 	return kubeClient, nil
 }
 
-// GetService 获取单个Service
 func (m *serviceManager) GetService(ctx context.Context, clusterID int, namespace, name string) (*corev1.Service, error) {
 	clientset, err := m.getKubeClient(clusterID)
 	if err != nil {
@@ -97,7 +93,6 @@ func (m *serviceManager) GetService(ctx context.Context, clusterID int, namespac
 	return service, nil
 }
 
-// ListServices 获取Service列表
 func (m *serviceManager) ListServices(ctx context.Context, clusterID int, namespace string) (*corev1.ServiceList, error) {
 	clientset, err := m.getKubeClient(clusterID)
 	if err != nil {
@@ -114,7 +109,6 @@ func (m *serviceManager) ListServices(ctx context.Context, clusterID int, namesp
 	return services, nil
 }
 
-// CreateService 创建Service
 func (m *serviceManager) CreateService(ctx context.Context, clusterID int, service *corev1.Service) (*corev1.Service, error) {
 	if service == nil {
 		return nil, fmt.Errorf("service 不能为空")
@@ -144,7 +138,6 @@ func (m *serviceManager) CreateService(ctx context.Context, clusterID int, servi
 	return createdService, nil
 }
 
-// UpdateService 更新Service
 func (m *serviceManager) UpdateService(ctx context.Context, clusterID int, service *corev1.Service) (*corev1.Service, error) {
 	clientset, err := m.getKubeClient(clusterID)
 	if err != nil {
@@ -165,7 +158,6 @@ func (m *serviceManager) UpdateService(ctx context.Context, clusterID int, servi
 	return updatedService, nil
 }
 
-// DeleteService 删除Service
 func (m *serviceManager) DeleteService(ctx context.Context, clusterID int, namespace, name string, options metav1.DeleteOptions) error {
 	clientset, err := m.getKubeClient(clusterID)
 	if err != nil {
@@ -218,7 +210,6 @@ func (m *serviceManager) BatchDeleteServices(ctx context.Context, clusterID int,
 	return nil
 }
 
-// GetServiceEndpoints 获取Service的Endpoints
 func (m *serviceManager) GetServiceEndpoints(ctx context.Context, clusterID int, namespace, serviceName string) (*corev1.Endpoints, error) {
 	clientset, err := m.getKubeClient(clusterID)
 	if err != nil {
@@ -247,7 +238,6 @@ func (m *serviceManager) GetServiceEndpoints(ctx context.Context, clusterID int,
 	return endpoints, nil
 }
 
-// ListServicesBySelector 根据选择器获取Service列表
 func (m *serviceManager) ListServicesBySelector(ctx context.Context, clusterID int, namespace string, selector string) (*corev1.ServiceList, error) {
 	clientset, err := m.getKubeClient(clusterID)
 	if err != nil {

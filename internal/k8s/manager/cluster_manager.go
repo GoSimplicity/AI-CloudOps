@@ -64,7 +64,6 @@ func (cm *clusterManager) CreateCluster(ctx context.Context, cluster *model.K8sC
 		return fmt.Errorf("集群配置不能为空")
 	}
 
-	// 验证资源配额格式
 	if err := utils.ValidateResourceQuantities(cluster); err != nil {
 		cm.logger.Warn("资源配额格式验证失败", zap.Error(err))
 	}
@@ -97,12 +96,10 @@ func (cm *clusterManager) UpdateCluster(ctx context.Context, cluster *model.K8sC
 		return fmt.Errorf("集群配置不能为空")
 	}
 
-	// 验证资源配额格式
 	if err := utils.ValidateResourceQuantities(cluster); err != nil {
 		cm.logger.Warn("资源配额验证失败", zap.Error(err))
 	}
 
-	// 先移除旧的客户端
 	cm.client.RemoveCluster(cluster.ID)
 
 	// 重新初始化k8s客户端
@@ -138,7 +135,6 @@ func (cm *clusterManager) RefreshCluster(ctx context.Context, clusterID int) err
 		return fmt.Errorf("集群不存在，ID: %d", clusterID)
 	}
 
-	// 检查集群连接
 	if err := cm.client.CheckClusterConnection(clusterID); err != nil {
 		cm.logger.Error("集群连接检查失败", zap.Int("clusterID", clusterID), zap.Error(err))
 		cm.dao.UpdateClusterStatus(ctx, clusterID, model.StatusError)

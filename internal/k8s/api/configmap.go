@@ -48,18 +48,17 @@ func NewK8sConfigMapHandler(configMapService service.ConfigMapService) *K8sConfi
 func (h *K8sConfigMapHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		k8sGroup.GET("/configmap/:cluster_id/list", h.GetConfigMapList)                              // 获取ConfigMap列表
-		k8sGroup.GET("/configmap/:cluster_id/:namespace/:name/detail", h.GetConfigMap)               // 获取ConfigMap详情
-		k8sGroup.GET("/configmap/:cluster_id/:namespace/:name/detail/yaml", h.GetConfigMapYAML)      // 获取ConfigMap YAML
-		k8sGroup.POST("/configmap/:cluster_id/create", h.CreateConfigMap)                            // 创建ConfigMap
-		k8sGroup.POST("/configmap/:cluster_id/create/yaml", h.CreateConfigMapByYaml)                 // 通过YAML创建ConfigMap
-		k8sGroup.PUT("/configmap/:cluster_id/:namespace/:name/update", h.UpdateConfigMap)            // 更新ConfigMap
-		k8sGroup.PUT("/configmap/:cluster_id/:namespace/:name/update/yaml", h.UpdateConfigMapByYaml) // 通过YAML更新ConfigMap
-		k8sGroup.DELETE("/configmap/:cluster_id/:namespace/:name/delete", h.DeleteConfigMap)         // 删除ConfigMap
+		k8sGroup.GET("/configmap/:cluster_id/list", h.GetConfigMapList)
+		k8sGroup.GET("/configmap/:cluster_id/:namespace/:name/detail", h.GetConfigMap)
+		k8sGroup.GET("/configmap/:cluster_id/:namespace/:name/detail/yaml", h.GetConfigMapYAML)
+		k8sGroup.POST("/configmap/:cluster_id/create", h.CreateConfigMap)
+		k8sGroup.POST("/configmap/:cluster_id/create/yaml", h.CreateConfigMapByYaml)
+		k8sGroup.PUT("/configmap/:cluster_id/:namespace/:name/update", h.UpdateConfigMap)
+		k8sGroup.PUT("/configmap/:cluster_id/:namespace/:name/update/yaml", h.UpdateConfigMapByYaml)
+		k8sGroup.DELETE("/configmap/:cluster_id/:namespace/:name/delete", h.DeleteConfigMap)
 	}
 }
 
-// GetConfigMapList 获取ConfigMap列表
 func (h *K8sConfigMapHandler) GetConfigMapList(ctx *gin.Context) {
 	var req model.GetConfigMapListReq
 
@@ -76,7 +75,6 @@ func (h *K8sConfigMapHandler) GetConfigMapList(ctx *gin.Context) {
 	})
 }
 
-// GetConfigMap 获取单个ConfigMap详情
 func (h *K8sConfigMapHandler) GetConfigMap(ctx *gin.Context) {
 	var req model.GetConfigMapDetailsReq
 
@@ -86,7 +84,7 @@ func (h *K8sConfigMapHandler) GetConfigMap(ctx *gin.Context) {
 		return
 	}
 
-	ns, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -99,20 +97,14 @@ func (h *K8sConfigMapHandler) GetConfigMap(ctx *gin.Context) {
 	}
 
 	req.ClusterID = clusterID
-	req.Namespace = ns
+	req.Namespace = namespace
 	req.Name = name
-
-	if req.Namespace == "" || req.Name == "" {
-		utils.BadRequestError(ctx, "命名空间和ConfigMap名称不能为空")
-		return
-	}
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.configMapService.GetConfigMap(ctx, &req)
 	})
 }
 
-// CreateConfigMap 创建ConfigMap
 func (h *K8sConfigMapHandler) CreateConfigMap(ctx *gin.Context) {
 	var req model.CreateConfigMapReq
 
@@ -129,7 +121,6 @@ func (h *K8sConfigMapHandler) CreateConfigMap(ctx *gin.Context) {
 	})
 }
 
-// UpdateConfigMap 更新ConfigMap
 func (h *K8sConfigMapHandler) UpdateConfigMap(ctx *gin.Context) {
 	var req model.UpdateConfigMapReq
 
@@ -139,7 +130,7 @@ func (h *K8sConfigMapHandler) UpdateConfigMap(ctx *gin.Context) {
 		return
 	}
 
-	ns, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -152,7 +143,7 @@ func (h *K8sConfigMapHandler) UpdateConfigMap(ctx *gin.Context) {
 	}
 
 	req.ClusterID = clusterID
-	req.Namespace = ns
+	req.Namespace = namespace
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
@@ -160,7 +151,6 @@ func (h *K8sConfigMapHandler) UpdateConfigMap(ctx *gin.Context) {
 	})
 }
 
-// DeleteConfigMap 删除ConfigMap
 func (h *K8sConfigMapHandler) DeleteConfigMap(ctx *gin.Context) {
 	var req model.DeleteConfigMapReq
 
@@ -170,7 +160,7 @@ func (h *K8sConfigMapHandler) DeleteConfigMap(ctx *gin.Context) {
 		return
 	}
 
-	ns, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -183,7 +173,7 @@ func (h *K8sConfigMapHandler) DeleteConfigMap(ctx *gin.Context) {
 	}
 
 	req.ClusterID = clusterID
-	req.Namespace = ns
+	req.Namespace = namespace
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
@@ -191,7 +181,6 @@ func (h *K8sConfigMapHandler) DeleteConfigMap(ctx *gin.Context) {
 	})
 }
 
-// GetConfigMapYAML 获取ConfigMap的YAML配置
 func (h *K8sConfigMapHandler) GetConfigMapYAML(ctx *gin.Context) {
 	var req model.GetConfigMapYamlReq
 
@@ -201,7 +190,7 @@ func (h *K8sConfigMapHandler) GetConfigMapYAML(ctx *gin.Context) {
 		return
 	}
 
-	ns, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -214,7 +203,7 @@ func (h *K8sConfigMapHandler) GetConfigMapYAML(ctx *gin.Context) {
 	}
 
 	req.ClusterID = clusterID
-	req.Namespace = ns
+	req.Namespace = namespace
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
@@ -222,7 +211,6 @@ func (h *K8sConfigMapHandler) GetConfigMapYAML(ctx *gin.Context) {
 	})
 }
 
-// CreateConfigMapByYaml 通过YAML创建ConfigMap
 func (h *K8sConfigMapHandler) CreateConfigMapByYaml(ctx *gin.Context) {
 	var req model.CreateConfigMapByYamlReq
 
@@ -239,7 +227,6 @@ func (h *K8sConfigMapHandler) CreateConfigMapByYaml(ctx *gin.Context) {
 	})
 }
 
-// UpdateConfigMapByYaml 通过YAML更新ConfigMap
 func (h *K8sConfigMapHandler) UpdateConfigMapByYaml(ctx *gin.Context) {
 	var req model.UpdateConfigMapByYamlReq
 
@@ -249,7 +236,7 @@ func (h *K8sConfigMapHandler) UpdateConfigMapByYaml(ctx *gin.Context) {
 		return
 	}
 
-	ns, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := utils.GetParamCustomName(ctx, "namespace")
 	if err != nil {
 		utils.BadRequestError(ctx, err.Error())
 		return
@@ -262,7 +249,7 @@ func (h *K8sConfigMapHandler) UpdateConfigMapByYaml(ctx *gin.Context) {
 	}
 
 	req.ClusterID = clusterID
-	req.Namespace = ns
+	req.Namespace = namespace
 	req.Name = name
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {

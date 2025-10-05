@@ -66,20 +66,19 @@ var NormalReasons = map[string]model.EventSeverity{
 	"Sync":             model.EventSeverityLow,
 }
 
-// GetEventSeverity 根据事件类型和原因判断事件严重程度
 func GetEventSeverity(eventType, reason string) model.EventSeverity {
 	if eventType == "Warning" {
 		if severity, exists := WarningReasons[reason]; exists {
 			return severity
 		}
-		return model.EventSeverityMedium // 默认警告级别
+		return model.EventSeverityMedium
 	}
 
 	if eventType == "Normal" {
 		if severity, exists := NormalReasons[reason]; exists {
 			return severity
 		}
-		return model.EventSeverityLow // 默认正常级别
+		return model.EventSeverityLow
 	}
 
 	return model.EventSeverityLow
@@ -90,7 +89,6 @@ func IsEventCritical(eventType, reason string) bool {
 	return GetEventSeverity(eventType, reason) == model.EventSeverityCritical
 }
 
-// FormatEventAge 格式化事件年龄显示
 func FormatEventAge(timestamp time.Time) string {
 	duration := time.Since(timestamp)
 
@@ -212,7 +210,6 @@ func GroupEventsByObject(events []corev1.Event) map[string][]corev1.Event {
 	return groups
 }
 
-// ConvertEventToK8sEvent 将 corev1.Event 转换为 model.K8sEvent
 func ConvertEventToK8sEvent(event corev1.Event) model.K8sEvent {
 	return model.K8sEvent{
 		Name:           event.Name,
@@ -237,7 +234,6 @@ func ConvertEventToK8sEvent(event corev1.Event) model.K8sEvent {
 	}
 }
 
-// GetEventSummary 获取事件摘要信息
 func GetEventSummary(events []corev1.Event) map[string]interface{} {
 	summary := make(map[string]interface{})
 
@@ -280,7 +276,6 @@ func GetEventSummary(events []corev1.Event) map[string]interface{} {
 	return summary
 }
 
-// ParseEventMessage 解析事件消息，提取关键信息
 func ParseEventMessage(message string) map[string]string {
 	info := make(map[string]string)
 	info["message"] = message
@@ -311,7 +306,7 @@ func ParseEventMessage(message string) map[string]string {
 
 // SortEventsByTime 按时间排序事件（最新的在前）
 func SortEventsByTime(events []corev1.Event) []corev1.Event {
-	// 使用副本避免修改原切片
+
 	sortedEvents := make([]corev1.Event, len(events))
 	copy(sortedEvents, events)
 

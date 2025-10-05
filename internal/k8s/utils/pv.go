@@ -37,13 +37,11 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// ConvertToPVEntity 将 Kubernetes PV 转换为内部 PV 模型
 func ConvertToPVEntity(pv *corev1.PersistentVolume, clusterID int) *model.K8sPV {
 	if pv == nil {
 		return nil
 	}
 
-	// 转换访问模式
 	var accessModes []string
 	for _, mode := range pv.Spec.AccessModes {
 		accessModes = append(accessModes, string(mode))
@@ -73,7 +71,6 @@ func ConvertToPVEntity(pv *corev1.PersistentVolume, clusterID int) *model.K8sPV 
 		volumeMode = string(*pv.Spec.VolumeMode)
 	}
 
-	// 转换状态为枚举
 	status := convertPVStatusToEnum(pv.Status.Phase)
 
 	// 获取绑定的 PVC 信息
@@ -137,7 +134,6 @@ func convertPVStatusToEnum(phase corev1.PersistentVolumePhase) model.K8sPVStatus
 	}
 }
 
-// ConvertToPVEntities 批量转换 PV 列表
 func ConvertToPVEntities(pvs []corev1.PersistentVolume, clusterID int) []*model.K8sPV {
 	if len(pvs) == 0 {
 		return nil
@@ -152,11 +148,9 @@ func ConvertToPVEntities(pvs []corev1.PersistentVolume, clusterID int) []*model.
 	return results
 }
 
-// BuildPVListOptions 构建 PV 列表查询选项
 func BuildPVListOptions(req *model.GetPVListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
 
-	// 构建字段选择器用于状态过滤
 	var fieldSelectors []string
 	if req.Status != "" {
 		// 将状态字符串转换为Kubernetes状态值
@@ -189,7 +183,6 @@ func convertStatusStringToK8sStatus(status string) string {
 	}
 }
 
-// ValidatePV 验证 PV 配置
 func ValidatePV(pv *corev1.PersistentVolume) error {
 	if pv == nil {
 		return fmt.Errorf("PV 不能为空")
@@ -264,7 +257,6 @@ func FilterPVsByStatus(pvs []corev1.PersistentVolume, status string) []corev1.Pe
 	return filtered
 }
 
-// GetPVAge 获取 PV 年龄
 func GetPVAge(pv corev1.PersistentVolume) string {
 	age := time.Since(pv.CreationTimestamp.Time)
 	days := int(age.Hours() / 24)
@@ -289,19 +281,16 @@ func IsPVAvailable(pv corev1.PersistentVolume) bool {
 	return pv.Status.Phase == corev1.VolumeAvailable
 }
 
-// ConvertCreatePVReqToPV 将创建PV请求转换为Kubernetes PV对象
 func ConvertCreatePVReqToPV(req *model.CreatePVReq) *corev1.PersistentVolume {
 	if req == nil {
 		return nil
 	}
 
-	// 转换访问模式
 	var accessModes []corev1.PersistentVolumeAccessMode
 	for _, mode := range req.AccessModes {
 		accessModes = append(accessModes, corev1.PersistentVolumeAccessMode(mode))
 	}
 
-	// 转换回收策略
 	var reclaimPolicy corev1.PersistentVolumeReclaimPolicy
 	if req.ReclaimPolicy != "" {
 		reclaimPolicy = corev1.PersistentVolumeReclaimPolicy(req.ReclaimPolicy)
@@ -309,7 +298,6 @@ func ConvertCreatePVReqToPV(req *model.CreatePVReq) *corev1.PersistentVolume {
 		reclaimPolicy = corev1.PersistentVolumeReclaimDelete
 	}
 
-	// 转换卷模式
 	var volumeMode *corev1.PersistentVolumeMode
 	if req.VolumeMode != "" {
 		vm := corev1.PersistentVolumeMode(req.VolumeMode)
@@ -346,7 +334,6 @@ func ConvertCreatePVReqToPV(req *model.CreatePVReq) *corev1.PersistentVolume {
 	return pv
 }
 
-// ConvertUpdatePVReqToPV 将更新PV请求转换为Kubernetes PV对象
 // 基于现有PV对象更新可变字段，保留不可变字段
 func ConvertUpdatePVReqToPV(req *model.UpdatePVReq, existingPV *corev1.PersistentVolume) *corev1.PersistentVolume {
 	if req == nil || existingPV == nil {
@@ -457,7 +444,6 @@ func FilterPVsByStorageClass(pvs []corev1.PersistentVolume, storageClass string)
 	return filtered
 }
 
-// GetPVCapacity 获取PV容量信息
 func GetPVCapacity(pv corev1.PersistentVolume) (string, int64) {
 	if pv.Spec.Capacity == nil {
 		return "", 0
@@ -471,7 +457,6 @@ func GetPVCapacity(pv corev1.PersistentVolume) (string, int64) {
 	return storage.String(), storage.Value()
 }
 
-// ValidatePVUpdate 验证PV更新请求
 func ValidatePVUpdate(req *model.UpdatePVReq) error {
 	if req == nil {
 		return fmt.Errorf("更新PV请求不能为空")
@@ -488,7 +473,6 @@ func ValidatePVUpdate(req *model.UpdatePVReq) error {
 	return nil
 }
 
-// ValidatePVCreate 验证PV创建请求
 func ValidatePVCreate(req *model.CreatePVReq) error {
 	if req == nil {
 		return fmt.Errorf("创建PV请求不能为空")

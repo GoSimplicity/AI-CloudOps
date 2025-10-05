@@ -34,7 +34,6 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// GetNodeTaintsByEffect 根据污点效果获取节点污点
 func GetNodeTaintsByEffect(taints []corev1.Taint, effect corev1.TaintEffect) []corev1.Taint {
 	var filtered []corev1.Taint
 	for _, taint := range taints {
@@ -45,7 +44,6 @@ func GetNodeTaintsByEffect(taints []corev1.Taint, effect corev1.TaintEffect) []c
 	return filtered
 }
 
-// ValidateTaint 验证污点的有效性
 func ValidateTaint(taint *corev1.Taint) error {
 	if taint == nil {
 		return fmt.Errorf("污点不能为空")
@@ -95,7 +93,6 @@ func TaintExists(taints []corev1.Taint, targetTaint corev1.Taint) bool {
 	return false
 }
 
-// AddOrUpdateTaint 添加或更新污点
 func AddOrUpdateTaint(taints []corev1.Taint, newTaint corev1.Taint) []corev1.Taint {
 	for i := range taints {
 		if taints[i].Key == newTaint.Key {
@@ -106,7 +103,6 @@ func AddOrUpdateTaint(taints []corev1.Taint, newTaint corev1.Taint) []corev1.Tai
 	return append(taints, newTaint)
 }
 
-// GetTaintsByKeys 根据键列表获取污点
 func GetTaintsByKeys(taints []corev1.Taint, keys []string) []corev1.Taint {
 	var result []corev1.Taint
 	keySet := make(map[string]bool)
@@ -122,7 +118,6 @@ func GetTaintsByKeys(taints []corev1.Taint, keys []string) []corev1.Taint {
 	return result
 }
 
-// BuildTaintYaml 构建污点YAML字符串 (从NodeTaintEntity)
 func BuildTaintYaml(taints []model.NodeTaint) (string, error) {
 	var k8sTaints []corev1.Taint
 	for _, taint := range taints {
@@ -142,7 +137,6 @@ func BuildTaintYaml(taints []model.NodeTaint) (string, error) {
 	return string(yamlData), nil
 }
 
-// BuildTaintYamlFromK8sTaints 构建污点YAML字符串 (从corev1.Taint)
 func BuildTaintYamlFromK8sTaints(taints []corev1.Taint) (string, error) {
 	yamlData, err := yaml.Marshal(taints)
 	if err != nil {
@@ -152,9 +146,8 @@ func BuildTaintYamlFromK8sTaints(taints []corev1.Taint) (string, error) {
 	return string(yamlData), nil
 }
 
-// ParseTaintYaml 解析污点YAML字符串为 corev1.Taint 切片
 func ParseTaintYaml(taintYaml string) (taintsResult []corev1.Taint, returnErr error) {
-	// 转换为自定义错误
+
 	defer func() {
 		if r := recover(); r != nil {
 			returnErr = fmt.Errorf("YAML解析过程中发生错误: %v。请检查YAML格式是否正确，例如:\n- key: \"example-key\"\n  value: \"example-value\"\n  effect: \"NoSchedule\"", r)
@@ -181,11 +174,11 @@ func ParseTaintYaml(taintYaml string) (taintsResult []corev1.Taint, returnErr er
 	var taintsToProcess []corev1.Taint
 	err := yaml.UnmarshalStrict([]byte(taintYaml), &taintsToProcess)
 	if err == nil {
-		// 检查解析结果是否为空
+
 		if len(taintsToProcess) == 0 {
 			return nil, fmt.Errorf("未找到有效的污点配置")
 		}
-		// 验证解析结果的有效性
+
 		for i, taint := range taintsToProcess {
 			if taint.Key == "" {
 				return nil, fmt.Errorf("第%d个污点的键不能为空", i+1)
@@ -193,7 +186,7 @@ func ParseTaintYaml(taintYaml string) (taintsResult []corev1.Taint, returnErr er
 			if taint.Effect == "" {
 				return nil, fmt.Errorf("第%d个污点的效果不能为空", i+1)
 			}
-			// 验证Effect是否为有效值
+
 			if taint.Effect != corev1.TaintEffectNoSchedule &&
 				taint.Effect != corev1.TaintEffectPreferNoSchedule &&
 				taint.Effect != corev1.TaintEffectNoExecute {
@@ -216,7 +209,7 @@ func ParseTaintYaml(taintYaml string) (taintsResult []corev1.Taint, returnErr er
 		looseTaints := make([]map[string]interface{}, 0)
 		looseErr := yaml.Unmarshal([]byte(taintYaml), &looseTaints)
 		if looseErr != nil {
-			// 检查常见的格式错误
+
 			if len(taintYaml) < 50 { // 对于短字符串，显示完整内容
 				return nil, fmt.Errorf("YAML格式错误，无法解析输入: '%s'。请确保YAML格式正确，例如:\n- key: \"example-key\"\n  value: \"example-value\"\n  effect: \"NoSchedule\"", taintYaml)
 			} else {
@@ -244,7 +237,6 @@ func ParseTaintYaml(taintYaml string) (taintsResult []corev1.Taint, returnErr er
 		return nil, fmt.Errorf("YAML格式不完整或字段类型错误。请确保每个污点都包含正确的 key、value 和 effect 字段")
 	}
 
-	// 验证解析结果
 	if len(customTaints) == 0 {
 		return nil, fmt.Errorf("未找到有效的污点配置")
 	}
@@ -259,7 +251,6 @@ func ParseTaintYaml(taintYaml string) (taintsResult []corev1.Taint, returnErr er
 			return nil, fmt.Errorf("第%d个污点的效果不能为空", i+1)
 		}
 
-		// 验证污点效果的有效性
 		var effect corev1.TaintEffect
 		switch customTaint.Effect {
 		case "NoSchedule":

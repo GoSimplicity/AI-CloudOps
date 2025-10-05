@@ -38,7 +38,6 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// ConvertToK8sPods 将 Kubernetes Pod 列表转换为内部 Pod 模型列表
 func ConvertToK8sPods(pods []corev1.Pod) []*model.K8sPod {
 	if len(pods) == 0 {
 		return nil
@@ -51,30 +50,23 @@ func ConvertToK8sPods(pods []corev1.Pod) []*model.K8sPod {
 	return results
 }
 
-// ConvertToK8sPod 将单个 Kubernetes Pod 转换为内部 Pod 模型
 func ConvertToK8sPod(pod *corev1.Pod) *model.K8sPod {
 	if pod == nil {
 		return nil
 	}
 
-	// 转换标签和注解为JSON字符串
 	labelsJSON, _ := json.Marshal(pod.Labels)
 	annotationsJSON, _ := json.Marshal(pod.Annotations)
 
-	// 转换容器列表为JSON字符串（包含运行时状态）
 	containersJSON, _ := json.Marshal(convertContainersWithStatus(pod.Spec.Containers, pod.Status.ContainerStatuses))
 	initContainersJSON, _ := json.Marshal(convertContainersWithStatus(pod.Spec.InitContainers, pod.Status.InitContainerStatuses))
 
-	// 转换条件为JSON字符串
 	conditionsJSON, _ := json.Marshal(convertPodConditions(pod.Status.Conditions))
 
-	// 转换卷列表为JSON字符串
 	volumesJSON, _ := json.Marshal(pod.Spec.Volumes)
 
-	// 转换所有者引用为JSON字符串
 	ownerRefsJSON, _ := json.Marshal(pod.OwnerReferences)
 
-	// 转换Spec为JSON字符串
 	specJSON, _ := json.Marshal(pod.Spec)
 
 	return &model.K8sPod{
@@ -325,7 +317,6 @@ func convertProbe(probe *corev1.Probe) *model.PodProbe {
 		FailureThreshold:    probe.FailureThreshold,
 	}
 
-	// 转换 HTTP GET 探测
 	if probe.HTTPGet != nil {
 		result.HTTPGet = &model.PodHTTPGetAction{
 			Path:   probe.HTTPGet.Path,
@@ -334,14 +325,12 @@ func convertProbe(probe *corev1.Probe) *model.PodProbe {
 		}
 	}
 
-	// 转换 TCP Socket 探测
 	if probe.TCPSocket != nil {
 		result.TCPSocket = &model.PodTCPSocketAction{
 			Port: probe.TCPSocket.Port.IntVal,
 		}
 	}
 
-	// 转换 Exec 探测
 	if probe.Exec != nil {
 		result.Exec = &model.PodExecAction{
 			Command: probe.Exec.Command,
@@ -351,7 +340,6 @@ func convertProbe(probe *corev1.Probe) *model.PodProbe {
 	return result
 }
 
-// ConvertPodContainers 将Pod的容器状态转换为PodContainer列表
 func ConvertPodContainers(pod *corev1.Pod) []model.PodContainer {
 	if pod == nil {
 		return nil
@@ -359,7 +347,6 @@ func ConvertPodContainers(pod *corev1.Pod) []model.PodContainer {
 
 	var containers []model.PodContainer
 
-	// 转换普通容器
 	for _, container := range pod.Spec.Containers {
 		podContainer := model.PodContainer{
 			Name:            container.Name,
@@ -447,7 +434,7 @@ func PodStatus(pod *corev1.Pod) string {
 	case corev1.PodFailed:
 		return StatusFailed
 	case corev1.PodRunning:
-		// 检查容器是否全部 Ready
+
 		allReady := true
 		for _, cs := range pod.Status.ContainerStatuses {
 			if !cs.Ready {
@@ -464,7 +451,6 @@ func PodStatus(pod *corev1.Pod) string {
 	}
 }
 
-// ValidatePod 验证Pod配置的有效性
 func ValidatePod(pod *corev1.Pod) error {
 	if pod == nil {
 		return fmt.Errorf("pod不能为空")
@@ -482,7 +468,6 @@ func ValidatePod(pod *corev1.Pod) error {
 		return fmt.Errorf("至少需要一个容器")
 	}
 
-	// 验证每个容器的配置
 	for i, container := range pod.Spec.Containers {
 		if container.Name == "" {
 			return fmt.Errorf("容器%d名称不能为空", i)
@@ -543,7 +528,6 @@ func IsPodReady(pod corev1.Pod) bool {
 	return false
 }
 
-// GetPodAge 获取Pod年龄
 func GetPodAge(pod corev1.Pod) string {
 	age := time.Since(pod.CreationTimestamp.Time)
 	days := int(age.Hours() / 24)
@@ -558,7 +542,6 @@ func GetPodAge(pod corev1.Pod) string {
 	return fmt.Sprintf("%dm", minutes)
 }
 
-// BuildPodFromRequest 从请求构建Pod对象
 func BuildPodFromRequest(req *model.CreatePodReq) (*corev1.Pod, error) {
 	if req == nil {
 		return nil, fmt.Errorf("请求不能为空")
@@ -584,7 +567,6 @@ func BuildPodFromRequest(req *model.CreatePodReq) (*corev1.Pod, error) {
 		},
 	}
 
-	// 转换容器
 	for _, c := range req.Containers {
 		container := corev1.Container{
 			Name:            c.Name,
@@ -596,7 +578,6 @@ func BuildPodFromRequest(req *model.CreatePodReq) (*corev1.Pod, error) {
 			SecurityContext: c.SecurityContext,
 		}
 
-		// 转换环境变量
 		for _, env := range c.Envs {
 			container.Env = append(container.Env, corev1.EnvVar{
 				Name:  env.Name,
@@ -604,7 +585,6 @@ func BuildPodFromRequest(req *model.CreatePodReq) (*corev1.Pod, error) {
 			})
 		}
 
-		// 转换端口
 		for _, port := range c.Ports {
 			container.Ports = append(container.Ports, corev1.ContainerPort{
 				Name:          port.Name,
@@ -613,7 +593,6 @@ func BuildPodFromRequest(req *model.CreatePodReq) (*corev1.Pod, error) {
 			})
 		}
 
-		// 转换资源要求
 		if c.Resources.Requests.CPU != "" || c.Resources.Requests.Memory != "" ||
 			c.Resources.Limits.CPU != "" || c.Resources.Limits.Memory != "" {
 			container.Resources = corev1.ResourceRequirements{
@@ -638,7 +617,6 @@ func BuildPodFromRequest(req *model.CreatePodReq) (*corev1.Pod, error) {
 			}
 		}
 
-		// 转换卷挂载
 		for _, vm := range c.VolumeMounts {
 			container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
 				Name:      vm.Name,
@@ -648,12 +626,10 @@ func BuildPodFromRequest(req *model.CreatePodReq) (*corev1.Pod, error) {
 			})
 		}
 
-		// 转换存活探针
 		if c.LivenessProbe != nil {
 			container.LivenessProbe = convertModelProbeToK8sProbe(c.LivenessProbe)
 		}
 
-		// 转换就绪探针
 		if c.ReadinessProbe != nil {
 			container.ReadinessProbe = convertModelProbeToK8sProbe(c.ReadinessProbe)
 		}
@@ -661,7 +637,6 @@ func BuildPodFromRequest(req *model.CreatePodReq) (*corev1.Pod, error) {
 		pod.Spec.Containers = append(pod.Spec.Containers, container)
 	}
 
-	// 转换初始化容器
 	for _, c := range req.InitContainers {
 		container := corev1.Container{
 			Name:            c.Name,
@@ -673,7 +648,6 @@ func BuildPodFromRequest(req *model.CreatePodReq) (*corev1.Pod, error) {
 			SecurityContext: c.SecurityContext,
 		}
 
-		// 转换环境变量
 		for _, env := range c.Envs {
 			container.Env = append(container.Env, corev1.EnvVar{
 				Name:  env.Name,
@@ -681,7 +655,6 @@ func BuildPodFromRequest(req *model.CreatePodReq) (*corev1.Pod, error) {
 			})
 		}
 
-		// 转换端口
 		for _, port := range c.Ports {
 			container.Ports = append(container.Ports, corev1.ContainerPort{
 				Name:          port.Name,
@@ -690,7 +663,6 @@ func BuildPodFromRequest(req *model.CreatePodReq) (*corev1.Pod, error) {
 			})
 		}
 
-		// 转换资源要求
 		if c.Resources.Requests.CPU != "" || c.Resources.Requests.Memory != "" ||
 			c.Resources.Limits.CPU != "" || c.Resources.Limits.Memory != "" {
 			container.Resources = corev1.ResourceRequirements{
@@ -715,7 +687,6 @@ func BuildPodFromRequest(req *model.CreatePodReq) (*corev1.Pod, error) {
 			}
 		}
 
-		// 转换卷挂载
 		for _, vm := range c.VolumeMounts {
 			container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
 				Name:      vm.Name,
@@ -725,12 +696,10 @@ func BuildPodFromRequest(req *model.CreatePodReq) (*corev1.Pod, error) {
 			})
 		}
 
-		// 转换存活探针
 		if c.LivenessProbe != nil {
 			container.LivenessProbe = convertModelProbeToK8sProbe(c.LivenessProbe)
 		}
 
-		// 转换就绪探针
 		if c.ReadinessProbe != nil {
 			container.ReadinessProbe = convertModelProbeToK8sProbe(c.ReadinessProbe)
 		}
@@ -768,7 +737,6 @@ func convertModelProbeToK8sProbe(probe *model.PodProbe) *corev1.Probe {
 		FailureThreshold:    probe.FailureThreshold,
 	}
 
-	// 转换 HTTP GET 探测
 	if probe.HTTPGet != nil {
 		k8sProbe.ProbeHandler = corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
@@ -779,7 +747,6 @@ func convertModelProbeToK8sProbe(probe *model.PodProbe) *corev1.Probe {
 		}
 	}
 
-	// 转换 TCP Socket 探测
 	if probe.TCPSocket != nil {
 		k8sProbe.ProbeHandler = corev1.ProbeHandler{
 			TCPSocket: &corev1.TCPSocketAction{
@@ -788,7 +755,6 @@ func convertModelProbeToK8sProbe(probe *model.PodProbe) *corev1.Probe {
 		}
 	}
 
-	// 转换 Exec 探测
 	if probe.Exec != nil {
 		k8sProbe.ProbeHandler = corev1.ProbeHandler{
 			Exec: &corev1.ExecAction{

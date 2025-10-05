@@ -46,7 +46,6 @@ const (
 	StatusEvicted     = "Evicted"
 )
 
-// ConvertUnstructuredToYAML 将Unstructured对象转换为YAML字符串
 func ConvertUnstructuredToYAML(obj *unstructured.Unstructured) (string, error) {
 	if obj == nil {
 		return "", fmt.Errorf("unstructured对象不能为空")

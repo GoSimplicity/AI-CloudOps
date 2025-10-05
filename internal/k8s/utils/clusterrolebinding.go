@@ -34,11 +34,8 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// BuildClusterRoleBindingListOptions 构建ClusterRoleBinding列表选项
 func BuildClusterRoleBindingListOptions(req *model.GetClusterRoleBindingListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
-
-	// 构建选项的逻辑可以在这里添加
 
 	return options
 }
@@ -82,7 +79,6 @@ func PaginateK8sClusterRoleBindings(clusterRoleBindings []*model.K8sClusterRoleB
 	return clusterRoleBindings[start:end], total
 }
 
-// ConvertK8sClusterRoleBindingToClusterRoleBindingInfo 将K8s ClusterRoleBinding转换为K8sClusterRoleBinding
 func ConvertK8sClusterRoleBindingToClusterRoleBindingInfo(clusterRoleBinding *rbacv1.ClusterRoleBinding, clusterID int) model.K8sClusterRoleBinding {
 	if clusterRoleBinding == nil {
 		return model.K8sClusterRoleBinding{}
@@ -104,7 +100,6 @@ func ConvertK8sClusterRoleBindingToClusterRoleBindingInfo(clusterRoleBinding *rb
 	}
 }
 
-// BuildK8sClusterRoleBinding 构建K8s ClusterRoleBinding对象
 func BuildK8sClusterRoleBinding(name string, labels, annotations model.KeyValueList, roleRef model.RoleRef, subjects []model.Subject) *rbacv1.ClusterRoleBinding {
 	return &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -117,7 +112,6 @@ func BuildK8sClusterRoleBinding(name string, labels, annotations model.KeyValueL
 	}
 }
 
-// ConvertK8sRoleRefToModel 将K8s RoleRef转换为模型RoleRef
 func ConvertK8sRoleRefToModel(roleRef rbacv1.RoleRef) model.RoleRef {
 	return model.RoleRef{
 		APIGroup: roleRef.APIGroup,
@@ -126,7 +120,6 @@ func ConvertK8sRoleRefToModel(roleRef rbacv1.RoleRef) model.RoleRef {
 	}
 }
 
-// ConvertK8sSubjectsToModel 将K8s Subject列表转换为模型Subject列表
 func ConvertK8sSubjectsToModel(subjects []rbacv1.Subject) []model.Subject {
 	if len(subjects) == 0 {
 		return nil

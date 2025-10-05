@@ -39,7 +39,6 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// BuildK8sServiceFromCore 构建K8sService模型
 func BuildK8sServiceFromCore(clusterID int, service corev1.Service) *model.K8sService {
 	status := getServiceStatus(service)
 	age := getServiceAge(service)
@@ -85,7 +84,6 @@ func BuildK8sServiceFromCore(clusterID int, service corev1.Service) *model.K8sSe
 	}
 }
 
-// BuildServiceFromRequest 从请求构建Service对象
 func BuildServiceFromRequest(req *model.CreateServiceReq) (*corev1.Service, error) {
 	if req == nil {
 		return nil, fmt.Errorf("请求不能为空")
@@ -122,7 +120,6 @@ func BuildServiceFromRequest(req *model.CreateServiceReq) (*corev1.Service, erro
 	return service, nil
 }
 
-// ValidateService 验证Service配置
 func ValidateService(service *corev1.Service) error {
 	if service == nil {
 		return fmt.Errorf("Service对象不能为空")
@@ -140,7 +137,6 @@ func ValidateService(service *corev1.Service) error {
 		return fmt.Errorf("Service端口配置不能为空")
 	}
 
-	// 验证端口配置
 	for _, port := range service.Spec.Ports {
 		if port.Port <= 0 {
 			return fmt.Errorf("Service端口必须大于0")
@@ -150,7 +146,6 @@ func ValidateService(service *corev1.Service) error {
 		}
 	}
 
-	// 验证Service类型
 	switch service.Spec.Type {
 	case corev1.ServiceTypeClusterIP, corev1.ServiceTypeNodePort, corev1.ServiceTypeLoadBalancer, corev1.ServiceTypeExternalName:
 		// 有效类型
@@ -199,7 +194,6 @@ func ServiceToYAML(service *corev1.Service) (string, error) {
 	return string(yamlBytes), nil
 }
 
-// BuildServiceListOptions 构建Service列表查询选项
 func BuildServiceListOptions(req *model.GetServiceListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
 
@@ -230,7 +224,6 @@ func FilterServicesByType(services []corev1.Service, serviceType string) []corev
 	return filtered
 }
 
-// BuildServiceListPagination 构建Service列表分页逻辑
 func BuildServiceListPagination(services []corev1.Service, page int, size int) ([]corev1.Service, int64) {
 	total := int64(len(services))
 	if total == 0 {
@@ -313,7 +306,6 @@ func buildServicePorts(ports []corev1.ServicePort) []model.ServicePort {
 	return servicePorts
 }
 
-// ConvertToCorePorts 将模型端口转换为Kubernetes端口
 func ConvertToCorePorts(ports []model.ServicePort) []corev1.ServicePort {
 	var corePorts []corev1.ServicePort
 	for _, port := range ports {
@@ -330,7 +322,6 @@ func ConvertToCorePorts(ports []model.ServicePort) []corev1.ServicePort {
 	return corePorts
 }
 
-// ConvertEndpointsToModel 将Kubernetes Endpoints转换为模型格式
 func ConvertEndpointsToModel(endpoints *corev1.Endpoints) []model.K8sServiceEndpoint {
 	if endpoints == nil {
 		return []model.K8sServiceEndpoint{}

@@ -70,7 +70,6 @@ func (m *ingressManager) getKubeClient(clusterID int) (*kubernetes.Clientset, er
 	return kubeClient, nil
 }
 
-// CreateIngress 创建Ingress
 func (m *ingressManager) CreateIngress(ctx context.Context, clusterID int, namespace string, ingress *networkingv1.Ingress) error {
 	if ingress == nil {
 		return fmt.Errorf("ingress 不能为空")
@@ -105,7 +104,6 @@ func (m *ingressManager) CreateIngress(ctx context.Context, clusterID int, names
 	return nil
 }
 
-// GetIngress 获取指定Ingress
 func (m *ingressManager) GetIngress(ctx context.Context, clusterID int, namespace, name string) (*networkingv1.Ingress, error) {
 	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
@@ -129,7 +127,6 @@ func (m *ingressManager) GetIngress(ctx context.Context, clusterID int, namespac
 	return ingress, nil
 }
 
-// GetIngressList 获取Ingress列表
 func (m *ingressManager) GetIngressList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sIngress, error) {
 	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
@@ -145,7 +142,6 @@ func (m *ingressManager) GetIngressList(ctx context.Context, clusterID int, name
 		return nil, fmt.Errorf("获取 Ingress 列表失败: %w", err)
 	}
 
-	// 转换为model结构
 	var k8sIngresses []*model.K8sIngress
 	for _, ingress := range ingressList.Items {
 		k8sIngress := utils.ConvertToK8sIngress(&ingress, clusterID)
@@ -159,7 +155,6 @@ func (m *ingressManager) GetIngressList(ctx context.Context, clusterID int, name
 	return k8sIngresses, nil
 }
 
-// UpdateIngress 更新Ingress
 func (m *ingressManager) UpdateIngress(ctx context.Context, clusterID int, namespace string, ingress *networkingv1.Ingress) error {
 	if ingress == nil {
 		return fmt.Errorf("ingress 不能为空")
@@ -194,7 +189,6 @@ func (m *ingressManager) UpdateIngress(ctx context.Context, clusterID int, names
 	return nil
 }
 
-// DeleteIngress 删除Ingress
 func (m *ingressManager) DeleteIngress(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
 	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {

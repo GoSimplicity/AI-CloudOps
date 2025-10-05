@@ -36,14 +36,12 @@ import (
 )
 
 type RoleBindingService interface {
-	// 基础 CRUD 操作
 	GetRoleBindingList(ctx context.Context, req *model.GetRoleBindingListReq) (model.ListResp[*model.K8sRoleBinding], error)
 	GetRoleBindingDetails(ctx context.Context, req *model.GetRoleBindingDetailsReq) (*model.K8sRoleBinding, error)
 	CreateRoleBinding(ctx context.Context, req *model.CreateRoleBindingReq) error
 	UpdateRoleBinding(ctx context.Context, req *model.UpdateRoleBindingReq) error
 	DeleteRoleBinding(ctx context.Context, req *model.DeleteRoleBindingReq) error
 
-	// YAML 操作
 	GetRoleBindingYaml(ctx context.Context, req *model.GetRoleBindingYamlReq) (*model.K8sYaml, error)
 	CreateRoleBindingByYaml(ctx context.Context, req *model.CreateRoleBindingByYamlReq) error
 	UpdateRoleBindingYaml(ctx context.Context, req *model.UpdateRoleBindingByYamlReq) error
@@ -62,10 +60,9 @@ func NewRoleBindingService(roleBindingManager manager.RoleBindingManager, logger
 }
 
 func (s *roleBindingService) GetRoleBindingList(ctx context.Context, req *model.GetRoleBindingListReq) (model.ListResp[*model.K8sRoleBinding], error) {
-	// 构建查询选项
+
 	options := k8sutils.BuildRoleBindingListOptions(req)
 
-	// 从 Manager 获取 RoleBinding 模型切片
 	roleBindings, err := s.roleBindingManager.GetRoleBindingList(ctx, req.ClusterID, req.Namespace, options)
 	if err != nil {
 		return model.ListResp[*model.K8sRoleBinding]{}, err
@@ -133,6 +130,14 @@ func (s *roleBindingService) CreateRoleBindingByYaml(ctx context.Context, req *m
 	roleBinding, err := k8sutils.YAMLToRoleBinding(req.YamlContent)
 	if err != nil {
 		return err
+	}
+
+	// 如果YAML中没有指定namespace，使用default命名空间
+	if roleBinding.Namespace == "" {
+		roleBinding.Namespace = "default"
+		s.logger.Info("YAML中未指定namespace，使用default命名空间",
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("name", roleBinding.Name))
 	}
 
 	return s.roleBindingManager.CreateRoleBinding(ctx, req.ClusterID, roleBinding.Namespace, roleBinding)

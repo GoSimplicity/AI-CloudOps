@@ -45,16 +45,14 @@ func NewK8sNamespaceHandler(namespaceService service.NamespaceService) *K8sNames
 func (h *K8sNamespaceHandler) RegisterRouters(server *gin.Engine) {
 	k8sGroup := server.Group("/api/k8s")
 	{
-		// Namespace基础管理
-		k8sGroup.GET("/clusters/:cluster_id/namespace/list", h.ListNamespaces)              // 获取Namespace列表
-		k8sGroup.GET("/clusters/:cluster_id/namespace/:name/detail", h.GetNamespaceDetails) // 获取Namespace详情
-		k8sGroup.POST("/clusters/:cluster_id/namespace/create", h.CreateNamespace)          // 创建Namespace
-		k8sGroup.PUT("/clusters/:cluster_id/namespace/:name/update", h.UpdateNamespace)     // 更新Namespace
-		k8sGroup.DELETE("/clusters/:cluster_id/namespace/:name/delete", h.DeleteNamespace)  // 删除Namespace
+		k8sGroup.GET("/clusters/:cluster_id/namespace/list", h.ListNamespaces)
+		k8sGroup.GET("/clusters/:cluster_id/namespace/:name/detail", h.GetNamespaceDetails)
+		k8sGroup.POST("/clusters/:cluster_id/namespace/create", h.CreateNamespace)
+		k8sGroup.PUT("/clusters/:cluster_id/namespace/:name/update", h.UpdateNamespace)
+		k8sGroup.DELETE("/clusters/:cluster_id/namespace/:name/delete", h.DeleteNamespace)
 	}
 }
 
-// CreateNamespace 创建Namespace
 func (h *K8sNamespaceHandler) CreateNamespace(ctx *gin.Context) {
 	var req model.K8sNamespaceCreateReq
 
@@ -71,7 +69,6 @@ func (h *K8sNamespaceHandler) CreateNamespace(ctx *gin.Context) {
 	})
 }
 
-// DeleteNamespace 删除Namespace
 func (h *K8sNamespaceHandler) DeleteNamespace(ctx *gin.Context) {
 	var req model.K8sNamespaceDeleteReq
 
@@ -95,7 +92,6 @@ func (h *K8sNamespaceHandler) DeleteNamespace(ctx *gin.Context) {
 	})
 }
 
-// GetNamespaceDetails 获取Namespace详情
 func (h *K8sNamespaceHandler) GetNamespaceDetails(ctx *gin.Context) {
 	var req model.K8sNamespaceGetDetailsReq
 
@@ -119,7 +115,6 @@ func (h *K8sNamespaceHandler) GetNamespaceDetails(ctx *gin.Context) {
 	})
 }
 
-// UpdateNamespace 更新Namespace
 func (h *K8sNamespaceHandler) UpdateNamespace(ctx *gin.Context) {
 	var req model.K8sNamespaceUpdateReq
 
@@ -143,7 +138,6 @@ func (h *K8sNamespaceHandler) UpdateNamespace(ctx *gin.Context) {
 	})
 }
 
-// ListNamespaces 获取Namespace列表
 func (h *K8sNamespaceHandler) ListNamespaces(ctx *gin.Context) {
 	var req model.K8sNamespaceListReq
 

@@ -26,6 +26,8 @@
 package model
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -38,7 +40,7 @@ type K8sConfigMap struct {
 	ClusterID    int               `json:"cluster_id" gorm:"index;not null"`           // 所属集群ID
 	UID          string            `json:"uid" gorm:"size:100"`                        // ConfigMap UID
 	Data         map[string]string `json:"data"`                                       // 字符串数据
-	BinaryData   map[string][]byte `json:"binary_data"`                                // 二进制数据
+	BinaryData   BinaryDataMap     `json:"binary_data"`                                // 二进制数据
 	Labels       map[string]string `json:"labels"`                                     // 标签
 	Annotations  map[string]string `json:"annotations"`                                // 注解
 	Immutable    bool              `json:"immutable"`                                  // 是否不可变
@@ -78,10 +80,63 @@ type CreateConfigMapReq struct {
 	Name        string            `json:"name" form:"name" binding:"required" comment:"ConfigMap名称"`      // ConfigMap名称
 	Namespace   string            `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
 	Data        map[string]string `json:"data" comment:"字符串数据"`                                           // 字符串数据
-	BinaryData  map[string][]byte `json:"binary_data" comment:"二进制数据"`                                    // 二进制数据
+	BinaryData  BinaryDataMap     `json:"binary_data" comment:"二进制数据"`                                    // 二进制数据
 	Labels      map[string]string `json:"labels" comment:"标签"`                                            // 标签
 	Annotations map[string]string `json:"annotations" comment:"注解"`                                       // 注解
 	Immutable   bool              `json:"immutable" comment:"是否不可变"`                                      // 是否不可变
+}
+
+// BinaryDataMap 二进制数据映射，支持 JSON base64 编码/解码
+type BinaryDataMap map[string][]byte
+
+// UnmarshalJSON 自定义 JSON 反序列化，将 base64 字符串解码为字节数组
+func (b *BinaryDataMap) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" || string(data) == "" {
+		*b = nil
+		return nil
+	}
+
+	// 解析为 map[string]string
+	var strMap map[string]string
+	if err := json.Unmarshal(data, &strMap); err != nil {
+		return err
+	}
+
+	// 转换为 map[string][]byte
+	byteMap := make(map[string][]byte, len(strMap))
+	for k, v := range strMap {
+		if v == "" {
+			byteMap[k] = []byte{}
+			continue
+		}
+		decoded, err := base64.StdEncoding.DecodeString(v)
+		if err != nil {
+			return err
+		}
+		byteMap[k] = decoded
+	}
+
+	*b = byteMap
+	return nil
+}
+
+// MarshalJSON 自定义 JSON 序列化，将字节数组编码为 base64 字符串
+func (b BinaryDataMap) MarshalJSON() ([]byte, error) {
+	if b == nil {
+		return []byte("null"), nil
+	}
+
+	// 转换为 map[string]string
+	strMap := make(map[string]string, len(b))
+	for k, v := range b {
+		if len(v) == 0 {
+			strMap[k] = ""
+		} else {
+			strMap[k] = base64.StdEncoding.EncodeToString(v)
+		}
+	}
+
+	return json.Marshal(strMap)
 }
 
 // UpdateConfigMapReq 更新ConfigMap请求
@@ -90,7 +145,7 @@ type UpdateConfigMapReq struct {
 	Name        string            `json:"name" form:"name" binding:"required" comment:"ConfigMap名称"`      // ConfigMap名称
 	Namespace   string            `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
 	Data        map[string]string `json:"data" comment:"字符串数据"`                                           // 字符串数据
-	BinaryData  map[string][]byte `json:"binary_data" comment:"二进制数据"`                                    // 二进制数据
+	BinaryData  BinaryDataMap     `json:"binary_data" comment:"二进制数据"`                                    // 二进制数据
 	Labels      map[string]string `json:"labels" comment:"标签"`                                            // 标签
 	Annotations map[string]string `json:"annotations" comment:"注解"`                                       // 注解
 }

@@ -35,16 +35,12 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// BuildRoleListOptions 构建Role列表选项
 func BuildRoleListOptions(req *model.GetRoleListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
-
-	// 构建选项的逻辑可以在这里添加
 
 	return options
 }
 
-// ConvertToK8sRole 将内部模型转换为Kubernetes Role对象
 func ConvertToK8sRole(req *model.CreateRoleReq) *rbacv1.Role {
 	return &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
@@ -82,7 +78,6 @@ func PaginateK8sRoles(roles []*model.K8sRole, page, pageSize int) ([]*model.K8sR
 	return roles[start:end], total
 }
 
-// ConvertK8sRoleToRoleInfo 将K8s Role转换为K8sRole
 func ConvertK8sRoleToRoleInfo(role *rbacv1.Role, clusterID int) model.K8sRole {
 	if role == nil {
 		return model.K8sRole{}
@@ -135,7 +130,6 @@ func YAMLToRole(yamlStr string) (*rbacv1.Role, error) {
 	return &role, nil
 }
 
-// BuildK8sRole 构建K8s Role对象
 func BuildK8sRole(name, namespace string, labels, annotations model.KeyValueList, rules []model.PolicyRule) *rbacv1.Role {
 	return &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{

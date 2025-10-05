@@ -37,7 +37,6 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// ConvertToK8sIngress 将Kubernetes Ingress转换为内部Ingress模型
 func ConvertToK8sIngress(ingress *networkingv1.Ingress, clusterID int) *model.K8sIngress {
 	if ingress == nil {
 		return nil
@@ -53,7 +52,6 @@ func ConvertToK8sIngress(ingress *networkingv1.Ingress, clusterID int) *model.K8
 	age := pkg.GetAge(ingress.CreationTimestamp.Time)
 	status := IngressStatus(ingress)
 
-	// 转换 Rules
 	rules := make([]model.IngressRule, 0, len(ingress.Spec.Rules))
 	for _, rule := range ingress.Spec.Rules {
 		ingressRule := model.IngressRule{
@@ -99,7 +97,7 @@ func ConvertToK8sIngress(ingress *networkingv1.Ingress, clusterID int) *model.K8
 		annotations = map[string]string{}
 	}
 
-	// 构建负载均衡器信息
+	// LoadBalancer信息从Status字段读取
 	loadBalancer := model.IngressLoadBalancer{}
 	if len(ingress.Status.LoadBalancer.Ingress) > 0 {
 		lbIngresses := make([]model.IngressLoadBalancerIngress, 0, len(ingress.Status.LoadBalancer.Ingress))
@@ -109,7 +107,6 @@ func ConvertToK8sIngress(ingress *networkingv1.Ingress, clusterID int) *model.K8
 				Hostname: lbIngress.Hostname,
 			}
 
-			// 构建端口状态
 			if len(lbIngress.Ports) > 0 {
 				ports := make([]model.IngressPortStatus, 0, len(lbIngress.Ports))
 				for _, port := range lbIngress.Ports {
@@ -177,7 +174,6 @@ func IngressStatus(item *networkingv1.Ingress) string {
 	return StatusUnknown
 }
 
-// ValidateIngress 验证Ingress配置
 func ValidateIngress(ingress *networkingv1.Ingress) error {
 	if ingress == nil {
 		return fmt.Errorf("ingress不能为空")
@@ -191,7 +187,6 @@ func ValidateIngress(ingress *networkingv1.Ingress) error {
 		return fmt.Errorf("namespace不能为空")
 	}
 
-	// 验证规则
 	for i, rule := range ingress.Spec.Rules {
 		if rule.HTTP != nil {
 			for j, path := range rule.HTTP.Paths {
@@ -251,7 +246,6 @@ func IsIngressReady(ingress networkingv1.Ingress) bool {
 	return IngressStatus(&ingress) == StatusReady
 }
 
-// GetIngressAge 获取Ingress年龄
 func GetIngressAge(ingress networkingv1.Ingress) string {
 	age := time.Since(ingress.CreationTimestamp.Time)
 	days := int(age.Hours() / 24)
@@ -266,7 +260,7 @@ func GetIngressAge(ingress networkingv1.Ingress) string {
 	return fmt.Sprintf("%dm", minutes)
 }
 
-// BuildIngressFromSpec 从CreateIngressReq构建Ingress对象
+// BuildIngressFromSpec 根据请求构建Ingress对象
 func BuildIngressFromSpec(req *model.CreateIngressReq) (*networkingv1.Ingress, error) {
 	if req == nil {
 		return nil, fmt.Errorf("请求不能为空")
@@ -282,6 +276,8 @@ func BuildIngressFromSpec(req *model.CreateIngressReq) (*networkingv1.Ingress, e
 		annotations = make(map[string]string)
 	}
 
+	// 创建Ingress对象，只设置Spec部分
+	// Status部分（包括LoadBalancer）由Kubernetes自动管理
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        req.Name,
@@ -294,7 +290,6 @@ func BuildIngressFromSpec(req *model.CreateIngressReq) (*networkingv1.Ingress, e
 		},
 	}
 
-	// 构建规则
 	if len(req.Rules) > 0 {
 		ingress.Spec.Rules = make([]networkingv1.IngressRule, 0, len(req.Rules))
 		for _, rule := range req.Rules {
@@ -325,7 +320,6 @@ func BuildIngressFromSpec(req *model.CreateIngressReq) (*networkingv1.Ingress, e
 		}
 	}
 
-	// 构建TLS配置
 	if len(req.TLS) > 0 {
 		ingress.Spec.TLS = make([]networkingv1.IngressTLS, 0, len(req.TLS))
 		for _, tls := range req.TLS {
@@ -353,11 +347,9 @@ func convertIngressStatusToEnum(status string) model.K8sIngressStatus {
 	}
 }
 
-// BuildIngressListOptions 构建Ingress列表查询选项
 func BuildIngressListOptions(req *model.GetIngressListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
 
-	// 构建标签选择器
 	var labelSelectors []string
 	for key, value := range req.Labels {
 		labelSelectors = append(labelSelectors, fmt.Sprintf("%s=%s", key, value))

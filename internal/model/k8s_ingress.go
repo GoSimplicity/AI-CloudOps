@@ -50,7 +50,7 @@ type K8sIngress struct {
 	IngressClassName *string               `json:"ingress_class_name"`                         // Ingress类名
 	Rules            []IngressRule         `json:"rules"`                                      // Ingress规则
 	TLS              []IngressTLS          `json:"tls"`                                        // TLS配置
-	LoadBalancer     IngressLoadBalancer   `json:"load_balancer"`                              // 负载均衡器信息
+	LoadBalancer     IngressLoadBalancer   `json:"load_balancer"`                              // 负载均衡器信息（由K8s自动填充，只读）
 	Labels           map[string]string     `json:"labels"`                                     // 标签
 	Annotations      map[string]string     `json:"annotations"`                                // 注解
 	CreatedAt        time.Time             `json:"created_at"`                                 // 创建时间
@@ -127,15 +127,16 @@ type GetIngressYamlReq struct {
 }
 
 // CreateIngressReq 创建Ingress请求
+// 注意：不需要传入LoadBalancer信息，该信息由Ingress Controller自动分配
 type CreateIngressReq struct {
 	ClusterID        int               `json:"cluster_id" binding:"required"` // 集群ID
 	Name             string            `json:"name" binding:"required"`       // Ingress名称
 	Namespace        string            `json:"namespace" binding:"required"`  // 命名空间
-	IngressClassName *string           `json:"ingress_class_name"`            // Ingress类名
-	Rules            []IngressRule     `json:"rules"`                         // Ingress规则
-	TLS              []IngressTLS      `json:"tls"`                           // TLS配置
+	IngressClassName *string           `json:"ingress_class_name"`            // Ingress类名（如nginx、traefik等）
+	Rules            []IngressRule     `json:"rules"`                         // Ingress路由规则
+	TLS              []IngressTLS      `json:"tls"`                           // TLS/HTTPS配置
 	Labels           map[string]string `json:"labels"`                        // 标签
-	Annotations      map[string]string `json:"annotations"`                   // 注解
+	Annotations      map[string]string `json:"annotations"`                   // 注解（可用于配置Ingress Controller行为）
 }
 
 // UpdateIngressReq 更新Ingress请求

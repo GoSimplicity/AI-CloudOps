@@ -39,7 +39,6 @@ import (
 )
 
 type ServiceAccountService interface {
-	// 基础 CRUD 操作
 	GetServiceAccountList(ctx context.Context, req *model.GetServiceAccountListReq) (model.ListResp[*model.K8sServiceAccount], error)
 	GetServiceAccountDetails(ctx context.Context, req *model.GetServiceAccountDetailsReq) (*model.K8sServiceAccount, error)
 	CreateServiceAccount(ctx context.Context, req *model.CreateServiceAccountReq) error
@@ -47,11 +46,9 @@ type ServiceAccountService interface {
 	DeleteServiceAccount(ctx context.Context, req *model.DeleteServiceAccountReq) error
 	CreateServiceAccountByYaml(ctx context.Context, req *model.CreateServiceAccountByYamlReq) error
 
-	// YAML 操作
 	GetServiceAccountYaml(ctx context.Context, req *model.GetServiceAccountYamlReq) (*model.K8sYaml, error)
 	UpdateServiceAccountYaml(ctx context.Context, req *model.UpdateServiceAccountByYamlReq) error
 
-	// Token管理
 	GetServiceAccountToken(ctx context.Context, req *model.GetServiceAccountTokenReq) (*model.ServiceAccountTokenInfo, error)
 	CreateServiceAccountToken(ctx context.Context, req *model.CreateServiceAccountTokenReq) (*model.ServiceAccountTokenInfo, error)
 }
@@ -69,16 +66,14 @@ func NewServiceAccountService(serviceAccountManager manager.ServiceAccountManage
 }
 
 func (s *serviceAccountService) GetServiceAccountList(ctx context.Context, req *model.GetServiceAccountListReq) (model.ListResp[*model.K8sServiceAccount], error) {
-	// 构建查询选项
+
 	options := k8sutils.BuildServiceAccountListOptions(req)
 
-	// 从 Manager 获取原始 ServiceAccount 列表
 	serviceAccountList, err := s.serviceAccountManager.GetServiceAccountList(ctx, req.ClusterID, req.Namespace, options)
 	if err != nil {
 		return model.ListResp[*model.K8sServiceAccount]{}, err
 	}
 
-	// 转换并过滤
 	var filtered []*model.K8sServiceAccount
 	keyword := strings.TrimSpace(req.Keyword)
 	for _, sa := range serviceAccountList.Items {
@@ -200,6 +195,14 @@ func (s *serviceAccountService) CreateServiceAccountByYaml(ctx context.Context, 
 	serviceAccount, err := k8sutils.YAMLToServiceAccount(req.YamlContent)
 	if err != nil {
 		return err
+	}
+
+	// 如果YAML中没有指定namespace，使用default命名空间
+	if serviceAccount.Namespace == "" {
+		serviceAccount.Namespace = "default"
+		s.logger.Info("YAML中未指定namespace，使用default命名空间",
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("name", serviceAccount.Name))
 	}
 
 	return s.serviceAccountManager.CreateServiceAccount(ctx, req.ClusterID, serviceAccount.Namespace, serviceAccount)

@@ -56,7 +56,6 @@ func (h *K8sRoleBindingHandler) RegisterRouters(server *gin.Engine) {
 	}
 }
 
-// GetRoleBindingList 获取 RoleBinding 列表
 func (h *K8sRoleBindingHandler) GetRoleBindingList(ctx *gin.Context) {
 	var req model.GetRoleBindingListReq
 
@@ -72,7 +71,6 @@ func (h *K8sRoleBindingHandler) GetRoleBindingList(ctx *gin.Context) {
 	})
 }
 
-// GetRoleBindingDetails 获取 RoleBinding 详情
 func (h *K8sRoleBindingHandler) GetRoleBindingDetails(ctx *gin.Context) {
 	var req model.GetRoleBindingDetailsReq
 
@@ -103,7 +101,6 @@ func (h *K8sRoleBindingHandler) GetRoleBindingDetails(ctx *gin.Context) {
 	})
 }
 
-// CreateRoleBinding 创建 RoleBinding
 func (h *K8sRoleBindingHandler) CreateRoleBinding(ctx *gin.Context) {
 	var req model.CreateRoleBindingReq
 
@@ -112,7 +109,6 @@ func (h *K8sRoleBindingHandler) CreateRoleBinding(ctx *gin.Context) {
 	})
 }
 
-// CreateRoleBindingByYaml 通过YAML创建 RoleBinding
 func (h *K8sRoleBindingHandler) CreateRoleBindingByYaml(ctx *gin.Context) {
 	var req model.CreateRoleBindingByYamlReq
 
@@ -129,7 +125,6 @@ func (h *K8sRoleBindingHandler) CreateRoleBindingByYaml(ctx *gin.Context) {
 	})
 }
 
-// UpdateRoleBinding 更新 RoleBinding
 func (h *K8sRoleBindingHandler) UpdateRoleBinding(ctx *gin.Context) {
 	var req model.UpdateRoleBindingReq
 
@@ -138,7 +133,6 @@ func (h *K8sRoleBindingHandler) UpdateRoleBinding(ctx *gin.Context) {
 	})
 }
 
-// DeleteRoleBinding 删除 RoleBinding
 func (h *K8sRoleBindingHandler) DeleteRoleBinding(ctx *gin.Context) {
 	var req model.DeleteRoleBindingReq
 
@@ -169,7 +163,6 @@ func (h *K8sRoleBindingHandler) DeleteRoleBinding(ctx *gin.Context) {
 	})
 }
 
-// GetRoleBindingYaml 获取 RoleBinding YAML
 func (h *K8sRoleBindingHandler) GetRoleBindingYaml(ctx *gin.Context) {
 	var req model.GetRoleBindingYamlReq
 
@@ -200,7 +193,6 @@ func (h *K8sRoleBindingHandler) GetRoleBindingYaml(ctx *gin.Context) {
 	})
 }
 
-// UpdateRoleBindingYaml 更新 RoleBinding YAML
 func (h *K8sRoleBindingHandler) UpdateRoleBindingYaml(ctx *gin.Context) {
 	var req model.UpdateRoleBindingByYamlReq
 

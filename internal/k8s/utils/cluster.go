@@ -47,7 +47,6 @@ func CleanClusterSensitiveInfoList(clusters []*model.K8sCluster) {
 	}
 }
 
-// ValidateClusterExists 验证集群是否存在
 func ValidateClusterExists(cluster *model.K8sCluster, clusterID int) error {
 	if cluster == nil {
 		return fmt.Errorf("集群不存在，ID: %d", clusterID)
@@ -55,14 +54,12 @@ func ValidateClusterExists(cluster *model.K8sCluster, clusterID int) error {
 	return nil
 }
 
-// ValidateResourceQuantities 验证资源配额格式
 func ValidateResourceQuantities(cluster *model.K8sCluster) error {
 	// TODO: 实现资源配额验证逻辑
 	// 这里可以验证CPU、内存等资源配额的格式是否正确
 	return nil
 }
 
-// AddClusterResourceLimit 添加集群资源限制
 func AddClusterResourceLimit(ctx context.Context, client kubernetes.Interface, cluster *model.K8sCluster) error {
 	// TODO: 实现添加集群资源限制的逻辑
 	// 这里可以创建ResourceQuota或LimitRange等资源

@@ -64,7 +64,6 @@ func NewDaemonSetService(daemonSetManager manager.DaemonSetManager, logger *zap.
 	}
 }
 
-// CreateDaemonSet 创建DaemonSet
 func (s *daemonSetService) CreateDaemonSet(ctx context.Context, req *model.CreateDaemonSetReq) error {
 	if req == nil {
 		return fmt.Errorf("创建DaemonSet请求不能为空")
@@ -82,18 +81,16 @@ func (s *daemonSetService) CreateDaemonSet(ctx context.Context, req *model.Creat
 		return fmt.Errorf("命名空间不能为空")
 	}
 
-	// 从请求构建DaemonSet对象
 	daemonSet, err := utils.BuildDaemonSetFromRequest(req)
 	if err != nil {
-		s.logger.Error("CreateDaemonSet: 构建DaemonSet对象失败",
+		s.logger.Error("构建DaemonSet对象失败",
 			zap.Error(err),
 			zap.String("name", req.Name))
 		return fmt.Errorf("构建DaemonSet对象失败: %w", err)
 	}
 
-	// 验证DaemonSet配置
 	if err := utils.ValidateDaemonSet(daemonSet); err != nil {
-		s.logger.Error("CreateDaemonSet: DaemonSet配置验证失败",
+		s.logger.Error("DaemonSet配置验证失败",
 			zap.Error(err),
 			zap.String("name", req.Name))
 		return fmt.Errorf("daemonSet配置验证失败: %w", err)
@@ -101,7 +98,7 @@ func (s *daemonSetService) CreateDaemonSet(ctx context.Context, req *model.Creat
 
 	err = s.daemonSetManager.CreateDaemonSet(ctx, req.ClusterID, req.Namespace, daemonSet)
 	if err != nil {
-		s.logger.Error("CreateDaemonSet: 创建DaemonSet失败",
+		s.logger.Error("创建DaemonSet失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -112,7 +109,6 @@ func (s *daemonSetService) CreateDaemonSet(ctx context.Context, req *model.Creat
 	return nil
 }
 
-// CreateDaemonSetByYaml 通过YAML创建DaemonSet
 func (s *daemonSetService) CreateDaemonSetByYaml(ctx context.Context, req *model.CreateDaemonSetByYamlReq) error {
 	if req == nil {
 		return fmt.Errorf("通过YAML创建DaemonSet请求不能为空")
@@ -129,7 +125,6 @@ func (s *daemonSetService) CreateDaemonSetByYaml(ctx context.Context, req *model
 	s.logger.Info("开始通过YAML创建DaemonSet",
 		zap.Int("clusterID", req.ClusterID))
 
-	// 从YAML构建DaemonSet对象
 	daemonSet, err := utils.BuildDaemonSetFromYaml(req)
 	if err != nil {
 		s.logger.Error("从YAML构建DaemonSet失败",
@@ -138,15 +133,21 @@ func (s *daemonSetService) CreateDaemonSetByYaml(ctx context.Context, req *model
 		return fmt.Errorf("从YAML构建DaemonSet失败: %w", err)
 	}
 
-	// 验证DaemonSet配置
+	// 如果YAML中没有指定namespace，使用default命名空间
+	if daemonSet.Namespace == "" {
+		daemonSet.Namespace = "default"
+		s.logger.Info("YAML中未指定namespace，使用default命名空间",
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("name", daemonSet.Name))
+	}
+
 	if err := utils.ValidateDaemonSet(daemonSet); err != nil {
-		s.logger.Error("CreateDaemonSetByYaml: DaemonSet配置验证失败",
+		s.logger.Error("DaemonSet配置验证失败",
 			zap.Error(err),
 			zap.String("name", daemonSet.Name))
 		return fmt.Errorf("daemonSet配置验证失败: %w", err)
 	}
 
-	// 使用现有的创建方法
 	err = s.daemonSetManager.CreateDaemonSet(ctx, req.ClusterID, daemonSet.Namespace, daemonSet)
 	if err != nil {
 		s.logger.Error("通过YAML创建DaemonSet失败",
@@ -165,7 +166,6 @@ func (s *daemonSetService) CreateDaemonSetByYaml(ctx context.Context, req *model
 	return nil
 }
 
-// DeleteDaemonSet 删除DaemonSet
 func (s *daemonSetService) DeleteDaemonSet(ctx context.Context, req *model.DeleteDaemonSetReq) error {
 	if req == nil {
 		return fmt.Errorf("删除DaemonSet请求不能为空")
@@ -185,7 +185,7 @@ func (s *daemonSetService) DeleteDaemonSet(ctx context.Context, req *model.Delet
 
 	err := s.daemonSetManager.DeleteDaemonSet(ctx, req.ClusterID, req.Namespace, req.Name, metav1.DeleteOptions{})
 	if err != nil {
-		s.logger.Error("DeleteDaemonSet: 删除DaemonSet失败",
+		s.logger.Error("删除DaemonSet失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -196,7 +196,6 @@ func (s *daemonSetService) DeleteDaemonSet(ctx context.Context, req *model.Delet
 	return nil
 }
 
-// GetDaemonSetDetails 获取DaemonSet详情
 func (s *daemonSetService) GetDaemonSetDetails(ctx context.Context, req *model.GetDaemonSetDetailsReq) (*model.K8sDaemonSet, error) {
 	if req == nil {
 		return nil, fmt.Errorf("获取DaemonSet详情请求不能为空")
@@ -216,7 +215,7 @@ func (s *daemonSetService) GetDaemonSetDetails(ctx context.Context, req *model.G
 
 	daemonSet, err := s.daemonSetManager.GetDaemonSet(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		s.logger.Error("GetDaemonSetDetails: 获取DaemonSet失败",
+		s.logger.Error("获取DaemonSet失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -224,10 +223,9 @@ func (s *daemonSetService) GetDaemonSetDetails(ctx context.Context, req *model.G
 		return nil, fmt.Errorf("获取DaemonSet失败: %w", err)
 	}
 
-	// 构建详细信息
 	k8sDaemonSet, err := utils.BuildK8sDaemonSet(ctx, req.ClusterID, *daemonSet)
 	if err != nil {
-		s.logger.Error("GetDaemonSetDetails: 构建DaemonSet详细信息失败",
+		s.logger.Error("构建DaemonSet详细信息失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -238,7 +236,6 @@ func (s *daemonSetService) GetDaemonSetDetails(ctx context.Context, req *model.G
 	return k8sDaemonSet, nil
 }
 
-// GetDaemonSetHistory 获取DaemonSet版本历史
 func (s *daemonSetService) GetDaemonSetHistory(ctx context.Context, req *model.GetDaemonSetHistoryReq) (model.ListResp[*model.K8sDaemonSetHistory], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sDaemonSetHistory]{}, fmt.Errorf("获取DaemonSet历史请求不能为空")
@@ -258,7 +255,7 @@ func (s *daemonSetService) GetDaemonSetHistory(ctx context.Context, req *model.G
 
 	history, total, err := s.daemonSetManager.GetDaemonSetHistory(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		s.logger.Error("GetDaemonSetHistory: 获取DaemonSet历史失败",
+		s.logger.Error("获取DaemonSet历史失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -272,7 +269,6 @@ func (s *daemonSetService) GetDaemonSetHistory(ctx context.Context, req *model.G
 	}, nil
 }
 
-// GetDaemonSetList 获取DaemonSet列表
 func (s *daemonSetService) GetDaemonSetList(ctx context.Context, req *model.GetDaemonSetListReq) (model.ListResp[*model.K8sDaemonSet], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sDaemonSet]{}, fmt.Errorf("获取DaemonSet列表请求不能为空")
@@ -282,12 +278,11 @@ func (s *daemonSetService) GetDaemonSetList(ctx context.Context, req *model.GetD
 		return model.ListResp[*model.K8sDaemonSet]{}, fmt.Errorf("集群ID不能为空")
 	}
 
-	// 构建查询选项
 	listOptions := utils.BuildDaemonSetListOptions(req)
 
 	k8sDaemonSets, err := s.daemonSetManager.GetDaemonSetList(ctx, req.ClusterID, req.Namespace, listOptions)
 	if err != nil {
-		s.logger.Error("GetDaemonSetList: 获取DaemonSet列表失败",
+		s.logger.Error("获取DaemonSet列表失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace))
@@ -325,7 +320,7 @@ func (s *daemonSetService) GetDaemonSetList(ctx context.Context, req *model.GetD
 		page = 1
 	}
 	if size <= 0 {
-		size = 10 // 默认每页显示10条
+		size = 10
 	}
 
 	pagedItems, total := utils.PaginateK8sDaemonSets(filteredDaemonSets, page, size)
@@ -336,7 +331,6 @@ func (s *daemonSetService) GetDaemonSetList(ctx context.Context, req *model.GetD
 	}, nil
 }
 
-// GetDaemonSetPods 获取DaemonSet下的Pod列表
 func (s *daemonSetService) GetDaemonSetPods(ctx context.Context, req *model.GetDaemonSetPodsReq) (model.ListResp[*model.K8sPod], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("获取DaemonSet Pods请求不能为空")
@@ -356,7 +350,7 @@ func (s *daemonSetService) GetDaemonSetPods(ctx context.Context, req *model.GetD
 
 	pods, total, err := s.daemonSetManager.GetDaemonSetPods(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		s.logger.Error("GetDaemonSetPods: 获取DaemonSet Pod失败",
+		s.logger.Error("获取DaemonSet Pod失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -370,7 +364,6 @@ func (s *daemonSetService) GetDaemonSetPods(ctx context.Context, req *model.GetD
 	}, nil
 }
 
-// GetDaemonSetYaml 获取DaemonSet YAML
 func (s *daemonSetService) GetDaemonSetYaml(ctx context.Context, req *model.GetDaemonSetYamlReq) (*model.K8sYaml, error) {
 	if req == nil {
 		return nil, fmt.Errorf("获取DaemonSet YAML请求不能为空")
@@ -390,7 +383,7 @@ func (s *daemonSetService) GetDaemonSetYaml(ctx context.Context, req *model.GetD
 
 	daemonSet, err := s.daemonSetManager.GetDaemonSet(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		s.logger.Error("GetDaemonSetYaml: 获取DaemonSet失败",
+		s.logger.Error("获取DaemonSet失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -398,10 +391,9 @@ func (s *daemonSetService) GetDaemonSetYaml(ctx context.Context, req *model.GetD
 		return nil, fmt.Errorf("获取DaemonSet失败: %w", err)
 	}
 
-	// 转换为YAML
 	yamlContent, err := utils.DaemonSetToYAML(daemonSet)
 	if err != nil {
-		s.logger.Error("GetDaemonSetYaml: 转换为YAML失败",
+		s.logger.Error("转换为YAML失败",
 			zap.Error(err),
 			zap.String("daemonSetName", daemonSet.Name))
 		return nil, fmt.Errorf("转换为YAML失败: %w", err)
@@ -412,7 +404,6 @@ func (s *daemonSetService) GetDaemonSetYaml(ctx context.Context, req *model.GetD
 	}, nil
 }
 
-// RestartDaemonSet 重启DaemonSet
 func (s *daemonSetService) RestartDaemonSet(ctx context.Context, req *model.RestartDaemonSetReq) error {
 	if req == nil {
 		return fmt.Errorf("重启DaemonSet请求不能为空")
@@ -432,7 +423,7 @@ func (s *daemonSetService) RestartDaemonSet(ctx context.Context, req *model.Rest
 
 	err := s.daemonSetManager.RestartDaemonSet(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		s.logger.Error("RestartDaemonSet: 重启DaemonSet失败",
+		s.logger.Error("重启DaemonSet失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -443,7 +434,6 @@ func (s *daemonSetService) RestartDaemonSet(ctx context.Context, req *model.Rest
 	return nil
 }
 
-// RollbackDaemonSet 回滚DaemonSet
 func (s *daemonSetService) RollbackDaemonSet(ctx context.Context, req *model.RollbackDaemonSetReq) error {
 	if req == nil {
 		return fmt.Errorf("回滚DaemonSet请求不能为空")
@@ -467,7 +457,7 @@ func (s *daemonSetService) RollbackDaemonSet(ctx context.Context, req *model.Rol
 
 	err := s.daemonSetManager.RollbackDaemonSet(ctx, req.ClusterID, req.Namespace, req.Name, req.Revision)
 	if err != nil {
-		s.logger.Error("RollbackDaemonSet: 回滚DaemonSet失败",
+		s.logger.Error("回滚DaemonSet失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -479,7 +469,6 @@ func (s *daemonSetService) RollbackDaemonSet(ctx context.Context, req *model.Rol
 	return nil
 }
 
-// UpdateDaemonSetByYaml 通过YAML更新DaemonSet
 func (s *daemonSetService) UpdateDaemonSetByYaml(ctx context.Context, req *model.UpdateDaemonSetByYamlReq) error {
 	if req == nil {
 		return fmt.Errorf("通过YAML更新DaemonSet请求不能为空")
@@ -506,7 +495,6 @@ func (s *daemonSetService) UpdateDaemonSetByYaml(ctx context.Context, req *model
 		zap.String("namespace", req.Namespace),
 		zap.String("name", req.Name))
 
-	// 从YAML构建DaemonSet对象
 	daemonSet, err := utils.BuildDaemonSetFromYamlForUpdate(req)
 	if err != nil {
 		s.logger.Error("从YAML构建DaemonSet失败",
@@ -517,15 +505,13 @@ func (s *daemonSetService) UpdateDaemonSetByYaml(ctx context.Context, req *model
 		return fmt.Errorf("从YAML构建DaemonSet失败: %w", err)
 	}
 
-	// 验证更新后的DaemonSet配置
 	if err := utils.ValidateDaemonSet(daemonSet); err != nil {
-		s.logger.Error("UpdateDaemonSetByYaml: DaemonSet配置验证失败",
+		s.logger.Error("DaemonSet配置验证失败",
 			zap.Error(err),
 			zap.String("name", req.Name))
 		return fmt.Errorf("daemonSet配置验证失败: %w", err)
 	}
 
-	// 使用现有的更新方法
 	err = s.daemonSetManager.UpdateDaemonSet(ctx, req.ClusterID, req.Namespace, daemonSet)
 	if err != nil {
 		s.logger.Error("通过YAML更新DaemonSet失败",
@@ -544,7 +530,6 @@ func (s *daemonSetService) UpdateDaemonSetByYaml(ctx context.Context, req *model
 	return nil
 }
 
-// UpdateDaemonSet 更新DaemonSet
 func (s *daemonSetService) UpdateDaemonSet(ctx context.Context, req *model.UpdateDaemonSetReq) error {
 	if req == nil {
 		return fmt.Errorf("更新DaemonSet请求不能为空")
@@ -564,7 +549,7 @@ func (s *daemonSetService) UpdateDaemonSet(ctx context.Context, req *model.Updat
 
 	existingDaemonSet, err := s.daemonSetManager.GetDaemonSet(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		s.logger.Error("UpdateDaemonSet: 获取现有DaemonSet失败",
+		s.logger.Error("获取现有DaemonSet失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
@@ -578,7 +563,7 @@ func (s *daemonSetService) UpdateDaemonSet(ctx context.Context, req *model.Updat
 	if req.YAML != "" {
 		yamlDaemonSet, err := utils.YAMLToDaemonSet(req.YAML)
 		if err != nil {
-			s.logger.Error("UpdateDaemonSet: 解析YAML失败",
+			s.logger.Error("解析YAML失败",
 				zap.Error(err),
 				zap.String("name", req.Name))
 			return fmt.Errorf("解析YAML失败: %w", err)
@@ -609,12 +594,10 @@ func (s *daemonSetService) UpdateDaemonSet(ctx context.Context, req *model.Updat
 				updatedDaemonSet.Spec.Template.Labels = make(map[string]string)
 			}
 
-			// 先添加用户指定的标签
 			for k, v := range req.Labels {
 				updatedDaemonSet.Spec.Template.Labels[k] = v
 			}
 
-			// 然后强制保留 selector 的标签（selector 是不可变的，必须匹配）
 			if updatedDaemonSet.Spec.Selector != nil && updatedDaemonSet.Spec.Selector.MatchLabels != nil {
 				for k, v := range updatedDaemonSet.Spec.Selector.MatchLabels {
 					updatedDaemonSet.Spec.Template.Labels[k] = v
@@ -626,9 +609,8 @@ func (s *daemonSetService) UpdateDaemonSet(ctx context.Context, req *model.Updat
 		}
 	}
 
-	// 验证更新后的DaemonSet配置
 	if err := utils.ValidateDaemonSet(updatedDaemonSet); err != nil {
-		s.logger.Error("UpdateDaemonSet: DaemonSet配置验证失败",
+		s.logger.Error("DaemonSet配置验证失败",
 			zap.Error(err),
 			zap.String("name", req.Name))
 		return fmt.Errorf("daemonSet配置验证失败: %w", err)
@@ -636,7 +618,7 @@ func (s *daemonSetService) UpdateDaemonSet(ctx context.Context, req *model.Updat
 
 	err = s.daemonSetManager.UpdateDaemonSet(ctx, req.ClusterID, req.Namespace, updatedDaemonSet)
 	if err != nil {
-		s.logger.Error("UpdateDaemonSet: 更新DaemonSet失败",
+		s.logger.Error("更新DaemonSet失败",
 			zap.Error(err),
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),

@@ -53,7 +53,6 @@ type PVCService interface {
 	GetPVC(ctx context.Context, req *model.GetPVCDetailsReq) (*model.K8sPVC, error)
 	GetPVCYaml(ctx context.Context, req *model.GetPVCYamlReq) (*model.K8sYaml, error)
 
-	// PVC操作
 	CreatePVC(ctx context.Context, req *model.CreatePVCReq) error
 	UpdatePVC(ctx context.Context, req *model.UpdatePVCReq) error
 	// YAML相关方法
@@ -81,7 +80,6 @@ func NewPVCService(dao dao.ClusterDAO, client client.K8sClient, pvcManager manag
 	}
 }
 
-// GetPVCList 获取PVC列表
 func (s *pvcService) GetPVCList(ctx context.Context, req *model.GetPVCListReq) (model.ListResp[*model.K8sPVC], error) {
 	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
@@ -150,7 +148,6 @@ func (s *pvcService) GetPVCList(ctx context.Context, req *model.GetPVCListReq) (
 	return model.ListResp[*model.K8sPVC]{Items: filtered[start:end], Total: total}, nil
 }
 
-// GetPVCsByNamespace 根据命名空间获取PVC列表
 func (s *pvcService) GetPVCsByNamespace(ctx context.Context, clusterID int, namespace string) ([]*model.K8sPVC, error) {
 	kubeClient, err := s.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -175,7 +172,6 @@ func (s *pvcService) GetPVCsByNamespace(ctx context.Context, clusterID int, name
 	return entities, nil
 }
 
-// GetPVC 获取单个PVC详情
 func (s *pvcService) GetPVC(ctx context.Context, req *model.GetPVCDetailsReq) (*model.K8sPVC, error) {
 	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
@@ -195,7 +191,6 @@ func (s *pvcService) GetPVC(ctx context.Context, req *model.GetPVCDetailsReq) (*
 	return s.convertPVCToEntity(pvc, req.ClusterID), nil
 }
 
-// GetPVCYaml 获取PVC的YAML
 func (s *pvcService) GetPVCYaml(ctx context.Context, req *model.GetPVCYamlReq) (*model.K8sYaml, error) {
 	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
@@ -221,7 +216,6 @@ func (s *pvcService) GetPVCYaml(ctx context.Context, req *model.GetPVCYamlReq) (
 	return &model.K8sYaml{YAML: string(yamlData)}, nil
 }
 
-// CreatePVC 创建PVC
 func (s *pvcService) CreatePVC(ctx context.Context, req *model.CreatePVCReq) error {
 	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
@@ -250,7 +244,6 @@ func (s *pvcService) CreatePVC(ctx context.Context, req *model.CreatePVCReq) err
 	return nil
 }
 
-// UpdatePVC 更新PVC
 func (s *pvcService) UpdatePVC(ctx context.Context, req *model.UpdatePVCReq) error {
 	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
@@ -279,7 +272,6 @@ func (s *pvcService) UpdatePVC(ctx context.Context, req *model.UpdatePVCReq) err
 	return nil
 }
 
-// DeletePVC 删除PVC
 func (s *pvcService) DeletePVC(ctx context.Context, req *model.DeletePVCReq) error {
 	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
@@ -342,7 +334,6 @@ func (s *pvcService) convertPVCToEntity(pvc *corev1.PersistentVolumeClaim, clust
 		volumeMode = string(*pvc.Spec.VolumeMode)
 	}
 
-	// 转换状态为枚举类型
 	status := s.convertPVCStatus(pvc.Status.Phase)
 
 	// 获取选择器
@@ -406,7 +397,6 @@ func (s *pvcService) pvcStatusToString(status model.K8sPVCStatus) string {
 	}
 }
 
-// CreatePVCByYaml 通过YAML创建PVC
 func (s *pvcService) CreatePVCByYaml(ctx context.Context, req *model.CreatePVCByYamlReq) error {
 	if req == nil {
 		return pkg.NewBusinessError(constants.ErrInvalidParam, "通过YAML创建PVC请求不能为空")
@@ -422,7 +412,13 @@ func (s *pvcService) CreatePVCByYaml(ctx context.Context, req *model.CreatePVCBy
 		s.logger.Error("解析PVC YAML失败", zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrK8sResourceOperation, "解析YAML失败")
 	}
-	// Namespace will be extracted from YAML content
+	// 如果YAML中没有指定namespace，使用default命名空间
+	if pvc.Namespace == "" {
+		pvc.Namespace = "default"
+		s.logger.Info("YAML中未指定namespace，使用default命名空间",
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("name", pvc.Name))
+	}
 	if err := k8sutils.ValidatePVC(pvc); err != nil {
 		s.logger.Error("PVC配置验证失败", zap.Error(err))
 		return pkg.NewBusinessError(constants.ErrInvalidParam, "PVC配置验证失败")
@@ -434,7 +430,6 @@ func (s *pvcService) CreatePVCByYaml(ctx context.Context, req *model.CreatePVCBy
 	return nil
 }
 
-// UpdatePVCByYaml 通过YAML更新PVC
 func (s *pvcService) UpdatePVCByYaml(ctx context.Context, req *model.UpdatePVCByYamlReq) error {
 	if req == nil {
 		return pkg.NewBusinessError(constants.ErrInvalidParam, "通过YAML更新PVC请求不能为空")
@@ -488,7 +483,6 @@ func (s *pvcService) ExpandPVC(ctx context.Context, req *model.ExpandPVCReq) err
 		return pkg.NewBusinessError(constants.ErrInvalidParam, "新容量不能为空")
 	}
 
-	// 使用manager的扩容方法
 	if err := s.pvcManager.ExpandPVC(ctx, req.ClusterID, req.Namespace, req.Name, req.NewCapacity); err != nil {
 		s.logger.Error("扩容PVC失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("namespace", req.Namespace), zap.String("name", req.Name))
 		return pkg.NewBusinessError(constants.ErrK8sResourceUpdate, "扩容PVC失败")
@@ -498,7 +492,6 @@ func (s *pvcService) ExpandPVC(ctx context.Context, req *model.ExpandPVCReq) err
 	return nil
 }
 
-// GetPVCPods 获取使用PVC的Pod列表
 func (s *pvcService) GetPVCPods(ctx context.Context, req *model.GetPVCPodsReq) (model.ListResp[*model.K8sPod], error) {
 	if req == nil {
 		return model.ListResp[*model.K8sPod]{}, pkg.NewBusinessError(constants.ErrInvalidParam, "获取PVC Pods请求不能为空")
@@ -570,7 +563,6 @@ func (s *pvcService) convertPodToEntity(pod *corev1.Pod, clusterID int) *model.K
 		return nil
 	}
 
-	// 使用utils包中的完整转换方法
 	k8sPod := k8sutils.ConvertToK8sPod(pod)
 	if k8sPod != nil {
 		// 设置集群ID

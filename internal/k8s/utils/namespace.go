@@ -34,7 +34,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ConvertLabelsToKeyValueList 将Kubernetes标签转换为KeyValueList
 func ConvertLabelsToKeyValueList(labels map[string]string) model.KeyValueList {
 	if labels == nil {
 		return model.KeyValueList{}
@@ -60,7 +59,6 @@ func IsNamespaceTerminating(namespace *corev1.Namespace) bool {
 	return namespace != nil && namespace.Status.Phase == corev1.NamespaceTerminating
 }
 
-// GetNamespaceStatus 获取命名空间状态的中文描述
 func GetNamespaceStatus(phase corev1.NamespacePhase) string {
 	switch phase {
 	case corev1.NamespaceActive:
@@ -72,7 +70,6 @@ func GetNamespaceStatus(phase corev1.NamespacePhase) string {
 	}
 }
 
-// ConvertToK8sNamespace 将名称和标签转换为Kubernetes Namespace对象
 func ConvertToK8sNamespace(name string, labels, annotations model.KeyValueList) *corev1.Namespace {
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -93,7 +90,6 @@ func ConvertToK8sNamespace(name string, labels, annotations model.KeyValueList) 
 	return namespace
 }
 
-// BuildNamespaceListOptions 构建Namespace列表选项
 func BuildNamespaceListOptions(req *model.K8sNamespaceListReq) metav1.ListOptions {
 	options := metav1.ListOptions{}
 
@@ -149,7 +145,6 @@ func FilterNamespacesByLabels(namespaces []corev1.Namespace, labels map[string]s
 	return filtered
 }
 
-// GetNamespaceResourceQuota 获取命名空间资源配额信息
 func GetNamespaceResourceQuota(namespace *corev1.Namespace) map[string]string {
 	if namespace == nil || namespace.Annotations == nil {
 		return nil
@@ -157,7 +152,6 @@ func GetNamespaceResourceQuota(namespace *corev1.Namespace) map[string]string {
 
 	quota := make(map[string]string)
 
-	// 检查常见的资源配额注解
 	quotaKeys := []string{
 		"quota.cpu",
 		"quota.memory",
@@ -217,7 +211,6 @@ func FilterNamespacesByName(namespaces []corev1.Namespace, nameFilter string) []
 	return filtered
 }
 
-// BuildNamespaceListPagination 构建命名空间列表分页逻辑
 func BuildNamespaceListPagination(namespaces []corev1.Namespace, page, size int) ([]corev1.Namespace, int64) {
 	total := int64(len(namespaces))
 	if total == 0 {
@@ -245,13 +238,11 @@ func BuildNamespaceListPagination(namespaces []corev1.Namespace, page, size int)
 	return namespaces[start:end], total
 }
 
-// ValidateNamespaceFilters 验证命名空间过滤参数
 func ValidateNamespaceFilters(req *model.K8sNamespaceListReq) error {
 	if req == nil {
 		return nil
 	}
 
-	// 验证标签选择器格式（简单验证）
 	if req.LabelSelector != "" {
 		// 可以添加更复杂的标签选择器格式验证
 		if strings.Contains(req.LabelSelector, "..") {
