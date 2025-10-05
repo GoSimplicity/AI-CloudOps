@@ -48,7 +48,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	"github.com/hibiken/asynq"
+)
 
+import (
 	_ "github.com/google/wire"
 )
 
