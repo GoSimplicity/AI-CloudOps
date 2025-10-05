@@ -254,6 +254,7 @@ func (s *secretService) UpdateSecret(ctx context.Context, req *model.UpdateSecre
 		return fmt.Errorf("请求参数不能为空")
 	}
 
+	// 获取现有的Secret以获取ResourceVersion（用于乐观锁）
 	existingSecret, err := s.secretManager.GetSecret(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -266,21 +267,20 @@ func (s *secretService) UpdateSecret(ctx context.Context, req *model.UpdateSecre
 		return fmt.Errorf("获取Secret失败: %w", err)
 	}
 
-	// 更新Secret数据
-	if req.Data != nil {
-		existingSecret.Data = map[string][]byte(req.Data)
-	}
-	if req.StringData != nil {
-		existingSecret.StringData = req.StringData
-	}
-	if req.Labels != nil {
-		existingSecret.Labels = req.Labels
-	}
-	if req.Annotations != nil {
-		existingSecret.Annotations = req.Annotations
-	}
+	// 创建新的Secret对象进行完全覆盖更新（参考Deployment模块）
+	// 只保留必要的元数据字段
+	updatedSecret := existingSecret.DeepCopy()
 
-	_, err = s.secretManager.UpdateSecret(ctx, req.ClusterID, existingSecret)
+	// 完全覆盖数据字段
+	updatedSecret.Data = map[string][]byte(req.Data)
+	updatedSecret.StringData = req.StringData
+	updatedSecret.Labels = req.Labels
+	updatedSecret.Annotations = req.Annotations
+
+	// Type和Immutable字段在创建后通常不能修改，保持原值
+	// 如果需要修改，K8s会返回错误
+
+	_, err = s.secretManager.UpdateSecret(ctx, req.ClusterID, updatedSecret)
 	if err != nil {
 		s.logger.Error("更新Secret失败", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID),
@@ -289,7 +289,7 @@ func (s *secretService) UpdateSecret(ctx context.Context, req *model.UpdateSecre
 		return fmt.Errorf("更新Secret失败: %w", err)
 	}
 
-	s.logger.Info("成功更新Secret",
+	s.logger.Info("成功更新Secret (完全覆盖)",
 		zap.Int("cluster_id", req.ClusterID),
 		zap.String("namespace", req.Namespace),
 		zap.String("name", req.Name))
@@ -396,36 +396,47 @@ func (s *secretService) UpdateSecretByYaml(ctx context.Context, req *model.Updat
 		return fmt.Errorf("请求参数不能为空")
 	}
 
+	s.logger.Info("开始通过YAML更新Secret",
+		zap.Int("cluster_id", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
+
 	// 解析YAML
 	sec, err := k8sutils.YAMLToSecret(req.YAML)
 	if err != nil {
+		s.logger.Error("解析YAML失败", zap.Error(err))
 		return fmt.Errorf("解析YAML失败: %w", err)
 	}
 
-	// 设置命名空间和名称
+	// 强制设置命名空间和名称（以URL参数为准）
 	sec.Namespace = req.Namespace
 	sec.Name = req.Name
 
-	// 获取现有资源以获取ResourceVersion
+	// 获取现有资源以获取ResourceVersion（用于乐观锁，避免并发冲突）
 	existing, err := s.secretManager.GetSecret(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("Secret不存在: %s/%s", req.Namespace, req.Name)
 		}
+		s.logger.Error("获取现有Secret失败", zap.Error(err))
 		return fmt.Errorf("获取现有Secret失败: %w", err)
 	}
 
-	// 保留ResourceVersion以避免并发冲突
+	// 保留ResourceVersion和UID等关键元数据
 	sec.ResourceVersion = existing.ResourceVersion
+	sec.UID = existing.UID
 
+	// 执行完全覆盖式更新
 	_, err = s.secretManager.UpdateSecret(ctx, req.ClusterID, sec)
 	if err != nil {
 		s.logger.Error("通过YAML更新Secret失败", zap.Error(err),
-			zap.Int("cluster_id", req.ClusterID), zap.String("namespace", req.Namespace), zap.String("name", req.Name))
+			zap.Int("cluster_id", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
 		return fmt.Errorf("通过YAML更新Secret失败: %w", err)
 	}
 
-	s.logger.Info("成功通过YAML更新Secret",
+	s.logger.Info("成功通过YAML更新Secret (完全覆盖)",
 		zap.Int("cluster_id", req.ClusterID),
 		zap.String("namespace", req.Namespace),
 		zap.String("name", req.Name))
