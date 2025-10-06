@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
@@ -93,6 +94,7 @@ func (s *secretService) GetSecretList(ctx context.Context, req *model.GetSecretL
 		return model.ListResp[*model.K8sSecret]{}, fmt.Errorf("获取Secret列表失败: %w", err)
 	}
 
+	// 应用过滤条件
 	entities := make([]*model.K8sSecret, 0, len(list.Items))
 	for _, item := range list.Items {
 		entity := s.convertToK8sSecret(&item, req.ClusterID)
@@ -100,8 +102,17 @@ func (s *secretService) GetSecretList(ctx context.Context, req *model.GetSecretL
 		if req.Type != "" && string(entity.Type) != string(req.Type) {
 			continue
 		}
+		// 名称过滤（使用通用的Search字段，支持不区分大小写）
+		if !utils.FilterByName(entity.Name, req.Search) {
+			continue
+		}
 		entities = append(entities, entity)
 	}
+
+	// 按创建时间排序（最新的在前）
+	utils.SortByCreationTime(entities, func(secret *model.K8sSecret) time.Time {
+		return secret.CreatedAt
+	})
 
 	page := req.Page
 	size := req.Size

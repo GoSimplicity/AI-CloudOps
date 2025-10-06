@@ -47,8 +47,7 @@ type K8sClusterRoleBinding struct {
 // GetClusterRoleBindingListReq 获取ClusterRoleBinding列表请求
 type GetClusterRoleBindingListReq struct {
 	ListReq
-	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
-	Keyword   string `json:"keyword" form:"keyword" comment:"关键字搜索"`
+	ClusterID int `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
 }
 
 // GetClusterRoleBindingDetailsReq 获取ClusterRoleBinding详情请求

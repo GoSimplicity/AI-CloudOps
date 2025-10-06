@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
@@ -131,9 +132,11 @@ func (s *ingressService) GetIngressList(ctx context.Context, req *model.GetIngre
 		return model.ListResp[*model.K8sIngress]{}, fmt.Errorf("获取Ingress列表失败: %w", err)
 	}
 
+	// 应用过滤条件
 	var filteredIngresses []*model.K8sIngress
-	if req.Status != "" {
-		for _, k8sIngress := range k8sIngresses {
+	for _, k8sIngress := range k8sIngresses {
+		// 状态过滤
+		if req.Status != "" {
 			var statusStr string
 			switch k8sIngress.Status {
 			case model.K8sIngressStatusRunning:
@@ -145,13 +148,21 @@ func (s *ingressService) GetIngressList(ctx context.Context, req *model.GetIngre
 			default:
 				statusStr = "unknown"
 			}
-			if strings.EqualFold(statusStr, req.Status) {
-				filteredIngresses = append(filteredIngresses, k8sIngress)
+			if !strings.EqualFold(statusStr, req.Status) {
+				continue
 			}
 		}
-	} else {
-		filteredIngresses = k8sIngresses
+		// 名称过滤（使用通用的Search字段，支持不区分大小写）
+		if !utils.FilterByName(k8sIngress.Name, req.Search) {
+			continue
+		}
+		filteredIngresses = append(filteredIngresses, k8sIngress)
 	}
+
+	// 按创建时间排序（最新的在前）
+	utils.SortByCreationTime(filteredIngresses, func(ingress *model.K8sIngress) time.Time {
+		return ingress.CreatedAt
+	})
 
 	page := req.Page
 	size := req.Size

@@ -103,8 +103,8 @@ func (d *clusterDAO) GetClusterList(ctx context.Context, req *model.ListClusters
 		query = query.Offset(offset).Limit(req.Size)
 	}
 
-	// 执行查询并排序
-	if err := query.Order("updated_at DESC, id DESC").Find(&clusters).Error; err != nil {
+	// 执行查询并按创建时间排序（最新的在前）
+	if err := query.Order("created_at DESC, id DESC").Find(&clusters).Error; err != nil {
 		d.l.Error("GetClusterList: 查询集群列表失败",
 			zap.Int("page", req.Page),
 			zap.Int("size", req.Size),

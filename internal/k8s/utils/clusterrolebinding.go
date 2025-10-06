@@ -49,13 +49,13 @@ func ConvertToK8sClusterRoleBinding(crb *rbacv1.ClusterRoleBinding) *model.K8sCl
 	return &model.K8sClusterRoleBinding{
 		Name:                  crb.Name,
 		UID:                   string(crb.UID),
-		CreatedAt:             crb.CreationTimestamp.Time.Format("2006-01-02T15:04:05Z07:00"),
+		CreatedAt:             crb.CreationTimestamp.Time.Format(time.RFC3339),
 		Labels:                crb.Labels,
 		Annotations:           crb.Annotations,
 		RoleRef:               ConvertK8sRoleRefToModel(crb.RoleRef),
 		Subjects:              ConvertK8sSubjectsToModel(crb.Subjects),
 		ResourceVersion:       crb.ResourceVersion,
-		Age:                   crb.CreationTimestamp.Time.Format(time.RFC3339),
+		Age:                   CalculateAge(crb.CreationTimestamp.Time),
 		RawClusterRoleBinding: crb,
 	}
 }
@@ -85,8 +85,6 @@ func ConvertK8sClusterRoleBindingToClusterRoleBindingInfo(clusterRoleBinding *rb
 		return model.K8sClusterRoleBinding{}
 	}
 
-	age := clusterRoleBinding.CreationTimestamp.Time.Format("2006-01-02T15:04:05Z07:00")
-
 	return model.K8sClusterRoleBinding{
 		Name:            clusterRoleBinding.Name,
 		ClusterID:       clusterID,
@@ -97,7 +95,7 @@ func ConvertK8sClusterRoleBindingToClusterRoleBindingInfo(clusterRoleBinding *rb
 		RoleRef:         ConvertK8sRoleRefToModel(clusterRoleBinding.RoleRef),
 		Subjects:        ConvertK8sSubjectsToModel(clusterRoleBinding.Subjects),
 		ResourceVersion: clusterRoleBinding.ResourceVersion,
-		Age:             age,
+		Age:             CalculateAge(clusterRoleBinding.CreationTimestamp.Time),
 	}
 }
 

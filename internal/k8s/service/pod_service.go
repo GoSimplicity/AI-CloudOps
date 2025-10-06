@@ -156,41 +156,30 @@ func (s *podService) GetPodList(ctx context.Context, req *model.GetPodListReq) (
 		return model.ListResp[*model.K8sPod]{}, fmt.Errorf("获取Pod列表失败: %w", err)
 	}
 
+	// 应用过滤条件
 	var filteredPods []*model.K8sPod
 	for _, pod := range k8sPods {
+		// 状态过滤
 		if req.Status != "" && pod.Status != req.Status {
 			continue
 		}
-		if req.Search != "" && !strings.Contains(pod.Name, req.Search) {
+		// 名称过滤（使用通用的Search字段，支持不区分大小写）
+		if !utils.FilterByName(pod.Name, req.Search) {
 			continue
 		}
 		filteredPods = append(filteredPods, pod)
 	}
 
+	// 按创建时间排序（最新的在前）
+	utils.SortByCreationTime(filteredPods, func(pod *model.K8sPod) time.Time {
+		return pod.CreatedAt
+	})
+
 	// 分页处理
-	page := req.Page
-	size := req.Size
-	if page <= 0 {
-		page = 1
-	}
-	if size <= 0 {
-		size = 10
-	}
-
-	total := int64(len(filteredPods))
-	start := (page - 1) * size
-	end := start + size
-
-	if start >= len(filteredPods) {
-		filteredPods = []*model.K8sPod{}
-	} else if end > len(filteredPods) {
-		filteredPods = filteredPods[start:]
-	} else {
-		filteredPods = filteredPods[start:end]
-	}
+	pagedPods, total := utils.Paginate(filteredPods, req.Page, req.Size)
 
 	return model.ListResp[*model.K8sPod]{
-		Items: filteredPods,
+		Items: pagedPods,
 		Total: total,
 	}, nil
 }

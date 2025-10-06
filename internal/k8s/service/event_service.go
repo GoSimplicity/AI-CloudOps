@@ -31,6 +31,7 @@ import (
 	"sort"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -74,12 +75,17 @@ func (s *eventService) GetEventList(ctx context.Context, req *model.GetEventList
 		return model.ListResp[*model.K8sEvent]{}, fmt.Errorf("获取Event列表失败: %w", err)
 	}
 
+	// 应用过滤条件
 	events := make([]*model.K8sEvent, 0, len(eventList.Items))
 	for _, event := range eventList.Items {
 		eventEntity := s.eventManager.ConvertEventToK8sEvent(&event, req.ClusterID)
 
 		// 根据请求参数进行过滤
 		if req.EventType != "" && event.Type != req.EventType {
+			continue
+		}
+		// 名称过滤（使用通用的Search字段，支持不区分大小写）
+		if !utils.FilterByName(event.Name, req.Search) {
 			continue
 		}
 

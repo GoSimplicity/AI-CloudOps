@@ -34,7 +34,6 @@ type GetServiceAccountListReq struct {
 	ListReq
 	ClusterID int    `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"`
 	Namespace string `json:"namespace" form:"namespace" comment:"命名空间"`
-	Keyword   string `json:"keyword" form:"keyword" comment:"关键字搜索"`
 }
 
 // GetServiceAccountDetailsReq 获取ServiceAccount详情请求

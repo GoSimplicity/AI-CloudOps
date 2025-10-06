@@ -28,13 +28,14 @@ package manager
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 type RoleManager interface {
@@ -47,143 +48,189 @@ type RoleManager interface {
 }
 
 type roleManager struct {
-	client client.K8sClient
-	logger *zap.Logger
+	clientFactory client.K8sClient
+	logger        *zap.Logger
 }
 
-func NewRoleManager(client client.K8sClient, logger *zap.Logger) RoleManager {
+func NewRoleManager(clientFactory client.K8sClient, logger *zap.Logger) RoleManager {
 	return &roleManager{
-		client: client,
-		logger: logger,
+		clientFactory: clientFactory,
+		logger:        logger,
 	}
+}
+
+func (m *roleManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
+	kubeClient, err := m.clientFactory.GetKubeClient(clusterID)
+	if err != nil {
+		m.logger.Error("获取Kubernetes客户端失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	}
+	return kubeClient, nil
 }
 
 func (m *roleManager) CreateRole(ctx context.Context, clusterID int, namespace string, role *rbacv1.Role) error {
-	clientset, err := m.client.GetKubeClient(clusterID)
-	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	if role == nil {
+		return fmt.Errorf("role 不能为空")
 	}
 
-	_, err = clientset.RbacV1().Roles(namespace).Create(ctx, role, metav1.CreateOptions{})
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("创建Role失败", zap.Error(err),
-			zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", role.Name))
-		return fmt.Errorf("创建Role %s/%s 失败: %w", namespace, role.Name, err)
+		return err
 	}
 
-	m.logger.Info("成功创建Role",
-		zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", role.Name))
+	_, err = kubeClient.RbacV1().Roles(namespace).Create(ctx, role, metav1.CreateOptions{})
+	if err != nil {
+		m.logger.Error("创建 Role 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", role.Name),
+			zap.Error(err))
+		return fmt.Errorf("创建 Role 失败: %w", err)
+	}
+
+	m.logger.Info("成功创建 Role",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", role.Name))
 	return nil
 }
 
 func (m *roleManager) GetRole(ctx context.Context, clusterID int, namespace, name string) (*rbacv1.Role, error) {
-	clientset, err := m.client.GetKubeClient(clusterID)
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+		return nil, err
 	}
 
-	role, err := clientset.RbacV1().Roles(namespace).Get(ctx, name, metav1.GetOptions{})
+	role, err := kubeClient.RbacV1().Roles(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		m.logger.Error("获取Role失败", zap.Error(err),
-			zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", name))
-		return nil, fmt.Errorf("获取Role %s/%s 失败: %w", namespace, name, err)
+		m.logger.Error("获取 Role 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.Error(err))
+		return nil, fmt.Errorf("获取 Role 失败: %w", err)
+	}
+
+	m.logger.Info("成功获取 Role",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", name),
+		zap.Int("rulesCount", len(role.Rules)))
+
+	// 详细记录规则信息
+	if len(role.Rules) > 0 {
+		for i, rule := range role.Rules {
+			m.logger.Debug("Role规则详情",
+				zap.Int("ruleIndex", i),
+				zap.Strings("verbs", rule.Verbs),
+				zap.Strings("apiGroups", rule.APIGroups),
+				zap.Strings("resources", rule.Resources),
+				zap.Strings("resourceNames", rule.ResourceNames))
+		}
 	}
 
 	return role, nil
 }
 
 func (m *roleManager) GetRoleList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sRole, error) {
-	clientset, err := m.client.GetKubeClient(clusterID)
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+		return nil, err
 	}
 
-	roles, err := clientset.RbacV1().Roles(namespace).List(ctx, listOptions)
+	roleList, err := kubeClient.RbacV1().Roles(namespace).List(ctx, listOptions)
 	if err != nil {
-		m.logger.Error("获取Role列表失败", zap.Error(err),
-			zap.Int("cluster_id", clusterID), zap.String("namespace", namespace))
-		return nil, fmt.Errorf("获取Role列表失败: %w", err)
+		m.logger.Error("获取 Role 列表失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.Error(err))
+		return nil, fmt.Errorf("获取 Role 列表失败: %w", err)
 	}
 
 	var k8sRoles []*model.K8sRole
-	for _, role := range roles.Items {
-		k8sRole := &model.K8sRole{
-			ClusterID:       clusterID,
-			Name:            role.Name,
-			Namespace:       role.Namespace,
-			UID:             string(role.UID),
-			CreatedAt:       role.CreationTimestamp.Time.Format(time.RFC3339),
-			Labels:          role.Labels,
-			Annotations:     role.Annotations,
-			ResourceVersion: role.ResourceVersion,
-			RawRole:         &role,
-		}
-		k8sRoles = append(k8sRoles, k8sRole)
+	for _, role := range roleList.Items {
+		// 使用统一的转换函数确保所有字段都被正确填充
+		roleInfo := utils.ConvertK8sRoleToRoleInfo(&role, clusterID)
+		k8sRoles = append(k8sRoles, &roleInfo)
 	}
 
-	m.logger.Debug("成功获取Role列表",
-		zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.Int("count", len(roles.Items)))
-
+	m.logger.Debug("成功获取 Role 列表",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.Int("count", len(k8sRoles)))
 	return k8sRoles, nil
 }
 
 func (m *roleManager) GetRoleListRaw(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*rbacv1.RoleList, error) {
-	clientset, err := m.client.GetKubeClient(clusterID)
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+		return nil, err
 	}
 
-	roles, err := clientset.RbacV1().Roles(namespace).List(ctx, listOptions)
+	roleList, err := kubeClient.RbacV1().Roles(namespace).List(ctx, listOptions)
 	if err != nil {
-		m.logger.Error("获取Role列表失败", zap.Error(err),
-			zap.Int("cluster_id", clusterID), zap.String("namespace", namespace))
-		return nil, fmt.Errorf("获取Role列表失败: %w", err)
+		m.logger.Error("获取 Role 列表失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.Error(err))
+		return nil, fmt.Errorf("获取 Role 列表失败: %w", err)
 	}
 
-	m.logger.Debug("成功获取Role列表",
-		zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.Int("count", len(roles.Items)))
-
-	return roles, nil
+	m.logger.Debug("成功获取 Role 列表",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.Int("count", len(roleList.Items)))
+	return roleList, nil
 }
 
 func (m *roleManager) UpdateRole(ctx context.Context, clusterID int, namespace string, role *rbacv1.Role) error {
-	clientset, err := m.client.GetKubeClient(clusterID)
-	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	if role == nil {
+		return fmt.Errorf("role 不能为空")
 	}
 
-	_, err = clientset.RbacV1().Roles(namespace).Update(ctx, role, metav1.UpdateOptions{})
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("更新Role失败", zap.Error(err),
-			zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", role.Name))
-		return fmt.Errorf("更新Role %s/%s 失败: %w", namespace, role.Name, err)
+		return err
 	}
 
-	m.logger.Info("成功更新Role",
-		zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", role.Name))
+	_, err = kubeClient.RbacV1().Roles(namespace).Update(ctx, role, metav1.UpdateOptions{})
+	if err != nil {
+		m.logger.Error("更新 Role 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", role.Name),
+			zap.Error(err))
+		return fmt.Errorf("更新 Role 失败: %w", err)
+	}
+
+	m.logger.Info("成功更新 Role",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", role.Name))
 	return nil
 }
 
 func (m *roleManager) DeleteRole(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
-	clientset, err := m.client.GetKubeClient(clusterID)
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+		return err
 	}
 
-	err = clientset.RbacV1().Roles(namespace).Delete(ctx, name, deleteOptions)
+	err = kubeClient.RbacV1().Roles(namespace).Delete(ctx, name, deleteOptions)
 	if err != nil {
-		m.logger.Error("删除Role失败", zap.Error(err),
-			zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", name))
-		return fmt.Errorf("删除Role %s/%s 失败: %w", namespace, name, err)
+		m.logger.Error("删除 Role 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.Error(err))
+		return fmt.Errorf("删除 Role 失败: %w", err)
 	}
 
-	m.logger.Info("成功删除Role",
-		zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", name))
+	m.logger.Info("成功删除 Role",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", name))
 	return nil
 }

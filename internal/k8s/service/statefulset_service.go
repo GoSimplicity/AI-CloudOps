@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
@@ -294,11 +295,11 @@ func (s *statefulSetService) GetStatefulSetList(ctx context.Context, req *model.
 		return model.ListResp[*model.K8sStatefulSet]{}, fmt.Errorf("获取StatefulSet列表失败: %w", err)
 	}
 
-	// 根据状态过滤
+	// 应用过滤条件
 	var filteredStatefulSets []*model.K8sStatefulSet
-	if req.Status != "" {
-		// 根据状态过滤
-		for _, k8sStatefulSet := range k8sStatefulSets {
+	for _, k8sStatefulSet := range k8sStatefulSets {
+		// 状态过滤
+		if req.Status != "" {
 			var statusStr string
 			switch k8sStatefulSet.Status {
 			case model.K8sStatefulSetStatusRunning:
@@ -312,25 +313,24 @@ func (s *statefulSetService) GetStatefulSetList(ctx context.Context, req *model.
 			default:
 				statusStr = "unknown"
 			}
-			if strings.EqualFold(statusStr, req.Status) {
-				filteredStatefulSets = append(filteredStatefulSets, k8sStatefulSet)
+			if !strings.EqualFold(statusStr, req.Status) {
+				continue
 			}
 		}
-	} else {
-		filteredStatefulSets = k8sStatefulSets
+		// 名称过滤（使用通用的Search字段，支持不区分大小写）
+		if !utils.FilterByName(k8sStatefulSet.Name, req.Search) {
+			continue
+		}
+		filteredStatefulSets = append(filteredStatefulSets, k8sStatefulSet)
 	}
+
+	// 按创建时间排序（最新的在前）
+	utils.SortByCreationTime(filteredStatefulSets, func(sts *model.K8sStatefulSet) time.Time {
+		return sts.CreatedAt
+	})
 
 	// 分页处理
-	page := req.Page
-	size := req.Size
-	if page <= 0 {
-		page = 1
-	}
-	if size <= 0 {
-		size = 10
-	}
-
-	pagedItems, total := utils.PaginateK8sStatefulSets(filteredStatefulSets, page, size)
+	pagedItems, total := utils.Paginate(filteredStatefulSets, req.Page, req.Size)
 
 	return model.ListResp[*model.K8sStatefulSet]{
 		Total: total,

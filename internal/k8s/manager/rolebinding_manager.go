@@ -28,13 +28,14 @@ package manager
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 type RoleBindingManager interface {
@@ -46,121 +47,153 @@ type RoleBindingManager interface {
 }
 
 type roleBindingManager struct {
-	client client.K8sClient
-	logger *zap.Logger
+	clientFactory client.K8sClient
+	logger        *zap.Logger
 }
 
-func NewRoleBindingManager(client client.K8sClient, logger *zap.Logger) RoleBindingManager {
+func NewRoleBindingManager(clientFactory client.K8sClient, logger *zap.Logger) RoleBindingManager {
 	return &roleBindingManager{
-		client: client,
-		logger: logger,
+		clientFactory: clientFactory,
+		logger:        logger,
 	}
+}
+
+func (m *roleBindingManager) getKubeClient(clusterID int) (*kubernetes.Clientset, error) {
+	kubeClient, err := m.clientFactory.GetKubeClient(clusterID)
+	if err != nil {
+		m.logger.Error("获取Kubernetes客户端失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	}
+	return kubeClient, nil
 }
 
 func (m *roleBindingManager) CreateRoleBinding(ctx context.Context, clusterID int, namespace string, roleBinding *rbacv1.RoleBinding) error {
-	clientset, err := m.client.GetKubeClient(clusterID)
-	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	if roleBinding == nil {
+		return fmt.Errorf("roleBinding 不能为空")
 	}
 
-	_, err = clientset.RbacV1().RoleBindings(namespace).Create(ctx, roleBinding, metav1.CreateOptions{})
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("创建RoleBinding失败", zap.Error(err),
-			zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", roleBinding.Name))
-		return fmt.Errorf("创建RoleBinding %s/%s 失败: %w", namespace, roleBinding.Name, err)
+		return err
 	}
 
-	m.logger.Info("成功创建RoleBinding",
-		zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", roleBinding.Name))
+	_, err = kubeClient.RbacV1().RoleBindings(namespace).Create(ctx, roleBinding, metav1.CreateOptions{})
+	if err != nil {
+		m.logger.Error("创建 RoleBinding 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", roleBinding.Name),
+			zap.Error(err))
+		return fmt.Errorf("创建 RoleBinding 失败: %w", err)
+	}
+
+	m.logger.Info("成功创建 RoleBinding",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", roleBinding.Name))
 	return nil
 }
 
 func (m *roleBindingManager) GetRoleBinding(ctx context.Context, clusterID int, namespace, name string) (*rbacv1.RoleBinding, error) {
-	clientset, err := m.client.GetKubeClient(clusterID)
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+		return nil, err
 	}
 
-	roleBinding, err := clientset.RbacV1().RoleBindings(namespace).Get(ctx, name, metav1.GetOptions{})
+	roleBinding, err := kubeClient.RbacV1().RoleBindings(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		m.logger.Error("获取RoleBinding失败", zap.Error(err),
-			zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", name))
-		return nil, fmt.Errorf("获取RoleBinding %s/%s 失败: %w", namespace, name, err)
+		m.logger.Error("获取 RoleBinding 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.Error(err))
+		return nil, fmt.Errorf("获取 RoleBinding 失败: %w", err)
 	}
 
+	m.logger.Debug("成功获取 RoleBinding",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", name))
 	return roleBinding, nil
 }
 
 func (m *roleBindingManager) GetRoleBindingList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) ([]*model.K8sRoleBinding, error) {
-	clientset, err := m.client.GetKubeClient(clusterID)
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return nil, fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+		return nil, err
 	}
 
-	roleBindings, err := clientset.RbacV1().RoleBindings(namespace).List(ctx, listOptions)
+	roleBindingList, err := kubeClient.RbacV1().RoleBindings(namespace).List(ctx, listOptions)
 	if err != nil {
-		m.logger.Error("获取RoleBinding列表失败", zap.Error(err),
-			zap.Int("cluster_id", clusterID), zap.String("namespace", namespace))
-		return nil, fmt.Errorf("获取RoleBinding列表失败: %w", err)
+		m.logger.Error("获取 RoleBinding 列表失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.Error(err))
+		return nil, fmt.Errorf("获取 RoleBinding 列表失败: %w", err)
 	}
 
 	var k8sRoleBindings []*model.K8sRoleBinding
-	for _, rb := range roleBindings.Items {
-
-		k8sRoleBinding := &model.K8sRoleBinding{
-			ClusterID:   clusterID,
-			Name:        rb.Name,
-			Namespace:   rb.Namespace,
-			CreatedAt:   rb.CreationTimestamp.Time.Format(time.RFC3339),
-			Labels:      rb.Labels,
-			Annotations: rb.Annotations,
-		}
+	for _, rb := range roleBindingList.Items {
+		// 使用统一的转换函数确保所有字段都被正确填充
+		k8sRoleBinding := utils.ConvertK8sRoleBindingToRoleBindingInfo(&rb, clusterID)
 		k8sRoleBindings = append(k8sRoleBindings, k8sRoleBinding)
 	}
 
-	m.logger.Debug("成功获取RoleBinding列表",
-		zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.Int("count", len(roleBindings.Items)))
-
+	m.logger.Debug("成功获取 RoleBinding 列表",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.Int("count", len(k8sRoleBindings)))
 	return k8sRoleBindings, nil
 }
 
 func (m *roleBindingManager) UpdateRoleBinding(ctx context.Context, clusterID int, namespace string, roleBinding *rbacv1.RoleBinding) error {
-	clientset, err := m.client.GetKubeClient(clusterID)
-	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+	if roleBinding == nil {
+		return fmt.Errorf("roleBinding 不能为空")
 	}
 
-	_, err = clientset.RbacV1().RoleBindings(namespace).Update(ctx, roleBinding, metav1.UpdateOptions{})
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("更新RoleBinding失败", zap.Error(err),
-			zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", roleBinding.Name))
-		return fmt.Errorf("更新RoleBinding %s/%s 失败: %w", namespace, roleBinding.Name, err)
+		return err
 	}
 
-	m.logger.Info("成功更新RoleBinding",
-		zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", roleBinding.Name))
+	_, err = kubeClient.RbacV1().RoleBindings(namespace).Update(ctx, roleBinding, metav1.UpdateOptions{})
+	if err != nil {
+		m.logger.Error("更新 RoleBinding 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", roleBinding.Name),
+			zap.Error(err))
+		return fmt.Errorf("更新 RoleBinding 失败: %w", err)
+	}
+
+	m.logger.Info("成功更新 RoleBinding",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", roleBinding.Name))
 	return nil
 }
 
 func (m *roleBindingManager) DeleteRoleBinding(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
-	clientset, err := m.client.GetKubeClient(clusterID)
+	kubeClient, err := m.getKubeClient(clusterID)
 	if err != nil {
-		m.logger.Error("获取Kubernetes客户端失败", zap.Error(err), zap.Int("cluster_id", clusterID))
-		return fmt.Errorf("获取Kubernetes客户端失败: %w", err)
+		return err
 	}
 
-	err = clientset.RbacV1().RoleBindings(namespace).Delete(ctx, name, deleteOptions)
+	err = kubeClient.RbacV1().RoleBindings(namespace).Delete(ctx, name, deleteOptions)
 	if err != nil {
-		m.logger.Error("删除RoleBinding失败", zap.Error(err),
-			zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", name))
-		return fmt.Errorf("删除RoleBinding %s/%s 失败: %w", namespace, name, err)
+		m.logger.Error("删除 RoleBinding 失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.Error(err))
+		return fmt.Errorf("删除 RoleBinding 失败: %w", err)
 	}
 
-	m.logger.Info("成功删除RoleBinding",
-		zap.Int("cluster_id", clusterID), zap.String("namespace", namespace), zap.String("name", name))
+	m.logger.Info("成功删除 RoleBinding",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", name))
 	return nil
 }

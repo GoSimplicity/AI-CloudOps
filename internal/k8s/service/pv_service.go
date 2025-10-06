@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
@@ -110,7 +111,7 @@ func (s *pvService) GetPVList(ctx context.Context, req *model.GetPVListReq) (mod
 			entities = append(entities, entity)
 		}
 	}
-	// optional filters
+	// 应用过滤条件
 	filtered := make([]*model.K8sPV, 0, len(entities))
 	for _, e := range entities {
 		// 过滤状态 (0表示不过滤，其他值表示具体状态)
@@ -134,8 +135,18 @@ func (s *pvService) GetPVList(ctx context.Context, req *model.GetPVListReq) (mod
 		if req.VolumeType != "" && !strings.EqualFold(e.VolumeMode, req.VolumeType) {
 			continue
 		}
+		// 名称过滤（使用通用的Search字段，支持不区分大小写）
+		if !utils.FilterByName(e.Name, req.Search) {
+			continue
+		}
 		filtered = append(filtered, e)
 	}
+
+	// 按创建时间排序（最新的在前）
+	utils.SortByCreationTime(filtered, func(pv *model.K8sPV) time.Time {
+		return pv.CreatedAt
+	})
+
 	// pagination
 	page := req.Page
 	size := req.Size

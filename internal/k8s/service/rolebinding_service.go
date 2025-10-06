@@ -27,6 +27,8 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
@@ -60,38 +62,126 @@ func NewRoleBindingService(roleBindingManager manager.RoleBindingManager, logger
 }
 
 func (s *roleBindingService) GetRoleBindingList(ctx context.Context, req *model.GetRoleBindingListReq) (model.ListResp[*model.K8sRoleBinding], error) {
+	if req == nil {
+		return model.ListResp[*model.K8sRoleBinding]{}, fmt.Errorf("获取RoleBinding列表请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return model.ListResp[*model.K8sRoleBinding]{}, fmt.Errorf("集群ID不能为空")
+	}
 
 	options := k8sutils.BuildRoleBindingListOptions(req)
 
 	roleBindings, err := s.roleBindingManager.GetRoleBindingList(ctx, req.ClusterID, req.Namespace, options)
 	if err != nil {
-		return model.ListResp[*model.K8sRoleBinding]{}, err
+		s.logger.Error("获取RoleBinding列表失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace))
+		return model.ListResp[*model.K8sRoleBinding]{}, fmt.Errorf("获取RoleBinding列表失败: %w", err)
 	}
+
+	// 名称过滤（使用通用的Search字段，支持不区分大小写）
+	var filteredRoleBindings []*model.K8sRoleBinding
+	for _, rb := range roleBindings {
+		if k8sutils.FilterByName(rb.Name, req.Search) {
+			filteredRoleBindings = append(filteredRoleBindings, rb)
+		}
+	}
+
+	// 按创建时间排序（最新的在前）
+	k8sutils.SortByCreationTime(filteredRoleBindings, func(rb *model.K8sRoleBinding) time.Time {
+		t, _ := time.Parse(time.RFC3339, rb.CreatedAt)
+		return t
+	})
 
 	// 分页处理
-	paginatedRoleBindings, err := k8sutils.PaginateK8sRoleBindings(roleBindings, req.Page, req.Size)
-	if err != nil {
-		return model.ListResp[*model.K8sRoleBinding]{}, err
-	}
+	paginatedRoleBindings, total := k8sutils.Paginate(filteredRoleBindings, req.Page, req.Size)
 
-	return paginatedRoleBindings, nil
+	return model.ListResp[*model.K8sRoleBinding]{
+		Items: paginatedRoleBindings,
+		Total: total,
+	}, nil
 }
 
 func (s *roleBindingService) GetRoleBindingDetails(ctx context.Context, req *model.GetRoleBindingDetailsReq) (*model.K8sRoleBinding, error) {
+	if req == nil {
+		return nil, fmt.Errorf("获取RoleBinding详情请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return nil, fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return nil, fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return nil, fmt.Errorf("RoleBinding名称不能为空")
+	}
+
 	roleBinding, err := s.roleBindingManager.GetRoleBinding(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		return nil, err
+		s.logger.Error("获取RoleBinding失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return nil, fmt.Errorf("获取RoleBinding失败: %w", err)
 	}
 
 	return k8sutils.ConvertK8sRoleBindingToRoleBindingInfo(roleBinding, req.ClusterID), nil
 }
 
 func (s *roleBindingService) CreateRoleBinding(ctx context.Context, req *model.CreateRoleBindingReq) error {
+	if req == nil {
+		return fmt.Errorf("创建RoleBinding请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("RoleBinding名称不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
 	roleBinding := k8sutils.ConvertToK8sRoleBinding(req)
-	return s.roleBindingManager.CreateRoleBinding(ctx, req.ClusterID, req.Namespace, roleBinding)
+	err := s.roleBindingManager.CreateRoleBinding(ctx, req.ClusterID, req.Namespace, roleBinding)
+	if err != nil {
+		s.logger.Error("创建RoleBinding失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return fmt.Errorf("创建RoleBinding失败: %w", err)
+	}
+
+	return nil
 }
 
 func (s *roleBindingService) UpdateRoleBinding(ctx context.Context, req *model.UpdateRoleBindingReq) error {
+	if req == nil {
+		return fmt.Errorf("更新RoleBinding请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("RoleBinding名称不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
 	roleBinding := &model.CreateRoleBindingReq{
 		ClusterID:   req.ClusterID,
 		Namespace:   req.Namespace,
@@ -101,24 +191,85 @@ func (s *roleBindingService) UpdateRoleBinding(ctx context.Context, req *model.U
 		Labels:      req.Labels,
 		Annotations: req.Annotations,
 	}
-	return s.roleBindingManager.UpdateRoleBinding(ctx, req.ClusterID, req.Namespace, k8sutils.ConvertToK8sRoleBinding(roleBinding))
+
+	err := s.roleBindingManager.UpdateRoleBinding(ctx, req.ClusterID, req.Namespace, k8sutils.ConvertToK8sRoleBinding(roleBinding))
+	if err != nil {
+		s.logger.Error("更新RoleBinding失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return fmt.Errorf("更新RoleBinding失败: %w", err)
+	}
+
+	return nil
 }
 
 func (s *roleBindingService) DeleteRoleBinding(ctx context.Context, req *model.DeleteRoleBindingReq) error {
-	return s.roleBindingManager.DeleteRoleBinding(ctx, req.ClusterID, req.Namespace, req.Name, metav1.DeleteOptions{})
+	if req == nil {
+		return fmt.Errorf("删除RoleBinding请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return fmt.Errorf("RoleBinding名称不能为空")
+	}
+
+	err := s.roleBindingManager.DeleteRoleBinding(ctx, req.ClusterID, req.Namespace, req.Name, metav1.DeleteOptions{})
+	if err != nil {
+		s.logger.Error("删除RoleBinding失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return fmt.Errorf("删除RoleBinding失败: %w", err)
+	}
+
+	return nil
 }
 
 // ======================== YAML 操作 ========================
 
 func (s *roleBindingService) GetRoleBindingYaml(ctx context.Context, req *model.GetRoleBindingYamlReq) (*model.K8sYaml, error) {
+	if req == nil {
+		return nil, fmt.Errorf("获取RoleBinding YAML请求不能为空")
+	}
+
+	if req.ClusterID <= 0 {
+		return nil, fmt.Errorf("集群ID不能为空")
+	}
+
+	if req.Namespace == "" {
+		return nil, fmt.Errorf("命名空间不能为空")
+	}
+
+	if req.Name == "" {
+		return nil, fmt.Errorf("RoleBinding名称不能为空")
+	}
+
 	roleBinding, err := s.roleBindingManager.GetRoleBinding(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		return nil, err
+		s.logger.Error("获取RoleBinding失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name))
+		return nil, fmt.Errorf("获取RoleBinding失败: %w", err)
 	}
 
 	yamlContent, err := k8sutils.RoleBindingToYAML(roleBinding)
 	if err != nil {
-		return nil, err
+		s.logger.Error("转换为YAML失败",
+			zap.Error(err),
+			zap.String("roleBindingName", roleBinding.Name))
+		return nil, fmt.Errorf("转换为YAML失败: %w", err)
 	}
 
 	return &model.K8sYaml{
@@ -127,9 +278,23 @@ func (s *roleBindingService) GetRoleBindingYaml(ctx context.Context, req *model.
 }
 
 func (s *roleBindingService) CreateRoleBindingByYaml(ctx context.Context, req *model.CreateRoleBindingByYamlReq) error {
+	if req == nil {
+		return fmt.Errorf("通过YAML创建RoleBinding请求不能为空")
+	}
+
+	if req.YamlContent == "" {
+		return fmt.Errorf("YAML内容不能为空")
+	}
+
+	s.logger.Info("开始通过YAML创建RoleBinding",
+		zap.Int("cluster_id", req.ClusterID))
+
 	roleBinding, err := k8sutils.YAMLToRoleBinding(req.YamlContent)
 	if err != nil {
-		return err
+		s.logger.Error("从YAML构建RoleBinding失败",
+			zap.Int("cluster_id", req.ClusterID),
+			zap.Error(err))
+		return fmt.Errorf("从YAML构建RoleBinding失败: %w", err)
 	}
 
 	// 如果YAML中没有指定namespace，使用default命名空间
@@ -140,14 +305,60 @@ func (s *roleBindingService) CreateRoleBindingByYaml(ctx context.Context, req *m
 			zap.String("name", roleBinding.Name))
 	}
 
-	return s.roleBindingManager.CreateRoleBinding(ctx, req.ClusterID, roleBinding.Namespace, roleBinding)
+	err = s.roleBindingManager.CreateRoleBinding(ctx, req.ClusterID, roleBinding.Namespace, roleBinding)
+	if err != nil {
+		s.logger.Error("通过YAML创建RoleBinding失败",
+			zap.Int("cluster_id", req.ClusterID),
+			zap.String("namespace", roleBinding.Namespace),
+			zap.String("name", roleBinding.Name),
+			zap.Error(err))
+		return fmt.Errorf("通过YAML创建RoleBinding失败: %w", err)
+	}
+
+	s.logger.Info("通过YAML创建RoleBinding成功",
+		zap.Int("cluster_id", req.ClusterID))
+
+	return nil
 }
 
 func (s *roleBindingService) UpdateRoleBindingYaml(ctx context.Context, req *model.UpdateRoleBindingByYamlReq) error {
-	roleBinding, err := k8sutils.YAMLToRoleBinding(req.YamlContent)
-	if err != nil {
-		return err
+	if req == nil {
+		return fmt.Errorf("更新RoleBinding YAML请求不能为空")
 	}
 
-	return s.roleBindingManager.UpdateRoleBinding(ctx, req.ClusterID, req.Namespace, roleBinding)
+	if req.YamlContent == "" {
+		return fmt.Errorf("YAML内容不能为空")
+	}
+
+	s.logger.Info("开始通过YAML更新RoleBinding",
+		zap.Int("cluster_id", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
+
+	roleBinding, err := k8sutils.YAMLToRoleBinding(req.YamlContent)
+	if err != nil {
+		s.logger.Error("从YAML构建RoleBinding失败",
+			zap.Int("cluster_id", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name),
+			zap.Error(err))
+		return fmt.Errorf("从YAML构建RoleBinding失败: %w", err)
+	}
+
+	err = s.roleBindingManager.UpdateRoleBinding(ctx, req.ClusterID, req.Namespace, roleBinding)
+	if err != nil {
+		s.logger.Error("通过YAML更新RoleBinding失败",
+			zap.Int("cluster_id", req.ClusterID),
+			zap.String("namespace", req.Namespace),
+			zap.String("name", req.Name),
+			zap.Error(err))
+		return fmt.Errorf("通过YAML更新RoleBinding失败: %w", err)
+	}
+
+	s.logger.Info("通过YAML更新RoleBinding成功",
+		zap.Int("cluster_id", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("name", req.Name))
+
+	return nil
 }

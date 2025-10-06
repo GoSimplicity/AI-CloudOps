@@ -33,6 +33,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
@@ -95,11 +96,21 @@ func (s *configMapService) GetConfigMapList(ctx context.Context, req *model.GetC
 		return model.ListResp[*model.K8sConfigMap]{}, fmt.Errorf("获取ConfigMap列表失败: %w", err)
 	}
 
+	// 应用过滤条件
 	entities := make([]*model.K8sConfigMap, 0, len(list.Items))
 	for _, cm := range list.Items {
 		entity := s.convertToK8sConfigMap(&cm, req.ClusterID)
+		// 名称过滤（使用通用的Search字段，支持不区分大小写）
+		if !utils.FilterByName(entity.Name, req.Search) {
+			continue
+		}
 		entities = append(entities, entity)
 	}
+
+	// 按创建时间排序（最新的在前）
+	utils.SortByCreationTime(entities, func(cm *model.K8sConfigMap) time.Time {
+		return cm.CreatedAt
+	})
 
 	page := req.Page
 	size := req.Size

@@ -27,6 +27,9 @@ package utils
 
 import (
 	"fmt"
+	"sort"
+	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
@@ -62,4 +65,85 @@ func ConvertUnstructuredToYAML(obj *unstructured.Unstructured) (string, error) {
 	}
 
 	return string(yamlBytes), nil
+}
+
+// CalculateAge 计算资源的年龄，返回可读的时间格式
+func CalculateAge(creationTime time.Time) string {
+	duration := time.Since(creationTime)
+
+	days := int(duration.Hours() / 24)
+	hours := int(duration.Hours()) % 24
+	minutes := int(duration.Minutes()) % 60
+
+	if days > 0 {
+		if days == 1 {
+			return "1d"
+		}
+		return fmt.Sprintf("%dd", days)
+	} else if hours > 0 {
+		if hours == 1 {
+			return "1h"
+		}
+		return fmt.Sprintf("%dh", hours)
+	} else if minutes > 0 {
+		if minutes == 1 {
+			return "1m"
+		}
+		return fmt.Sprintf("%dm", minutes)
+	} else {
+		seconds := int(duration.Seconds())
+		if seconds <= 1 {
+			return "1s"
+		}
+		return fmt.Sprintf("%ds", seconds)
+	}
+}
+
+// FilterByName 根据搜索关键字过滤资源名称
+func FilterByName(name string, searchKeyword string) bool {
+	if searchKeyword == "" {
+		return true
+	}
+	return Contains(name, searchKeyword)
+}
+
+// Contains 不区分大小写的字符串包含检查
+func Contains(str, substr string) bool {
+	return strings.Contains(strings.ToLower(str), strings.ToLower(substr))
+}
+
+// Paginate 通用分页函数
+func Paginate[T any](items []T, page, size int) ([]T, int64) {
+	total := int64(len(items))
+	if total == 0 {
+		return []T{}, 0
+	}
+
+	// 如果没有设置分页参数，返回所有数据
+	if page <= 0 {
+		page = 1
+	}
+	if size <= 0 {
+		size = 10
+	}
+
+	start := int64((page - 1) * size)
+	end := start + int64(size)
+
+	if start >= total {
+		return []T{}, total
+	}
+	if end > total {
+		end = total
+	}
+
+	return items[start:end], total
+}
+
+// SortByCreationTime 按创建时间排序资源列表（最新的在前）
+// 使用泛型函数，接受一个提取时间的函数
+func SortByCreationTime[T any](items []T, getTime func(T) time.Time) {
+	sort.Slice(items, func(i, j int) bool {
+		return getTime(items[i]).After(getTime(items[j]))
+	})
 }

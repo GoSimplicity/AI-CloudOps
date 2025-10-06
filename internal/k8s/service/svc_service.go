@@ -28,6 +28,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
@@ -280,11 +281,27 @@ func (s *svcService) GetServiceList(ctx context.Context, req *model.GetServiceLi
 
 	services := serviceList.Items
 
-	if req.Type != "" {
-		services = utils.FilterServicesByType(services, req.Type)
+	// 应用过滤条件
+	var filteredServices []corev1.Service
+	for _, service := range services {
+		// 类型过滤
+		if req.Type != "" && string(service.Spec.Type) != req.Type {
+			continue
+		}
+		// 名称过滤（使用通用的Search字段，支持不区分大小写）
+		if !utils.FilterByName(service.Name, req.Search) {
+			continue
+		}
+		filteredServices = append(filteredServices, service)
 	}
 
-	pagedServices, total := utils.BuildServiceListPagination(services, req.Page, req.Size)
+	// 按创建时间排序（最新的在前）
+	utils.SortByCreationTime(filteredServices, func(svc corev1.Service) time.Time {
+		return svc.CreationTimestamp.Time
+	})
+
+	// 分页处理
+	pagedServices, total := utils.BuildServiceListPagination(filteredServices, req.Page, req.Size)
 
 	items := make([]*model.K8sService, 0, len(pagedServices))
 	for _, service := range pagedServices {

@@ -28,6 +28,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
+
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
@@ -83,12 +86,27 @@ func (s *nodeService) GetNodeList(ctx context.Context, req *model.GetNodeListReq
 
 	nodes := nodeList.Items
 
-	// 根据条件过滤节点
+	// 应用过滤条件
+	// 状态过滤
 	if len(req.Status) > 0 {
 		nodes = utils.FilterNodesByStatus(nodes, req.Status)
 	}
 
-	pagedNodes, totalAfterFilter := utils.BuildNodeListPagination(nodes, req.Page, req.Size)
+	// 名称过滤（使用通用的Search字段，支持不区分大小写）
+	var filteredNodes []corev1.Node
+	for _, node := range nodes {
+		if utils.FilterByName(node.Name, req.Search) {
+			filteredNodes = append(filteredNodes, node)
+		}
+	}
+
+	// 按创建时间排序（最新的在前）
+	utils.SortByCreationTime(filteredNodes, func(node corev1.Node) time.Time {
+		return node.CreationTimestamp.Time
+	})
+
+	// 分页处理
+	pagedNodes, totalAfterFilter := utils.BuildNodeListPagination(filteredNodes, req.Page, req.Size)
 	total = totalAfterFilter
 
 	var items []*model.K8sNode

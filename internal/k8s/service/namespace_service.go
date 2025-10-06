@@ -28,6 +28,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
@@ -262,6 +263,11 @@ func (s *namespaceService) ListNamespaces(ctx context.Context, req *model.K8sNam
 		labelsMap := utils.ConvertKeyValueListToLabels(req.Labels)
 		namespaces = utils.FilterNamespacesByLabels(namespaces, labelsMap)
 	}
+
+	// 按创建时间排序（最新的在前）
+	utils.SortByCreationTime(namespaces, func(ns corev1.Namespace) time.Time {
+		return ns.CreationTimestamp.Time
+	})
 
 	pagedNamespaces, total := utils.BuildNamespaceListPagination(namespaces, req.Page, req.Size)
 

@@ -27,6 +27,7 @@ package utils
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -154,11 +155,17 @@ func ConvertK8sRoleBindingToRoleBindingInfo(roleBinding *rbacv1.RoleBinding, clu
 	}
 
 	return &model.K8sRoleBinding{
-		Name:      roleBinding.Name,
-		Namespace: roleBinding.Namespace,
-		ClusterID: clusterID,
-		Labels:    roleBinding.Labels,
-		RoleRef:   ConvertK8sRoleRefToModel(roleBinding.RoleRef),
-		Subjects:  ConvertK8sSubjectsToModel(roleBinding.Subjects),
+		Name:            roleBinding.Name,
+		Namespace:       roleBinding.Namespace,
+		ClusterID:       clusterID,
+		UID:             string(roleBinding.UID),
+		CreatedAt:       roleBinding.CreationTimestamp.Time.Format(time.RFC3339),
+		Labels:          roleBinding.Labels,
+		Annotations:     roleBinding.Annotations,
+		RoleRef:         ConvertK8sRoleRefToModel(roleBinding.RoleRef),
+		Subjects:        ConvertK8sSubjectsToModel(roleBinding.Subjects),
+		ResourceVersion: roleBinding.ResourceVersion,
+		Age:             CalculateAge(roleBinding.CreationTimestamp.Time),
+		RawRoleBinding:  roleBinding,
 	}
 }

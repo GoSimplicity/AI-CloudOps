@@ -28,7 +28,7 @@ package service
 import (
 	"context"
 	"fmt"
-	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
@@ -74,38 +74,25 @@ func (s *serviceAccountService) GetServiceAccountList(ctx context.Context, req *
 		return model.ListResp[*model.K8sServiceAccount]{}, err
 	}
 
+	// 应用过滤条件
 	var filtered []*model.K8sServiceAccount
-	keyword := strings.TrimSpace(req.Keyword)
 	for _, sa := range serviceAccountList.Items {
 		entity := k8sutils.BuildServiceAccountResponse(&sa, req.ClusterID)
 		if entity == nil {
 			continue
 		}
-		if keyword != "" {
-			// 名称、标签、注解关键字匹配
-			match := strings.Contains(entity.Name, keyword)
-			if !match {
-				for k, v := range entity.Labels {
-					if strings.Contains(k, keyword) || strings.Contains(v, keyword) {
-						match = true
-						break
-					}
-				}
-			}
-			if !match {
-				for k, v := range entity.Annotations {
-					if strings.Contains(k, keyword) || strings.Contains(v, keyword) {
-						match = true
-						break
-					}
-				}
-			}
-			if !match {
-				continue
-			}
+		// 名称过滤（使用通用的Search字段，支持不区分大小写）
+		if !k8sutils.FilterByName(entity.Name, req.Search) {
+			continue
 		}
 		filtered = append(filtered, entity)
 	}
+
+	// 按创建时间排序（最新的在前）
+	k8sutils.SortByCreationTime(filtered, func(sa *model.K8sServiceAccount) time.Time {
+		t, _ := time.Parse(time.RFC3339, sa.CreatedAt)
+		return t
+	})
 
 	// 分页
 	page := req.Page

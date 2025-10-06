@@ -27,6 +27,7 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -354,15 +355,61 @@ func ConvertPolicyRulesToK8s(rules []model.PolicyRule) []rbacv1.PolicyRule {
 
 	k8sRules := make([]rbacv1.PolicyRule, 0, len(rules))
 	for _, rule := range rules {
+		// 过滤掉空字符串
+		verbs := filterEmptyStrings(rule.Verbs)
+		apiGroups := filterEmptyStrings(rule.APIGroups)
+		resources := filterEmptyStrings(rule.Resources)
+		resourceNames := filterEmptyStrings(rule.ResourceNames)
+		nonResourceURLs := filterEmptyStrings(rule.NonResourceURLs)
+
+		// 验证规则的有效性
+		// 1. Verbs 不能为空
+		if len(verbs) == 0 {
+			continue
+		}
+
+		// 2. 必须有 Resources 或 NonResourceURLs
+		if len(resources) == 0 && len(nonResourceURLs) == 0 {
+			continue
+		}
+
+		// 3. 如果有 Resources，必须有 APIGroups
+		if len(resources) > 0 && len(apiGroups) == 0 {
+			// 如果没有指定 APIGroups，默认为核心 API 组
+			apiGroups = []string{""}
+		}
+
 		k8sRules = append(k8sRules, rbacv1.PolicyRule{
-			Verbs:         rule.Verbs,
-			APIGroups:     rule.APIGroups,
-			Resources:     rule.Resources,
-			ResourceNames: rule.ResourceNames,
+			Verbs:           verbs,
+			APIGroups:       apiGroups,
+			Resources:       resources,
+			ResourceNames:   resourceNames,
+			NonResourceURLs: nonResourceURLs,
 		})
 	}
 
 	return k8sRules
+}
+
+// filterEmptyStrings 过滤掉字符串数组中的空字符串
+func filterEmptyStrings(strs []string) []string {
+	if len(strs) == 0 {
+		return nil
+	}
+
+	filtered := make([]string, 0, len(strs))
+	for _, s := range strs {
+		trimmed := strings.TrimSpace(s)
+		if trimmed != "" {
+			filtered = append(filtered, trimmed)
+		}
+	}
+
+	if len(filtered) == 0 {
+		return nil
+	}
+
+	return filtered
 }
 
 func ConvertK8sPolicyRulesToModel(rules []rbacv1.PolicyRule) []model.PolicyRule {
@@ -373,10 +420,11 @@ func ConvertK8sPolicyRulesToModel(rules []rbacv1.PolicyRule) []model.PolicyRule 
 	modelRules := make([]model.PolicyRule, 0, len(rules))
 	for _, rule := range rules {
 		modelRules = append(modelRules, model.PolicyRule{
-			Verbs:         rule.Verbs,
-			APIGroups:     rule.APIGroups,
-			Resources:     rule.Resources,
-			ResourceNames: rule.ResourceNames,
+			APIGroups:       rule.APIGroups,
+			Resources:       rule.Resources,
+			Verbs:           rule.Verbs,
+			ResourceNames:   rule.ResourceNames,
+			NonResourceURLs: rule.NonResourceURLs,
 		})
 	}
 

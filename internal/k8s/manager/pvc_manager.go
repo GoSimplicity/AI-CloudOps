@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"go.uber.org/zap"
@@ -29,6 +30,7 @@ type PVCManager interface {
 	GetPendingPVCs(ctx context.Context, clusterID int, namespace string) (*corev1.PersistentVolumeClaimList, error)
 	GetBoundPVCs(ctx context.Context, clusterID int, namespace string) (*corev1.PersistentVolumeClaimList, error)
 	ExpandPVC(ctx context.Context, clusterID int, namespace, name string, newSize string) error
+	GetPVCPods(ctx context.Context, clusterID int, namespace, pvcName string) ([]corev1.Pod, error)
 }
 
 type pvcManager struct {
@@ -322,23 +324,84 @@ func (m *pvcManager) GetBoundPVCs(ctx context.Context, clusterID int, namespace 
 
 // ExpandPVC 扩容PersistentVolumeClaim
 func (m *pvcManager) ExpandPVC(ctx context.Context, clusterID int, namespace, name, newSize string) error {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
+	if err != nil {
+		m.logger.Error("获取Kubernetes客户端失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return err
+	}
+
+	// 获取PVC
 	pvc, err := m.GetPVC(ctx, clusterID, namespace, name)
 	if err != nil {
 		return err
 	}
 
+	// 检查PVC是否有StorageClass（动态配置的PVC才能扩容）
+	if pvc.Spec.StorageClassName == nil || *pvc.Spec.StorageClassName == "" {
+		errMsg := fmt.Sprintf("PVC '%s' 未使用StorageClass，无法进行扩容。只有通过StorageClass动态配置的PVC才支持扩容功能。建议：创建一个新的使用StorageClass的PVC，然后迁移数据", name)
+		m.logger.Error("PVC未使用StorageClass",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name))
+		return fmt.Errorf("%s", errMsg)
+	}
+
+	// 获取StorageClass并检查是否支持卷扩容
+	storageClass, err := kubeClient.StorageV1().StorageClasses().Get(ctx, *pvc.Spec.StorageClassName, metav1.GetOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("PVC '%s' 使用的StorageClass '%s' 在集群中不存在。这可能是因为：1) StorageClass已被删除；2) PVC配置错误。请检查集群中可用的StorageClass列表（kubectl get storageclass），并确保PVC配置正确",
+			name, *pvc.Spec.StorageClassName)
+		m.logger.Error("获取StorageClass失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("storageClass", *pvc.Spec.StorageClassName),
+			zap.Error(err))
+		return fmt.Errorf("%s", errMsg)
+	}
+
+	// 检查StorageClass是否支持卷扩容
+	if storageClass.AllowVolumeExpansion == nil || !*storageClass.AllowVolumeExpansion {
+		errMsg := fmt.Sprintf("StorageClass '%s' 不支持卷扩容功能。解决方案：\n1. 如果您是集群管理员，可以修改StorageClass，设置 allowVolumeExpansion: true（注意：某些存储驱动可能不支持此功能）\n2. 或者创建一个支持扩容的新StorageClass，然后创建新PVC并迁移数据\n3. 使用命令查看StorageClass详情：kubectl get storageclass %s -o yaml",
+			*pvc.Spec.StorageClassName, *pvc.Spec.StorageClassName)
+		m.logger.Error("StorageClass不支持卷扩容",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.String("storageClass", *pvc.Spec.StorageClassName))
+		return fmt.Errorf("%s", errMsg)
+	}
+
 	// 解析新的存储大小
 	newQuantity, err := resource.ParseQuantity(newSize)
 	if err != nil {
+		errMsg := fmt.Sprintf("存储容量格式不正确：'%s'。请使用正确的格式，例如：1Gi, 2Gi, 500Mi, 1Ti 等", newSize)
 		m.logger.Error("解析存储大小失败",
 			zap.Int("clusterID", clusterID),
 			zap.String("namespace", namespace),
 			zap.String("name", name),
 			zap.String("newSize", newSize),
 			zap.Error(err))
-		return err
+		return fmt.Errorf("%s", errMsg)
 	}
 
+	// 获取当前容量
+	currentQuantity := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+
+	// 验证新容量是否大于当前容量
+	if newQuantity.Cmp(currentQuantity) <= 0 {
+		errMsg := fmt.Sprintf("扩容失败：新容量 %s 必须大于当前容量 %s",
+			newSize, currentQuantity.String())
+		m.logger.Error("新容量必须大于当前容量",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.String("currentSize", currentQuantity.String()),
+			zap.String("newSize", newSize))
+		return fmt.Errorf("%s", errMsg)
+	}
+
+	// 更新PVC的存储请求大小
 	if pvc.Spec.Resources.Requests == nil {
 		pvc.Spec.Resources.Requests = make(corev1.ResourceList)
 	}
@@ -359,7 +422,55 @@ func (m *pvcManager) ExpandPVC(ctx context.Context, clusterID int, namespace, na
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", name),
+		zap.String("oldSize", currentQuantity.String()),
 		zap.String("newSize", newSize))
 
 	return nil
+}
+
+// GetPVCPods 获取使用指定PVC的所有Pod
+func (m *pvcManager) GetPVCPods(ctx context.Context, clusterID int, namespace, pvcName string) ([]corev1.Pod, error) {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
+	if err != nil {
+		m.logger.Error("获取Kubernetes客户端失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// 获取命名空间下的所有Pod
+	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		m.logger.Error("获取Pod列表失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.Error(err))
+		return nil, err
+	}
+
+	// 过滤使用指定PVC的Pod
+	var podsUsingPVC []corev1.Pod
+	for _, pod := range podList.Items {
+		// 检查Pod的所有卷
+		for _, volume := range pod.Spec.Volumes {
+			// 检查是否是PersistentVolumeClaim类型的卷，且ClaimName匹配
+			if volume.PersistentVolumeClaim != nil && volume.PersistentVolumeClaim.ClaimName == pvcName {
+				podsUsingPVC = append(podsUsingPVC, pod)
+				m.logger.Debug("找到使用PVC的Pod",
+					zap.Int("clusterID", clusterID),
+					zap.String("namespace", namespace),
+					zap.String("pvcName", pvcName),
+					zap.String("podName", pod.Name))
+				break // 找到匹配的卷就跳出内层循环，继续下一个Pod
+			}
+		}
+	}
+
+	m.logger.Info("成功获取PVC关联的Pod",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("pvcName", pvcName),
+		zap.Int("count", len(podsUsingPVC)))
+
+	return podsUsingPVC, nil
 }

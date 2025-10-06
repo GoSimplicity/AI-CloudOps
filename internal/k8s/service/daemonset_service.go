@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
@@ -289,11 +290,11 @@ func (s *daemonSetService) GetDaemonSetList(ctx context.Context, req *model.GetD
 		return model.ListResp[*model.K8sDaemonSet]{}, fmt.Errorf("获取DaemonSet列表失败: %w", err)
 	}
 
-	// 根据状态过滤
+	// 应用过滤条件
 	var filteredDaemonSets []*model.K8sDaemonSet
-	if req.Status != "" {
-		// 根据状态过滤
-		for _, k8sDaemonSet := range k8sDaemonSets {
+	for _, k8sDaemonSet := range k8sDaemonSets {
+		// 状态过滤
+		if req.Status != "" {
 			var statusStr string
 			switch k8sDaemonSet.Status {
 			case model.K8sDaemonSetStatusRunning:
@@ -305,25 +306,24 @@ func (s *daemonSetService) GetDaemonSetList(ctx context.Context, req *model.GetD
 			default:
 				statusStr = "unknown"
 			}
-			if strings.EqualFold(statusStr, req.Status) {
-				filteredDaemonSets = append(filteredDaemonSets, k8sDaemonSet)
+			if !strings.EqualFold(statusStr, req.Status) {
+				continue
 			}
 		}
-	} else {
-		filteredDaemonSets = k8sDaemonSets
+		// 名称过滤（使用通用的Search字段，支持不区分大小写）
+		if !utils.FilterByName(k8sDaemonSet.Name, req.Search) {
+			continue
+		}
+		filteredDaemonSets = append(filteredDaemonSets, k8sDaemonSet)
 	}
+
+	// 按创建时间排序（最新的在前）
+	utils.SortByCreationTime(filteredDaemonSets, func(ds *model.K8sDaemonSet) time.Time {
+		return ds.CreatedAt
+	})
 
 	// 分页处理
-	page := req.Page
-	size := req.Size
-	if page <= 0 {
-		page = 1
-	}
-	if size <= 0 {
-		size = 10
-	}
-
-	pagedItems, total := utils.PaginateK8sDaemonSets(filteredDaemonSets, page, size)
+	pagedItems, total := utils.Paginate(filteredDaemonSets, req.Page, req.Size)
 
 	return model.ListResp[*model.K8sDaemonSet]{
 		Total: total,

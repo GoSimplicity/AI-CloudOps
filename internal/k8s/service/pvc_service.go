@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
@@ -108,7 +109,7 @@ func (s *pvcService) GetPVCList(ctx context.Context, req *model.GetPVCListReq) (
 		entity := s.convertPVCToEntity(&pvc, req.ClusterID)
 		entities = append(entities, entity)
 	}
-	// filters
+	// 应用过滤条件
 	filtered := make([]*model.K8sPVC, 0, len(entities))
 	for _, e := range entities {
 		// 过滤状态 (0表示不过滤，其他值表示具体状态)
@@ -128,8 +129,18 @@ func (s *pvcService) GetPVCList(ctx context.Context, req *model.GetPVCListReq) (
 				continue
 			}
 		}
+		// 名称过滤（使用通用的Search字段，支持不区分大小写）
+		if !k8sutils.FilterByName(e.Name, req.Search) {
+			continue
+		}
 		filtered = append(filtered, e)
 	}
+
+	// 按创建时间排序（最新的在前）
+	k8sutils.SortByCreationTime(filtered, func(pvc *model.K8sPVC) time.Time {
+		return pvc.CreatedAt
+	})
+
 	// pagination
 	page := req.Page
 	size := req.Size
@@ -585,7 +596,7 @@ func (s *pvcService) ExpandPVC(ctx context.Context, req *model.ExpandPVCReq) err
 
 	if err := s.pvcManager.ExpandPVC(ctx, req.ClusterID, req.Namespace, req.Name, req.NewCapacity); err != nil {
 		s.logger.Error("扩容PVC失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("namespace", req.Namespace), zap.String("name", req.Name))
-		return pkg.NewBusinessError(constants.ErrK8sResourceUpdate, "扩容PVC失败")
+		return pkg.NewBusinessError(constants.ErrK8sResourceUpdate, err.Error())
 	}
 
 	s.logger.Info("成功扩容PVC", zap.Int("clusterID", req.ClusterID), zap.String("namespace", req.Namespace), zap.String("name", req.Name), zap.String("newCapacity", req.NewCapacity))
@@ -603,70 +614,35 @@ func (s *pvcService) GetPVCPods(ctx context.Context, req *model.GetPVCPodsReq) (
 		return model.ListResp[*model.K8sPod]{}, pkg.NewBusinessError(constants.ErrInvalidParam, "命名空间和PVC名称不能为空")
 	}
 
-	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
+	// 通过 Manager 层获取使用该 PVC 的所有 Pod
+	pods, err := s.pvcManager.GetPVCPods(ctx, req.ClusterID, req.Namespace, req.Name)
 	if err != nil {
-		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return model.ListResp[*model.K8sPod]{}, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
-	}
-
-	// 获取所有Pod，然后过滤使用指定PVC的Pod
-	pods, err := kubeClient.CoreV1().Pods(req.Namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		s.logger.Error("获取Pod列表失败",
+		s.logger.Error("获取PVC关联的Pod失败",
+			zap.Error(err),
+			zap.Int("clusterID", req.ClusterID),
 			zap.String("namespace", req.Namespace),
-			zap.Error(err))
-		return model.ListResp[*model.K8sPod]{}, pkg.NewBusinessError(constants.ErrK8sResourceList, "获取Pod列表失败")
+			zap.String("pvcName", req.Name))
+		return model.ListResp[*model.K8sPod]{}, pkg.NewBusinessError(constants.ErrK8sResourceList, "获取PVC关联的Pod失败")
 	}
 
-	// 过滤使用指定PVC的Pod
-	var filteredPods []*model.K8sPod
-	s.logger.Info("开始过滤使用指定PVC的Pod",
-		zap.String("pvc_name", req.Name),
-		zap.String("namespace", req.Namespace),
-		zap.Int("total_pods", len(pods.Items)))
-
-	for _, pod := range pods.Items {
-		if s.podUsesPVC(&pod, req.Name) {
-			s.logger.Info("找到使用PVC的Pod",
-				zap.String("pod_name", pod.Name),
-				zap.String("pvc_name", req.Name))
-			k8sPod := s.convertPodToEntity(&pod, req.ClusterID)
-			if k8sPod != nil {
-				filteredPods = append(filteredPods, k8sPod)
-			}
+	// 转换为 model.K8sPod
+	k8sPods := make([]*model.K8sPod, 0, len(pods))
+	for _, pod := range pods {
+		k8sPod := k8sutils.ConvertToK8sPod(&pod)
+		if k8sPod != nil {
+			k8sPod.ClusterID = int64(req.ClusterID)
+			k8sPods = append(k8sPods, k8sPod)
 		}
 	}
 
-	s.logger.Info("PVC关联Pod查询完成",
-		zap.String("pvc_name", req.Name),
-		zap.Int("filtered_pods_count", len(filteredPods)))
+	s.logger.Info("成功获取PVC关联的Pod",
+		zap.Int("clusterID", req.ClusterID),
+		zap.String("namespace", req.Namespace),
+		zap.String("pvcName", req.Name),
+		zap.Int("count", len(k8sPods)))
 
 	return model.ListResp[*model.K8sPod]{
-		Items: filteredPods,
-		Total: int64(len(filteredPods)),
+		Items: k8sPods,
+		Total: int64(len(k8sPods)),
 	}, nil
-}
-
-// podUsesPVC 检查Pod是否使用指定的PVC
-func (s *pvcService) podUsesPVC(pod *corev1.Pod, pvcName string) bool {
-	for _, volume := range pod.Spec.Volumes {
-		if volume.PersistentVolumeClaim != nil && volume.PersistentVolumeClaim.ClaimName == pvcName {
-			return true
-		}
-	}
-	return false
-}
-
-// convertPodToEntity 将Kubernetes Pod对象转换为实体模型
-func (s *pvcService) convertPodToEntity(pod *corev1.Pod, clusterID int) *model.K8sPod {
-	if pod == nil {
-		return nil
-	}
-
-	k8sPod := k8sutils.ConvertToK8sPod(pod)
-	if k8sPod != nil {
-		k8sPod.ClusterID = int64(clusterID)
-	}
-
-	return k8sPod
 }

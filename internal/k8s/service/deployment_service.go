@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
@@ -235,11 +236,11 @@ func (s *deploymentService) GetDeploymentList(ctx context.Context, req *model.Ge
 		return model.ListResp[*model.K8sDeployment]{}, fmt.Errorf("获取Deployment列表失败: %w", err)
 	}
 
-	// 根据状态过滤
+	// 应用过滤条件
 	var filteredDeployments []*model.K8sDeployment
-	if req.Status != "" {
-		// 根据状态过滤
-		for _, k8sDeployment := range k8sDeployments {
+	for _, k8sDeployment := range k8sDeployments {
+		// 状态过滤
+		if req.Status != "" {
 			var statusStr string
 			switch k8sDeployment.Status {
 			case model.K8sDeploymentStatusRunning:
@@ -253,25 +254,24 @@ func (s *deploymentService) GetDeploymentList(ctx context.Context, req *model.Ge
 			default:
 				statusStr = "unknown"
 			}
-			if strings.EqualFold(statusStr, req.Status) {
-				filteredDeployments = append(filteredDeployments, k8sDeployment)
+			if !strings.EqualFold(statusStr, req.Status) {
+				continue
 			}
 		}
-	} else {
-		filteredDeployments = k8sDeployments
+		// 名称过滤（使用通用的Search字段，支持不区分大小写）
+		if !utils.FilterByName(k8sDeployment.Name, req.Search) {
+			continue
+		}
+		filteredDeployments = append(filteredDeployments, k8sDeployment)
 	}
+
+	// 按创建时间排序（最新的在前）
+	utils.SortByCreationTime(filteredDeployments, func(deployment *model.K8sDeployment) time.Time {
+		return deployment.CreatedAt
+	})
 
 	// 分页处理
-	page := req.Page
-	size := req.Size
-	if page <= 0 {
-		page = 1
-	}
-	if size <= 0 {
-		size = 10
-	}
-
-	pagedItems, total := utils.PaginateK8sDeployments(filteredDeployments, page, size)
+	pagedItems, total := utils.Paginate(filteredDeployments, req.Page, req.Size)
 
 	return model.ListResp[*model.K8sDeployment]{
 		Total: total,

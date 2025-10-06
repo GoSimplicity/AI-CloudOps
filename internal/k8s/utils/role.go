@@ -83,9 +83,6 @@ func ConvertK8sRoleToRoleInfo(role *rbacv1.Role, clusterID int) model.K8sRole {
 		return model.K8sRole{}
 	}
 
-	ageDuration := time.Since(role.CreationTimestamp.Time)
-	age := formatAge(ageDuration)
-
 	return model.K8sRole{
 		Name:            role.Name,
 		Namespace:       role.Namespace,
@@ -96,7 +93,7 @@ func ConvertK8sRoleToRoleInfo(role *rbacv1.Role, clusterID int) model.K8sRole {
 		Annotations:     role.Annotations,
 		Rules:           ConvertK8sPolicyRulesToModel(role.Rules),
 		ResourceVersion: role.ResourceVersion,
-		Age:             age,
+		Age:             CalculateAge(role.CreationTimestamp.Time),
 		RawRole:         role,
 	}
 }
@@ -140,18 +137,4 @@ func BuildK8sRole(name, namespace string, labels, annotations model.KeyValueList
 		},
 		Rules: ConvertPolicyRulesToK8s(rules),
 	}
-}
-
-// formatAge 将时长格式化为简短字符串（如 2d、5h、30m）
-func formatAge(d time.Duration) string {
-	days := int(d.Hours() / 24)
-	if days > 0 {
-		return fmt.Sprintf("%dd", days)
-	}
-	hours := int(d.Hours())
-	if hours > 0 {
-		return fmt.Sprintf("%dh", hours)
-	}
-	minutes := int(d.Minutes())
-	return fmt.Sprintf("%dm", minutes)
 }
