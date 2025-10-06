@@ -38,8 +38,8 @@ type YamlTaskDAO interface {
 	ListAllYamlTasks(ctx context.Context, req *model.YamlTaskListReq) ([]*model.K8sYamlTask, error)
 	CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
 	UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
-	DeleteYamlTask(ctx context.Context, id int) error
-	GetYamlTaskByID(ctx context.Context, id int) (*model.K8sYamlTask, error)
+	DeleteYamlTask(ctx context.Context, id int, clusterID int) error
+	GetYamlTaskByID(ctx context.Context, id int, clusterID int) (*model.K8sYamlTask, error)
 	GetYamlTaskByTemplateID(ctx context.Context, templateID int) ([]*model.K8sYamlTask, error)
 }
 
@@ -58,36 +58,25 @@ func NewYamlTaskDAO(db *gorm.DB, logger *zap.Logger) YamlTaskDAO {
 // ListAllYamlTasks 查询所有 YAML 任务
 func (d *yamlTaskDAO) ListAllYamlTasks(ctx context.Context, req *model.YamlTaskListReq) ([]*model.K8sYamlTask, error) {
 	var tasks []*model.K8sYamlTask
-
 	query := d.db.WithContext(ctx)
 
-	// 根据集群ID过滤
 	if req.ClusterID > 0 {
 		query = query.Where("cluster_id = ?", req.ClusterID)
 	}
-
-	// 根据模板ID过滤
 	if req.TemplateID > 0 {
 		query = query.Where("template_id = ?", req.TemplateID)
 	}
-
-	// 根据状态过滤
 	if req.Status != "" {
 		query = query.Where("status = ?", req.Status)
 	}
-
-	// 根据任务名称过滤（模糊匹配）
 	if req.Name != "" {
 		query = query.Where("name LIKE ?", "%"+req.Name+"%")
 	}
-
-	// 分页处理
 	if req.Size > 0 {
 		offset := (req.Page - 1) * req.Size
 		query = query.Offset(offset).Limit(req.Size)
 	}
 
-	// 按创建时间倒序排列
 	query = query.Order("created_at DESC")
 
 	if err := query.Find(&tasks).Error; err != nil {
@@ -103,48 +92,56 @@ func (d *yamlTaskDAO) CreateYamlTask(ctx context.Context, task *model.K8sYamlTas
 		d.logger.Error("CreateYamlTask 创建Yaml任务失败", zap.Error(err), zap.Any("task", task))
 		return err
 	}
-
 	return nil
 }
 
 func (d *yamlTaskDAO) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
-	if err := d.db.WithContext(ctx).Model(&model.K8sYamlTask{}).Where("id = ?", task.ID).Updates(task).Error; err != nil {
-		d.logger.Error("UpdateYamlTask 更新Yaml任务失败", zap.Int("taskID", task.ID), zap.Error(err))
-		return err
+	if task.ID == 0 {
+		d.logger.Error("UpdateYamlTask ID 不能为空", zap.Any("task", task))
+		return fmt.Errorf("invalid task ID")
 	}
 
+	if err := d.db.WithContext(ctx).Model(&model.K8sYamlTask{}).Where("id = ? AND cluster_id = ?", task.ID, task.ClusterID).Updates(task).Error; err != nil {
+		d.logger.Error("UpdateYamlTask 更新Yaml任务失败", zap.Int("taskID", task.ID), zap.Int("clusterID", task.ClusterID), zap.Error(err))
+		return err
+	}
 	return nil
 }
 
-func (d *yamlTaskDAO) DeleteYamlTask(ctx context.Context, id int) error {
-	if err := d.db.WithContext(ctx).Where("id = ?", id).Delete(&model.K8sYamlTask{}).Error; err != nil {
-		d.logger.Error("DeleteYamlTask 删除Yaml任务失败", zap.Int("taskID", id), zap.Error(err))
-		return err
+func (d *yamlTaskDAO) DeleteYamlTask(ctx context.Context, id int, clusterID int) error {
+	if id == 0 {
+		d.logger.Error("DeleteYamlTask ID 不能为空", zap.Int("id", id))
+		return fmt.Errorf("invalid task ID")
 	}
 
+	if err := d.db.WithContext(ctx).Where("id = ? AND cluster_id = ?", id, clusterID).Delete(&model.K8sYamlTask{}).Error; err != nil {
+		d.logger.Error("DeleteYamlTask 删除Yaml任务失败", zap.Int("taskID", id), zap.Int("clusterID", clusterID), zap.Error(err))
+		return err
+	}
 	return nil
 }
 
-func (d *yamlTaskDAO) GetYamlTaskByID(ctx context.Context, id int) (*model.K8sYamlTask, error) {
+func (d *yamlTaskDAO) GetYamlTaskByID(ctx context.Context, id int, clusterID int) (*model.K8sYamlTask, error) {
+	if id == 0 {
+		d.logger.Error("GetYamlTaskByID ID 不能为空", zap.Int("id", id))
+		return nil, fmt.Errorf("invalid task ID")
+	}
+
 	var task model.K8sYamlTask
-
-	if err := d.db.WithContext(ctx).Where("id = ?", id).First(&task).Error; err != nil {
-		d.logger.Error("GetYamlTaskByID 查询Yaml任务失败", zap.Int("taskID", id), zap.Error(err))
-		return nil, fmt.Errorf("YAML 任务 ID %d 未找到: %w", id, err)
+	if err := d.db.WithContext(ctx).Where("id = ? AND cluster_id = ?", id, clusterID).First(&task).Error; err != nil {
+		d.logger.Error("GetYamlTaskByID 查询Yaml任务失败", zap.Int("taskID", id), zap.Int("clusterID", clusterID), zap.Error(err))
+		return nil, fmt.Errorf("YAML 任务 ID %d (集群 %d) 未找到: %w", id, clusterID, err)
 	}
-
 	return &task, nil
 }
 
 func (d *yamlTaskDAO) GetYamlTaskByTemplateID(ctx context.Context, templateID int) ([]*model.K8sYamlTask, error) {
 	var tasks []*model.K8sYamlTask
-
 	if err := d.db.WithContext(ctx).Where("template_id = ?", templateID).Find(&tasks).Error; err != nil {
 		d.logger.Error("GetYamlTaskByTemplateID 查询Yaml任务失败", zap.Int("templateID", templateID), zap.Error(err))
 		return nil, err
 	}
 
-	// 若未找到任务，记录信息日志
 	if len(tasks) == 0 {
 		d.logger.Info("GetYamlTaskByTemplateID 未找到相关Yaml任务", zap.Int("templateID", templateID))
 	}

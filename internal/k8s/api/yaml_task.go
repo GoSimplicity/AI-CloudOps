@@ -50,6 +50,7 @@ func (h *K8sYamlTaskHandler) RegisterRouters(server *gin.Engine) {
 		k8sGroup.POST("/yaml_task/:cluster_id/:id/update", h.UpdateYamlTask)
 		k8sGroup.POST("/yaml_task/:cluster_id/:id/apply", h.ApplyYamlTask)
 		k8sGroup.DELETE("/yaml_task/:cluster_id/:id/delete", h.DeleteYamlTask)
+		k8sGroup.GET("/yaml_task/:cluster_id/:id/detail", h.GetYamlTaskDetail)
 	}
 }
 
@@ -155,5 +156,28 @@ func (h *K8sYamlTaskHandler) DeleteYamlTask(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.yamlTaskService.DeleteYamlTask(ctx, &req)
+	})
+}
+
+func (h *K8sYamlTaskHandler) GetYamlTaskDetail(ctx *gin.Context) {
+	var req model.YamlTaskDetailReq
+
+	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		utils.BadRequestError(ctx, "缺少 'cluster_id' 参数")
+		return
+	}
+
+	id, err := utils.GetParamID(ctx)
+	if err != nil {
+		utils.BadRequestError(ctx, "缺少 'id' 参数")
+		return
+	}
+
+	req.ID = id
+	req.ClusterID = clusterId
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.yamlTaskService.GetYamlTaskDetail(ctx, &req)
 	})
 }

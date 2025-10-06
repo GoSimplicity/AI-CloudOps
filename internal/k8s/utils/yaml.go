@@ -68,11 +68,9 @@ func ParseYamlTemplate(templateContent string, variables []string) (string, erro
 	return yamlContent, nil
 }
 
-func ApplyYamlToCluster(ctx context.Context, discoveryClient discovery.DiscoveryInterface, dynamicClient dynamic.Interface, yamlContent string) error {
-	// 分割多文档YAML
+func ApplyYamlToCluster(ctx context.Context, discoveryClient discovery.DiscoveryInterface, dynamicClient dynamic.Interface, yamlContent string, dryRun bool) error {
 	documents := strings.Split(yamlContent, "---")
 
-	// 获取 REST Mapper（复用）
 	apiGroupResources, err := restmapper.GetAPIGroupResources(discoveryClient)
 	if err != nil {
 		return fmt.Errorf("获取 API 组资源失败: %w", err)
@@ -82,15 +80,13 @@ func ApplyYamlToCluster(ctx context.Context, discoveryClient discovery.Discovery
 
 	var errors []string
 
-	// 遍历每个文档
 	for i, document := range documents {
-		// 跳过空文档
 		doc := strings.TrimSpace(document)
 		if doc == "" {
 			continue
 		}
 
-		if err := ApplySingleDocument(ctx, doc, restMapper, dynamicClient, i); err != nil {
+		if err := ApplySingleDocument(ctx, doc, restMapper, dynamicClient, i, dryRun); err != nil {
 			errors = append(errors, fmt.Sprintf("文档 %d: %v", i+1, err))
 		}
 	}
@@ -102,26 +98,22 @@ func ApplyYamlToCluster(ctx context.Context, discoveryClient discovery.Discovery
 	return nil
 }
 
-func ApplySingleDocument(ctx context.Context, document string, restMapper meta.RESTMapper, dynamicClient dynamic.Interface, docIndex int) error {
-
+func ApplySingleDocument(ctx context.Context, document string, restMapper meta.RESTMapper, dynamicClient dynamic.Interface, docIndex int, dryRun bool) error {
 	jsonData, err := yaml.ToJSON([]byte(document))
 	if err != nil {
 		return fmt.Errorf("YAML 转换 JSON 失败: %w", err)
 	}
 
-	// 解析为 Unstructured 对象
 	obj := &unstructured.Unstructured{}
 	if _, _, err = unstructured.UnstructuredJSONScheme.Decode(jsonData, nil, obj); err != nil {
 		return fmt.Errorf("解析 JSON 失败: %w", err)
 	}
 
-	// 获取 GVK (GroupVersionKind)
 	gvk := obj.GetObjectKind().GroupVersionKind()
 	if gvk.Kind == "" || gvk.Version == "" {
 		return fmt.Errorf("YAML 内容缺少必要的 apiVersion 或 kind 字段")
 	}
 
-	// 获取正确的资源映射
 	mapping, err := restMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return fmt.Errorf("无法找到对应的资源: %w", err)
@@ -138,11 +130,19 @@ func ApplySingleDocument(ctx context.Context, document string, restMapper meta.R
 		dr = dynamicClient.Resource(mapping.Resource)
 	}
 
+	// 构建 CreateOptions 和 UpdateOptions
+	createOpts := metav1.CreateOptions{}
+	updateOpts := metav1.UpdateOptions{}
+	if dryRun {
+		createOpts.DryRun = []string{metav1.DryRunAll}
+		updateOpts.DryRun = []string{metav1.DryRunAll}
+	}
+
 	// 尝试创建资源
-	_, err = dr.Create(ctx, obj, metav1.CreateOptions{})
+	_, err = dr.Create(ctx, obj, createOpts)
 	if err != nil {
 		// 如果创建失败，尝试更新
-		_, updateErr := dr.Update(ctx, obj, metav1.UpdateOptions{})
+		_, updateErr := dr.Update(ctx, obj, updateOpts)
 		if updateErr != nil {
 			return fmt.Errorf("创建或更新资源失败: create error: %v, update error: %v", err, updateErr)
 		}

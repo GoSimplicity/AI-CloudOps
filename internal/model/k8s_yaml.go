@@ -168,6 +168,12 @@ type YamlTaskDeleteReq struct {
 
 // YamlTemplateDetailReq 获取YAML模板详情请求
 type YamlTemplateDetailReq struct {
-	ID        int `json:"id" binding:"required" comment:"模板ID"`                           // 模板ID
+	ID        int `json:"id" form:"id" binding:"required" comment:"模板ID"`                 // 模板ID
+	ClusterID int `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+}
+
+// YamlTaskDetailReq 获取YAML任务详情请求
+type YamlTaskDetailReq struct {
+	ID        int `json:"id" form:"id" binding:"required" comment:"任务ID"`                 // 任务ID
 	ClusterID int `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
 }

@@ -45,6 +45,7 @@ type YamlTaskService interface {
 	UpdateYamlTask(ctx context.Context, req *model.YamlTaskUpdateReq) error
 	DeleteYamlTask(ctx context.Context, req *model.YamlTaskDeleteReq) error
 	ApplyYamlTask(ctx context.Context, req *model.YamlTaskExecuteReq) error
+	GetYamlTaskDetail(ctx context.Context, req *model.YamlTaskDetailReq) (*model.K8sYamlTask, error)
 }
 
 type yamlTaskService struct {
@@ -96,9 +97,13 @@ func (s *yamlTaskService) UpdateYamlTask(ctx context.Context, req *model.YamlTas
 }
 
 func (s *yamlTaskService) DeleteYamlTask(ctx context.Context, req *model.YamlTaskDeleteReq) error {
-	return s.manager.DeleteYamlTask(ctx, req.ID)
+	return s.manager.DeleteYamlTask(ctx, req.ID, req.ClusterID)
 }
 
 func (s *yamlTaskService) ApplyYamlTask(ctx context.Context, req *model.YamlTaskExecuteReq) error {
-	return s.manager.ApplyYamlTask(ctx, req.ID)
+	return s.manager.ApplyYamlTask(ctx, req.ID, req.ClusterID, req.DryRun)
+}
+
+func (s *yamlTaskService) GetYamlTaskDetail(ctx context.Context, req *model.YamlTaskDetailReq) (*model.K8sYamlTask, error) {
+	return s.manager.GetYamlTaskDetail(ctx, req.ID, req.ClusterID)
 }
