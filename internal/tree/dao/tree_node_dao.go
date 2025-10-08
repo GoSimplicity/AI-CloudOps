@@ -31,6 +31,7 @@ import (
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -110,31 +111,7 @@ func (t *treeNodeDAO) GetTreeList(ctx context.Context, req *model.GetTreeNodeLis
 	}
 
 	// 构建树形结构
-	return t.buildTreeStructure(nodes), count, nil
-}
-
-// buildTreeStructure 构建树形结构
-func (t *treeNodeDAO) buildTreeStructure(nodes []*model.TreeNode) []*model.TreeNode {
-	nodeMap := make(map[int]*model.TreeNode)
-	var rootNodes []*model.TreeNode
-
-	for _, node := range nodes {
-		nodeClone := *node
-		nodeClone.Children = make([]*model.TreeNode, 0)
-		nodeMap[node.ID] = &nodeClone
-	}
-
-	for _, node := range nodes {
-		currentNode := nodeMap[node.ID]
-		if node.ParentID == 0 || nodeMap[node.ParentID] == nil {
-			rootNodes = append(rootNodes, currentNode)
-		} else {
-			parent := nodeMap[node.ParentID]
-			parent.Children = append(parent.Children, currentNode)
-		}
-	}
-
-	return rootNodes
+	return treeUtils.BuildTreeStructure(nodes), count, nil
 }
 
 // GetNode 获取节点详情
@@ -464,6 +441,11 @@ func (t *treeNodeDAO) DeleteNode(ctx context.Context, id int) error {
 
 // BindResource 绑定资源到节点
 func (t *treeNodeDAO) BindResource(ctx context.Context, nodeId int, resourceIds []int) error {
+	// 验证资源ID列表
+	if err := treeUtils.ValidateResourceIDs(resourceIds); err != nil {
+		return err
+	}
+
 	// 验证节点存在
 	var count int64
 	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("id = ?", nodeId).Count(&count).Error; err != nil {

@@ -32,6 +32,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
+	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 )
@@ -118,8 +119,8 @@ func (s *treeService) GetNodeDetail(ctx context.Context, id int) (*model.TreeNod
 
 // GetChildNodes 获取直接子节点
 func (s *treeService) GetChildNodes(ctx context.Context, parentID int) ([]*model.TreeNode, error) {
-	if parentID < 0 {
-		return nil, errors.New("父节点ID无效")
+	if err := treeUtils.ValidateParentID(parentID); err != nil {
+		return nil, err
 	}
 	return s.dao.GetChildNodes(ctx, parentID)
 }
@@ -179,12 +180,12 @@ func (s *treeService) DeleteNode(ctx context.Context, id int) error {
 
 // MoveNode 移动节点
 func (s *treeService) MoveNode(ctx context.Context, nodeId, newParentId int) error {
-	if newParentId < 0 {
-		return errors.New("新父节点ID不能为负数")
+	if err := treeUtils.ValidateParentID(newParentId); err != nil {
+		return err
 	}
 
-	if nodeId == newParentId {
-		return errors.New("节点不能移动到自己")
+	if err := treeUtils.ValidateNodeMove(nodeId, newParentId); err != nil {
+		return err
 	}
 
 	s.logger.Info("移动节点", zap.Int("nodeId", nodeId), zap.Int("newParentId", newParentId))
@@ -209,8 +210,8 @@ func (s *treeService) MoveNode(ctx context.Context, nodeId, newParentId int) err
 
 // GetNodeMembers 获取节点成员列表
 func (s *treeService) GetNodeMembers(ctx context.Context, nodeId int, memberType string) (model.ListResp[*model.User], error) {
-	if memberType != "" && memberType != NodeAdminRole && memberType != NodeMemberRole && memberType != "all" {
-		return model.ListResp[*model.User]{}, errors.New("成员类型只能是admin、member或all")
+	if err := treeUtils.ValidateMemberType(memberType); err != nil {
+		return model.ListResp[*model.User]{}, err
 	}
 
 	s.logger.Debug("获取节点成员", zap.Int("nodeId", nodeId), zap.String("memberType", memberType))
@@ -257,8 +258,8 @@ func (s *treeService) RemoveNodeMember(ctx context.Context, req *model.RemoveTre
 
 // BindResource 绑定资源到节点
 func (s *treeService) BindResource(ctx context.Context, req *model.BindTreeNodeResourceReq) error {
-	if len(req.ResourceIDs) == 0 {
-		return errors.New("资源ID列表不能为空")
+	if err := treeUtils.ValidateResourceIDs(req.ResourceIDs); err != nil {
+		return err
 	}
 
 	return s.dao.BindResource(ctx, req.NodeID, req.ResourceIDs)
@@ -266,8 +267,8 @@ func (s *treeService) BindResource(ctx context.Context, req *model.BindTreeNodeR
 
 // UnbindResource 解绑资源
 func (s *treeService) UnbindResource(ctx context.Context, req *model.UnbindTreeNodeResourceReq) error {
-	if req.ResourceID <= 0 {
-		return errors.New("资源ID不能为空或小于等于0")
+	if err := treeUtils.ValidateID(req.ResourceID); err != nil {
+		return err
 	}
 
 	s.logger.Info("解绑资源",

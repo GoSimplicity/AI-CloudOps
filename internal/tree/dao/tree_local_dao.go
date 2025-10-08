@@ -30,6 +30,7 @@ import (
 	"errors"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -172,7 +173,7 @@ func (d *treeLocalDAO) BatchGetByIDs(ctx context.Context, ids []int) ([]*model.T
 
 // BindTreeNodes 绑定树节点
 func (d *treeLocalDAO) BindTreeNodes(ctx context.Context, localID int, treeNodeIds []int) error {
-	if len(treeNodeIds) == 0 {
+	if !treeUtils.ValidateTreeNodeIDs(treeNodeIds) {
 		d.logger.Info("没有需要绑定的树节点")
 		return nil
 	}
@@ -202,7 +203,7 @@ func (d *treeLocalDAO) BindTreeNodes(ctx context.Context, localID int, treeNodeI
 }
 
 func (d *treeLocalDAO) UnBindTreeNodes(ctx context.Context, localID int, treeNodeIds []int) error {
-	if len(treeNodeIds) == 0 {
+	if !treeUtils.ValidateTreeNodeIDs(treeNodeIds) {
 		d.logger.Info("没有需要解绑的树节点")
 		return nil
 	}

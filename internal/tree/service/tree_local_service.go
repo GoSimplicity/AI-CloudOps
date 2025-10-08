@@ -32,9 +32,8 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
 	"github.com/imdario/mergo"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -65,12 +64,7 @@ func NewTreeLocalService(logger *zap.Logger, dao dao.TreeLocalDAO) TreeLocalServ
 // GetTreeLocalList 获取本地主机列表
 func (s *treeLocalService) GetTreeLocalList(ctx context.Context, req *model.GetTreeLocalResourceListReq) (model.ListResp[*model.TreeLocalResource], error) {
 	// 兜底分页参数，避免offset为负或size为0
-	if req.Page <= 0 {
-		req.Page = 1
-	}
-	if req.Size <= 0 {
-		req.Size = 10
-	}
+	treeUtils.ValidateAndSetPaginationDefaults(&req.Page, &req.Size)
 	locals, total, err := s.dao.GetList(ctx, req)
 	if err != nil {
 		s.logger.Error("获取本地主机列表失败", zap.Error(err))
@@ -85,8 +79,8 @@ func (s *treeLocalService) GetTreeLocalList(ctx context.Context, req *model.GetT
 
 // GetTreeLocalDetail 获取本地主机详情
 func (s *treeLocalService) GetTreeLocalDetail(ctx context.Context, req *model.GetTreeLocalResourceDetailReq) (*model.TreeLocalResource, error) {
-	if req.ID <= 0 {
-		return nil, errors.New("无效的主机ID")
+	if err := treeUtils.ValidateID(req.ID); err != nil {
+		return nil, fmt.Errorf("无效的主机ID: %w", err)
 	}
 
 	local, err := s.dao.GetByID(ctx, req.ID)
@@ -103,8 +97,8 @@ func (s *treeLocalService) GetTreeLocalDetail(ctx context.Context, req *model.Ge
 
 // GetTreeLocalForConnection 获取用于连接的本地主机详情(包含解密后的密码)
 func (s *treeLocalService) GetTreeLocalForConnection(ctx context.Context, req *model.GetTreeLocalResourceDetailReq) (*model.TreeLocalResource, error) {
-	if req.ID <= 0 {
-		return nil, errors.New("无效的主机ID")
+	if err := treeUtils.ValidateID(req.ID); err != nil {
+		return nil, fmt.Errorf("无效的主机ID: %w", err)
 	}
 
 	local, err := s.dao.GetByID(ctx, req.ID)
@@ -118,7 +112,7 @@ func (s *treeLocalService) GetTreeLocalForConnection(ctx context.Context, req *m
 
 	// 解密密码以供连接使用
 	if local.AuthMode == model.AuthModePassword && local.Password != "" {
-		plainPassword, err := s.decryptPassword(local.Password)
+		plainPassword, err := treeUtils.DecryptPassword(local.Password)
 		if err != nil {
 			s.logger.Error("密码解密失败", zap.Int("id", req.ID), zap.Error(err))
 			return nil, fmt.Errorf("密码解密失败: %w", err)
@@ -166,7 +160,7 @@ func (s *treeLocalService) CreateTreeLocal(ctx context.Context, req *model.Creat
 
 	// 加密
 	if local.AuthMode == model.AuthModePassword && req.Password != "" {
-		encryptedPassword, err := s.encryptPassword(req.Password)
+		encryptedPassword, err := treeUtils.EncryptPassword(req.Password)
 		if err != nil {
 			s.logger.Error("密码加密失败", zap.Error(err))
 			return fmt.Errorf("密码加密失败: %w", err)
@@ -183,8 +177,8 @@ func (s *treeLocalService) CreateTreeLocal(ctx context.Context, req *model.Creat
 }
 
 func (s *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.UpdateTreeLocalResourceReq) error {
-	if req.ID <= 0 {
-		return errors.New("无效的主机ID")
+	if err := treeUtils.ValidateID(req.ID); err != nil {
+		return fmt.Errorf("无效的主机ID: %w", err)
 	}
 
 	// 检查是否存在
@@ -224,7 +218,7 @@ func (s *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.Updat
 
 	// 加密密码
 	if req.AuthMode == model.AuthModePassword && req.Password != "" {
-		pwd, err := s.encryptPassword(req.Password)
+		pwd, err := treeUtils.EncryptPassword(req.Password)
 		if err != nil {
 			s.logger.Error("密码加密失败", zap.Error(err))
 			return fmt.Errorf("密码加密失败: %w", err)
@@ -252,8 +246,8 @@ func (s *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.Updat
 
 // DeleteTreeLocal 删除本地主机
 func (s *treeLocalService) DeleteTreeLocal(ctx context.Context, req *model.DeleteTreeLocalResourceReq) error {
-	if req.ID <= 0 {
-		return errors.New("无效的主机ID")
+	if err := treeUtils.ValidateID(req.ID); err != nil {
+		return fmt.Errorf("无效的主机ID: %w", err)
 	}
 
 	if err := s.dao.Delete(ctx, req.ID); err != nil {
@@ -268,8 +262,8 @@ func (s *treeLocalService) DeleteTreeLocal(ctx context.Context, req *model.Delet
 }
 
 func (s *treeLocalService) BindTreeLocal(ctx context.Context, req *model.BindTreeLocalResourceReq) error {
-	if req.ID <= 0 {
-		return errors.New("无效的主机ID")
+	if err := treeUtils.ValidateID(req.ID); err != nil {
+		return fmt.Errorf("无效的主机ID: %w", err)
 	}
 
 	if err := s.dao.BindTreeNodes(ctx, req.ID, req.TreeNodeIDs); err != nil {
@@ -281,8 +275,8 @@ func (s *treeLocalService) BindTreeLocal(ctx context.Context, req *model.BindTre
 }
 
 func (s *treeLocalService) UnBindLocalResource(ctx context.Context, req *model.UnBindTreeLocalResourceReq) error {
-	if req.ID <= 0 {
-		return errors.New("无效的主机ID")
+	if err := treeUtils.ValidateID(req.ID); err != nil {
+		return fmt.Errorf("无效的主机ID: %w", err)
 	}
 
 	if err := s.dao.UnBindTreeNodes(ctx, req.ID, req.TreeNodeIDs); err != nil {
@@ -291,38 +285,4 @@ func (s *treeLocalService) UnBindLocalResource(ctx context.Context, req *model.U
 	}
 
 	return nil
-}
-
-// encryptPassword 加密密码
-func (s *treeLocalService) encryptPassword(password string) (string, error) {
-	if password == "" {
-		return "", nil
-	}
-
-	encryptionKey := viper.GetString("tree.password_encryption_key")
-	if encryptionKey == "" {
-		return "", errors.New("未配置密码加密密钥")
-	}
-	if len(encryptionKey) != 32 {
-		return "", errors.New("密码加密密钥长度必须为32字节")
-	}
-
-	return utils.EncryptSecretKey(password, []byte(encryptionKey))
-}
-
-// decryptPassword 解密密码
-func (s *treeLocalService) decryptPassword(encryptedPassword string) (string, error) {
-	if encryptedPassword == "" {
-		return "", nil
-	}
-
-	encryptionKey := viper.GetString("tree.password_encryption_key")
-	if encryptionKey == "" {
-		return "", errors.New("未配置密码加密密钥")
-	}
-	if len(encryptionKey) != 32 {
-		return "", errors.New("密码加密密钥长度必须为32字节")
-	}
-
-	return utils.DecryptSecretKey(encryptedPassword, []byte(encryptionKey))
 }
