@@ -50,7 +50,7 @@ type TreeLocalResource struct {
 	Status         ResourceStatus `json:"status" gorm:"type:tinyint(1);comment:资源状态;default:1"`
 	Environment    string         `json:"environment" gorm:"type:varchar(50);comment:环境标识,如dev,prod"`
 	Description    string         `json:"description" gorm:"type:text;comment:资源描述"`
-	Tags           StringList     `json:"tags" gorm:"type:varchar(500);comment:资源标签集合"`
+	Tags           KeyValueList   `json:"tags" gorm:"type:text;serializer:json;comment:资源标签集合"`
 	Cpu            int            `json:"cpu" gorm:"comment:CPU核数"`
 	Memory         int            `json:"memory" gorm:"comment:内存大小,单位GiB"`
 	Disk           int            `json:"disk" gorm:"comment:系统盘大小,单位GiB"`
@@ -62,7 +62,7 @@ type TreeLocalResource struct {
 	CreateUserName string         `json:"create_user_name" gorm:"type:varchar(100);comment:创建者姓名"`
 	Key            string         `json:"key" gorm:"type:text;comment:密钥"`
 	AuthMode       AuthMode       `json:"auth_mode" gorm:"type:tinyint(1);comment:认证方式,1:密码,2:密钥;default:1"`
-	OsType         string         `json:"os_type" gorm:"type:varchar(50);comment:操作系统类型,如win,linux"`
+	OSType         string         `json:"os_type" gorm:"type:varchar(50);comment:操作系统类型,如win,linux"`
 	OSName         string         `json:"os_name" gorm:"type:varchar(100);comment:操作系统名称"`
 	ImageName      string         `json:"image_name" gorm:"type:varchar(100);comment:镜像名称"`
 	TreeNodes      []*TreeNode    `json:"tree_nodes" gorm:"many2many:cl_tree_node_local"`
@@ -85,58 +85,58 @@ type GetTreeLocalResourceDetailReq struct {
 
 // CreateTreeLocalReq 创建本地树资源请求
 type CreateTreeLocalResourceReq struct {
-	Name           string     `json:"name" binding:"required"`
-	Environment    string     `json:"environment"`
-	Description    string     `json:"description"`
-	Tags           StringList `json:"tags"`
-	IpAddr         string     `json:"ip_addr" binding:"required"`
-	Port           int        `json:"port"`
-	Username       string     `json:"username"`
-	Password       string     `json:"password"`
-	CreateUserID   int        `json:"create_user_id"`
-	CreateUserName string     `json:"create_user_name"`
-	OsType         string     `json:"os_type"`
-	OSName         string     `json:"os_name"`
-	ImageName      string     `json:"image_name"`
-	Key            string     `json:"key"`
-	AuthMode       AuthMode   `json:"auth_mode"`
+	Name           string       `json:"name" binding:"required"`
+	Environment    string       `json:"environment"`
+	Description    string       `json:"description"`
+	Tags           KeyValueList `json:"tags"`
+	IpAddr         string       `json:"ip_addr" binding:"required"`
+	Port           int          `json:"port"`
+	Username       string       `json:"username"`
+	Password       string       `json:"password"`
+	CreateUserID   int          `json:"create_user_id"`
+	CreateUserName string       `json:"create_user_name"`
+	OSType         string       `json:"os_type"`
+	OSName         string       `json:"os_name"`
+	ImageName      string       `json:"image_name"`
+	Key            string       `json:"key"`
+	AuthMode       AuthMode     `json:"auth_mode"`
 }
 
 // UpdateTreeLocalReq 更新本地树资源请求
 type UpdateTreeLocalResourceReq struct {
-	ID          int        `json:"id" form:"id"`
-	Name        string     `json:"name"`
-	Environment string     `json:"environment"`
-	Description string     `json:"description"`
-	Tags        StringList `json:"tags"`
-	IpAddr      string     `json:"ip_addr"`
-	Port        int        `json:"port"`
-	OsType      string     `json:"os_type"`
-	OSName      string     `json:"os_name"`
-	ImageName   string     `json:"image_name"`
-	Username    string     `json:"username"`
-	Password    string     `json:"password"`
-	Key         string     `json:"key"`
-	AuthMode    AuthMode   `json:"auth_mode"`
+	ID          int          `json:"id" form:"id"`
+	Name        string       `json:"name"`
+	Environment string       `json:"environment"`
+	Description string       `json:"description"`
+	Tags        KeyValueList `json:"tags"`
+	IpAddr      string       `json:"ip_addr"`
+	Port        int          `json:"port"`
+	OSType      string       `json:"os_type"`
+	OSName      string       `json:"os_name"`
+	ImageName   string       `json:"image_name"`
+	Username    string       `json:"username"`
+	Password    string       `json:"password"`
+	Key         string       `json:"key"`
+	AuthMode    AuthMode     `json:"auth_mode"`
 }
 
-// DeleteTreeLocalReq 删除本地树资源请求
+// DeleteTreeLocalResourceReq 删除本地树资源请求
 type DeleteTreeLocalResourceReq struct {
-	ID int `json:"id" form:"id"`
+	ID int `json:"id" form:"id" binding:"required"`
 }
 
-// ConnectTerminalReq 连接终端请求
-type ConnectTerminalResourceReq struct {
-	ID     int `json:"id" form:"id"`
+// ConnectTreeLocalResourceTerminalReq 连接本地资源终端请求
+type ConnectTreeLocalResourceTerminalReq struct {
+	ID     int `json:"id" form:"id" binding:"required"`
 	UserID int `json:"user_id"`
 }
 
 type BindTreeLocalResourceReq struct {
-	ID          int   `json:"id" form:"id"`
-	TreeNodeIDs []int `json:"tree_node_ids" form:"tree_node_ids"`
+	ID          int   `json:"id" form:"id" binding:"required"`
+	TreeNodeIDs []int `json:"tree_node_ids" form:"tree_node_ids" binding:"required,min=1"`
 }
 
 type UnBindTreeLocalResourceReq struct {
-	ID          int   `json:"id" form:"id"`
-	TreeNodeIDs []int `json:"tree_node_ids" form:"tree_node_ids"`
+	ID          int   `json:"id" form:"id" binding:"required"`
+	TreeNodeIDs []int `json:"tree_node_ids" form:"tree_node_ids" binding:"required,min=1"`
 }

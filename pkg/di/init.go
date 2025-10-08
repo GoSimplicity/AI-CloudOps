@@ -50,8 +50,8 @@ func InitTables(db *gorm.DB) error {
 		// tree
 		&model.TreeNode{},
 		&model.TreeLocalResource{},
-
-		// k8s
+		&model.TreeCloudResource{},
+		&model.CloudAccount{},
 		&model.K8sCluster{},
 
 		// prometheus

@@ -32,8 +32,40 @@ import (
 	"github.com/spf13/viper"
 )
 
+// ValidateAndSetPaginationDefaults 验证并设置分页参数的默认值
+func ValidateAndSetPaginationDefaults(page, size *int) {
+	if *page <= 0 {
+		*page = 1
+	}
+	if *size <= 0 {
+		*size = 10
+	}
+}
+
+// ValidateID 验证ID是否有效
+func ValidateID(id int) error {
+	if id <= 0 {
+		return errors.New("无效的ID")
+	}
+	return nil
+}
+
+// ValidateTreeNodeIDs 验证树节点ID列表
+func ValidateTreeNodeIDs(treeNodeIDs []int) bool {
+	return len(treeNodeIDs) > 0
+}
+
+// SetSSHDefaults 设置SSH连接的默认值
+func SetSSHDefaults(port *int, username *string) {
+	if *port == 0 {
+		*port = 22
+	}
+	if *username == "" {
+		*username = "root"
+	}
+}
+
 // EncryptPassword 加密密码
-// 使用配置文件中的加密密钥对密码进行加密
 func EncryptPassword(password string) (string, error) {
 	if password == "" {
 		return "", nil
@@ -51,7 +83,6 @@ func EncryptPassword(password string) (string, error) {
 }
 
 // DecryptPassword 解密密码
-// 使用配置文件中的加密密钥对加密后的密码进行解密
 func DecryptPassword(encryptedPassword string) (string, error) {
 	if encryptedPassword == "" {
 		return "", nil

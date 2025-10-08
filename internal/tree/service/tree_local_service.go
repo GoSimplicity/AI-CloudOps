@@ -144,19 +144,13 @@ func (s *treeLocalService) CreateTreeLocal(ctx context.Context, req *model.Creat
 		CreateUserName: req.CreateUserName,
 		Key:            req.Key,
 		AuthMode:       req.AuthMode,
-		OsType:         req.OsType,
+		OSType:         req.OSType,
 		OSName:         req.OSName,
 		ImageName:      req.ImageName,
 	}
 
 	// 设置默认值
-	if local.Port == 0 {
-		local.Port = 22
-	}
-
-	if local.Username == "" {
-		local.Username = "root"
-	}
+	treeUtils.SetSSHDefaults(&local.Port, &local.Username)
 
 	// 加密
 	if local.AuthMode == model.AuthModePassword && req.Password != "" {
@@ -210,7 +204,7 @@ func (s *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.Updat
 		Status:      model.STARTING,
 		IpAddr:      req.IpAddr,
 		Port:        req.Port,
-		OsType:      req.OsType,
+		OSType:      req.OSType,
 		OSName:      req.OSName,
 		ImageName:   req.ImageName,
 		AuthMode:    req.AuthMode,

@@ -25,11 +25,45 @@
 
 package utils
 
-import "github.com/GoSimplicity/AI-CloudOps/internal/model"
+import (
+	"errors"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+)
+
+// ValidateParentID 验证父节点ID是否有效
+func ValidateParentID(parentID int) error {
+	if parentID < 0 {
+		return errors.New("父节点ID不能为负数")
+	}
+	return nil
+}
+
+// ValidateNodeMove 验证节点移动操作
+func ValidateNodeMove(nodeID, newParentID int) error {
+	if nodeID == newParentID {
+		return errors.New("节点不能移动到自己")
+	}
+	return nil
+}
+
+// ValidateMemberType 验证成员类型
+func ValidateMemberType(memberType string) error {
+	if memberType != "" && memberType != "admin" && memberType != "member" && memberType != "all" {
+		return errors.New("成员类型只能是admin、member或all")
+	}
+	return nil
+}
+
+// ValidateResourceIDs 验证资源ID列表
+func ValidateResourceIDs(resourceIDs []int) error {
+	if len(resourceIDs) == 0 {
+		return errors.New("资源ID列表不能为空")
+	}
+	return nil
+}
 
 // BuildTreeStructure 构建树形结构
-// 将扁平化的节点列表转换为具有父子关系的树形结构
-// 返回根节点列表，每个节点的Children字段包含其子节点
 func BuildTreeStructure(nodes []*model.TreeNode) []*model.TreeNode {
 	// 创建节点映射表，用于快速查找节点
 	nodeMap := make(map[int]*model.TreeNode)

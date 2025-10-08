@@ -80,7 +80,7 @@ func (h *TreeLocalHandler) GetTreeLocalDetail(ctx *gin.Context) {
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "invalid param id")
+		utils.ErrorWithMessage(ctx, "无效的资源ID")
 		return
 	}
 
