@@ -149,41 +149,53 @@ func (t *treeNodeDAO) GetChildNodes(ctx context.Context, parentID int) ([]*model
 // GetTreeStatistics 获取服务树统计数据
 func (t *treeNodeDAO) GetTreeStatistics(ctx context.Context) (*model.TreeNodeStatisticsResp, error) {
 	var stats model.TreeNodeStatisticsResp
+	var count int64
 
 	// 节点总数
-	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Count((*int64)(&[]int64{0}[0])).Error; err != nil {
+	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Count(&count).Error; err != nil {
 		t.logger.Error("统计节点总数失败", zap.Error(err))
-	}
-	// 为了避免使用中间变量，这里分别统计并赋值
-	var c int64
-	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Count(&c).Error; err == nil {
-		stats.TotalNodes = int(c)
+	} else {
+		stats.TotalNodes = int(count)
 	}
 
-	// 活跃/非活跃
-	c = 0
-	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("status = ?", model.ACTIVE).Count(&c).Error; err == nil {
-		stats.ActiveNodes = int(c)
+	// 活跃节点数
+	count = 0
+	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("status = ?", model.ACTIVE).Count(&count).Error; err != nil {
+		t.logger.Error("统计活跃节点失败", zap.Error(err))
+	} else {
+		stats.ActiveNodes = int(count)
 	}
-	c = 0
-	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("status = ?", model.INACTIVE).Count(&c).Error; err == nil {
-		stats.InactiveNodes = int(c)
+
+	// 非活跃节点数
+	count = 0
+	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("status = ?", model.INACTIVE).Count(&count).Error; err != nil {
+		t.logger.Error("统计非活跃节点失败", zap.Error(err))
+	} else {
+		stats.InactiveNodes = int(count)
 	}
 
 	// 资源总数
-	c = 0
-	if err := t.db.WithContext(ctx).Model(&model.TreeLocalResource{}).Count(&c).Error; err == nil {
-		stats.TotalResources = int(c)
+	count = 0
+	if err := t.db.WithContext(ctx).Model(&model.TreeLocalResource{}).Count(&count).Error; err != nil {
+		t.logger.Error("统计资源总数失败", zap.Error(err))
+	} else {
+		stats.TotalResources = int(count)
 	}
 
-	// 管理员与成员总数（关联关系条目数）
-	c = 0
-	if err := t.db.WithContext(ctx).Table("cl_tree_node_admin").Count(&c).Error; err == nil {
-		stats.TotalAdmins = int(c)
+	// 管理员总数（关联关系条目数）
+	count = 0
+	if err := t.db.WithContext(ctx).Table("cl_tree_node_admin").Count(&count).Error; err != nil {
+		t.logger.Error("统计管理员总数失败", zap.Error(err))
+	} else {
+		stats.TotalAdmins = int(count)
 	}
-	c = 0
-	if err := t.db.WithContext(ctx).Table("cl_tree_node_member").Count(&c).Error; err == nil {
-		stats.TotalMembers = int(c)
+
+	// 成员总数（关联关系条目数）
+	count = 0
+	if err := t.db.WithContext(ctx).Table("cl_tree_node_member").Count(&count).Error; err != nil {
+		t.logger.Error("统计成员总数失败", zap.Error(err))
+	} else {
+		stats.TotalMembers = int(count)
 	}
 
 	return &stats, nil

@@ -37,18 +37,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	NodeAdminRole      = "admin"    // 管理员角色
-	NodeMemberRole     = "member"   // 普通成员角色
-	NodeStatusActive   = "active"   // 活跃状态
-	NodeStatusInactive = "inactive" // 非活跃状态
-	NodeStatusDeleted  = "deleted"  // 删除状态
-
-	// 默认值
-	DefaultLevel  = 1
-	DefaultStatus = NodeStatusActive
-)
-
 type TreeNodeService interface {
 	// 树结构相关接口
 	GetTreeList(ctx context.Context, req *model.GetTreeNodeListReq) (model.ListResp[*model.TreeNode], error)

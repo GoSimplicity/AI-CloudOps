@@ -30,7 +30,6 @@ type ecsSSH struct {
 	UserID     int                  // 用户ID，用于区分不同用户的会话
 	Sessions   map[int]*ssh.Session // 用户会话映射表，key为UserID，value为对应的SSH会话
 	sessionMu  sync.RWMutex         // 保护Sessions的读写锁
-	Channel    ssh.Channel          // SSH通信通道（当前版本未使用）
 	LastResult string               // 最近一次执行命令的结果
 	logger     *zap.Logger          // 日志记录器
 }
