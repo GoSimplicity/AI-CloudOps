@@ -80,6 +80,9 @@ func (s *treeService) GetTreeList(ctx context.Context, req *model.GetTreeNodeLis
 		return model.ListResp[*model.TreeNode]{}, errors.New("层级不能为负数")
 	}
 
+	// 设置分页默认值
+	treeUtils.ValidateAndSetPaginationDefaults(&req.Page, &req.Size)
+
 	s.logger.Debug("获取树节点列表", zap.Int("level", req.Level), zap.Int("status", int(req.Status)))
 
 	trees, total, err := s.dao.GetTreeList(ctx, req)

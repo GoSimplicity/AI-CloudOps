@@ -48,7 +48,6 @@ type TreeCloudService interface {
 	UnBindTreeCloudResource(ctx context.Context, req *model.UnBindTreeCloudResourceReq) error
 	GetTreeNodeCloudResources(ctx context.Context, req *model.GetTreeNodeCloudResourcesReq) ([]*model.TreeCloudResource, error)
 	UpdateCloudResourceStatus(ctx context.Context, req *model.UpdateCloudResourceStatusReq) error
-	VerifyCloudCredentials(ctx context.Context, req *model.VerifyCloudCredentialsReq) error
 	SyncTreeCloudResource(ctx context.Context, req *model.SyncTreeCloudResourceReq) error
 	BatchImportCloudResource(ctx context.Context, req *model.BatchImportCloudResourceReq) ([]int, error)
 }
@@ -344,33 +343,6 @@ func (s *treeCloudService) UpdateCloudResourceStatus(ctx context.Context, req *m
 	return nil
 }
 
-// VerifyCloudCredentials 验证云厂商凭证
-func (s *treeCloudService) VerifyCloudCredentials(ctx context.Context, req *model.VerifyCloudCredentialsReq) error {
-	// TODO: 实现具体的云厂商SDK验证逻辑
-	// 这里需要根据不同的云厂商（阿里云、腾讯云、AWS等）调用对应的SDK验证凭证
-	s.logger.Info("验证云厂商凭证",
-		zap.Int8("provider", int8(req.Provider)),
-		zap.String("region", req.Region))
-
-	// 根据云厂商类型验证凭证
-	switch req.Provider {
-	case model.ProviderAliyun:
-		return treeUtils.VerifyAliyunCredentials(ctx, req, s.logger)
-	case model.ProviderTencent:
-		return treeUtils.VerifyTencentCredentials(ctx, req, s.logger)
-	case model.ProviderAWS:
-		return treeUtils.VerifyAWSCredentials(ctx, req, s.logger)
-	case model.ProviderHuawei:
-		return treeUtils.VerifyHuaweiCredentials(ctx, req, s.logger)
-	case model.ProviderAzure:
-		return treeUtils.VerifyAzureCredentials(ctx, req, s.logger)
-	case model.ProviderGCP:
-		return treeUtils.VerifyGCPCredentials(ctx, req, s.logger)
-	default:
-		return fmt.Errorf("不支持的云厂商: %d", req.Provider)
-	}
-}
-
 // SyncTreeCloudResource 从云厂商同步资源
 func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model.SyncTreeCloudResourceReq) error {
 	// 获取云账户信息
@@ -388,30 +360,133 @@ func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model
 		return errors.New("云账户已禁用，无法同步资源")
 	}
 
+	// 解密密钥
+	accessKey, err := treeUtils.DecryptPassword(account.AccessKey)
+	if err != nil {
+		s.logger.Error("解密AccessKey失败", zap.Error(err))
+		return fmt.Errorf("解密AccessKey失败: %w", err)
+	}
+
+	secretKey, err := treeUtils.DecryptPassword(account.SecretKey)
+	if err != nil {
+		s.logger.Error("解密SecretKey失败", zap.Error(err))
+		return fmt.Errorf("解密SecretKey失败: %w", err)
+	}
+
 	s.logger.Info("同步云资源",
 		zap.Int("cloudAccountID", req.CloudAccountID),
 		zap.Int8("provider", int8(account.Provider)),
 		zap.String("region", account.Region),
 		zap.String("syncMode", string(req.SyncMode)))
 
-	// TODO: 根据不同的云厂商调用对应的同步逻辑
-	// 这里需要实现具体的云厂商SDK调用
+	// 根据不同的云厂商调用对应的同步逻辑
 	switch account.Provider {
 	case model.ProviderAliyun:
-		return errors.New("阿里云资源同步功能待实现")
+		return s.syncAliyunResources(ctx, account, accessKey, secretKey, req)
 	case model.ProviderTencent:
-		return errors.New("腾讯云资源同步功能待实现")
+		return errors.New("腾讯云资源同步功能暂未实现")
 	case model.ProviderAWS:
-		return errors.New("AWS资源同步功能待实现")
+		return errors.New("AWS资源同步功能暂未实现")
 	case model.ProviderHuawei:
-		return errors.New("华为云资源同步功能待实现")
+		return errors.New("华为云资源同步功能暂未实现")
 	case model.ProviderAzure:
-		return errors.New("Azure资源同步功能待实现")
+		return errors.New("Azure资源同步功能暂未实现")
 	case model.ProviderGCP:
-		return errors.New("GCP资源同步功能待实现")
+		return errors.New("GCP资源同步功能暂未实现")
 	default:
 		return fmt.Errorf("不支持的云厂商: %d", account.Provider)
 	}
+}
+
+// syncAliyunResources 同步阿里云资源
+func (s *treeCloudService) syncAliyunResources(ctx context.Context, account *model.CloudAccount, accessKey, secretKey string, req *model.SyncTreeCloudResourceReq) error {
+	// 构建同步配置
+	config := &treeUtils.AliyunSyncConfig{
+		AccessKey:      accessKey,
+		SecretKey:      secretKey,
+		Region:         account.Region,
+		CloudAccountID: account.ID,
+		ResourceType:   req.ResourceType,
+		InstanceIDs:    req.InstanceIDs,
+		SyncMode:       req.SyncMode,
+	}
+
+	// 从阿里云获取资源列表
+	resources, err := treeUtils.SyncAliyunResources(ctx, config, s.logger)
+	if err != nil {
+		return err
+	}
+
+	// 根据同步模式处理资源
+	if req.SyncMode == model.SyncModeFull {
+		// 全量同步：先删除该云账户下的所有ECS资源，再重新创建
+		return s.fullSyncResources(ctx, account.ID, resources)
+	}
+
+	// 增量同步：更新已存在的资源，创建不存在的资源
+	return s.incrementalSyncResources(ctx, account.ID, resources)
+}
+
+// fullSyncResources 全量同步资源
+func (s *treeCloudService) fullSyncResources(ctx context.Context, cloudAccountID int, resources []*model.TreeCloudResource) error {
+	// 获取该云账户下的所有ECS资源
+	req := &model.GetTreeCloudResourceListReq{
+		ListReq: model.ListReq{
+			Page: 1,
+			Size: 10000, // 获取所有资源
+		},
+		CloudAccountID: cloudAccountID,
+		ResourceType:   model.ResourceTypeECS,
+	}
+	existingResources, _, err := s.dao.GetList(ctx, req)
+	if err != nil {
+		s.logger.Error("获取现有资源失败", zap.Error(err))
+		return err
+	}
+
+	// 删除不在新资源列表中的资源
+	newInstanceIDSet := make(map[string]bool)
+	for _, resource := range resources {
+		newInstanceIDSet[resource.InstanceID] = true
+	}
+
+	for _, existingResource := range existingResources {
+		if !newInstanceIDSet[existingResource.InstanceID] {
+			if err := s.dao.Delete(ctx, existingResource.ID); err != nil {
+				s.logger.Error("删除资源失败", zap.Int("id", existingResource.ID), zap.Error(err))
+			}
+		}
+	}
+
+	// 更新或创建资源
+	return s.incrementalSyncResources(ctx, cloudAccountID, resources)
+}
+
+// incrementalSyncResources 增量同步资源
+func (s *treeCloudService) incrementalSyncResources(ctx context.Context, cloudAccountID int, resources []*model.TreeCloudResource) error {
+	for _, resource := range resources {
+		// 检查资源是否已存在
+		existing, err := s.dao.GetByAccountAndInstanceID(ctx, cloudAccountID, resource.InstanceID)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			s.logger.Error("查询资源失败", zap.String("instanceID", resource.InstanceID), zap.Error(err))
+			continue
+		}
+
+		if existing != nil {
+			// 更新现有资源
+			resource.ID = existing.ID
+			if err := s.dao.Update(ctx, resource); err != nil {
+				s.logger.Error("更新资源失败", zap.Int("id", existing.ID), zap.Error(err))
+			}
+		} else {
+			// 创建新资源
+			if err := s.dao.Create(ctx, resource); err != nil {
+				s.logger.Error("创建资源失败", zap.String("instanceID", resource.InstanceID), zap.Error(err))
+			}
+		}
+	}
+
+	return nil
 }
 
 // BatchImportCloudResource 批量导入云资源
@@ -435,17 +510,91 @@ func (s *treeCloudService) BatchImportCloudResource(ctx context.Context, req *mo
 		return nil, errors.New("云账户已禁用，无法导入资源")
 	}
 
+	// 解密密钥
+	accessKey, err := treeUtils.DecryptPassword(account.AccessKey)
+	if err != nil {
+		s.logger.Error("解密AccessKey失败", zap.Error(err))
+		return nil, fmt.Errorf("解密AccessKey失败: %w", err)
+	}
+
+	secretKey, err := treeUtils.DecryptPassword(account.SecretKey)
+	if err != nil {
+		s.logger.Error("解密SecretKey失败", zap.Error(err))
+		return nil, fmt.Errorf("解密SecretKey失败: %w", err)
+	}
+
 	s.logger.Info("批量导入云资源",
 		zap.Int("cloudAccountID", req.CloudAccountID),
 		zap.Int8("provider", int8(account.Provider)),
 		zap.String("region", account.Region),
 		zap.Int("count", len(req.InstanceIDs)))
 
-	// TODO: 实现批量导入逻辑
-	// 1. 根据云厂商调用对应的SDK获取实例详情
-	// 2. 批量创建云资源记录
-	// 3. 返回创建的资源ID列表
+	// 根据云厂商调用对应的导入逻辑
+	switch account.Provider {
+	case model.ProviderAliyun:
+		return s.batchImportAliyunResources(ctx, account, accessKey, secretKey, req)
+	case model.ProviderTencent:
+		return nil, errors.New("腾讯云批量导入功能暂未实现")
+	case model.ProviderAWS:
+		return nil, errors.New("AWS批量导入功能暂未实现")
+	case model.ProviderHuawei:
+		return nil, errors.New("华为云批量导入功能暂未实现")
+	case model.ProviderAzure:
+		return nil, errors.New("Azure批量导入功能暂未实现")
+	case model.ProviderGCP:
+		return nil, errors.New("GCP批量导入功能暂未实现")
+	default:
+		return nil, fmt.Errorf("不支持的云厂商: %d", account.Provider)
+	}
+}
 
-	// 暂时返回空列表
-	return []int{}, errors.New("批量导入云资源功能待实现")
+// batchImportAliyunResources 批量导入阿里云资源
+func (s *treeCloudService) batchImportAliyunResources(ctx context.Context, account *model.CloudAccount, accessKey, secretKey string, req *model.BatchImportCloudResourceReq) ([]int, error) {
+	// 构建同步配置，指定要导入的实例ID
+	config := &treeUtils.AliyunSyncConfig{
+		AccessKey:      accessKey,
+		SecretKey:      secretKey,
+		Region:         account.Region,
+		CloudAccountID: account.ID,
+		ResourceType:   model.ResourceTypeECS,
+		InstanceIDs:    req.InstanceIDs,
+		SyncMode:       model.SyncModeIncremental,
+	}
+
+	// 从阿里云获取指定实例的详情
+	resources, err := treeUtils.SyncAliyunResources(ctx, config, s.logger)
+	if err != nil {
+		return nil, err
+	}
+
+	// 批量导入资源
+	var importedIDs []int
+	for _, resource := range resources {
+		// 检查资源是否已存在
+		existing, err := s.dao.GetByAccountAndInstanceID(ctx, account.ID, resource.InstanceID)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			s.logger.Error("查询资源失败", zap.String("instanceID", resource.InstanceID), zap.Error(err))
+			continue
+		}
+
+		if existing != nil {
+			// 资源已存在，更新
+			resource.ID = existing.ID
+			if err := s.dao.Update(ctx, resource); err != nil {
+				s.logger.Error("更新资源失败", zap.Int("id", existing.ID), zap.Error(err))
+				continue
+			}
+			importedIDs = append(importedIDs, existing.ID)
+		} else {
+			// 创建新资源
+			if err := s.dao.Create(ctx, resource); err != nil {
+				s.logger.Error("创建资源失败", zap.String("instanceID", resource.InstanceID), zap.Error(err))
+				continue
+			}
+			importedIDs = append(importedIDs, resource.ID)
+		}
+	}
+
+	s.logger.Info("批量导入阿里云资源成功", zap.Int("count", len(importedIDs)))
+	return importedIDs, nil
 }

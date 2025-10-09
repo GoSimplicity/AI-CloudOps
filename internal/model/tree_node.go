@@ -69,9 +69,9 @@ func (t *TreeNode) TableName() string {
 
 // GetTreeNodeListReq 获取树节点列表请求
 type GetTreeNodeListReq struct {
+	ListReq
 	Level  int            `json:"level" form:"level" binding:"omitempty,min=1"`
 	Status TreeNodeStatus `json:"status" form:"status" binding:"omitempty,oneof=1 2"`
-	Search string         `json:"search" form:"search" binding:"omitempty"`
 }
 
 // GetTreeNodeDetailReq 获取节点详情请求

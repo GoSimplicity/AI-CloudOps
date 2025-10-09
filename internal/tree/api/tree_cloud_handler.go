@@ -55,7 +55,6 @@ func (h *TreeCloudHandler) RegisterRouters(server *gin.Engine) {
 		cloudGroup.DELETE("/:id/delete", h.DeleteTreeCloudResource)
 		cloudGroup.POST("/:id/bind", h.BindTreeCloudResource)
 		cloudGroup.POST("/:id/unbind", h.UnBindTreeCloudResource)
-		cloudGroup.POST("/verify", h.VerifyCloudCredentials)
 		cloudGroup.POST("/sync", h.SyncTreeCloudResource)
 		cloudGroup.POST("/batch_import", h.BatchImportCloudResource)
 		cloudGroup.GET("/:id/node", h.GetTreeNodeCloudResources)
@@ -169,15 +168,6 @@ func (h *TreeCloudHandler) UnBindTreeCloudResource(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UnBindTreeCloudResource(ctx, &req)
-	})
-}
-
-// VerifyCloudCredentials 验证云厂商凭证
-func (h *TreeCloudHandler) VerifyCloudCredentials(ctx *gin.Context) {
-	var req model.VerifyCloudCredentialsReq
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.VerifyCloudCredentials(ctx, &req)
 	})
 }
 

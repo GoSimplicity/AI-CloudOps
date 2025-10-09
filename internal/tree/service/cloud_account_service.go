@@ -255,27 +255,53 @@ func (s *cloudAccountService) VerifyCloudAccount(ctx context.Context, req *model
 		return fmt.Errorf("解密SecretKey失败: %w", err)
 	}
 
-	// TODO: 根据 Provider 调用相应的云厂商 SDK 验证凭证
-	// 这里需要实现具体的云厂商验证逻辑
-
-	// 截断敏感信息用于日志
-	akLog := accessKey
-	if len(akLog) > 10 {
-		akLog = akLog[:10] + "..."
-	}
-	skLog := secretKey
-	if len(skLog) > 10 {
-		skLog = skLog[:10] + "..."
+	// 根据 Provider 调用相应的云厂商 SDK 验证凭证
+	verifyReq := &model.VerifyCloudCredentialsReq{
+		Provider:  account.Provider,
+		Region:    account.Region,
+		AccessKey: accessKey,
+		SecretKey: secretKey,
 	}
 
-	s.logger.Info("验证云账户凭证",
+	switch account.Provider {
+	case model.ProviderAliyun:
+		if err := treeUtils.VerifyAliyunCredentials(ctx, verifyReq, s.logger); err != nil {
+			s.logger.Error("阿里云凭证验证失败", zap.Int("id", req.ID), zap.Error(err))
+			return fmt.Errorf("阿里云凭证验证失败: %w", err)
+		}
+	case model.ProviderTencent:
+		if err := treeUtils.VerifyTencentCredentials(ctx, verifyReq, s.logger); err != nil {
+			s.logger.Error("腾讯云凭证验证失败", zap.Int("id", req.ID), zap.Error(err))
+			return fmt.Errorf("腾讯云凭证验证失败: %w", err)
+		}
+	case model.ProviderAWS:
+		if err := treeUtils.VerifyAWSCredentials(ctx, verifyReq, s.logger); err != nil {
+			s.logger.Error("AWS凭证验证失败", zap.Int("id", req.ID), zap.Error(err))
+			return fmt.Errorf("AWS凭证验证失败: %w", err)
+		}
+	case model.ProviderHuawei:
+		if err := treeUtils.VerifyHuaweiCredentials(ctx, verifyReq, s.logger); err != nil {
+			s.logger.Error("华为云凭证验证失败", zap.Int("id", req.ID), zap.Error(err))
+			return fmt.Errorf("华为云凭证验证失败: %w", err)
+		}
+	case model.ProviderAzure:
+		if err := treeUtils.VerifyAzureCredentials(ctx, verifyReq, s.logger); err != nil {
+			s.logger.Error("Azure凭证验证失败", zap.Int("id", req.ID), zap.Error(err))
+			return fmt.Errorf("Azure凭证验证失败: %w", err)
+		}
+	case model.ProviderGCP:
+		if err := treeUtils.VerifyGCPCredentials(ctx, verifyReq, s.logger); err != nil {
+			s.logger.Error("GCP凭证验证失败", zap.Int("id", req.ID), zap.Error(err))
+			return fmt.Errorf("GCP凭证验证失败: %w", err)
+		}
+	default:
+		return fmt.Errorf("不支持的云厂商: %d", account.Provider)
+	}
+
+	s.logger.Info("云账户凭证验证成功",
 		zap.Int("id", req.ID),
 		zap.Int8("provider", int8(account.Provider)),
-		zap.String("region", account.Region),
-		zap.String("accessKey", akLog),
-		zap.String("secretKey", skLog),
-	)
+		zap.String("region", account.Region))
 
-	// 暂时返回成功，实际应该调用云厂商API验证
 	return nil
 }

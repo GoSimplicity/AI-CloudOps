@@ -95,22 +95,26 @@ func (t *treeNodeDAO) GetTreeList(ctx context.Context, req *model.GetTreeNodeLis
 		return nil, 0, err
 	}
 
-	// 预加载关联数据并查询
-	if err := query.Preload("AdminUsers").
+	// 分页查询
+	offset := (req.Page - 1) * req.Size
+	if err := query.
+		Preload("AdminUsers").
 		Preload("MemberUsers").
 		Preload("TreeLocalResources").
 		Order("level ASC, parent_id ASC, name ASC").
+		Limit(req.Size).
+		Offset(offset).
 		Find(&nodes).Error; err != nil {
 		t.logger.Error("获取树节点列表失败", zap.Error(err))
 		return nil, 0, err
 	}
 
-	// 如果指定了层级，直接返回列表
+	// 如果指定了层级，直接返回列表（已分页）
 	if req.Level > 0 {
 		return nodes, count, nil
 	}
 
-	// 构建树形结构
+	// 构建树形结构（基于已分页的数据）
 	return treeUtils.BuildTreeStructure(nodes), count, nil
 }
 
