@@ -40,6 +40,7 @@ import (
 // AliyunClient 阿里云客户端封装
 type AliyunClient struct {
 	client *ecs.Client
+	region string
 	logger *zap.Logger
 }
 
@@ -52,6 +53,7 @@ func NewAliyunClient(accessKey, secretKey, region string, logger *zap.Logger) (*
 
 	return &AliyunClient{
 		client: client,
+		region: region,
 		logger: logger,
 	}, nil
 }
@@ -123,6 +125,7 @@ func (c *AliyunClient) convertECSToResource(instance *ecs.Instance) *model.TreeC
 		InstanceID:   instance.InstanceId,
 		InstanceType: instance.InstanceType,
 		Status:       c.convertECSStatus(instance.Status),
+		Region:       c.region,
 		ZoneID:       instance.ZoneId,
 		VpcID:        instance.VpcAttributes.VpcId,
 		OSType:       instance.OSType,
@@ -138,6 +141,13 @@ func (c *AliyunClient) convertECSToResource(instance *ecs.Instance) *model.TreeC
 
 	if len(instance.VpcAttributes.PrivateIpAddress.IpAddress) > 0 {
 		resource.PrivateIP = instance.VpcAttributes.PrivateIpAddress.IpAddress[0]
+	}
+
+	// 设置镜像名称（如果OSName为空，使用ImageId）
+	if instance.OSName != "" {
+		resource.ImageName = instance.OSName
+	} else {
+		resource.ImageName = instance.ImageId
 	}
 
 	switch instance.InstanceChargeType {

@@ -155,6 +155,13 @@ func (s *treeCloudService) CreateTreeCloudResource(ctx context.Context, req *mod
 		}
 	}
 
+	// 获取云账户以获取Region信息
+	account, err := s.cloudAccountDAO.GetByID(ctx, req.CloudAccountID)
+	if err != nil {
+		s.logger.Error("获取云账户失败", zap.Int("cloudAccountID", req.CloudAccountID), zap.Error(err))
+		return fmt.Errorf("获取云账户失败: %w", err)
+	}
+
 	// 创建云资源对象
 	cloud := &model.TreeCloudResource{
 		Name:           req.Name,
@@ -166,6 +173,7 @@ func (s *treeCloudService) CreateTreeCloudResource(ctx context.Context, req *mod
 		CreateUserID:   req.CreateUserID,
 		CreateUserName: req.CreateUserName,
 		CloudAccountID: req.CloudAccountID,
+		Region:         account.Region,
 		InstanceID:     req.InstanceID,
 		InstanceType:   req.InstanceType,
 		Cpu:            req.Cpu,
@@ -248,6 +256,16 @@ func (s *treeCloudService) UpdateTreeCloudResource(ctx context.Context, req *mod
 		Password:       req.Password,
 		Key:            req.Key,
 		AuthMode:       req.AuthMode,
+	}
+
+	// 如果CloudAccountID发生变化，需要更新Region
+	if req.CloudAccountID != 0 {
+		account, err := s.cloudAccountDAO.GetByID(ctx, req.CloudAccountID)
+		if err != nil {
+			s.logger.Error("获取云账户失败", zap.Int("cloudAccountID", req.CloudAccountID), zap.Error(err))
+			return fmt.Errorf("获取云账户失败: %w", err)
+		}
+		cloud.Region = account.Region
 	}
 
 	// 直接更新

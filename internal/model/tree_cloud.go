@@ -101,6 +101,7 @@ type TreeCloudResource struct {
 	CreateUserName string              `json:"create_user_name" gorm:"type:varchar(100);comment:创建者姓名"`
 	CloudAccountID int                 `json:"cloud_account_id" gorm:"not null;comment:云账户ID"`
 	CloudAccount   *CloudAccount       `json:"cloud_account,omitempty" gorm:"foreignKey:CloudAccountID"`
+	Region         string              `json:"region" gorm:"type:varchar(50);comment:区域,如cn-hangzhou"`
 	InstanceID     string              `json:"instance_id" gorm:"type:varchar(100);comment:云资源实例ID"`
 	InstanceType   string              `json:"instance_type" gorm:"type:varchar(100);comment:实例规格(如ecs.g6.large)"`
 	Cpu            int                 `json:"cpu" gorm:"comment:CPU核数;default:0"`
