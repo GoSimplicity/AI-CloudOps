@@ -53,6 +53,8 @@ func InitTables(db *gorm.DB) error {
 		&model.TreeCloudResource{},
 		&model.CloudAccount{},
 		&model.K8sCluster{},
+		&model.CloudResourceSyncHistory{},
+		&model.CloudResourceChangeLog{},
 
 		// prometheus
 		&model.MonitorScrapePool{},

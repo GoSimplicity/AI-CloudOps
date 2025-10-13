@@ -65,14 +65,39 @@ func InitLogger() *zap.Logger {
 	// 创建控制台输出
 	consoleWriter := zapcore.AddSync(os.Stdout)
 
+	// 从配置读取日志等级
+	logLevel := getLogLevel(viper.GetString("log.level"))
+
 	// 创建 Core
 	core := zapcore.NewTee(
-		zapcore.NewCore(zapcore.NewConsoleEncoder(encoderConfig), consoleWriter, zapcore.WarnLevel), // 控制台输出warn及以上级别
-		zapcore.NewCore(zapcore.NewJSONEncoder(encoderConfig), fileWriter, zapcore.WarnLevel),       // 文件记录warn及以上级别
+		zapcore.NewCore(zapcore.NewConsoleEncoder(encoderConfig), consoleWriter, logLevel), // 控制台输出
+		zapcore.NewCore(zapcore.NewJSONEncoder(encoderConfig), fileWriter, logLevel),       // 文件记录
 	)
 
 	// 创建 logger
 	logger := zap.New(core, zap.AddCaller(), zap.AddStacktrace(zapcore.ErrorLevel))
 
 	return logger
+}
+
+// getLogLevel 根据配置字符串返回对应的日志等级
+func getLogLevel(level string) zapcore.Level {
+	switch level {
+	case "debug":
+		return zapcore.DebugLevel
+	case "info":
+		return zapcore.InfoLevel
+	case "warn":
+		return zapcore.WarnLevel
+	case "error":
+		return zapcore.ErrorLevel
+	case "dpanic":
+		return zapcore.DPanicLevel
+	case "panic":
+		return zapcore.PanicLevel
+	case "fatal":
+		return zapcore.FatalLevel
+	default:
+		return zapcore.InfoLevel // 默认使用 Info 级别
+	}
 }

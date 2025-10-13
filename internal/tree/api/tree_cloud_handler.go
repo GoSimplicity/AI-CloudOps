@@ -50,16 +50,16 @@ func (h *TreeCloudHandler) RegisterRouters(server *gin.Engine) {
 	{
 		cloudGroup.GET("/list", h.GetTreeCloudResourceList)
 		cloudGroup.GET("/:id/detail", h.GetTreeCloudResourceDetail)
-		cloudGroup.POST("/create", h.CreateTreeCloudResource)
-		cloudGroup.PUT("/:id/update", h.UpdateTreeCloudResource)
-		cloudGroup.DELETE("/:id/delete", h.DeleteTreeCloudResource)
-		cloudGroup.POST("/:id/bind", h.BindTreeCloudResource)
-		cloudGroup.POST("/:id/unbind", h.UnBindTreeCloudResource)
-		cloudGroup.POST("/sync", h.SyncTreeCloudResource)
-		cloudGroup.POST("/batch_import", h.BatchImportCloudResource)
 		cloudGroup.GET("/:id/node", h.GetTreeNodeCloudResources)
 		cloudGroup.GET("/:id/terminal", h.ConnectCloudResourceTerminal)
+		cloudGroup.POST("/sync", h.SyncTreeCloudResource)
+		cloudGroup.GET("/sync/history", h.GetSyncHistory)
+		cloudGroup.PUT("/:id/update", h.UpdateTreeCloudResource)
+		cloudGroup.DELETE("/:id/delete", h.DeleteTreeCloudResource)
 		cloudGroup.PUT("/:id/status", h.UpdateCloudResourceStatus)
+		cloudGroup.POST("/:id/bind", h.BindTreeCloudResource)
+		cloudGroup.POST("/:id/unbind", h.UnBindTreeCloudResource)
+		cloudGroup.GET("/changelog", h.GetChangeLog)
 	}
 }
 
@@ -89,21 +89,7 @@ func (h *TreeCloudHandler) GetTreeCloudResourceDetail(ctx *gin.Context) {
 	})
 }
 
-// CreateTreeCloudResource 创建云资源
-func (h *TreeCloudHandler) CreateTreeCloudResource(ctx *gin.Context) {
-	var req model.CreateTreeCloudResourceReq
-
-	user := ctx.MustGet("user").(utils.UserClaims)
-
-	req.CreateUserID = user.Uid
-	req.CreateUserName = user.Username
-
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.CreateTreeCloudResource(ctx, &req)
-	})
-}
-
-// UpdateTreeCloudResource 更新云资源
+// UpdateTreeCloudResource 更新云资源本地元数据（不影响云上资源）
 func (h *TreeCloudHandler) UpdateTreeCloudResource(ctx *gin.Context) {
 	var req model.UpdateTreeCloudResourceReq
 
@@ -171,21 +157,30 @@ func (h *TreeCloudHandler) UnBindTreeCloudResource(ctx *gin.Context) {
 	})
 }
 
-// SyncTreeCloudResource 从云厂商同步资源
+// SyncTreeCloudResource 从云厂商同步资源（核心功能）
 func (h *TreeCloudHandler) SyncTreeCloudResource(ctx *gin.Context) {
 	var req model.SyncTreeCloudResourceReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.SyncTreeCloudResource(ctx, &req)
+		return h.service.SyncTreeCloudResource(ctx, &req)
 	})
 }
 
-// BatchImportCloudResource 批量导入云资源
-func (h *TreeCloudHandler) BatchImportCloudResource(ctx *gin.Context) {
-	var req model.BatchImportCloudResourceReq
+// GetSyncHistory 获取云资源同步历史
+func (h *TreeCloudHandler) GetSyncHistory(ctx *gin.Context) {
+	var req model.GetCloudResourceSyncHistoryReq
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.service.BatchImportCloudResource(ctx, &req)
+		return h.service.GetSyncHistory(ctx, &req)
+	})
+}
+
+// GetChangeLog 获取云资源变更日志
+func (h *TreeCloudHandler) GetChangeLog(ctx *gin.Context) {
+	var req model.GetCloudResourceChangeLogReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.service.GetChangeLog(ctx, &req)
 	})
 }
 

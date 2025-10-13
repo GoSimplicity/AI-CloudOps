@@ -39,6 +39,26 @@ const (
 	ProviderGCP                              // Google Cloud
 )
 
+// String 返回云厂商的字符串表示（用于日志和调试）
+func (p CloudProvider) String() string {
+	switch p {
+	case ProviderAliyun:
+		return "阿里云"
+	case ProviderTencent:
+		return "腾讯云"
+	case ProviderAWS:
+		return "AWS"
+	case ProviderHuawei:
+		return "华为云"
+	case ProviderAzure:
+		return "Azure"
+	case ProviderGCP:
+		return "Google Cloud"
+	default:
+		return "未知"
+	}
+}
+
 // CloudResourceType 云资源类型
 type CloudResourceType int8
 
@@ -51,6 +71,26 @@ const (
 	ResourceTypeOther                              // 其他资源
 )
 
+// String 返回资源类型的字符串表示（用于日志和调试）
+func (r CloudResourceType) String() string {
+	switch r {
+	case ResourceTypeECS:
+		return "云服务器"
+	case ResourceTypeRDS:
+		return "云数据库"
+	case ResourceTypeSLB:
+		return "负载均衡"
+	case ResourceTypeOSS:
+		return "对象存储"
+	case ResourceTypeVPC:
+		return "虚拟私有云"
+	case ResourceTypeOther:
+		return "其他"
+	default:
+		return "未知"
+	}
+}
+
 // CloudResourceStatus 云资源状态
 type CloudResourceStatus int8
 
@@ -62,6 +102,26 @@ const (
 	CloudResourceDeleted                                 // 已删除
 	CloudResourceUnknown                                 // 未知状态
 )
+
+// String 返回资源状态的字符串表示（用于日志和调试）
+func (s CloudResourceStatus) String() string {
+	switch s {
+	case CloudResourceRunning:
+		return "运行中"
+	case CloudResourceStopped:
+		return "已停止"
+	case CloudResourceStarting:
+		return "启动中"
+	case CloudResourceStopping:
+		return "停止中"
+	case CloudResourceDeleted:
+		return "已删除"
+	case CloudResourceUnknown:
+		return "未知"
+	default:
+		return "未知"
+	}
+}
 
 // Currency 货币单位
 type Currency string
@@ -145,74 +205,44 @@ type GetTreeCloudResourceDetailReq struct {
 	ID int `json:"id" form:"id" binding:"required,gt=0"`
 }
 
-// CreateTreeCloudResourceReq 创建云资源请求（录入已有云资源）
-type CreateTreeCloudResourceReq struct {
-	Name           string            `json:"name" binding:"required"`
-	ResourceType   CloudResourceType `json:"resource_type" binding:"required,oneof=1 2 3 4 5 6"`
-	Environment    string            `json:"environment"`
-	Description    string            `json:"description"`
-	Tags           KeyValueList      `json:"tags"`
-	CreateUserID   int               `json:"create_user_id"`
-	CreateUserName string            `json:"create_user_name"`
-	CloudAccountID int               `json:"cloud_account_id" binding:"required,gt=0"`
-	InstanceID     string            `json:"instance_id"`
-	InstanceType   string            `json:"instance_type"`
-	Cpu            int               `json:"cpu" binding:"omitempty,gte=0"`
-	Memory         int               `json:"memory" binding:"omitempty,gte=0"`
-	Disk           int               `json:"disk" binding:"omitempty,gte=0"`
-	PublicIP       string            `json:"public_ip" binding:"omitempty,ip"`
-	PrivateIP      string            `json:"private_ip" binding:"omitempty,ip"`
-	VpcID          string            `json:"vpc_id"`
-	ZoneID         string            `json:"zone_id"`
-	ChargeType     ChargeType        `json:"charge_type"`
-	ExpireTime     *time.Time        `json:"expire_time"`
-	MonthlyCost    float64           `json:"monthly_cost" binding:"omitempty,gte=0"`
-	Currency       string            `json:"currency"`
-	OSType         string            `json:"os_type"`
-	OSName         string            `json:"os_name"`
-	ImageID        string            `json:"image_id"`
-	ImageName      string            `json:"image_name"`
-	Port           int               `json:"port" binding:"omitempty,gte=1,lte=65535"`
-	Username       string            `json:"username"`
-	Password       string            `json:"password"`
-	Key            string            `json:"key"`
-	AuthMode       AuthMode          `json:"auth_mode" binding:"omitempty,oneof=1 2"`
-}
-
-// UpdateTreeCloudResourceReq 更新云资源请求
+// UpdateTreeCloudResourceReq 更新云资源本地元数据请求（不影响云上资源）
 type UpdateTreeCloudResourceReq struct {
-	ID             int               `json:"id" binding:"required,gt=0"`
-	Name           string            `json:"name"`
-	Environment    string            `json:"environment"`
-	Description    string            `json:"description"`
-	Tags           KeyValueList      `json:"tags"`
-	ResourceType   CloudResourceType `json:"resource_type" binding:"omitempty,oneof=1 2 3 4 5 6"`
-	CloudAccountID int               `json:"cloud_account_id" binding:"omitempty,gt=0"`
-	InstanceType   string            `json:"instance_type"`
-	PublicIP       string            `json:"public_ip" binding:"omitempty,ip"`
-	PrivateIP      string            `json:"private_ip" binding:"omitempty,ip"`
-	ChargeType     ChargeType        `json:"charge_type"`
-	ExpireTime     *time.Time        `json:"expire_time"`
-	MonthlyCost    float64           `json:"monthly_cost" binding:"omitempty,gte=0"`
-	Currency       string            `json:"currency"`
-	Port           int               `json:"port" binding:"omitempty,gte=1,lte=65535"`
-	Username       string            `json:"username"`
-	Password       string            `json:"password"`
-	Key            string            `json:"key"`
-	AuthMode       AuthMode          `json:"auth_mode" binding:"omitempty,oneof=1 2"`
+	ID          int          `json:"id" binding:"required,gt=0"`
+	Environment string       `json:"environment"`                              // 环境标识
+	Description string       `json:"description"`                              // 资源描述
+	Tags        KeyValueList `json:"tags"`                                     // 自定义标签
+	Port        int          `json:"port" binding:"omitempty,gte=1,lte=65535"` // SSH端口
+	Username    string       `json:"username"`                                 // SSH用户名
+	Password    string       `json:"password"`                                 // SSH密码
+	Key         string       `json:"key"`                                      // SSH密钥
+	AuthMode    AuthMode     `json:"auth_mode" binding:"omitempty,oneof=1 2"`  // SSH认证方式
 }
 
-// DeleteTreeCloudResourceReq 删除云资源请求
+// DeleteTreeCloudResourceReq 删除云资源请求（仅从平台删除，不影响云上资源）
 type DeleteTreeCloudResourceReq struct {
 	ID int `json:"id" binding:"required,gt=0"`
 }
 
 // SyncTreeCloudResourceReq 从云厂商同步资源请求
 type SyncTreeCloudResourceReq struct {
-	CloudAccountID int               `json:"cloud_account_id" binding:"required,gt=0"`
-	ResourceType   CloudResourceType `json:"resource_type" binding:"omitempty,oneof=1 2 3 4 5 6"`  // 同步的资源类型，为空则同步所有
-	InstanceIDs    []string          `json:"instance_ids"`                                         // 指定同步的实例ID列表，为空则同步所有
-	SyncMode       SyncMode          `json:"sync_mode" binding:"omitempty,oneof=full incremental"` // 同步模式: full-全量, incremental-增量
+	CloudAccountID int                 `json:"cloud_account_id" binding:"required,gt=0"`
+	ResourceTypes  []CloudResourceType `json:"resource_types" binding:"omitempty"`                   // 同步的资源类型列表，为空则同步所有
+	Regions        []string            `json:"regions"`                                              // 指定同步的区域列表，为空则同步账号配置的区域
+	InstanceIDs    []string            `json:"instance_ids"`                                         // 指定同步的实例ID列表，为空则同步所有
+	SyncMode       SyncMode            `json:"sync_mode" binding:"omitempty,oneof=full incremental"` // 同步模式: full-全量, incremental-增量
+	AutoBind       bool                `json:"auto_bind"`                                            // 是否自动绑定到服务树节点
+	BindNodeID     int                 `json:"bind_node_id" binding:"omitempty,gt=0"`                // 自动绑定的目标节点ID
+}
+
+// SyncCloudResourceResp 同步云资源响应
+type SyncCloudResourceResp struct {
+	TotalCount      int       `json:"total_count"`      // 总共同步的资源数量
+	NewCount        int       `json:"new_count"`        // 新增的资源数量
+	UpdateCount     int       `json:"update_count"`     // 更新的资源数量
+	DeleteCount     int       `json:"delete_count"`     // 删除的资源数量（全量同步时）
+	FailedCount     int       `json:"failed_count"`     // 同步失败的数量
+	FailedInstances []string  `json:"failed_instances"` // 同步失败的实例ID列表
+	SyncTime        time.Time `json:"sync_time"`        // 同步时间
 }
 
 // VerifyCloudCredentialsReq 验证云厂商凭证请求
@@ -230,12 +260,6 @@ type GetTreeNodeCloudResourcesReq struct {
 	CloudAccountID int                 `json:"cloud_account_id" form:"cloud_account_id" binding:"omitempty,gt=0"`
 	ResourceType   CloudResourceType   `json:"resource_type" form:"resource_type" binding:"omitempty,oneof=1 2 3 4 5 6"`
 	Status         CloudResourceStatus `json:"status" form:"status" binding:"omitempty,oneof=1 2 3 4 5 6"`
-}
-
-// BatchImportCloudResourceReq 批量导入云资源请求
-type BatchImportCloudResourceReq struct {
-	CloudAccountID int      `json:"cloud_account_id" binding:"required,gt=0"`
-	InstanceIDs    []string `json:"instance_ids" binding:"required,min=1"` // 要导入的实例ID列表
 }
 
 // BindTreeCloudResourceReq 绑定云资源到树节点请求
@@ -260,4 +284,59 @@ type ConnectTreeCloudResourceTerminalReq struct {
 type UpdateCloudResourceStatusReq struct {
 	ID     int                 `json:"id" binding:"required,gt=0"`
 	Status CloudResourceStatus `json:"status" binding:"required,oneof=1 2 3 4 5 6"`
+}
+
+// CloudResourceSyncHistory 云资源同步历史
+type CloudResourceSyncHistory struct {
+	Model
+	CloudAccountID  int       `json:"cloud_account_id" gorm:"not null;comment:云账户ID"`
+	SyncMode        SyncMode  `json:"sync_mode" gorm:"type:varchar(20);comment:同步模式"`
+	TotalCount      int       `json:"total_count" gorm:"comment:同步总数"`
+	NewCount        int       `json:"new_count" gorm:"comment:新增数量"`
+	UpdateCount     int       `json:"update_count" gorm:"comment:更新数量"`
+	DeleteCount     int       `json:"delete_count" gorm:"comment:删除数量"`
+	FailedCount     int       `json:"failed_count" gorm:"comment:失败数量"`
+	FailedInstances string    `json:"failed_instances" gorm:"type:text;comment:失败的实例ID列表(JSON)"`
+	SyncStatus      string    `json:"sync_status" gorm:"type:varchar(20);comment:同步状态(success/failed/partial)"`
+	ErrorMessage    string    `json:"error_message" gorm:"type:text;comment:错误信息"`
+	StartTime       time.Time `json:"start_time" gorm:"comment:开始时间"`
+	EndTime         time.Time `json:"end_time" gorm:"comment:结束时间"`
+	Duration        int       `json:"duration" gorm:"comment:同步耗时(秒)"`
+}
+
+func (c *CloudResourceSyncHistory) TableName() string {
+	return "cl_cloud_resource_sync_history"
+}
+
+// GetCloudResourceSyncHistoryReq 获取同步历史请求
+type GetCloudResourceSyncHistoryReq struct {
+	ListReq
+	CloudAccountID int    `json:"cloud_account_id" form:"cloud_account_id" binding:"omitempty,gt=0"`
+	SyncStatus     string `json:"sync_status" form:"sync_status"`
+}
+
+// CloudResourceChangeLog 云资源变更日志
+type CloudResourceChangeLog struct {
+	Model
+	ResourceID   int       `json:"resource_id" gorm:"not null;comment:云资源ID"`
+	InstanceID   string    `json:"instance_id" gorm:"type:varchar(100);comment:实例ID"`
+	ChangeType   string    `json:"change_type" gorm:"type:varchar(20);comment:变更类型(created/updated/deleted/status_changed)"`
+	FieldName    string    `json:"field_name" gorm:"type:varchar(100);comment:变更字段名"`
+	OldValue     string    `json:"old_value" gorm:"type:text;comment:旧值"`
+	NewValue     string    `json:"new_value" gorm:"type:text;comment:新值"`
+	ChangeSource string    `json:"change_source" gorm:"type:varchar(50);comment:变更来源(sync/manual)"`
+	OperatorID   int       `json:"operator_id" gorm:"comment:操作人ID"`
+	OperatorName string    `json:"operator_name" gorm:"type:varchar(100);comment:操作人姓名"`
+	ChangeTime   time.Time `json:"change_time" gorm:"comment:变更时间"`
+}
+
+func (c *CloudResourceChangeLog) TableName() string {
+	return "cl_cloud_resource_change_log"
+}
+
+// GetCloudResourceChangeLogReq 获取资源变更日志请求
+type GetCloudResourceChangeLogReq struct {
+	ListReq
+	ResourceID int    `json:"resource_id" form:"resource_id" binding:"omitempty,gt=0"`
+	ChangeType string `json:"change_type" form:"change_type"`
 }

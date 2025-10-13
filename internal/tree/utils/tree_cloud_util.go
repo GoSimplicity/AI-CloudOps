@@ -46,6 +46,12 @@ type AliyunSyncConfig struct {
 
 // SyncAliyunResources 同步阿里云资源
 func SyncAliyunResources(ctx context.Context, config *AliyunSyncConfig, logger *zap.Logger) ([]*model.TreeCloudResource, error) {
+	logger.Info("开始同步阿里云资源",
+		zap.Int("cloudAccountID", config.CloudAccountID),
+		zap.String("region", config.Region),
+		zap.String("syncMode", string(config.SyncMode)),
+		zap.Int("specifiedInstanceCount", len(config.InstanceIDs)))
+
 	// 创建阿里云客户端
 	client, err := NewAliyunClient(config.AccessKey, config.SecretKey, config.Region, logger)
 	if err != nil {
@@ -64,6 +70,8 @@ func SyncAliyunResources(ctx context.Context, config *AliyunSyncConfig, logger *
 		logger.Error("获取阿里云ECS实例失败", zap.Error(err))
 		return nil, err
 	}
+
+	logger.Info("阿里云API返回资源数量", zap.Int("count", len(resources)))
 
 	// 为每个资源设置云账户ID
 	for _, resource := range resources {

@@ -78,6 +78,10 @@ func (c *AliyunClient) ListECSInstances(ctx context.Context, instanceIDs []strin
 	pageNumber := 1
 	pageSize := 100
 
+	c.logger.Info("开始获取阿里云ECS实例",
+		zap.String("region", c.region),
+		zap.Int("specifiedInstanceCount", len(instanceIDs)))
+
 	for {
 		request := ecs.CreateDescribeInstancesRequest()
 		request.Scheme = "https"
@@ -89,10 +93,23 @@ func (c *AliyunClient) ListECSInstances(ctx context.Context, instanceIDs []strin
 			request.InstanceIds = fmt.Sprintf(`["%s"]`, strings.Join(instanceIDs, `","`))
 		}
 
+		c.logger.Debug("调用阿里云API",
+			zap.Int("pageNumber", pageNumber),
+			zap.Int("pageSize", pageSize))
+
 		response, err := c.client.DescribeInstances(request)
 		if err != nil {
+			c.logger.Error("阿里云API调用失败",
+				zap.Int("pageNumber", pageNumber),
+				zap.Error(err))
 			return nil, fmt.Errorf("获取ECS实例列表失败(页码:%d): %w", pageNumber, err)
 		}
+
+		c.logger.Info("阿里云API返回",
+			zap.Int("pageNumber", pageNumber),
+			zap.Int("totalCount", response.TotalCount),
+			zap.Int("currentPageCount", len(response.Instances.Instance)),
+			zap.Int("pageSize", response.PageSize))
 
 		// 转换实例数据
 		for _, instance := range response.Instances.Instance {
@@ -100,8 +117,20 @@ func (c *AliyunClient) ListECSInstances(ctx context.Context, instanceIDs []strin
 			allResources = append(allResources, resource)
 		}
 
-		// 检查是否还有下一页
+		// 使用TotalCount来判断是否还有下一页
+		// 如果已经获取的资源数量大于等于总数，停止分页
+		if len(allResources) >= response.TotalCount {
+			c.logger.Info("已获取所有实例",
+				zap.Int("totalCount", response.TotalCount),
+				zap.Int("fetchedCount", len(allResources)))
+			break
+		}
+
+		// 如果当前页的实例数小于pageSize，说明这是最后一页
 		if len(response.Instances.Instance) < pageSize {
+			c.logger.Info("到达最后一页",
+				zap.Int("currentPageCount", len(response.Instances.Instance)),
+				zap.Int("pageSize", pageSize))
 			break
 		}
 
@@ -113,7 +142,9 @@ func (c *AliyunClient) ListECSInstances(ctx context.Context, instanceIDs []strin
 		pageNumber++
 	}
 
-	c.logger.Info("获取阿里云ECS实例成功", zap.Int("count", len(allResources)))
+	c.logger.Info("获取阿里云ECS实例成功",
+		zap.Int("count", len(allResources)),
+		zap.String("region", c.region))
 	return allResources, nil
 }
 

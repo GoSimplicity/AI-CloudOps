@@ -36,18 +36,34 @@ import (
 )
 
 type TreeCloudDAO interface {
+	// 云资源基础操作
 	Create(ctx context.Context, cloud *model.TreeCloudResource) error
 	Update(ctx context.Context, cloud *model.TreeCloudResource) error
+	UpdateMetadata(ctx context.Context, id int, metadata map[string]interface{}) error
 	Delete(ctx context.Context, id int) error
 	GetByID(ctx context.Context, id int) (*model.TreeCloudResource, error)
 	GetList(ctx context.Context, req *model.GetTreeCloudResourceListReq) ([]*model.TreeCloudResource, int64, error)
 	GetByAccountAndInstanceID(ctx context.Context, cloudAccountID int, instanceID string) (*model.TreeCloudResource, error)
 	GetByNodeID(ctx context.Context, nodeID int, req *model.GetTreeNodeCloudResourcesReq) ([]*model.TreeCloudResource, error)
+
+	// 树节点绑定
 	BindTreeNodes(ctx context.Context, cloudID int, treeNodeIds []int) error
 	UnBindTreeNodes(ctx context.Context, cloudID int, treeNodeIds []int) error
+
+	// 批量操作
 	BatchGetByIDs(ctx context.Context, ids []int) ([]*model.TreeCloudResource, error)
 	BatchCreate(ctx context.Context, clouds []*model.TreeCloudResource) error
+
+	// 状态更新
 	UpdateStatus(ctx context.Context, id int, status model.CloudResourceStatus) error
+
+	// 同步历史
+	CreateSyncHistory(ctx context.Context, history *model.CloudResourceSyncHistory) error
+	GetSyncHistoryList(ctx context.Context, req *model.GetCloudResourceSyncHistoryReq) ([]*model.CloudResourceSyncHistory, int64, error)
+
+	// 变更日志
+	CreateChangeLog(ctx context.Context, log *model.CloudResourceChangeLog) error
+	GetChangeLogList(ctx context.Context, req *model.GetCloudResourceChangeLogReq) ([]*model.CloudResourceChangeLog, int64, error)
 }
 
 type treeCloudDAO struct {
@@ -72,10 +88,25 @@ func (d *treeCloudDAO) Create(ctx context.Context, cloud *model.TreeCloudResourc
 	return nil
 }
 
-// Update 更新云资源
+// Update 更新云资源（用于同步场景，更新所有字段）
 func (d *treeCloudDAO) Update(ctx context.Context, cloud *model.TreeCloudResource) error {
-	if err := d.db.WithContext(ctx).Model(cloud).Updates(cloud).Error; err != nil {
+	// 使用Save方法确保所有字段都会被更新，包括零值字段
+	// 这对于同步场景很重要，因为云资源的某些字段可能变为零值
+	if err := d.db.WithContext(ctx).Save(cloud).Error; err != nil {
 		d.logger.Error("更新云资源失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+// UpdateMetadata 更新云资源的本地元数据（只更新指定字段）
+func (d *treeCloudDAO) UpdateMetadata(ctx context.Context, id int, metadata map[string]interface{}) error {
+	if err := d.db.WithContext(ctx).
+		Model(&model.TreeCloudResource{}).
+		Where("id = ?", id).
+		Updates(metadata).Error; err != nil {
+		d.logger.Error("更新云资源元数据失败", zap.Error(err), zap.Int("id", id))
 		return err
 	}
 
@@ -309,4 +340,106 @@ func (d *treeCloudDAO) UnBindTreeNodes(ctx context.Context, cloudID int, treeNod
 	d.logger.Info("解绑树节点成功", zap.Int("cloudID", cloudID), zap.Ints("treeNodeIds", treeNodeIds))
 
 	return nil
+}
+
+// CreateSyncHistory 创建同步历史记录
+func (d *treeCloudDAO) CreateSyncHistory(ctx context.Context, history *model.CloudResourceSyncHistory) error {
+	if err := d.db.WithContext(ctx).Create(history).Error; err != nil {
+		d.logger.Error("创建同步历史失败", zap.Error(err))
+		return err
+	}
+
+	d.logger.Info("创建同步历史成功",
+		zap.Int("cloudAccountID", history.CloudAccountID),
+		zap.String("syncStatus", history.SyncStatus))
+	return nil
+}
+
+// GetSyncHistoryList 获取同步历史列表
+func (d *treeCloudDAO) GetSyncHistoryList(ctx context.Context, req *model.GetCloudResourceSyncHistoryReq) ([]*model.CloudResourceSyncHistory, int64, error) {
+	var histories []*model.CloudResourceSyncHistory
+	var total int64
+
+	query := d.db.WithContext(ctx).Model(&model.CloudResourceSyncHistory{})
+
+	// 添加查询条件
+	if req.CloudAccountID != 0 {
+		query = query.Where("cloud_account_id = ?", req.CloudAccountID)
+	}
+
+	if req.SyncStatus != "" {
+		query = query.Where("sync_status = ?", req.SyncStatus)
+	}
+
+	if req.Search != "" {
+		query = query.Where("error_message LIKE ?", "%"+req.Search+"%")
+	}
+
+	// 计算总数
+	if err := query.Count(&total).Error; err != nil {
+		d.logger.Error("获取同步历史总数失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	// 分页查询
+	offset := (req.Page - 1) * req.Size
+	if err := query.Order("created_at DESC").
+		Limit(req.Size).
+		Offset(offset).
+		Find(&histories).Error; err != nil {
+		d.logger.Error("获取同步历史列表失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	return histories, total, nil
+}
+
+// CreateChangeLog 创建变更日志
+func (d *treeCloudDAO) CreateChangeLog(ctx context.Context, log *model.CloudResourceChangeLog) error {
+	if err := d.db.WithContext(ctx).Create(log).Error; err != nil {
+		d.logger.Error("创建变更日志失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+// GetChangeLogList 获取变更日志列表
+func (d *treeCloudDAO) GetChangeLogList(ctx context.Context, req *model.GetCloudResourceChangeLogReq) ([]*model.CloudResourceChangeLog, int64, error) {
+	var logs []*model.CloudResourceChangeLog
+	var total int64
+
+	query := d.db.WithContext(ctx).Model(&model.CloudResourceChangeLog{})
+
+	// 添加查询条件
+	if req.ResourceID != 0 {
+		query = query.Where("resource_id = ?", req.ResourceID)
+	}
+
+	if req.ChangeType != "" {
+		query = query.Where("change_type = ?", req.ChangeType)
+	}
+
+	if req.Search != "" {
+		query = query.Where("instance_id LIKE ? OR field_name LIKE ?",
+			"%"+req.Search+"%", "%"+req.Search+"%")
+	}
+
+	// 计算总数
+	if err := query.Count(&total).Error; err != nil {
+		d.logger.Error("获取变更日志总数失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	// 分页查询
+	offset := (req.Page - 1) * req.Size
+	if err := query.Order("change_time DESC").
+		Limit(req.Size).
+		Offset(offset).
+		Find(&logs).Error; err != nil {
+		d.logger.Error("获取变更日志列表失败", zap.Error(err))
+		return nil, 0, err
+	}
+
+	return logs, total, nil
 }
