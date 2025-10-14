@@ -36,7 +36,6 @@ import (
 )
 
 type TreeCloudDAO interface {
-	// 云资源基础操作
 	Create(ctx context.Context, cloud *model.TreeCloudResource) error
 	Update(ctx context.Context, cloud *model.TreeCloudResource) error
 	UpdateMetadata(ctx context.Context, id int, metadata map[string]interface{}) error
@@ -45,23 +44,13 @@ type TreeCloudDAO interface {
 	GetList(ctx context.Context, req *model.GetTreeCloudResourceListReq) ([]*model.TreeCloudResource, int64, error)
 	GetByAccountAndInstanceID(ctx context.Context, cloudAccountID int, instanceID string) (*model.TreeCloudResource, error)
 	GetByNodeID(ctx context.Context, nodeID int, req *model.GetTreeNodeCloudResourcesReq) ([]*model.TreeCloudResource, error)
-
-	// 树节点绑定
 	BindTreeNodes(ctx context.Context, cloudID int, treeNodeIds []int) error
 	UnBindTreeNodes(ctx context.Context, cloudID int, treeNodeIds []int) error
-
-	// 批量操作
 	BatchGetByIDs(ctx context.Context, ids []int) ([]*model.TreeCloudResource, error)
 	BatchCreate(ctx context.Context, clouds []*model.TreeCloudResource) error
-
-	// 状态更新
 	UpdateStatus(ctx context.Context, id int, status model.CloudResourceStatus) error
-
-	// 同步历史
 	CreateSyncHistory(ctx context.Context, history *model.CloudResourceSyncHistory) error
 	GetSyncHistoryList(ctx context.Context, req *model.GetCloudResourceSyncHistoryReq) ([]*model.CloudResourceSyncHistory, int64, error)
-
-	// 变更日志
 	CreateChangeLog(ctx context.Context, log *model.CloudResourceChangeLog) error
 	GetChangeLogList(ctx context.Context, req *model.GetCloudResourceChangeLogReq) ([]*model.CloudResourceChangeLog, int64, error)
 }
@@ -90,9 +79,7 @@ func (d *treeCloudDAO) Create(ctx context.Context, cloud *model.TreeCloudResourc
 
 // Update 更新云资源（用于同步场景，更新所有字段）
 func (d *treeCloudDAO) Update(ctx context.Context, cloud *model.TreeCloudResource) error {
-	// 使用Save方法确保所有字段都会被更新，包括零值字段
-	// 这对于同步场景很重要，因为云资源的某些字段可能变为零值
-	if err := d.db.WithContext(ctx).Save(cloud).Error; err != nil {
+	if err := d.db.WithContext(ctx).Model(cloud).Updates(cloud).Error; err != nil {
 		d.logger.Error("更新云资源失败", zap.Error(err))
 		return err
 	}
