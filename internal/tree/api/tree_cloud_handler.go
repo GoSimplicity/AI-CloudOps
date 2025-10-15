@@ -89,7 +89,7 @@ func (h *TreeCloudHandler) GetTreeCloudResourceDetail(ctx *gin.Context) {
 	})
 }
 
-// UpdateTreeCloudResource 更新云资源本地元数据（不影响云上资源）
+// UpdateTreeCloudResource 更新云资源本地元数据
 func (h *TreeCloudHandler) UpdateTreeCloudResource(ctx *gin.Context) {
 	var req model.UpdateTreeCloudResourceReq
 
@@ -99,7 +99,11 @@ func (h *TreeCloudHandler) UpdateTreeCloudResource(ctx *gin.Context) {
 		return
 	}
 
+	// 获取当前用户信息
+	uc := ctx.MustGet("user").(utils.UserClaims)
 	req.ID = id
+	req.OperatorID = uc.Uid
+	req.OperatorName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateTreeCloudResource(ctx, &req)
@@ -116,7 +120,11 @@ func (h *TreeCloudHandler) DeleteTreeCloudResource(ctx *gin.Context) {
 		return
 	}
 
+	// 获取当前用户信息
+	uc := ctx.MustGet("user").(utils.UserClaims)
 	req.ID = id
+	req.OperatorID = uc.Uid
+	req.OperatorName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.DeleteTreeCloudResource(ctx, &req)
@@ -157,9 +165,14 @@ func (h *TreeCloudHandler) UnBindTreeCloudResource(ctx *gin.Context) {
 	})
 }
 
-// SyncTreeCloudResource 从云厂商同步资源（核心功能）
+// SyncTreeCloudResource 从云厂商同步资源
 func (h *TreeCloudHandler) SyncTreeCloudResource(ctx *gin.Context) {
 	var req model.SyncTreeCloudResourceReq
+
+	// 获取当前用户信息
+	uc := ctx.MustGet("user").(utils.UserClaims)
+	req.OperatorID = uc.Uid
+	req.OperatorName = uc.Username
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.SyncTreeCloudResource(ctx, &req)

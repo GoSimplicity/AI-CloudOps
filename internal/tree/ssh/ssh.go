@@ -24,8 +24,8 @@ type ecsSSH struct {
 	Port       int                  // SSH端口号，默认22
 	Username   string               // SSH用户名
 	Mode       int8                 // 认证方式：1:密码,2:密钥
-	Password   string               // 密码（当Mode为password时使用）
-	Key        string               // SSH私钥内容（当Mode为key时使用）
+	Password   string               // 密码
+	Key        string               // SSH私钥内容
 	Client     *ssh.Client          // SSH客户端连接
 	UserID     int                  // 用户ID，用于区分不同用户的会话
 	Sessions   map[int]*ssh.Session // 用户会话映射表，key为UserID，value为对应的SSH会话
@@ -70,7 +70,7 @@ func (s *ecsSSH) Connect(ip string, port int, username string, password string, 
 	s.Mode = mode
 	s.UserID = userID
 
-	// 初始化Sessions映射（双重检查锁定模式）
+	// 初始化Sessions映射
 	if s.Sessions == nil {
 		s.sessionMu.Lock()
 		if s.Sessions == nil {
@@ -89,8 +89,8 @@ func (s *ecsSSH) Connect(ip string, port int, username string, password string, 
 	// 配置SSH客户端
 	config := &ssh.ClientConfig{
 		User:            s.Username,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 注意：生产环境应使用更安全的主机密钥验证
-		Timeout:         10 * time.Second,            // 连接超时时间
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         10 * time.Second,
 	}
 
 	// 根据认证方式配置认证方法
@@ -185,7 +185,7 @@ func (s *ecsSSH) Run(command string) (string, error) {
 		}
 	}
 
-	// 为每个命令创建新的会话（避免会话状态污染）
+	// 为每个命令创建新的会话
 	session, err := s.Client.NewSession()
 	if err != nil {
 		s.logger.Error("创建命令执行会话失败", zap.Error(err))
@@ -199,7 +199,7 @@ func (s *ecsSSH) Run(command string) (string, error) {
 		}
 	}()
 
-	// 执行命令并获取输出（合并stdout和stderr）
+	// 执行命令并获取输出
 	s.logger.Debug("执行命令", zap.String("命令", command))
 	buf, err := session.CombinedOutput(command)
 	s.LastResult = string(buf)
@@ -283,7 +283,7 @@ func (r MyReader) Read(p []byte) (n int, err error) {
 	// 将接收到的消息转换为命令字符串
 	cmdStr := string(message)
 
-	// 确保命令以换行符结尾（终端需要）
+	// 确保命令以换行符结尾
 	if !strings.HasSuffix(cmdStr, "\n") {
 		cmdStr = cmdStr + "\n"
 	}
@@ -363,13 +363,12 @@ func (s *ecsSSH) Web2SSH(ws *websocket.Conn) {
 
 	// 配置伪终端模式
 	modes := ssh.TerminalModes{
-		ssh.ECHO:          0,     // 禁用回显（避免重复显示用户输入）
-		ssh.TTY_OP_ISPEED: 14400, // 输入波特率
+		ssh.ECHO:          0, // 禁用回显
+		ssh.TTY_OP_ISPEED: 14400,
 		ssh.TTY_OP_OSPEED: 14400, // 输出波特率
 	}
 
-	// 请求伪终端（PTY）
-	// xterm: 终端类型
+	// 请求伪终端
 	// 25: 终端行数
 	// 80: 终端列数
 	if err := session.RequestPty("xterm", 25, 80, modes); err != nil {
@@ -400,7 +399,7 @@ func (s *ecsSSH) Web2SSH(ws *websocket.Conn) {
 
 	s.logger.Info("Web终端SSH会话已启动", zap.Int("用户ID", s.UserID))
 
-	// 等待SSH会话结束（阻塞直到用户退出或连接断开）
+	// 等待SSH会话结束
 	if err := session.Wait(); err != nil {
 		s.logger.Info("SSH会话结束", zap.Int("用户ID", s.UserID), zap.Error(err))
 	} else {

@@ -109,12 +109,12 @@ func (t *treeNodeDAO) GetTreeList(ctx context.Context, req *model.GetTreeNodeLis
 		return nil, 0, err
 	}
 
-	// 如果指定了层级，直接返回列表（已分页）
+	// 指定层级时直接返回列表
 	if req.Level > 0 {
 		return nodes, count, nil
 	}
 
-	// 构建树形结构（基于已分页的数据）
+	// 构建树形结构
 	return treeUtils.BuildTreeStructure(nodes), count, nil
 }
 
@@ -186,7 +186,7 @@ func (t *treeNodeDAO) GetTreeStatistics(ctx context.Context) (*model.TreeNodeSta
 		stats.TotalResources = int(count)
 	}
 
-	// 管理员总数（关联关系条目数）
+	// 管理员总数
 	count = 0
 	if err := t.db.WithContext(ctx).Table("cl_tree_node_admin").Count(&count).Error; err != nil {
 		t.logger.Error("统计管理员总数失败", zap.Error(err))
@@ -194,7 +194,7 @@ func (t *treeNodeDAO) GetTreeStatistics(ctx context.Context) (*model.TreeNodeSta
 		stats.TotalAdmins = int(count)
 	}
 
-	// 成员总数（关联关系条目数）
+	// 成员总数
 	count = 0
 	if err := t.db.WithContext(ctx).Table("cl_tree_node_member").Count(&count).Error; err != nil {
 		t.logger.Error("统计成员总数失败", zap.Error(err))
@@ -293,7 +293,7 @@ func (t *treeNodeDAO) UpdateNode(ctx context.Context, node *model.TreeNode) erro
 
 	// 如果父节点发生变化，需要验证和计算层级
 	if node.ParentID != existingNode.ParentID {
-		// 验证新父节点存在（如果不是根节点）
+		// 验证新父节点存在
 		if node.ParentID != 0 {
 			var count int64
 			if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("id = ?", node.ParentID).Count(&count).Error; err != nil {
@@ -558,7 +558,7 @@ func (t *treeNodeDAO) GetNodeMembers(ctx context.Context, nodeId int, memberType
 			return nil, err
 		}
 	case "all", "":
-		// 获取所有用户（管理员+成员）
+		// 获取所有用户
 		var adminUsers []*model.User
 		var memberUsers []*model.User
 

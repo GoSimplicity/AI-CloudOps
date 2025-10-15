@@ -27,6 +27,20 @@ package model
 
 import "time"
 
+// 变更类型常量
+const (
+	ChangeTypeCreated       = "created"        // 创建
+	ChangeTypeUpdated       = "updated"        // 更新
+	ChangeTypeDeleted       = "deleted"        // 删除
+	ChangeTypeStatusChanged = "status_changed" // 状态变更
+)
+
+// 变更来源常量
+const (
+	ChangeSourceManual = "manual" // 手动操作
+	ChangeSourceSync   = "sync"   // 同步操作
+)
+
 // CloudProvider 云厂商类型
 type CloudProvider int8
 
@@ -207,20 +221,24 @@ type GetTreeCloudResourceDetailReq struct {
 
 // UpdateTreeCloudResourceReq 更新云资源本地元数据请求（不影响云上资源）
 type UpdateTreeCloudResourceReq struct {
-	ID          int          `json:"id" binding:"required,gt=0"`
-	Environment string       `json:"environment"`                              // 环境标识
-	Description string       `json:"description"`                              // 资源描述
-	Tags        KeyValueList `json:"tags"`                                     // 自定义标签
-	Port        int          `json:"port" binding:"omitempty,gte=1,lte=65535"` // SSH端口
-	Username    string       `json:"username"`                                 // SSH用户名
-	Password    string       `json:"password"`                                 // SSH密码
-	Key         string       `json:"key"`                                      // SSH密钥
-	AuthMode    AuthMode     `json:"auth_mode" binding:"omitempty,oneof=1 2"`  // SSH认证方式
+	ID           int          `json:"id" binding:"required,gt=0"`
+	Environment  string       `json:"environment"`                              // 环境标识
+	Description  string       `json:"description"`                              // 资源描述
+	Tags         KeyValueList `json:"tags"`                                     // 自定义标签
+	Port         int          `json:"port" binding:"omitempty,gte=1,lte=65535"` // SSH端口
+	Username     string       `json:"username"`                                 // SSH用户名
+	Password     string       `json:"password"`                                 // SSH密码
+	Key          string       `json:"key"`                                      // SSH密钥
+	AuthMode     AuthMode     `json:"auth_mode" binding:"omitempty,oneof=1 2"`  // SSH认证方式
+	OperatorID   int          `json:"-"`                                        // 操作人ID (不通过JSON传递)
+	OperatorName string       `json:"-"`                                        // 操作人姓名 (不通过JSON传递)
 }
 
 // DeleteTreeCloudResourceReq 删除云资源请求（仅从平台删除，不影响云上资源）
 type DeleteTreeCloudResourceReq struct {
-	ID int `json:"id" binding:"required,gt=0"`
+	ID           int    `json:"id" binding:"required,gt=0"`
+	OperatorID   int    `json:"-"` // 操作人ID (不通过JSON传递)
+	OperatorName string `json:"-"` // 操作人姓名 (不通过JSON传递)
 }
 
 // SyncTreeCloudResourceReq 从云厂商同步资源请求
@@ -232,6 +250,8 @@ type SyncTreeCloudResourceReq struct {
 	SyncMode       SyncMode            `json:"sync_mode" binding:"omitempty,oneof=full incremental"` // 同步模式: full-全量, incremental-增量
 	AutoBind       bool                `json:"auto_bind"`                                            // 是否自动绑定到服务树节点
 	BindNodeID     int                 `json:"bind_node_id" binding:"omitempty,gt=0"`                // 自动绑定的目标节点ID
+	OperatorID     int                 `json:"-"`                                                    // 操作人ID (不通过JSON传递)
+	OperatorName   string              `json:"-"`                                                    // 操作人姓名 (不通过JSON传递)
 }
 
 // SyncCloudResourceResp 同步云资源响应

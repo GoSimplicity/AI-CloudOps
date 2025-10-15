@@ -72,7 +72,7 @@ func (c *AliyunClient) VerifyCredentials(ctx context.Context) error {
 	return nil
 }
 
-// ListECSInstances 获取ECS实例列表（支持分页获取所有实例）
+// ListECSInstances 获取ECS实例列表
 func (c *AliyunClient) ListECSInstances(ctx context.Context, instanceIDs []string) ([]*model.TreeCloudResource, error) {
 	var allResources []*model.TreeCloudResource
 	pageNumber := 1
@@ -126,7 +126,7 @@ func (c *AliyunClient) ListECSInstances(ctx context.Context, instanceIDs []strin
 			break
 		}
 
-		// 如果当前页的实例数小于pageSize，说明这是最后一页
+		// 判断是否为最后一页
 		if len(response.Instances.Instance) < pageSize {
 			c.logger.Info("到达最后一页",
 				zap.Int("currentPageCount", len(response.Instances.Instance)),
@@ -174,7 +174,7 @@ func (c *AliyunClient) convertECSToResource(instance *ecs.Instance) *model.TreeC
 		resource.PrivateIP = instance.VpcAttributes.PrivateIpAddress.IpAddress[0]
 	}
 
-	// 设置镜像名称（如果OSName为空，使用ImageId）
+	// 设置镜像名称
 	if instance.OSName != "" {
 		resource.ImageName = instance.OSName
 	} else {

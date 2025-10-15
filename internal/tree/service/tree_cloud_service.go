@@ -40,26 +40,17 @@ import (
 )
 
 type TreeCloudService interface {
-	// 查询相关
 	GetTreeCloudResourceList(ctx context.Context, req *model.GetTreeCloudResourceListReq) (model.ListResp[*model.TreeCloudResource], error)
 	GetTreeCloudResourceDetail(ctx context.Context, req *model.GetTreeCloudResourceDetailReq) (*model.TreeCloudResource, error)
 	GetTreeCloudResourceForConnection(ctx context.Context, req *model.GetTreeCloudResourceDetailReq) (*model.TreeCloudResource, error)
 	GetTreeNodeCloudResources(ctx context.Context, req *model.GetTreeNodeCloudResourcesReq) ([]*model.TreeCloudResource, error)
-
-	// 同步相关（核心功能）
 	SyncTreeCloudResource(ctx context.Context, req *model.SyncTreeCloudResourceReq) (*model.SyncCloudResourceResp, error)
 	GetSyncHistory(ctx context.Context, req *model.GetCloudResourceSyncHistoryReq) (model.ListResp[*model.CloudResourceSyncHistory], error)
-
-	// 本地管理相关
 	UpdateTreeCloudResource(ctx context.Context, req *model.UpdateTreeCloudResourceReq) error
 	DeleteTreeCloudResource(ctx context.Context, req *model.DeleteTreeCloudResourceReq) error
 	UpdateCloudResourceStatus(ctx context.Context, req *model.UpdateCloudResourceStatusReq) error
-
-	// 服务树绑定相关
 	BindTreeCloudResource(ctx context.Context, req *model.BindTreeCloudResourceReq) error
 	UnBindTreeCloudResource(ctx context.Context, req *model.UnBindTreeCloudResourceReq) error
-
-	// 变更日志相关
 	GetChangeLog(ctx context.Context, req *model.GetCloudResourceChangeLogReq) (model.ListResp[*model.CloudResourceChangeLog], error)
 }
 
@@ -127,7 +118,7 @@ func (s *treeCloudService) GetTreeCloudResourceForConnection(ctx context.Context
 		return nil, err
 	}
 
-	// 解密SSH密码（针对ECS类型）
+	// 解密SSH密码
 	if cloud.AuthMode == model.AuthModePassword && cloud.Password != "" {
 		plainPassword, err := treeUtils.DecryptPassword(cloud.Password)
 		if err != nil {
@@ -140,7 +131,7 @@ func (s *treeCloudService) GetTreeCloudResourceForConnection(ctx context.Context
 	return cloud, nil
 }
 
-// UpdateTreeCloudResource 更新云资源本地元数据（不影响云上资源）
+// UpdateTreeCloudResource 更新云资源本地元数据
 func (s *treeCloudService) UpdateTreeCloudResource(ctx context.Context, req *model.UpdateTreeCloudResourceReq) error {
 	if err := treeUtils.ValidateID(req.ID); err != nil {
 		return fmt.Errorf("无效的云资源ID: %w", err)
@@ -203,7 +194,7 @@ func (s *treeCloudService) UpdateTreeCloudResource(ctx context.Context, req *mod
 		return err
 	}
 
-	// 记录变更日志（记录每个字段的变更）
+	// 记录变更日志
 	// 获取资源实例ID用于日志
 	resource, _ := s.dao.GetByID(ctx, req.ID)
 	instanceID := ""
@@ -216,13 +207,13 @@ func (s *treeCloudService) UpdateTreeCloudResource(ctx context.Context, req *mod
 		changeLog := &model.CloudResourceChangeLog{
 			ResourceID:   req.ID,
 			InstanceID:   instanceID,
-			ChangeType:   "updated",
+			ChangeType:   model.ChangeTypeUpdated,
 			FieldName:    fieldName,
-			OldValue:     "", // 简化处理，不记录旧值
+			OldValue:     "",
 			NewValue:     fmt.Sprintf("%v", newValue),
-			ChangeSource: "manual",
-			OperatorID:   0,
-			OperatorName: "",
+			ChangeSource: model.ChangeSourceManual,
+			OperatorID:   req.OperatorID,
+			OperatorName: req.OperatorName,
 			ChangeTime:   time.Now(),
 		}
 		// 异步记录，不影响主流程
@@ -237,7 +228,7 @@ func (s *treeCloudService) UpdateTreeCloudResource(ctx context.Context, req *mod
 	return nil
 }
 
-// DeleteTreeCloudResource 删除云资源（仅从平台删除，不影响云上资源）
+// DeleteTreeCloudResource 删除云资源
 func (s *treeCloudService) DeleteTreeCloudResource(ctx context.Context, req *model.DeleteTreeCloudResourceReq) error {
 	if err := treeUtils.ValidateID(req.ID); err != nil {
 		return fmt.Errorf("无效的云资源ID: %w", err)
@@ -254,7 +245,7 @@ func (s *treeCloudService) DeleteTreeCloudResource(ctx context.Context, req *mod
 	}
 
 	// 记录删除日志
-	s.recordChangeLog(ctx, cloud, nil, "manual", 0, "")
+	s.recordChangeLog(ctx, cloud, nil, model.ChangeSourceManual, req.OperatorID, req.OperatorName)
 
 	if err := s.dao.Delete(ctx, req.ID); err != nil {
 		s.logger.Error("删除云资源失败", zap.Int("id", req.ID), zap.Error(err))
@@ -335,7 +326,7 @@ func (s *treeCloudService) UpdateCloudResourceStatus(ctx context.Context, req *m
 	return nil
 }
 
-// SyncTreeCloudResource 从云厂商同步资源（核心功能）
+// SyncTreeCloudResource 从云厂商同步资源
 func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model.SyncTreeCloudResourceReq) (*model.SyncCloudResourceResp, error) {
 	startTime := time.Now()
 
@@ -481,15 +472,15 @@ func (s *treeCloudService) syncAliyunResourcesWithStats(ctx context.Context, acc
 	// 根据同步模式处理资源
 	if req.SyncMode == model.SyncModeFull {
 		// 全量同步：先删除该云账户下的所有ECS资源，再重新创建
-		return s.fullSyncResources(ctx, account.ID, resources, resp, req.AutoBind, req.BindNodeID)
+		return s.fullSyncResources(ctx, account.ID, resources, resp, req.AutoBind, req.BindNodeID, req.OperatorID, req.OperatorName)
 	}
 
 	// 增量同步：更新已存在的资源，创建不存在的资源
-	return s.incrementalSyncResources(ctx, account.ID, resources, resp, req.AutoBind, req.BindNodeID)
+	return s.incrementalSyncResources(ctx, account.ID, resources, resp, req.AutoBind, req.BindNodeID, req.OperatorID, req.OperatorName)
 }
 
 // fullSyncResources 全量同步资源
-func (s *treeCloudService) fullSyncResources(ctx context.Context, cloudAccountID int, resources []*model.TreeCloudResource, resp *model.SyncCloudResourceResp, autoBind bool, bindNodeID int) error {
+func (s *treeCloudService) fullSyncResources(ctx context.Context, cloudAccountID int, resources []*model.TreeCloudResource, resp *model.SyncCloudResourceResp, autoBind bool, bindNodeID int, operatorID int, operatorName string) error {
 	// 获取该云账户下的所有ECS资源
 	req := &model.GetTreeCloudResourceListReq{
 		ListReq: model.ListReq{
@@ -520,17 +511,17 @@ func (s *treeCloudService) fullSyncResources(ctx context.Context, cloudAccountID
 			} else {
 				resp.DeleteCount++
 				// 记录删除日志
-				s.recordChangeLog(ctx, existingResource, nil, "sync", 0, "")
+				s.recordChangeLog(ctx, existingResource, nil, model.ChangeSourceSync, operatorID, operatorName)
 			}
 		}
 	}
 
 	// 更新或创建资源
-	return s.incrementalSyncResources(ctx, cloudAccountID, resources, resp, autoBind, bindNodeID)
+	return s.incrementalSyncResources(ctx, cloudAccountID, resources, resp, autoBind, bindNodeID, operatorID, operatorName)
 }
 
 // incrementalSyncResources 增量同步资源
-func (s *treeCloudService) incrementalSyncResources(ctx context.Context, cloudAccountID int, resources []*model.TreeCloudResource, resp *model.SyncCloudResourceResp, autoBind bool, bindNodeID int) error {
+func (s *treeCloudService) incrementalSyncResources(ctx context.Context, cloudAccountID int, resources []*model.TreeCloudResource, resp *model.SyncCloudResourceResp, autoBind bool, bindNodeID int, operatorID int, operatorName string) error {
 	for _, resource := range resources {
 		resp.TotalCount++
 
@@ -553,7 +544,7 @@ func (s *treeCloudService) incrementalSyncResources(ctx context.Context, cloudAc
 			} else {
 				resp.UpdateCount++
 				// 记录更新日志
-				s.recordChangeLog(ctx, existing, resource, "sync", 0, "")
+				s.recordChangeLog(ctx, existing, resource, model.ChangeSourceSync, operatorID, operatorName)
 			}
 		} else {
 			// 创建新资源
@@ -564,7 +555,7 @@ func (s *treeCloudService) incrementalSyncResources(ctx context.Context, cloudAc
 			} else {
 				resp.NewCount++
 				// 记录创建日志
-				s.recordChangeLog(ctx, nil, resource, "sync", 0, "")
+				s.recordChangeLog(ctx, nil, resource, model.ChangeSourceSync, operatorID, operatorName)
 
 				// 如果启用自动绑定，则绑定到指定节点
 				if autoBind && bindNodeID > 0 {
@@ -589,7 +580,7 @@ func (s *treeCloudService) recordChangeLog(ctx context.Context, oldResource, new
 		changeLog := &model.CloudResourceChangeLog{
 			ResourceID:   oldResource.ID,
 			InstanceID:   oldResource.InstanceID,
-			ChangeType:   "deleted",
+			ChangeType:   model.ChangeTypeDeleted,
 			FieldName:    "",
 			OldValue:     oldResource.Name,
 			NewValue:     "",
@@ -610,7 +601,7 @@ func (s *treeCloudService) recordChangeLog(ctx context.Context, oldResource, new
 		changeLog := &model.CloudResourceChangeLog{
 			ResourceID:   newResource.ID,
 			InstanceID:   newResource.InstanceID,
-			ChangeType:   "created",
+			ChangeType:   model.ChangeTypeCreated,
 			FieldName:    "",
 			OldValue:     "",
 			NewValue:     newResource.Name,
@@ -633,7 +624,7 @@ func (s *treeCloudService) recordChangeLog(ctx context.Context, oldResource, new
 			changeLog := &model.CloudResourceChangeLog{
 				ResourceID:   newResource.ID,
 				InstanceID:   newResource.InstanceID,
-				ChangeType:   "status_changed",
+				ChangeType:   model.ChangeTypeStatusChanged,
 				FieldName:    "status",
 				OldValue:     fmt.Sprintf("%d", oldResource.Status),
 				NewValue:     fmt.Sprintf("%d", newResource.Status),

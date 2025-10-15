@@ -77,7 +77,7 @@ func (d *treeCloudDAO) Create(ctx context.Context, cloud *model.TreeCloudResourc
 	return nil
 }
 
-// Update 更新云资源（用于同步场景，更新所有字段）
+// Update 更新云资源
 func (d *treeCloudDAO) Update(ctx context.Context, cloud *model.TreeCloudResource) error {
 	if err := d.db.WithContext(ctx).Model(cloud).Updates(cloud).Error; err != nil {
 		d.logger.Error("更新云资源失败", zap.Error(err))
@@ -87,7 +87,7 @@ func (d *treeCloudDAO) Update(ctx context.Context, cloud *model.TreeCloudResourc
 	return nil
 }
 
-// UpdateMetadata 更新云资源的本地元数据（只更新指定字段）
+// UpdateMetadata 更新云资源元数据
 func (d *treeCloudDAO) UpdateMetadata(ctx context.Context, id int, metadata map[string]interface{}) error {
 	if err := d.db.WithContext(ctx).
 		Model(&model.TreeCloudResource{}).
