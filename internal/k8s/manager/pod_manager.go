@@ -210,7 +210,6 @@ func (m *podManager) DeletePod(ctx context.Context, clusterID int, namespace, na
 
 func (m *podManager) GetPodLogs(ctx context.Context, clusterID int, namespace, name string, logOptions *corev1.PodLogOptions) (io.ReadCloser, error) {
 	kubeClient, err := m.getKubeClient(clusterID)
-
 	if err != nil {
 		return nil, err
 	}
@@ -230,18 +229,14 @@ func (m *podManager) GetPodLogs(ctx context.Context, clusterID int, namespace, n
 }
 
 // BatchDeletePods 批量删除 Pod
-// 使用并发+重试机制提高批量操作的效率和可靠性
-// 并发度为3是经过测试的平衡值：既能提高性能，又不会对API Server造成过大压力
 func (m *podManager) BatchDeletePods(ctx context.Context, clusterID int, namespace string, podNames []string, deleteOpts metav1.DeleteOptions) error {
 	kubeClient, err := m.getKubeClient(clusterID)
-
 	if err != nil {
 		return err
 	}
 
 	tasks := make([]retry.WrapperTask, 0, len(podNames))
 	for _, name := range podNames {
-
 		tasks = append(tasks, retry.WrapperTask{
 			Backoff: retry.DefaultBackoff,
 
@@ -279,7 +274,6 @@ func (m *podManager) PodTerminalSession(
 	namespace, pod, container, shell string,
 	conn *websocket.Conn,
 ) error {
-
 	kubeClient, err := m.clientFactory.GetKubeClient(clusterID)
 	if err != nil {
 		return err
@@ -301,7 +295,6 @@ func (m *podManager) PodTerminalSession(
 }
 
 func (m *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace, pod, container, filePath string) error {
-
 	if namespace == "" {
 		return fmt.Errorf("命名空间不能为空")
 	}
@@ -440,7 +433,6 @@ func (m *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace,
 		Stderr:            &uploadStderr,
 		TerminalSizeQueue: nil,
 	})
-
 	if err != nil {
 		m.logger.Error("执行上传失败",
 			zap.Error(err),
@@ -463,7 +455,6 @@ func (m *podManager) UploadFileToPod(ctx *gin.Context, clusterID int, namespace,
 }
 
 func (m *podManager) PortForward(ctx context.Context, ports []string, dialer httpstream.Dialer) error {
-
 	// 创建 PortForwarder
 	stopChan := make(chan struct{}, 1)
 	readyChan := make(chan struct{})
@@ -574,7 +565,6 @@ func (m *podManager) PodPortForward(ctx context.Context, clusterID int, namespac
 }
 
 func (m *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespace, pod, container, filePath string) (*k8sutils.PodFileStreamPipe, error) {
-
 	if namespace == "" {
 		return nil, fmt.Errorf("命名空间不能为空")
 	}
@@ -631,7 +621,6 @@ func (m *podManager) DownloadPodFile(ctx context.Context, clusterID int, namespa
 
 	reader, err := k8sutils.NewPodFileStreamPipe(
 		ctx, restConfig, kubeClient, namespace, pod, container, filePath)
-
 	if err != nil {
 		m.logger.Error("创建Pod文件流失败",
 			zap.Error(err),
@@ -776,7 +765,7 @@ func writeFilesToTar(files []fileWithHeader, w io.Writer) error {
 
 			hdr := &tar.Header{
 				Name: filename,
-				Mode: 0644,
+				Mode: 0o644,
 				Size: fileInfo.header.Size,
 			}
 
@@ -796,7 +785,6 @@ func writeFilesToTar(files []fileWithHeader, w io.Writer) error {
 
 			return nil
 		}(f, i)
-
 		if err != nil {
 			return err
 		}

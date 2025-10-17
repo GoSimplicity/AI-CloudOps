@@ -131,6 +131,8 @@ var HandlerSet = wire.NewSet(
 	workorderHandler.NewNotificationHandler,
 	treeHandler.NewTreeNodeHandler,
 	treeHandler.NewTreeLocalHandler,
+	treeHandler.NewTreeCloudHandler,
+	treeHandler.NewCloudAccountHandler,
 	terminal.NewTerminalHandler,
 	cronApi.NewCronJobHandler,
 )
@@ -185,6 +187,8 @@ var ServiceSet = wire.NewSet(
 	workorderService.NewWorkorderNotificationService,
 	treeService.NewTreeNodeService,
 	treeService.NewTreeLocalService,
+	treeService.NewTreeCloudService,
+	treeService.NewCloudAccountService,
 	cronService.NewCronService,
 )
 
@@ -216,6 +220,8 @@ var DaoSet = wire.NewSet(
 	workorderDao.NewNotificationDAO,
 	treeDao.NewTreeNodeDAO,
 	treeDao.NewTreeLocalDAO,
+	treeDao.NewTreeCloudDAO,
+	treeDao.NewCloudAccountDAO,
 	cronDao.NewCronJobDAO,
 )
 

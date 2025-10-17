@@ -31,6 +31,7 @@ import (
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -94,47 +95,27 @@ func (t *treeNodeDAO) GetTreeList(ctx context.Context, req *model.GetTreeNodeLis
 		return nil, 0, err
 	}
 
-	// 预加载关联数据并查询
-	if err := query.Preload("AdminUsers").
+	// 分页查询
+	offset := (req.Page - 1) * req.Size
+	if err := query.
+		Preload("AdminUsers").
 		Preload("MemberUsers").
 		Preload("TreeLocalResources").
 		Order("level ASC, parent_id ASC, name ASC").
+		Limit(req.Size).
+		Offset(offset).
 		Find(&nodes).Error; err != nil {
 		t.logger.Error("获取树节点列表失败", zap.Error(err))
 		return nil, 0, err
 	}
 
-	// 如果指定了层级，直接返回列表
+	// 指定层级时直接返回列表
 	if req.Level > 0 {
 		return nodes, count, nil
 	}
 
 	// 构建树形结构
-	return t.buildTreeStructure(nodes), count, nil
-}
-
-// buildTreeStructure 构建树形结构
-func (t *treeNodeDAO) buildTreeStructure(nodes []*model.TreeNode) []*model.TreeNode {
-	nodeMap := make(map[int]*model.TreeNode)
-	var rootNodes []*model.TreeNode
-
-	for _, node := range nodes {
-		nodeClone := *node
-		nodeClone.Children = make([]*model.TreeNode, 0)
-		nodeMap[node.ID] = &nodeClone
-	}
-
-	for _, node := range nodes {
-		currentNode := nodeMap[node.ID]
-		if node.ParentID == 0 || nodeMap[node.ParentID] == nil {
-			rootNodes = append(rootNodes, currentNode)
-		} else {
-			parent := nodeMap[node.ParentID]
-			parent.Children = append(parent.Children, currentNode)
-		}
-	}
-
-	return rootNodes
+	return treeUtils.BuildTreeStructure(nodes), count, nil
 }
 
 // GetNode 获取节点详情
@@ -172,41 +153,53 @@ func (t *treeNodeDAO) GetChildNodes(ctx context.Context, parentID int) ([]*model
 // GetTreeStatistics 获取服务树统计数据
 func (t *treeNodeDAO) GetTreeStatistics(ctx context.Context) (*model.TreeNodeStatisticsResp, error) {
 	var stats model.TreeNodeStatisticsResp
+	var count int64
 
 	// 节点总数
-	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Count((*int64)(&[]int64{0}[0])).Error; err != nil {
+	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Count(&count).Error; err != nil {
 		t.logger.Error("统计节点总数失败", zap.Error(err))
-	}
-	// 为了避免使用中间变量，这里分别统计并赋值
-	var c int64
-	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Count(&c).Error; err == nil {
-		stats.TotalNodes = int(c)
+	} else {
+		stats.TotalNodes = int(count)
 	}
 
-	// 活跃/非活跃
-	c = 0
-	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("status = ?", model.ACTIVE).Count(&c).Error; err == nil {
-		stats.ActiveNodes = int(c)
+	// 活跃节点数
+	count = 0
+	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("status = ?", model.ACTIVE).Count(&count).Error; err != nil {
+		t.logger.Error("统计活跃节点失败", zap.Error(err))
+	} else {
+		stats.ActiveNodes = int(count)
 	}
-	c = 0
-	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("status = ?", model.INACTIVE).Count(&c).Error; err == nil {
-		stats.InactiveNodes = int(c)
+
+	// 非活跃节点数
+	count = 0
+	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("status = ?", model.INACTIVE).Count(&count).Error; err != nil {
+		t.logger.Error("统计非活跃节点失败", zap.Error(err))
+	} else {
+		stats.InactiveNodes = int(count)
 	}
 
 	// 资源总数
-	c = 0
-	if err := t.db.WithContext(ctx).Model(&model.TreeLocalResource{}).Count(&c).Error; err == nil {
-		stats.TotalResources = int(c)
+	count = 0
+	if err := t.db.WithContext(ctx).Model(&model.TreeLocalResource{}).Count(&count).Error; err != nil {
+		t.logger.Error("统计资源总数失败", zap.Error(err))
+	} else {
+		stats.TotalResources = int(count)
 	}
 
-	// 管理员与成员总数（关联关系条目数）
-	c = 0
-	if err := t.db.WithContext(ctx).Table("cl_tree_node_admin").Count(&c).Error; err == nil {
-		stats.TotalAdmins = int(c)
+	// 管理员总数
+	count = 0
+	if err := t.db.WithContext(ctx).Table("cl_tree_node_admin").Count(&count).Error; err != nil {
+		t.logger.Error("统计管理员总数失败", zap.Error(err))
+	} else {
+		stats.TotalAdmins = int(count)
 	}
-	c = 0
-	if err := t.db.WithContext(ctx).Table("cl_tree_node_member").Count(&c).Error; err == nil {
-		stats.TotalMembers = int(c)
+
+	// 成员总数
+	count = 0
+	if err := t.db.WithContext(ctx).Table("cl_tree_node_member").Count(&count).Error; err != nil {
+		t.logger.Error("统计成员总数失败", zap.Error(err))
+	} else {
+		stats.TotalMembers = int(count)
 	}
 
 	return &stats, nil
@@ -300,7 +293,7 @@ func (t *treeNodeDAO) UpdateNode(ctx context.Context, node *model.TreeNode) erro
 
 	// 如果父节点发生变化，需要验证和计算层级
 	if node.ParentID != existingNode.ParentID {
-		// 验证新父节点存在（如果不是根节点）
+		// 验证新父节点存在
 		if node.ParentID != 0 {
 			var count int64
 			if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("id = ?", node.ParentID).Count(&count).Error; err != nil {
@@ -464,6 +457,11 @@ func (t *treeNodeDAO) DeleteNode(ctx context.Context, id int) error {
 
 // BindResource 绑定资源到节点
 func (t *treeNodeDAO) BindResource(ctx context.Context, nodeId int, resourceIds []int) error {
+	// 验证资源ID列表
+	if err := treeUtils.ValidateResourceIDs(resourceIds); err != nil {
+		return err
+	}
+
 	// 验证节点存在
 	var count int64
 	if err := t.db.WithContext(ctx).Model(&model.TreeNode{}).Where("id = ?", nodeId).Count(&count).Error; err != nil {
@@ -560,7 +558,7 @@ func (t *treeNodeDAO) GetNodeMembers(ctx context.Context, nodeId int, memberType
 			return nil, err
 		}
 	case "all", "":
-		// 获取所有用户（管理员+成员）
+		// 获取所有用户
 		var adminUsers []*model.User
 		var memberUsers []*model.User
 

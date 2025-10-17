@@ -30,24 +30,18 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/websocket"
 	"github.com/gin-gonic/gin"
 )
 
 type TreeLocalHandler struct {
 	service   service.TreeLocalService
 	sshClient ssh.Client
-	wsManager websocket.Manager
 }
 
 func NewTreeLocalHandler(service service.TreeLocalService, sshClient ssh.Client) *TreeLocalHandler {
-	// 初始化WebSocket管理器
-	wsManager := websocket.NewManager(nil, nil)
-
 	return &TreeLocalHandler{
 		service:   service,
 		sshClient: sshClient,
-		wsManager: wsManager,
 	}
 }
 
@@ -80,7 +74,7 @@ func (h *TreeLocalHandler) GetTreeLocalDetail(ctx *gin.Context) {
 
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "invalid param id")
+		utils.ErrorWithMessage(ctx, "无效的资源ID")
 		return
 	}
 

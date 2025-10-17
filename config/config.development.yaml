@@ -2,7 +2,7 @@ server:
   port: "8889"
 log:
   dir: "./logs"
-  level: "debug"
+  level: "warn"
 jwt:
   key1: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l"
   key2: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0z"
