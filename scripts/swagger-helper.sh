@@ -204,7 +204,7 @@ fix_annotations() {
 
 # 显示帮助信息
 show_help() {
-    echo "AI-CloudOps Swagger 文档助手"
+    echo "Swagger 文档助手"
     echo ""
     echo "用法:"
     echo "  bash scripts/swagger-helper.sh <command>"

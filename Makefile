@@ -50,7 +50,7 @@ swagger:
 	@echo "✅ Swagger 文档生成完成！"
 
 # 兼容旧的命令名
-openai: swagger
+docs: swagger
 
 # 检查 Swagger 注解完整性
 swagger-check:

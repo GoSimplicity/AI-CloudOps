@@ -27,6 +27,7 @@ package dao
 
 import (
 	"context"
+	"errors"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
@@ -35,6 +36,9 @@ import (
 
 type CloudAccountDAO interface {
 	Create(ctx context.Context, account *model.CloudAccount) error
+	CreateWithTransaction(ctx context.Context, fn func(tx interface{}) error) error
+	CreateInTransaction(ctx context.Context, account *model.CloudAccount, tx interface{}) error
+	CreateRegionInTransaction(ctx context.Context, region *model.CloudAccountRegion, tx interface{}) error
 	Update(ctx context.Context, account *model.CloudAccount) error
 	Delete(ctx context.Context, id int) error
 	GetByID(ctx context.Context, id int) (*model.CloudAccount, error)
@@ -89,7 +93,11 @@ func (d *cloudAccountDAO) Delete(ctx context.Context, id int) error {
 func (d *cloudAccountDAO) GetByID(ctx context.Context, id int) (*model.CloudAccount, error) {
 	var account model.CloudAccount
 
-	err := d.db.WithContext(ctx).Preload("CloudResources").Where("id = ?", id).First(&account).Error
+	err := d.db.WithContext(ctx).
+		Preload("Regions").
+		Preload("CloudResources").
+		Where("id = ?", id).
+		First(&account).Error
 	if err != nil {
 		d.logger.Error("根据ID获取云账户详情失败", zap.Error(err), zap.Int("id", id))
 		return nil, err
@@ -108,10 +116,6 @@ func (d *cloudAccountDAO) GetList(ctx context.Context, req *model.GetCloudAccoun
 	// 添加查询条件
 	if req.Provider != 0 {
 		query = query.Where("provider = ?", req.Provider)
-	}
-
-	if req.Region != "" {
-		query = query.Where("region = ?", req.Region)
 	}
 
 	if req.Status != 0 {
@@ -162,8 +166,12 @@ func (d *cloudAccountDAO) GetByProviderAndRegion(ctx context.Context, provider m
 	var accounts []*model.CloudAccount
 
 	query := d.db.WithContext(ctx).Where("provider = ?", provider)
+	// 注：这里需要根据新的数据结构调整查询逻辑
+	// 现在Region信息存储在 CloudAccountRegion 表中
 	if region != "" {
-		query = query.Where("region = ?", region)
+		query = query.
+			Joins("JOIN cl_cloud_account_region ON cl_cloud_account.id = cl_cloud_account_region.cloud_account_id").
+			Where("cl_cloud_account_region.region = ?", region)
 	}
 
 	err := query.Find(&accounts).Error
@@ -173,4 +181,41 @@ func (d *cloudAccountDAO) GetByProviderAndRegion(ctx context.Context, provider m
 	}
 
 	return accounts, nil
+}
+
+// CreateWithTransaction 使用事务创建云账户
+func (d *cloudAccountDAO) CreateWithTransaction(ctx context.Context, fn func(tx interface{}) error) error {
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(tx)
+	})
+}
+
+// CreateInTransaction 在事务中创建云账户
+func (d *cloudAccountDAO) CreateInTransaction(ctx context.Context, account *model.CloudAccount, tx interface{}) error {
+	gormTx, ok := tx.(*gorm.DB)
+	if !ok {
+		return errors.New("事务类型转换失败")
+	}
+
+	if err := gormTx.WithContext(ctx).Create(account).Error; err != nil {
+		d.logger.Error("在事务中创建云账户失败", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+// CreateRegionInTransaction 在事务中创建区域关联
+func (d *cloudAccountDAO) CreateRegionInTransaction(ctx context.Context, region *model.CloudAccountRegion, tx interface{}) error {
+	gormTx, ok := tx.(*gorm.DB)
+	if !ok {
+		return errors.New("事务类型转换失败")
+	}
+
+	if err := gormTx.WithContext(ctx).Create(region).Error; err != nil {
+		d.logger.Error("在事务中创建区域关联失败", zap.Error(err))
+		return err
+	}
+
+	return nil
 }

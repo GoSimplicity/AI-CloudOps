@@ -94,8 +94,34 @@ func (s *cloudAccountService) GetCloudAccountDetail(ctx context.Context, req *mo
 	return account, nil
 }
 
-// CreateCloudAccount 创建云账户
+// CreateCloudAccount 创建云账户（支持多区域）
 func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model.CreateCloudAccountReq) error {
+	// 验证区域列表
+	if len(req.Regions) == 0 {
+		return errors.New("必须至少指定一个区域")
+	}
+
+	// 检查是否有重复的区域
+	regionMap := make(map[string]bool)
+	var defaultCount int
+	for _, regionItem := range req.Regions {
+		if regionMap[regionItem.Region] {
+			return fmt.Errorf("区域 %s 重复", regionItem.Region)
+		}
+		regionMap[regionItem.Region] = true
+
+		if regionItem.IsDefault {
+			defaultCount++
+		}
+	}
+
+	// 确保只有一个默认区域，如果没有指定默认区域，则设置第一个为默认
+	if defaultCount == 0 {
+		req.Regions[0].IsDefault = true
+	} else if defaultCount > 1 {
+		return errors.New("只能设置一个默认区域")
+	}
+
 	// 加密 AccessKey 和 SecretKey
 	encryptedAccessKey, err := treeUtils.EncryptPassword(req.AccessKey)
 	if err != nil {
@@ -109,28 +135,49 @@ func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model
 		return fmt.Errorf("加密SecretKey失败: %w", err)
 	}
 
-	// 创建云账户对象
-	account := &model.CloudAccount{
-		Name:           req.Name,
-		Provider:       req.Provider,
-		Region:         req.Region,
-		AccessKey:      encryptedAccessKey,
-		SecretKey:      encryptedSecretKey,
-		AccountID:      req.AccountID,
-		AccountName:    req.AccountName,
-		AccountAlias:   req.AccountAlias,
-		Description:    req.Description,
-		Status:         model.CloudAccountEnabled, // 默认启用
-		CreateUserID:   req.CreateUserID,
-		CreateUserName: req.CreateUserName,
-	}
+	// 使用事务创建云账户和区域关联
+	return s.dao.CreateWithTransaction(ctx, func(tx interface{}) error {
+		// 创建云账户对象
+		account := &model.CloudAccount{
+			Name:           req.Name,
+			Provider:       req.Provider,
+			AccessKey:      encryptedAccessKey,
+			SecretKey:      encryptedSecretKey,
+			AccountID:      req.AccountID,
+			AccountName:    req.AccountName,
+			AccountAlias:   req.AccountAlias,
+			Description:    req.Description,
+			Status:         model.CloudAccountEnabled, // 默认启用
+			CreateUserID:   req.CreateUserID,
+			CreateUserName: req.CreateUserName,
+		}
 
-	if err := s.dao.Create(ctx, account); err != nil {
-		s.logger.Error("创建云账户失败", zap.Error(err))
-		return err
-	}
+		if err := s.dao.CreateInTransaction(ctx, account, tx); err != nil {
+			s.logger.Error("创建云账户失败", zap.Error(err))
+			return err
+		}
 
-	return nil
+		// 创建区域关联
+		for _, regionItem := range req.Regions {
+			region := &model.CloudAccountRegion{
+				CloudAccountID: account.ID,
+				Region:         regionItem.Region,
+				RegionName:     regionItem.RegionName,
+				IsDefault:      regionItem.IsDefault,
+				Description:    regionItem.Description,
+				Status:         model.CloudAccountRegionEnabled,
+				CreateUserID:   req.CreateUserID,
+				CreateUserName: req.CreateUserName,
+			}
+
+			if err := s.dao.CreateRegionInTransaction(ctx, region, tx); err != nil {
+				s.logger.Error("创建云账户区域关联失败", zap.Error(err))
+				return err
+			}
+		}
+
+		return nil
+	})
 }
 
 // UpdateCloudAccount 更新云账户
@@ -255,10 +302,25 @@ func (s *cloudAccountService) VerifyCloudAccount(ctx context.Context, req *model
 		return fmt.Errorf("解密SecretKey失败: %w", err)
 	}
 
+	// 获取默认区域用于验证凭证
+	defaultRegion := "cn-hangzhou" // 默认区域
+	if len(account.Regions) > 0 {
+		for _, region := range account.Regions {
+			if region.IsDefault {
+				defaultRegion = region.Region
+				break
+			}
+		}
+		// 如果没有找到默认区域，使用第一个区域
+		if defaultRegion == "cn-hangzhou" {
+			defaultRegion = account.Regions[0].Region
+		}
+	}
+
 	// 根据 Provider 调用相应的云厂商 SDK 验证凭证
 	verifyReq := &model.VerifyCloudCredentialsReq{
 		Provider:  account.Provider,
-		Region:    account.Region,
+		Region:    defaultRegion,
 		AccessKey: accessKey,
 		SecretKey: secretKey,
 	}
@@ -301,7 +363,7 @@ func (s *cloudAccountService) VerifyCloudAccount(ctx context.Context, req *model
 	s.logger.Info("云账户凭证验证成功",
 		zap.Int("id", req.ID),
 		zap.Int8("provider", int8(account.Provider)),
-		zap.String("region", account.Region))
+		zap.String("region", defaultRegion))
 
 	return nil
 }

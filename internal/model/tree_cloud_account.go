@@ -36,19 +36,20 @@ const (
 // CloudAccount 云账户管理
 type CloudAccount struct {
 	Model
-	Name           string               `json:"name" gorm:"type:varchar(100);not null;comment:账户名称"`
-	Provider       CloudProvider        `json:"provider" gorm:"type:tinyint(1);not null;comment:云厂商类型;default:1"`
-	Region         string               `json:"region" gorm:"type:varchar(50);not null;comment:区域,如cn-hangzhou"`
-	AccessKey      string               `json:"-" gorm:"type:varchar(500);not null;comment:访问密钥ID,加密存储"`
-	SecretKey      string               `json:"-" gorm:"type:varchar(500);not null;comment:访问密钥Secret,加密存储"`
-	AccountID      string               `json:"account_id" gorm:"type:varchar(100);comment:云账号ID"`
-	AccountName    string               `json:"account_name" gorm:"type:varchar(100);comment:云账号名称"`
-	AccountAlias   string               `json:"account_alias" gorm:"type:varchar(100);comment:账号别名"`
-	Description    string               `json:"description" gorm:"type:text;comment:账户描述"`
-	Status         CloudAccountStatus   `json:"status" gorm:"type:tinyint(1);not null;comment:账户状态,1:启用,2:禁用;default:1"`
-	CreateUserID   int                  `json:"create_user_id" gorm:"comment:创建者ID;default:0"`
-	CreateUserName string               `json:"create_user_name" gorm:"type:varchar(100);comment:创建者姓名"`
-	CloudResources []*TreeCloudResource `json:"cloud_resources,omitempty" gorm:"foreignKey:CloudAccountID"`
+	Name           string                `json:"name" gorm:"type:varchar(100);not null;comment:账户名称"`
+	Provider       CloudProvider         `json:"provider" gorm:"type:tinyint(1);not null;comment:云厂商类型;default:1"`
+	Region         string                `json:"region" gorm:"type:varchar(50);not null;comment:区域,如cn-hangzhou"`
+	AccessKey      string                `json:"-" gorm:"type:varchar(500);not null;comment:访问密钥ID,加密存储"`
+	SecretKey      string                `json:"-" gorm:"type:varchar(500);not null;comment:访问密钥Secret,加密存储"`
+	AccountID      string                `json:"account_id" gorm:"type:varchar(100);comment:云账号ID"`
+	AccountName    string                `json:"account_name" gorm:"type:varchar(100);comment:云账号名称"`
+	AccountAlias   string                `json:"account_alias" gorm:"type:varchar(100);comment:账号别名"`
+	Description    string                `json:"description" gorm:"type:text;comment:账户描述"`
+	Status         CloudAccountStatus    `json:"status" gorm:"type:tinyint(1);not null;comment:账户状态,1:启用,2:禁用;default:1"`
+	CreateUserID   int                   `json:"create_user_id" gorm:"comment:创建者ID;default:0"`
+	CreateUserName string                `json:"create_user_name" gorm:"type:varchar(100);comment:创建者姓名"`
+	CloudResources []*TreeCloudResource  `json:"cloud_resources,omitempty" gorm:"foreignKey:CloudAccountID"`
+	Regions        []*CloudAccountRegion `json:"regions,omitempty" gorm:"foreignKey:CloudAccountID"`
 }
 
 func (c *CloudAccount) TableName() string {
@@ -70,17 +71,18 @@ type GetCloudAccountDetailReq struct {
 
 // CreateCloudAccountReq 创建云账户请求
 type CreateCloudAccountReq struct {
-	Name           string        `json:"name" binding:"required"`
-	Provider       CloudProvider `json:"provider" binding:"required,oneof=1 2 3 4 5 6"`
-	Region         string        `json:"region" binding:"required"`
-	AccessKey      string        `json:"access_key" binding:"required"`
-	SecretKey      string        `json:"secret_key" binding:"required"`
-	AccountID      string        `json:"account_id"`
-	AccountName    string        `json:"account_name"`
-	AccountAlias   string        `json:"account_alias"`
-	Description    string        `json:"description"`
-	CreateUserID   int           `json:"create_user_id"`
-	CreateUserName string        `json:"create_user_name"`
+	Name           string                         `json:"name" binding:"required"`
+	Provider       CloudProvider                  `json:"provider" binding:"required,oneof=1 2 3 4 5 6"`
+	Region         string                         `json:"region" binding:"required"`
+	AccessKey      string                         `json:"access_key" binding:"required"`
+	SecretKey      string                         `json:"secret_key" binding:"required"`
+	AccountID      string                         `json:"account_id"`
+	AccountName    string                         `json:"account_name"`
+	AccountAlias   string                         `json:"account_alias"`
+	Description    string                         `json:"description"`
+	CreateUserID   int                            `json:"create_user_id"`
+	CreateUserName string                         `json:"create_user_name"`
+	Regions        []CreateCloudAccountRegionItem `json:"regions,omitempty"`
 }
 
 // UpdateCloudAccountReq 更新云账户请求

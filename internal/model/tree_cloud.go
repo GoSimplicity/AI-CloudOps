@@ -165,40 +165,42 @@ const (
 type TreeCloudResource struct {
 	Model
 
-	Name           string              `json:"name" gorm:"type:varchar(100);not null;comment:资源名称"`
-	ResourceType   CloudResourceType   `json:"resource_type" gorm:"type:tinyint(1);not null;comment:资源类型;default:1"`
-	Status         CloudResourceStatus `json:"status" gorm:"type:tinyint(1);not null;comment:资源状态;default:1"`
-	Environment    string              `json:"environment" gorm:"type:varchar(50);comment:环境标识(dev/test/prod)"`
-	Description    string              `json:"description" gorm:"type:text;comment:资源描述"`
-	Tags           KeyValueList        `json:"tags" gorm:"type:text;serializer:json;comment:资源标签集合"`
-	CreateUserID   int                 `json:"create_user_id" gorm:"comment:创建者ID;default:0"`
-	CreateUserName string              `json:"create_user_name" gorm:"type:varchar(100);comment:创建者姓名"`
-	CloudAccountID int                 `json:"cloud_account_id" gorm:"not null;comment:云账户ID"`
-	CloudAccount   *CloudAccount       `json:"cloud_account,omitempty" gorm:"foreignKey:CloudAccountID"`
-	Region         string              `json:"region" gorm:"type:varchar(50);comment:区域,如cn-hangzhou"`
-	InstanceID     string              `json:"instance_id" gorm:"type:varchar(100);comment:云资源实例ID"`
-	InstanceType   string              `json:"instance_type" gorm:"type:varchar(100);comment:实例规格(如ecs.g6.large)"`
-	Cpu            int                 `json:"cpu" gorm:"comment:CPU核数;default:0"`
-	Memory         int                 `json:"memory" gorm:"comment:内存大小(GiB);default:0"`
-	Disk           int                 `json:"disk" gorm:"comment:磁盘大小(GiB);default:0"`
-	PublicIP       string              `json:"public_ip" gorm:"type:varchar(45);comment:公网IP"`
-	PrivateIP      string              `json:"private_ip" gorm:"type:varchar(45);comment:私网IP"`
-	VpcID          string              `json:"vpc_id" gorm:"type:varchar(100);comment:VPC ID"`
-	ZoneID         string              `json:"zone_id" gorm:"type:varchar(50);comment:可用区ID"`
-	ChargeType     ChargeType          `json:"charge_type" gorm:"type:varchar(50);comment:计费方式(PostPaid/PrePaid)"`
-	ExpireTime     *time.Time          `json:"expire_time" gorm:"type:datetime;comment:到期时间"`
-	MonthlyCost    float64             `json:"monthly_cost" gorm:"type:decimal(10,2);comment:月度成本;default:0"`
-	Currency       Currency            `json:"currency" gorm:"type:varchar(10);not null;comment:货币单位;default:'CNY'"`
-	OSType         string              `json:"os_type" gorm:"type:varchar(50);comment:操作系统类型(linux/windows)"`
-	OSName         string              `json:"os_name" gorm:"type:varchar(100);comment:操作系统名称"`
-	ImageID        string              `json:"image_id" gorm:"type:varchar(100);comment:镜像ID"`
-	ImageName      string              `json:"image_name" gorm:"type:varchar(100);comment:镜像名称"`
-	Port           int                 `json:"port" gorm:"comment:SSH端口号;default:22"`
-	Username       string              `json:"username" gorm:"type:varchar(100);comment:SSH用户名"`
-	Password       string              `json:"-" gorm:"type:varchar(500);comment:SSH密码(加密存储)"`
-	Key            string              `json:"-" gorm:"type:text;comment:SSH密钥"`
-	AuthMode       AuthMode            `json:"auth_mode" gorm:"type:tinyint(1);comment:SSH认证方式(1:密码,2:密钥);default:1"`
-	TreeNodes      []*TreeNode         `json:"tree_nodes" gorm:"many2many:cl_tree_node_cloud"`
+	Name                 string              `json:"name" gorm:"type:varchar(100);not null;comment:资源名称"`
+	ResourceType         CloudResourceType   `json:"resource_type" gorm:"type:tinyint(1);not null;comment:资源类型;default:1"`
+	Status               CloudResourceStatus `json:"status" gorm:"type:tinyint(1);not null;comment:资源状态;default:1"`
+	Environment          string              `json:"environment" gorm:"type:varchar(50);comment:环境标识(dev/test/prod)"`
+	Description          string              `json:"description" gorm:"type:text;comment:资源描述"`
+	Tags                 KeyValueList        `json:"tags" gorm:"type:text;serializer:json;comment:资源标签集合"`
+	CreateUserID         int                 `json:"create_user_id" gorm:"comment:创建者ID;default:0"`
+	CreateUserName       string              `json:"create_user_name" gorm:"type:varchar(100);comment:创建者姓名"`
+	CloudAccountID       int                 `json:"cloud_account_id" gorm:"not null;comment:云账户ID"`
+	CloudAccount         *CloudAccount       `json:"cloud_account,omitempty" gorm:"foreignKey:CloudAccountID"`
+	CloudAccountRegionID int                 `json:"cloud_account_region_id" gorm:"not null;comment:云账户区域ID"`
+	CloudAccountRegion   *CloudAccountRegion `json:"cloud_account_region,omitempty" gorm:"foreignKey:CloudAccountRegionID"`
+	Region               string              `json:"region" gorm:"type:varchar(50);comment:区域,如cn-hangzhou(冗余字段,便于查询)"`
+	InstanceID           string              `json:"instance_id" gorm:"type:varchar(100);comment:云资源实例ID"`
+	InstanceType         string              `json:"instance_type" gorm:"type:varchar(100);comment:实例规格(如ecs.g6.large)"`
+	Cpu                  int                 `json:"cpu" gorm:"comment:CPU核数;default:0"`
+	Memory               int                 `json:"memory" gorm:"comment:内存大小(GiB);default:0"`
+	Disk                 int                 `json:"disk" gorm:"comment:磁盘大小(GiB);default:0"`
+	PublicIP             string              `json:"public_ip" gorm:"type:varchar(45);comment:公网IP"`
+	PrivateIP            string              `json:"private_ip" gorm:"type:varchar(45);comment:私网IP"`
+	VpcID                string              `json:"vpc_id" gorm:"type:varchar(100);comment:VPC ID"`
+	ZoneID               string              `json:"zone_id" gorm:"type:varchar(50);comment:可用区ID"`
+	ChargeType           ChargeType          `json:"charge_type" gorm:"type:varchar(50);comment:计费方式(PostPaid/PrePaid)"`
+	ExpireTime           *time.Time          `json:"expire_time" gorm:"type:datetime;comment:到期时间"`
+	MonthlyCost          float64             `json:"monthly_cost" gorm:"type:decimal(10,2);comment:月度成本;default:0"`
+	Currency             Currency            `json:"currency" gorm:"type:varchar(10);not null;comment:货币单位;default:'CNY'"`
+	OSType               string              `json:"os_type" gorm:"type:varchar(50);comment:操作系统类型(linux/windows)"`
+	OSName               string              `json:"os_name" gorm:"type:varchar(100);comment:操作系统名称"`
+	ImageID              string              `json:"image_id" gorm:"type:varchar(100);comment:镜像ID"`
+	ImageName            string              `json:"image_name" gorm:"type:varchar(100);comment:镜像名称"`
+	Port                 int                 `json:"port" gorm:"comment:SSH端口号;default:22"`
+	Username             string              `json:"username" gorm:"type:varchar(100);comment:SSH用户名"`
+	Password             string              `json:"-" gorm:"type:varchar(500);comment:SSH密码(加密存储)"`
+	Key                  string              `json:"-" gorm:"type:text;comment:SSH密钥"`
+	AuthMode             AuthMode            `json:"auth_mode" gorm:"type:tinyint(1);comment:SSH认证方式(1:密码,2:密钥);default:1"`
+	TreeNodes            []*TreeNode         `json:"tree_nodes" gorm:"many2many:cl_tree_node_cloud"`
 }
 
 func (t *TreeCloudResource) TableName() string {
@@ -243,15 +245,15 @@ type DeleteTreeCloudResourceReq struct {
 
 // SyncTreeCloudResourceReq 从云厂商同步资源请求
 type SyncTreeCloudResourceReq struct {
-	CloudAccountID int                 `json:"cloud_account_id" binding:"required,gt=0"`
-	ResourceTypes  []CloudResourceType `json:"resource_types" binding:"omitempty"`                   // 同步的资源类型列表，为空则同步所有
-	Regions        []string            `json:"regions"`                                              // 指定同步的区域列表，为空则同步账号配置的区域
-	InstanceIDs    []string            `json:"instance_ids"`                                         // 指定同步的实例ID列表，为空则同步所有
-	SyncMode       SyncMode            `json:"sync_mode" binding:"omitempty,oneof=full incremental"` // 同步模式: full-全量, incremental-增量
-	AutoBind       bool                `json:"auto_bind"`                                            // 是否自动绑定到服务树节点
-	BindNodeID     int                 `json:"bind_node_id" binding:"omitempty,gt=0"`                // 自动绑定的目标节点ID
-	OperatorID     int                 `json:"-"`                                                    // 操作人ID (不通过JSON传递)
-	OperatorName   string              `json:"-"`                                                    // 操作人姓名 (不通过JSON传递)
+	CloudAccountID        int                 `json:"cloud_account_id" binding:"required,gt=0"`
+	CloudAccountRegionIDs []int               `json:"cloud_account_region_ids"`                             // 指定同步的账号区域ID列表，为空则同步账号的所有区域
+	ResourceTypes         []CloudResourceType `json:"resource_types" binding:"omitempty"`                   // 同步的资源类型列表，为空则同步所有
+	InstanceIDs           []string            `json:"instance_ids"`                                         // 指定同步的实例ID列表，为空则同步所有
+	SyncMode              SyncMode            `json:"sync_mode" binding:"omitempty,oneof=full incremental"` // 同步模式: full-全量, incremental-增量
+	AutoBind              bool                `json:"auto_bind"`                                            // 是否自动绑定到服务树节点
+	BindNodeID            int                 `json:"bind_node_id" binding:"omitempty,gt=0"`                // 自动绑定的目标节点ID
+	OperatorID            int                 `json:"-"`                                                    // 操作人ID (不通过JSON传递)
+	OperatorName          string              `json:"-"`                                                    // 操作人姓名 (不通过JSON传递)
 }
 
 // SyncCloudResourceResp 同步云资源响应

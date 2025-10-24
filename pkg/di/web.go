@@ -84,6 +84,7 @@ func InitGinServer(
 	treeLocalHdl *resourceApi.TreeLocalHandler,
 	treeCloudHdl *resourceApi.TreeCloudHandler,
 	cloudAccountHdl *resourceApi.CloudAccountHandler,
+	cloudAccountRegionHdl *resourceApi.CloudAccountRegionHandler,
 	notificationHdl *workorderApi.NotificationHandler,
 	ingressHdl *k8sApi.K8sIngressHandler,
 	k8sPodHdl *k8sApi.K8sPodHandler,
@@ -137,6 +138,7 @@ func InitGinServer(
 	treeLocalHdl.RegisterRouters(server)
 	treeCloudHdl.RegisterRouters(server)
 	cloudAccountHdl.RegisterRouters(server)
+	cloudAccountRegionHdl.RegisterRouters(server)
 	notificationHdl.RegisterRouters(server)
 	ingressHdl.RegisterRouters(server)
 	k8sPodHdl.RegisterRouters(server)

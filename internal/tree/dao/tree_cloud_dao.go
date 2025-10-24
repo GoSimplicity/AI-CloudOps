@@ -53,6 +53,8 @@ type TreeCloudDAO interface {
 	GetSyncHistoryList(ctx context.Context, req *model.GetCloudResourceSyncHistoryReq) ([]*model.CloudResourceSyncHistory, int64, error)
 	CreateChangeLog(ctx context.Context, log *model.CloudResourceChangeLog) error
 	GetChangeLogList(ctx context.Context, req *model.GetCloudResourceChangeLogReq) ([]*model.CloudResourceChangeLog, int64, error)
+	GetResourcesByRegion(ctx context.Context, regionID int, resourceType model.CloudResourceType) ([]*model.TreeCloudResource, error)
+	GetByRegionAndInstanceID(ctx context.Context, regionID int, instanceID string) (*model.TreeCloudResource, error)
 }
 
 type treeCloudDAO struct {
@@ -429,4 +431,46 @@ func (d *treeCloudDAO) GetChangeLogList(ctx context.Context, req *model.GetCloud
 	}
 
 	return logs, total, nil
+}
+
+// GetResourcesByRegion 根据区域ID和资源类型获取资源列表
+func (d *treeCloudDAO) GetResourcesByRegion(ctx context.Context, regionID int, resourceType model.CloudResourceType) ([]*model.TreeCloudResource, error) {
+	var resources []*model.TreeCloudResource
+
+	query := d.db.WithContext(ctx).Where("cloud_account_region_id = ?", regionID)
+	if resourceType != 0 {
+		query = query.Where("resource_type = ?", resourceType)
+	}
+
+	err := query.Find(&resources).Error
+	if err != nil {
+		d.logger.Error("根据区域获取资源列表失败",
+			zap.Int("regionID", regionID),
+			zap.Int8("resourceType", int8(resourceType)),
+			zap.Error(err))
+		return nil, err
+	}
+
+	return resources, nil
+}
+
+// GetByRegionAndInstanceID 根据区域ID和实例ID获取资源
+func (d *treeCloudDAO) GetByRegionAndInstanceID(ctx context.Context, regionID int, instanceID string) (*model.TreeCloudResource, error) {
+	var resource model.TreeCloudResource
+
+	err := d.db.WithContext(ctx).
+		Where("cloud_account_region_id = ? AND instance_id = ?", regionID, instanceID).
+		First(&resource).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+		d.logger.Error("根据区域和实例ID获取资源失败",
+			zap.Int("regionID", regionID),
+			zap.String("instanceID", instanceID),
+			zap.Error(err))
+		return nil, err
+	}
+
+	return &resource, nil
 }

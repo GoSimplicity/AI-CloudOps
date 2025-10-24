@@ -240,3 +240,31 @@ func (c *AliyunClient) GetECSInstanceByID(ctx context.Context, instanceID string
 
 	return resources[0], nil
 }
+
+// GetAvailableRegions 获取阿里云所有可用区域列表
+func (c *AliyunClient) GetAvailableRegions(ctx context.Context) ([]model.AvailableRegion, error) {
+	request := ecs.CreateDescribeRegionsRequest()
+	request.Scheme = "https"
+
+	c.logger.Debug("调用阿里云DescribeRegions API")
+
+	response, err := c.client.DescribeRegions(request)
+	if err != nil {
+		c.logger.Error("调用阿里云DescribeRegions API失败", zap.Error(err))
+		return nil, fmt.Errorf("获取阿里云区域列表失败: %w", err)
+	}
+
+	c.logger.Info("成功获取阿里云区域列表",
+		zap.Int("regionCount", len(response.Regions.Region)))
+
+	var regions []model.AvailableRegion
+	for _, region := range response.Regions.Region {
+		regions = append(regions, model.AvailableRegion{
+			Region:     region.RegionId,
+			RegionName: region.LocalName,
+			Available:  true, // 阿里云API返回的都是可用的区域
+		})
+	}
+
+	return regions, nil
+}

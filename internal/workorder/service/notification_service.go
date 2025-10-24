@@ -192,8 +192,8 @@ func (s *workorderNotificationService) TestSendNotification(ctx context.Context,
 		// 统一商务化模板变量设置
 		sendRequest.Templates["workorder_id"] = fmt.Sprintf("%d", testInstanceID)
 		sendRequest.Templates["serial_number"] = fmt.Sprintf("WO-%d", testInstanceID)
-		sendRequest.Templates["title"] = "AI-CloudOps 测试工单 - 系统功能验证"
-		sendRequest.Templates["description"] = "这是一个AI-CloudOps运维管理平台的系统测试工单，用于验证通知功能的完整性和可靠性。"
+		sendRequest.Templates["title"] = "系统测试工单 - 通知功能验证"
+		sendRequest.Templates["description"] = "系统测试工单，验证工单通知功能是否正常工作。"
 		sendRequest.Templates["operator_name"] = "系统管理员"
 		sendRequest.Templates["assignee_name"] = "运维工程师"
 		sendRequest.Templates["priority_level"] = fmt.Sprintf("%d", int(notificationConfig.Priority))

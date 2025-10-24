@@ -383,17 +383,42 @@ func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model
 		return nil, fmt.Errorf("解密SecretKey失败: %w", err)
 	}
 
+	// 获取要同步的区域列表
+	var regionsToSync []*model.CloudAccountRegion
+	if len(req.CloudAccountRegionIDs) > 0 {
+		// 同步指定的区域
+		for _, regionID := range req.CloudAccountRegionIDs {
+			for _, region := range account.Regions {
+				if region.ID == regionID {
+					regionsToSync = append(regionsToSync, region)
+					break
+				}
+			}
+		}
+	} else {
+		// 同步账号下的所有启用区域
+		for _, region := range account.Regions {
+			if region.Status == model.CloudAccountRegionEnabled {
+				regionsToSync = append(regionsToSync, region)
+			}
+		}
+	}
+
+	if len(regionsToSync) == 0 {
+		return nil, errors.New("没有可用的区域进行同步")
+	}
+
 	s.logger.Info("开始同步云资源",
 		zap.Int("cloudAccountID", req.CloudAccountID),
 		zap.Int8("provider", int8(account.Provider)),
-		zap.String("region", account.Region),
+		zap.Int("regionCount", len(regionsToSync)),
 		zap.String("syncMode", string(req.SyncMode)))
 
-	// 根据不同的云厂商调用对应的同步逻辑
+	// 根据不同的云厂商调用对应的同步逻辑，遍历所有区域
 	var syncErr error
 	switch account.Provider {
 	case model.ProviderAliyun:
-		syncErr = s.syncAliyunResourcesWithStats(ctx, account, accessKey, secretKey, req, resp)
+		syncErr = s.syncAliyunResourcesForMultipleRegions(ctx, account, accessKey, secretKey, regionsToSync, req, resp)
 	case model.ProviderTencent:
 		syncErr = errors.New("腾讯云资源同步功能暂未实现")
 	case model.ProviderAWS:
@@ -451,12 +476,87 @@ func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model
 }
 
 // syncAliyunResourcesWithStats 同步阿里云资源并返回统计信息
+// syncAliyunResourcesForMultipleRegions 多区域阿里云资源同步
+func (s *treeCloudService) syncAliyunResourcesForMultipleRegions(ctx context.Context, account *model.CloudAccount, accessKey, secretKey string, regions []*model.CloudAccountRegion, req *model.SyncTreeCloudResourceReq, resp *model.SyncCloudResourceResp) error {
+	// 遍历每个区域进行同步
+	for _, region := range regions {
+		s.logger.Info("开始同步区域资源",
+			zap.String("region", region.Region),
+			zap.String("regionName", region.RegionName))
+
+		// 构建同步配置
+		config := &treeUtils.AliyunSyncConfig{
+			AccessKey:      accessKey,
+			SecretKey:      secretKey,
+			Region:         region.Region,
+			CloudAccountID: account.ID,
+			ResourceType:   0, // 暂时只同步ECS
+			InstanceIDs:    req.InstanceIDs,
+			SyncMode:       req.SyncMode,
+		}
+
+		// 从阿里云获取资源列表
+		resources, err := treeUtils.SyncAliyunResources(ctx, config, s.logger)
+		if err != nil {
+			s.logger.Error("同步区域资源失败",
+				zap.String("region", region.Region),
+				zap.Error(err))
+			// 继续同步其他区域，不直接返回错误
+			continue
+		}
+
+		// 为资源设置区域关联信息
+		for _, resource := range resources {
+			resource.CloudAccountRegionID = region.ID
+			resource.Region = region.Region // 冗余字段，便于查询
+		}
+
+		// 根据同步模式处理资源
+		if req.SyncMode == model.SyncModeFull {
+			// 全量同步：先删除该区域下的所有ECS资源，再重新创建
+			err = s.fullSyncResourcesForRegion(ctx, region.ID, resources, resp, req.AutoBind, req.BindNodeID, req.OperatorID, req.OperatorName)
+		} else {
+			// 增量同步：更新已存在的资源，创建不存在的资源
+			err = s.incrementalSyncResourcesForRegion(ctx, region.ID, resources, resp, req.AutoBind, req.BindNodeID, req.OperatorID, req.OperatorName)
+		}
+
+		if err != nil {
+			s.logger.Error("处理区域资源失败",
+				zap.String("region", region.Region),
+				zap.Error(err))
+			// 继续同步其他区域
+			continue
+		}
+
+		s.logger.Info("区域资源同步完成",
+			zap.String("region", region.Region),
+			zap.Int("resourceCount", len(resources)))
+	}
+
+	return nil
+}
+
 func (s *treeCloudService) syncAliyunResourcesWithStats(ctx context.Context, account *model.CloudAccount, accessKey, secretKey string, req *model.SyncTreeCloudResourceReq, resp *model.SyncCloudResourceResp) error {
+	// 获取默认区域或第一个区域（向后兼容）
+	var region *model.CloudAccountRegion
+	for _, r := range account.Regions {
+		if r.IsDefault {
+			region = r
+			break
+		}
+	}
+	if region == nil && len(account.Regions) > 0 {
+		region = account.Regions[0]
+	}
+	if region == nil {
+		return errors.New("云账户没有配置区域")
+	}
+
 	// 构建同步配置
 	config := &treeUtils.AliyunSyncConfig{
 		AccessKey:      accessKey,
 		SecretKey:      secretKey,
-		Region:         account.Region,
+		Region:         region.Region,
 		CloudAccountID: account.ID,
 		ResourceType:   0, // 暂时只同步ECS
 		InstanceIDs:    req.InstanceIDs,
@@ -467,6 +567,12 @@ func (s *treeCloudService) syncAliyunResourcesWithStats(ctx context.Context, acc
 	resources, err := treeUtils.SyncAliyunResources(ctx, config, s.logger)
 	if err != nil {
 		return err
+	}
+
+	// 为资源设置区域关联信息
+	for _, resource := range resources {
+		resource.CloudAccountRegionID = region.ID
+		resource.Region = region.Region // 冗余字段，便于查询
 	}
 
 	// 根据同步模式处理资源
@@ -518,6 +624,102 @@ func (s *treeCloudService) fullSyncResources(ctx context.Context, cloudAccountID
 
 	// 更新或创建资源
 	return s.incrementalSyncResources(ctx, cloudAccountID, resources, resp, autoBind, bindNodeID, operatorID, operatorName)
+}
+
+// fullSyncResourcesForRegion 基于区域的全量同步资源
+func (s *treeCloudService) fullSyncResourcesForRegion(ctx context.Context, regionID int, resources []*model.TreeCloudResource, resp *model.SyncCloudResourceResp, autoBind bool, bindNodeID int, operatorID int, operatorName string) error {
+	// 通过DAO层查询指定区域的资源
+	existingResources, err := s.dao.GetResourcesByRegion(ctx, regionID, model.ResourceTypeECS)
+	if err != nil {
+		s.logger.Error("获取区域现有资源失败", zap.Int("regionID", regionID), zap.Error(err))
+		return err
+	}
+
+	// 删除不在新资源列表中的资源
+	newInstanceIDSet := make(map[string]bool)
+	for _, resource := range resources {
+		newInstanceIDSet[resource.InstanceID] = true
+	}
+
+	for _, existingResource := range existingResources {
+		if !newInstanceIDSet[existingResource.InstanceID] {
+			if err := s.dao.Delete(ctx, existingResource.ID); err != nil {
+				s.logger.Error("删除资源失败", zap.Int("id", existingResource.ID), zap.Error(err))
+				resp.FailedCount++
+				resp.FailedInstances = append(resp.FailedInstances, existingResource.InstanceID)
+			} else {
+				resp.DeleteCount++
+				// 记录删除日志
+				s.recordChangeLog(ctx, existingResource, nil, model.ChangeSourceSync, operatorID, operatorName)
+			}
+		}
+	}
+
+	// 更新或创建资源
+	return s.incrementalSyncResourcesForRegion(ctx, regionID, resources, resp, autoBind, bindNodeID, operatorID, operatorName)
+}
+
+// incrementalSyncResourcesForRegion 基于区域的增量同步资源
+func (s *treeCloudService) incrementalSyncResourcesForRegion(ctx context.Context, regionID int, resources []*model.TreeCloudResource, resp *model.SyncCloudResourceResp, autoBind bool, bindNodeID int, operatorID int, operatorName string) error {
+	for _, resource := range resources {
+		resp.TotalCount++
+
+		// 检查资源是否已存在（通过区域和实例ID查询）
+		existing, err := s.dao.GetByRegionAndInstanceID(ctx, regionID, resource.InstanceID)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			s.logger.Error("查询区域资源失败",
+				zap.Int("regionID", regionID),
+				zap.String("instanceID", resource.InstanceID),
+				zap.Error(err))
+			resp.FailedCount++
+			resp.FailedInstances = append(resp.FailedInstances, resource.InstanceID)
+			continue
+		}
+
+		if existing != nil {
+			// 更新现有资源
+			resource.ID = existing.ID
+			if err := s.dao.Update(ctx, resource); err != nil {
+				s.logger.Error("更新区域资源失败", zap.Int("id", existing.ID), zap.Error(err))
+				resp.FailedCount++
+				resp.FailedInstances = append(resp.FailedInstances, resource.InstanceID)
+			} else {
+				resp.UpdateCount++
+				// 记录更新日志
+				s.recordChangeLog(ctx, existing, resource, model.ChangeSourceSync, operatorID, operatorName)
+			}
+		} else {
+			// 创建新资源
+			if err := s.dao.Create(ctx, resource); err != nil {
+				s.logger.Error("创建区域资源失败",
+					zap.Int("regionID", regionID),
+					zap.String("instanceID", resource.InstanceID),
+					zap.Error(err))
+				resp.FailedCount++
+				resp.FailedInstances = append(resp.FailedInstances, resource.InstanceID)
+			} else {
+				resp.NewCount++
+				// 记录创建日志
+				s.recordChangeLog(ctx, nil, resource, model.ChangeSourceSync, operatorID, operatorName)
+
+				// 自动绑定到服务树节点
+				if autoBind && bindNodeID > 0 {
+					bindReq := &model.BindTreeCloudResourceReq{
+						ID:          resource.ID,
+						TreeNodeIDs: []int{bindNodeID},
+					}
+					if err := s.BindTreeCloudResource(ctx, bindReq); err != nil {
+						s.logger.Warn("自动绑定资源到节点失败",
+							zap.Int("resourceID", resource.ID),
+							zap.Int("nodeID", bindNodeID),
+							zap.Error(err))
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // incrementalSyncResources 增量同步资源
