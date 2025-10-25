@@ -35,7 +35,7 @@ const (
 	CloudAccountRegionDisabled                                     // 禁用
 )
 
-// CloudAccountRegion 云账号区域关联表（支持一个账号配置多个区域）
+// CloudAccountRegion 云账号区域关联表
 type CloudAccountRegion struct {
 	Model
 	CloudAccountID int                      `json:"cloud_account_id" gorm:"not null;comment:云账户ID;index:idx_account_region,unique"`
