@@ -45,6 +45,7 @@ func NewCloudAccountHandler(service service.CloudAccountService) *CloudAccountHa
 func (h *CloudAccountHandler) RegisterRouters(server *gin.Engine) {
 	accountGroup := server.Group("/api/tree/cloud/account")
 	{
+		// 基础操作
 		accountGroup.GET("/list", h.GetCloudAccountList)
 		accountGroup.GET("/:id/detail", h.GetCloudAccountDetail)
 		accountGroup.POST("/create", h.CreateCloudAccount)
@@ -52,6 +53,14 @@ func (h *CloudAccountHandler) RegisterRouters(server *gin.Engine) {
 		accountGroup.DELETE("/:id/delete", h.DeleteCloudAccount)
 		accountGroup.PUT("/:id/status", h.UpdateCloudAccountStatus)
 		accountGroup.POST("/:id/verify", h.VerifyCloudAccount)
+
+		// 批量操作
+		accountGroup.POST("/batch/delete", h.BatchDeleteCloudAccount)
+		accountGroup.PUT("/batch/status", h.BatchUpdateCloudAccountStatus)
+
+		// 导入导出
+		accountGroup.POST("/import", h.ImportCloudAccount)
+		accountGroup.POST("/export", h.ExportCloudAccount)
 	}
 }
 
@@ -87,11 +96,8 @@ func (h *CloudAccountHandler) CreateCloudAccount(ctx *gin.Context) {
 
 	user := ctx.MustGet("user").(utils.UserClaims)
 
-	req.CreateUserID = user.Uid
-	req.CreateUserName = user.Username
-
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.CreateCloudAccount(ctx, &req)
+		return nil, h.service.CreateCloudAccount(ctx, &req, user.Uid, user.Username)
 	})
 }
 
@@ -160,5 +166,43 @@ func (h *CloudAccountHandler) VerifyCloudAccount(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.VerifyCloudAccount(ctx, &req)
+	})
+}
+
+// BatchDeleteCloudAccount 批量删除云账户
+func (h *CloudAccountHandler) BatchDeleteCloudAccount(ctx *gin.Context) {
+	var req model.BatchDeleteCloudAccountReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.BatchDeleteCloudAccount(ctx, &req)
+	})
+}
+
+// BatchUpdateCloudAccountStatus 批量更新云账户状态
+func (h *CloudAccountHandler) BatchUpdateCloudAccountStatus(ctx *gin.Context) {
+	var req model.BatchUpdateCloudAccountStatusReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.BatchUpdateCloudAccountStatus(ctx, &req)
+	})
+}
+
+// ImportCloudAccount 导入云账户
+func (h *CloudAccountHandler) ImportCloudAccount(ctx *gin.Context) {
+	var req model.ImportCloudAccountReq
+
+	user := ctx.MustGet("user").(utils.UserClaims)
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.service.ImportCloudAccount(ctx, &req, user.Uid, user.Username)
+	})
+}
+
+// ExportCloudAccount 导出云账户
+func (h *CloudAccountHandler) ExportCloudAccount(ctx *gin.Context) {
+	var req model.ExportCloudAccountReq
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.service.ExportCloudAccount(ctx, &req)
 	})
 }

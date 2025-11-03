@@ -48,7 +48,9 @@ type TreeCloudDAO interface {
 	UnBindTreeNodes(ctx context.Context, cloudID int, treeNodeIds []int) error
 	BatchGetByIDs(ctx context.Context, ids []int) ([]*model.TreeCloudResource, error)
 	BatchCreate(ctx context.Context, clouds []*model.TreeCloudResource) error
+	BatchDelete(ctx context.Context, ids []int) error
 	UpdateStatus(ctx context.Context, id int, status model.CloudResourceStatus) error
+	BatchUpdateStatus(ctx context.Context, ids []int, status model.CloudResourceStatus) error
 	CreateSyncHistory(ctx context.Context, history *model.CloudResourceSyncHistory) error
 	GetSyncHistoryList(ctx context.Context, req *model.GetCloudResourceSyncHistoryReq) ([]*model.CloudResourceSyncHistory, int64, error)
 	CreateChangeLog(ctx context.Context, log *model.CloudResourceChangeLog) error
@@ -340,7 +342,7 @@ func (d *treeCloudDAO) CreateSyncHistory(ctx context.Context, history *model.Clo
 
 	d.logger.Info("创建同步历史成功",
 		zap.Int("cloudAccountID", history.CloudAccountID),
-		zap.String("syncStatus", history.SyncStatus))
+		zap.String("syncStatus", string(history.SyncStatus)))
 	return nil
 }
 
@@ -473,4 +475,37 @@ func (d *treeCloudDAO) GetByRegionAndInstanceID(ctx context.Context, regionID in
 	}
 
 	return &resource, nil
+}
+
+// BatchDelete 批量删除云资源
+func (d *treeCloudDAO) BatchDelete(ctx context.Context, ids []int) error {
+	if len(ids) == 0 {
+		return errors.New("批量删除ID列表不能为空")
+	}
+
+	if err := d.db.WithContext(ctx).Where("id IN ?", ids).Delete(&model.TreeCloudResource{}).Error; err != nil {
+		d.logger.Error("批量删除云资源失败", zap.Error(err), zap.Ints("ids", ids))
+		return err
+	}
+
+	d.logger.Info("批量删除云资源成功", zap.Int("count", len(ids)))
+	return nil
+}
+
+// BatchUpdateStatus 批量更新云资源状态
+func (d *treeCloudDAO) BatchUpdateStatus(ctx context.Context, ids []int, status model.CloudResourceStatus) error {
+	if len(ids) == 0 {
+		return errors.New("批量更新ID列表不能为空")
+	}
+
+	if err := d.db.WithContext(ctx).
+		Model(&model.TreeCloudResource{}).
+		Where("id IN ?", ids).
+		Update("status", status).Error; err != nil {
+		d.logger.Error("批量更新云资源状态失败", zap.Error(err), zap.Ints("ids", ids), zap.Int8("status", int8(status)))
+		return err
+	}
+
+	d.logger.Info("批量更新云资源状态成功", zap.Int("count", len(ids)), zap.Int8("status", int8(status)))
+	return nil
 }

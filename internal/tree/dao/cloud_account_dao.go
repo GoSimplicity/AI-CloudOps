@@ -45,6 +45,11 @@ type CloudAccountDAO interface {
 	GetList(ctx context.Context, req *model.GetCloudAccountListReq) ([]*model.CloudAccount, int64, error)
 	UpdateStatus(ctx context.Context, id int, status model.CloudAccountStatus) error
 	GetByProviderAndRegion(ctx context.Context, provider model.CloudProvider, region string) ([]*model.CloudAccount, error)
+	BatchDelete(ctx context.Context, ids []int) error
+	BatchUpdateStatus(ctx context.Context, ids []int, status model.CloudAccountStatus) error
+	CheckNameExists(ctx context.Context, name string, provider model.CloudProvider, excludeID int) (bool, error)
+	GetByIDs(ctx context.Context, ids []int) ([]*model.CloudAccount, error)
+	GetAll(ctx context.Context, provider model.CloudProvider) ([]*model.CloudAccount, error)
 }
 
 type cloudAccountDAO struct {
@@ -218,4 +223,93 @@ func (d *cloudAccountDAO) CreateRegionInTransaction(ctx context.Context, region 
 	}
 
 	return nil
+}
+
+// BatchDelete 批量删除云账户
+func (d *cloudAccountDAO) BatchDelete(ctx context.Context, ids []int) error {
+	if len(ids) == 0 {
+		return errors.New("批量删除ID列表不能为空")
+	}
+
+	if err := d.db.WithContext(ctx).Where("id IN ?", ids).Delete(&model.CloudAccount{}).Error; err != nil {
+		d.logger.Error("批量删除云账户失败", zap.Error(err), zap.Ints("ids", ids))
+		return err
+	}
+
+	return nil
+}
+
+// BatchUpdateStatus 批量更新云账户状态
+func (d *cloudAccountDAO) BatchUpdateStatus(ctx context.Context, ids []int, status model.CloudAccountStatus) error {
+	if len(ids) == 0 {
+		return errors.New("批量更新ID列表不能为空")
+	}
+
+	if err := d.db.WithContext(ctx).
+		Model(&model.CloudAccount{}).
+		Where("id IN ?", ids).
+		Update("status", status).Error; err != nil {
+		d.logger.Error("批量更新云账户状态失败", zap.Error(err), zap.Ints("ids", ids), zap.Int8("status", int8(status)))
+		return err
+	}
+
+	return nil
+}
+
+// CheckNameExists 检查云账户名称是否已存在（相同云厂商下）
+func (d *cloudAccountDAO) CheckNameExists(ctx context.Context, name string, provider model.CloudProvider, excludeID int) (bool, error) {
+	var count int64
+	query := d.db.WithContext(ctx).Model(&model.CloudAccount{}).
+		Where("name = ? AND provider = ?", name, provider)
+
+	// 如果提供了 excludeID（更新场景），排除当前记录
+	if excludeID > 0 {
+		query = query.Where("id != ?", excludeID)
+	}
+
+	if err := query.Count(&count).Error; err != nil {
+		d.logger.Error("检查云账户名称是否存在失败", zap.Error(err))
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
+// GetByIDs 根据ID列表获取云账户
+func (d *cloudAccountDAO) GetByIDs(ctx context.Context, ids []int) ([]*model.CloudAccount, error) {
+	if len(ids) == 0 {
+		return []*model.CloudAccount{}, nil
+	}
+
+	var accounts []*model.CloudAccount
+	if err := d.db.WithContext(ctx).
+		Preload("Regions").
+		Where("id IN ?", ids).
+		Find(&accounts).Error; err != nil {
+		d.logger.Error("根据ID列表获取云账户失败", zap.Error(err), zap.Ints("ids", ids))
+		return nil, err
+	}
+
+	return accounts, nil
+}
+
+// GetAll 获取所有云账户（支持按云厂商筛选）
+func (d *cloudAccountDAO) GetAll(ctx context.Context, provider model.CloudProvider) ([]*model.CloudAccount, error) {
+	var accounts []*model.CloudAccount
+	query := d.db.WithContext(ctx).Model(&model.CloudAccount{})
+
+	// 如果指定了云厂商，添加过滤条件
+	if provider != 0 {
+		query = query.Where("provider = ?", provider)
+	}
+
+	if err := query.
+		Preload("Regions").
+		Order("created_at DESC").
+		Find(&accounts).Error; err != nil {
+		d.logger.Error("获取所有云账户失败", zap.Error(err))
+		return nil, err
+	}
+
+	return accounts, nil
 }

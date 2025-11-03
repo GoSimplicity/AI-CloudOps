@@ -60,6 +60,8 @@ func (h *TreeCloudHandler) RegisterRouters(server *gin.Engine) {
 		cloudGroup.POST("/:id/bind", h.BindTreeCloudResource)
 		cloudGroup.POST("/:id/unbind", h.UnBindTreeCloudResource)
 		cloudGroup.GET("/changelog", h.GetChangeLog)
+		cloudGroup.POST("/batch/delete", h.BatchDeleteTreeCloudResource)
+		cloudGroup.PUT("/batch/status", h.BatchUpdateCloudResourceStatus)
 	}
 }
 
@@ -318,5 +320,33 @@ func (h *TreeCloudHandler) UpdateCloudResourceStatus(ctx *gin.Context) {
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateCloudResourceStatus(ctx, &req)
+	})
+}
+
+// BatchDeleteTreeCloudResource 批量删除云资源
+func (h *TreeCloudHandler) BatchDeleteTreeCloudResource(ctx *gin.Context) {
+	var req model.BatchDeleteTreeCloudResourceReq
+
+	// 获取当前用户信息
+	uc := ctx.MustGet("user").(utils.UserClaims)
+	req.OperatorID = uc.Uid
+	req.OperatorName = uc.Username
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.BatchDeleteTreeCloudResource(ctx, &req)
+	})
+}
+
+// BatchUpdateCloudResourceStatus 批量更新云资源状态
+func (h *TreeCloudHandler) BatchUpdateCloudResourceStatus(ctx *gin.Context) {
+	var req model.BatchUpdateCloudResourceStatusReq
+
+	// 获取当前用户信息
+	uc := ctx.MustGet("user").(utils.UserClaims)
+	req.OperatorID = uc.Uid
+	req.OperatorName = uc.Username
+
+	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.BatchUpdateCloudResourceStatus(ctx, &req)
 	})
 }
