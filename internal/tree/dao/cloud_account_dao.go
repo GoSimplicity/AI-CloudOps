@@ -39,7 +39,9 @@ type CloudAccountDAO interface {
 	CreateWithTransaction(ctx context.Context, fn func(tx interface{}) error) error
 	CreateInTransaction(ctx context.Context, account *model.CloudAccount, tx interface{}) error
 	CreateRegionInTransaction(ctx context.Context, region *model.CloudAccountRegion, tx interface{}) error
+	DeleteRegionsByAccountIDInTransaction(ctx context.Context, accountID int, tx interface{}) error
 	Update(ctx context.Context, account *model.CloudAccount) error
+	UpdateWithFields(ctx context.Context, account *model.CloudAccount, fields []string) error
 	Delete(ctx context.Context, id int) error
 	GetByID(ctx context.Context, id int) (*model.CloudAccount, error)
 	GetList(ctx context.Context, req *model.GetCloudAccountListReq) ([]*model.CloudAccount, int64, error)
@@ -127,26 +129,49 @@ func (d *cloudAccountDAO) GetList(ctx context.Context, req *model.GetCloudAccoun
 		query = query.Where("status = ?", req.Status)
 	}
 
+	// 支持搜索名称、账号名称、账号ID、账号别名
 	if req.Search != "" {
-		query = query.Where("name LIKE ? OR account_name LIKE ?", "%"+req.Search+"%", "%"+req.Search+"%")
+		searchPattern := "%" + req.Search + "%"
+		query = query.Where(
+			"name LIKE ? OR account_name LIKE ? OR account_id LIKE ? OR account_alias LIKE ?",
+			searchPattern, searchPattern, searchPattern, searchPattern,
+		)
 	}
 
 	// 计算总数
 	err := query.Count(&total).Error
 	if err != nil {
-		d.logger.Error("获取云账户总数失败", zap.Error(err))
+		d.logger.Error("获取云账户总数失败",
+			zap.String("search", req.Search),
+			zap.Int8("provider", int8(req.Provider)),
+			zap.Error(err))
 		return nil, 0, err
 	}
 
-	// 分页查询
+	// 构建排序
+	orderBy := "created_at"
+	order := "DESC"
+
+	if req.OrderBy != "" {
+		orderBy = req.OrderBy
+	}
+	if req.Order != "" {
+		order = req.Order
+	}
+
+	// 分页查询（预加载区域信息）
 	offset := (req.Page - 1) * req.Size
 	err = query.
-		Order("created_at DESC").
+		Preload("Regions"). // 预加载区域信息
+		Order(orderBy + " " + order).
 		Limit(req.Size).
 		Offset(offset).
 		Find(&accounts).Error
 	if err != nil {
-		d.logger.Error("获取云账户列表失败", zap.Error(err))
+		d.logger.Error("获取云账户列表失败",
+			zap.Int("page", req.Page),
+			zap.Int("size", req.Size),
+			zap.Error(err))
 		return nil, 0, err
 	}
 
@@ -170,18 +195,26 @@ func (d *cloudAccountDAO) UpdateStatus(ctx context.Context, id int, status model
 func (d *cloudAccountDAO) GetByProviderAndRegion(ctx context.Context, provider model.CloudProvider, region string) ([]*model.CloudAccount, error) {
 	var accounts []*model.CloudAccount
 
-	query := d.db.WithContext(ctx).Where("provider = ?", provider)
-	// 注：这里需要根据新的数据结构调整查询逻辑
-	// 现在Region信息存储在 CloudAccountRegion 表中
+	query := d.db.WithContext(ctx).Model(&model.CloudAccount{}).
+		Where("provider = ?", provider)
+
+	// 如果指定了区域，通过JOIN查询特定区域的账户
 	if region != "" {
 		query = query.
 			Joins("JOIN cl_cloud_account_region ON cl_cloud_account.id = cl_cloud_account_region.cloud_account_id").
-			Where("cl_cloud_account_region.region = ?", region)
+			Where("cl_cloud_account_region.region = ?", region).
+			Distinct("cl_cloud_account.*") // 避免重复
 	}
+
+	// 预加载区域信息
+	query = query.Preload("Regions")
 
 	err := query.Find(&accounts).Error
 	if err != nil {
-		d.logger.Error("根据云厂商和区域获取云账户列表失败", zap.Error(err))
+		d.logger.Error("根据云厂商和区域获取云账户列表失败",
+			zap.Int8("provider", int8(provider)),
+			zap.String("region", region),
+			zap.Error(err))
 		return nil, err
 	}
 
@@ -225,6 +258,45 @@ func (d *cloudAccountDAO) CreateRegionInTransaction(ctx context.Context, region 
 	return nil
 }
 
+// DeleteRegionsByAccountIDInTransaction 在事务中删除指定账户的所有区域关联
+func (d *cloudAccountDAO) DeleteRegionsByAccountIDInTransaction(ctx context.Context, accountID int, tx interface{}) error {
+	gormTx, ok := tx.(*gorm.DB)
+	if !ok {
+		return errors.New("事务类型转换失败")
+	}
+
+	if err := gormTx.WithContext(ctx).
+		Where("cloud_account_id = ?", accountID).
+		Delete(&model.CloudAccountRegion{}).Error; err != nil {
+		d.logger.Error("在事务中删除账户区域关联失败",
+			zap.Int("account_id", accountID),
+			zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+// UpdateWithFields 更新云账户（指定字段）
+func (d *cloudAccountDAO) UpdateWithFields(ctx context.Context, account *model.CloudAccount, fields []string) error {
+	if len(fields) == 0 {
+		return errors.New("更新字段列表不能为空")
+	}
+
+	if err := d.db.WithContext(ctx).
+		Model(account).
+		Select(fields).
+		Updates(account).Error; err != nil {
+		d.logger.Error("更新云账户失败",
+			zap.Int("id", account.ID),
+			zap.Strings("fields", fields),
+			zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
 // BatchDelete 批量删除云账户
 func (d *cloudAccountDAO) BatchDelete(ctx context.Context, ids []int) error {
 	if len(ids) == 0 {
@@ -259,6 +331,7 @@ func (d *cloudAccountDAO) BatchUpdateStatus(ctx context.Context, ids []int, stat
 // CheckNameExists 检查云账户名称是否已存在（相同云厂商下）
 func (d *cloudAccountDAO) CheckNameExists(ctx context.Context, name string, provider model.CloudProvider, excludeID int) (bool, error) {
 	var count int64
+
 	query := d.db.WithContext(ctx).Model(&model.CloudAccount{}).
 		Where("name = ? AND provider = ?", name, provider)
 

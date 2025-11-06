@@ -38,7 +38,6 @@ type CloudAccount struct {
 	Model
 	Name           string             `json:"name" gorm:"type:varchar(100);not null;uniqueIndex:idx_name_provider;comment:账户名称"`
 	Provider       CloudProvider      `json:"provider" gorm:"type:tinyint(1);not null;uniqueIndex:idx_name_provider;comment:云厂商类型;default:1"`
-	Region         string             `json:"region" gorm:"type:varchar(50);not null;index;comment:主区域,如cn-hangzhou"`
 	AccessKey      string             `json:"-" gorm:"type:varchar(500);not null;comment:访问密钥ID,加密存储"`
 	SecretKey      string             `json:"-" gorm:"type:varchar(500);not null;comment:访问密钥Secret,加密存储"`
 	AccountID      string             `json:"account_id" gorm:"type:varchar(100);index;comment:云账号ID"`
@@ -60,9 +59,10 @@ func (c *CloudAccount) TableName() string {
 // GetCloudAccountListReq 获取云账户列表请求
 type GetCloudAccountListReq struct {
 	ListReq
-	Provider CloudProvider      `json:"provider" form:"provider" binding:"omitempty,oneof=1 2 3 4 5 6"` // 云厂商筛选
-	Region   string             `json:"region" form:"region" binding:"omitempty,max=50"`                // 区域筛选
-	Status   CloudAccountStatus `json:"status" form:"status" binding:"omitempty,oneof=1 2"`             // 状态筛选
+	Provider CloudProvider      `json:"provider" form:"provider" binding:"omitempty,oneof=1 2 3 4 5 6"`                // 云厂商筛选
+	Status   CloudAccountStatus `json:"status" form:"status" binding:"omitempty,oneof=1 2"`                            // 状态筛选
+	OrderBy  string             `json:"order_by" form:"order_by" binding:"omitempty,oneof=created_at updated_at name"` // 排序字段
+	Order    string             `json:"order" form:"order" binding:"omitempty,oneof=asc desc"`                         // 排序方向
 }
 
 // GetCloudAccountDetailReq 获取云账户详情请求
@@ -74,26 +74,26 @@ type GetCloudAccountDetailReq struct {
 type CreateCloudAccountReq struct {
 	Name         string                         `json:"name" binding:"required,min=2,max=100"`         // 账户名称
 	Provider     CloudProvider                  `json:"provider" binding:"required,oneof=1 2 3 4 5 6"` // 云厂商类型
-	Region       string                         `json:"region" binding:"required,min=2,max=50"`        // 主区域
 	AccessKey    string                         `json:"access_key" binding:"required,min=10,max=500"`  // 访问密钥ID
 	SecretKey    string                         `json:"secret_key" binding:"required,min=10,max=500"`  // 访问密钥Secret
 	AccountID    string                         `json:"account_id" binding:"omitempty,max=100"`        // 云账号ID
 	AccountName  string                         `json:"account_name" binding:"omitempty,max=100"`      // 云账号名称
 	AccountAlias string                         `json:"account_alias" binding:"omitempty,max=100"`     // 账号别名
 	Description  string                         `json:"description" binding:"omitempty,max=500"`       // 账户描述
-	Regions      []CreateCloudAccountRegionItem `json:"regions,omitempty" binding:"omitempty,dive"`    // 额外区域配置
+	Regions      []CreateCloudAccountRegionItem `json:"regions" binding:"required,min=1,dive"`         // 区域配置（至少一个）
 }
 
 // UpdateCloudAccountReq 更新云账户请求
 type UpdateCloudAccountReq struct {
-	ID           int    `json:"id" binding:"required,gt=0"`                    // 账户ID
-	Name         string `json:"name" binding:"omitempty,min=2,max=100"`        // 账户名称
-	AccessKey    string `json:"access_key" binding:"omitempty,min=10,max=500"` // 访问密钥ID
-	SecretKey    string `json:"secret_key" binding:"omitempty,min=10,max=500"` // 访问密钥Secret
-	AccountID    string `json:"account_id" binding:"omitempty,max=100"`        // 云账号ID
-	AccountName  string `json:"account_name" binding:"omitempty,max=100"`      // 云账号名称
-	AccountAlias string `json:"account_alias" binding:"omitempty,max=100"`     // 账号别名
-	Description  string `json:"description" binding:"omitempty,max=500"`       // 账户描述
+	ID           int                            `json:"id" binding:"required,gt=0"`                    // 账户ID
+	Name         string                         `json:"name" binding:"omitempty,min=2,max=100"`        // 账户名称
+	AccessKey    string                         `json:"access_key" binding:"omitempty,min=10,max=500"` // 访问密钥ID
+	SecretKey    string                         `json:"secret_key" binding:"omitempty,min=10,max=500"` // 访问密钥Secret
+	AccountID    string                         `json:"account_id" binding:"omitempty,max=100"`        // 云账号ID
+	AccountName  string                         `json:"account_name" binding:"omitempty,max=100"`      // 云账号名称
+	AccountAlias string                         `json:"account_alias" binding:"omitempty,max=100"`     // 账号别名
+	Description  string                         `json:"description" binding:"omitempty,max=500"`       // 账户描述
+	Regions      []CreateCloudAccountRegionItem `json:"regions" binding:"omitempty,min=1,dive"`        // 区域配置（可选，如果提供则至少一个）
 }
 
 // DeleteCloudAccountReq 删除云账户请求
@@ -130,9 +130,9 @@ type ImportCloudAccountReq struct {
 
 // ExportCloudAccountReq 导出云账户请求
 type ExportCloudAccountReq struct {
-	IDs      []int         `json:"ids" binding:"omitempty,max=100,dive,gt=0"`       // 指定账户ID，为空则导出全部
-	Provider CloudProvider `json:"provider" binding:"omitempty,oneof=1 2 3 4 5 6"`  // 按云厂商过滤
-	Format   string        `json:"format" binding:"omitempty,oneof=json csv excel"` // 导出格式
+	IDs      []int         `json:"ids" binding:"omitempty,max=100,dive,gt=0"`      // 指定账户ID，为空则导出全部
+	Provider CloudProvider `json:"provider" binding:"omitempty,oneof=1 2 3 4 5 6"` // 按云厂商过滤
+	Format   string        `json:"format" binding:"omitempty,oneof=json csv"`      // 导出格式：json或csv
 }
 
 // ImportCloudAccountResp 导入云账户响应

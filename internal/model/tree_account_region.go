@@ -102,10 +102,10 @@ type BatchCreateCloudAccountRegionReq struct {
 
 // CreateCloudAccountRegionItem 创建云账号区域项
 type CreateCloudAccountRegionItem struct {
-	Region      string `json:"region" binding:"required"`
-	RegionName  string `json:"region_name"`
-	IsDefault   bool   `json:"is_default"`
-	Description string `json:"description"`
+	Region      string `json:"region" binding:"required"` // 区域,如cn-hangzhou
+	RegionName  string `json:"region_name"`               // 区域名称,如华东1(杭州)
+	IsDefault   bool   `json:"is_default"`                // 是否为默认区域
+	Description string `json:"description"`               // 区域描述
 }
 
 // GetAvailableRegionsReq 获取可用区域列表请求

@@ -68,11 +68,42 @@ func (s *cloudAccountService) GetCloudAccountList(ctx context.Context, req *mode
 	// 兜底分页参数
 	treeUtils.ValidateAndSetPaginationDefaults(&req.Page, &req.Size)
 
+	// 设置默认排序
+	if req.OrderBy == "" {
+		req.OrderBy = "created_at"
+	}
+	if req.Order == "" {
+		req.Order = "desc"
+	}
+
+	// 记录查询参数
+	s.logger.Debug("获取云账户列表",
+		zap.Int("page", req.Page),
+		zap.Int("size", req.Size),
+		zap.String("search", req.Search),
+		zap.Int8("provider", int8(req.Provider)),
+		zap.Int8("status", int8(req.Status)),
+		zap.String("order_by", req.OrderBy),
+		zap.String("order", req.Order))
+
 	accounts, total, err := s.dao.GetList(ctx, req)
 	if err != nil {
-		s.logger.Error("获取云账户列表失败", zap.Error(err))
-		return model.ListResp[*model.CloudAccount]{}, err
+		s.logger.Error("获取云账户列表失败",
+			zap.Int("page", req.Page),
+			zap.Int("size", req.Size),
+			zap.Error(err))
+		return model.ListResp[*model.CloudAccount]{}, fmt.Errorf("获取云账户列表失败: %w", err)
 	}
+
+	// 清理敏感信息（双重保险，虽然json:"-"标签已经防止序列化）
+	treeUtils.SanitizeCloudAccounts(accounts)
+
+	// 记录成功日志
+	s.logger.Info("成功获取云账户列表",
+		zap.Int64("total", total),
+		zap.Int("returned", len(accounts)),
+		zap.Int("page", req.Page),
+		zap.Int("size", req.Size))
 
 	return model.ListResp[*model.CloudAccount]{
 		Items: accounts,
@@ -86,54 +117,51 @@ func (s *cloudAccountService) GetCloudAccountDetail(ctx context.Context, req *mo
 		return nil, fmt.Errorf("无效的云账户ID: %w", err)
 	}
 
+	s.logger.Debug("获取云账户详情", zap.Int("id", req.ID))
+
 	account, err := s.dao.GetByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			s.logger.Warn("云账户不存在", zap.Int("id", req.ID))
 			return nil, errors.New("云账户不存在")
 		}
-		s.logger.Error("获取云账户详情失败", zap.Int("id", req.ID), zap.Error(err))
-		return nil, err
+		s.logger.Error("获取云账户详情失败",
+			zap.Int("id", req.ID),
+			zap.Error(err))
+		return nil, fmt.Errorf("获取云账户详情失败: %w", err)
 	}
+
+	// 清理敏感信息（双重保险，虽然json:"-"标签已经防止序列化）
+	treeUtils.SanitizeCloudAccount(account)
+
+	// 记录成功日志（包含关键信息，但不包含敏感数据）
+	s.logger.Info("成功获取云账户详情",
+		zap.Int("id", account.ID),
+		zap.String("name", account.Name),
+		zap.Int8("provider", int8(account.Provider)),
+		zap.Int("region_count", len(account.Regions)),
+		zap.Int("resource_count", len(account.CloudResources)))
 
 	return account, nil
 }
 
 // CreateCloudAccount 创建云账户（支持多区域）
 func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model.CreateCloudAccountReq, createUserID int, createUserName string) error {
-	// 验证区域列表
-	if len(req.Regions) == 0 {
-		return errors.New("必须至少指定一个区域")
+	// 验证和规范化区域列表
+	normalizedRegions, err := treeUtils.ValidateAndNormalizeRegions(req.Regions)
+	if err != nil {
+		return fmt.Errorf("区域验证失败: %w", err)
 	}
 
 	// 检查账户名称是否已存在（同一云厂商下）
 	exists, err := s.dao.CheckNameExists(ctx, req.Name, req.Provider, 0)
 	if err != nil {
 		s.logger.Error("检查云账户名称是否存在失败", zap.Error(err))
-		return err
+		return fmt.Errorf("检查云账户名称失败: %w", err)
 	}
+
 	if exists {
 		return fmt.Errorf("云账户名称 %s 在 %s 下已存在", req.Name, treeUtils.GetProviderName(req.Provider))
-	}
-
-	// 检查是否有重复的区域
-	regionMap := make(map[string]bool)
-	var defaultCount int
-	for _, regionItem := range req.Regions {
-		if regionMap[regionItem.Region] {
-			return fmt.Errorf("区域 %s 重复", regionItem.Region)
-		}
-		regionMap[regionItem.Region] = true
-
-		if regionItem.IsDefault {
-			defaultCount++
-		}
-	}
-
-	// 确保只有一个默认区域，如果没有指定默认区域，则设置第一个为默认
-	if defaultCount == 0 {
-		req.Regions[0].IsDefault = true
-	} else if defaultCount > 1 {
-		return errors.New("只能设置一个默认区域")
 	}
 
 	// 加密 AccessKey 和 SecretKey
@@ -150,7 +178,7 @@ func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model
 	}
 
 	// 使用事务创建云账户和区域关联
-	return s.dao.CreateWithTransaction(ctx, func(tx interface{}) error {
+	if err := s.dao.CreateWithTransaction(ctx, func(tx interface{}) error {
 		// 创建云账户对象
 		account := &model.CloudAccount{
 			Name:           req.Name,
@@ -167,12 +195,14 @@ func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model
 		}
 
 		if err := s.dao.CreateInTransaction(ctx, account, tx); err != nil {
-			s.logger.Error("创建云账户失败", zap.Error(err))
-			return err
+			s.logger.Error("在事务中创建云账户失败",
+				zap.String("name", req.Name),
+				zap.Error(err))
+			return fmt.Errorf("创建云账户失败: %w", err)
 		}
 
-		// 创建区域关联
-		for _, regionItem := range req.Regions {
+		// 创建区域关联（使用规范化后的区域列表）
+		for _, regionItem := range normalizedRegions {
 			region := &model.CloudAccountRegion{
 				CloudAccountID: account.ID,
 				Region:         regionItem.Region,
@@ -185,16 +215,29 @@ func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model
 			}
 
 			if err := s.dao.CreateRegionInTransaction(ctx, region, tx); err != nil {
-				s.logger.Error("创建云账户区域关联失败", zap.Error(err))
-				return err
+				s.logger.Error("在事务中创建云账户区域关联失败",
+					zap.Int("account_id", account.ID),
+					zap.String("region", regionItem.Region),
+					zap.Error(err))
+				return fmt.Errorf("创建云账户区域关联失败: %w", err)
 			}
 		}
 
+		s.logger.Info("成功创建云账户",
+			zap.Int("account_id", account.ID),
+			zap.String("name", account.Name),
+			zap.Int8("provider", int8(account.Provider)),
+			zap.Int("region_count", len(normalizedRegions)))
+
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-// UpdateCloudAccount 更新云账户
+// UpdateCloudAccount 更新云账户（支持更新区域）
 func (s *cloudAccountService) UpdateCloudAccount(ctx context.Context, req *model.UpdateCloudAccountReq) error {
 	if err := treeUtils.ValidateID(req.ID); err != nil {
 		return fmt.Errorf("无效的云账户ID: %w", err)
@@ -206,7 +249,8 @@ func (s *cloudAccountService) UpdateCloudAccount(ctx context.Context, req *model
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("云账户不存在")
 		}
-		return err
+		s.logger.Error("获取云账户失败", zap.Int("id", req.ID), zap.Error(err))
+		return fmt.Errorf("获取云账户失败: %w", err)
 	}
 
 	// 如果修改了名称，检查新名称是否已存在（同一云厂商下）
@@ -214,45 +258,130 @@ func (s *cloudAccountService) UpdateCloudAccount(ctx context.Context, req *model
 		exists, err := s.dao.CheckNameExists(ctx, req.Name, account.Provider, req.ID)
 		if err != nil {
 			s.logger.Error("检查云账户名称是否存在失败", zap.Error(err))
-			return err
+			return fmt.Errorf("检查云账户名称失败: %w", err)
 		}
 		if exists {
 			return fmt.Errorf("云账户名称 %s 在 %s 下已存在", req.Name, treeUtils.GetProviderName(account.Provider))
 		}
 	}
 
-	// 构建更新对象
-	updateAccount := &model.CloudAccount{
-		Model:        model.Model{ID: req.ID},
-		Name:         req.Name,
-		AccountID:    req.AccountID,
-		AccountName:  req.AccountName,
-		AccountAlias: req.AccountAlias,
-		Description:  req.Description,
-	}
-
-	// 如果需要更新 AccessKey
-	if req.AccessKey != "" {
-		encryptedAccessKey, err := treeUtils.EncryptPassword(req.AccessKey)
+	// 如果需要更新区域，验证区域列表
+	var normalizedRegions []model.CreateCloudAccountRegionItem
+	if len(req.Regions) > 0 {
+		normalizedRegions, err = treeUtils.ValidateAndNormalizeRegions(req.Regions)
 		if err != nil {
-			s.logger.Error("加密AccessKey失败", zap.Error(err))
-			return fmt.Errorf("加密AccessKey失败: %w", err)
+			return fmt.Errorf("区域验证失败: %w", err)
 		}
-		updateAccount.AccessKey = encryptedAccessKey
 	}
 
-	// 如果需要更新 SecretKey
-	if req.SecretKey != "" {
-		encryptedSecretKey, err := treeUtils.EncryptPassword(req.SecretKey)
-		if err != nil {
-			s.logger.Error("加密SecretKey失败", zap.Error(err))
-			return fmt.Errorf("加密SecretKey失败: %w", err)
+	// 使用事务更新云账户和区域
+	if err := s.dao.CreateWithTransaction(ctx, func(tx interface{}) error {
+		// 构建更新对象和字段列表
+		updateAccount := &model.CloudAccount{
+			Model: model.Model{ID: req.ID},
 		}
-		updateAccount.SecretKey = encryptedSecretKey
-	}
+		updateFields := make([]string, 0)
 
-	if err := s.dao.Update(ctx, updateAccount); err != nil {
-		s.logger.Error("更新云账户失败", zap.Error(err))
+		// 基本信息字段
+		if req.Name != "" {
+			updateAccount.Name = req.Name
+			updateFields = append(updateFields, "name")
+		}
+		if req.AccountID != "" {
+			updateAccount.AccountID = req.AccountID
+			updateFields = append(updateFields, "account_id")
+		}
+		if req.AccountName != "" {
+			updateAccount.AccountName = req.AccountName
+			updateFields = append(updateFields, "account_name")
+		}
+		if req.AccountAlias != "" {
+			updateAccount.AccountAlias = req.AccountAlias
+			updateFields = append(updateFields, "account_alias")
+		}
+		if req.Description != "" {
+			updateAccount.Description = req.Description
+			updateFields = append(updateFields, "description")
+		}
+
+		// 加密并更新 AccessKey
+		if req.AccessKey != "" {
+			encryptedAccessKey, err := treeUtils.EncryptPassword(req.AccessKey)
+			if err != nil {
+				s.logger.Error("加密AccessKey失败", zap.Error(err))
+				return fmt.Errorf("加密AccessKey失败: %w", err)
+			}
+			updateAccount.AccessKey = encryptedAccessKey
+			updateFields = append(updateFields, "access_key")
+		}
+
+		// 加密并更新 SecretKey
+		if req.SecretKey != "" {
+			encryptedSecretKey, err := treeUtils.EncryptPassword(req.SecretKey)
+			if err != nil {
+				s.logger.Error("加密SecretKey失败", zap.Error(err))
+				return fmt.Errorf("加密SecretKey失败: %w", err)
+			}
+			updateAccount.SecretKey = encryptedSecretKey
+			updateFields = append(updateFields, "secret_key")
+		}
+
+		// 更新云账户基本信息（如果有字段需要更新）
+		if len(updateFields) > 0 {
+			if err := s.dao.UpdateWithFields(ctx, updateAccount, updateFields); err != nil {
+				s.logger.Error("更新云账户基本信息失败",
+					zap.Int("id", req.ID),
+					zap.Strings("fields", updateFields),
+					zap.Error(err))
+				return fmt.Errorf("更新云账户基本信息失败: %w", err)
+			}
+		}
+
+		// 如果需要更新区域，先删除旧的区域关联，再创建新的
+		if len(normalizedRegions) > 0 {
+			// 删除旧的区域关联
+			if err := s.dao.DeleteRegionsByAccountIDInTransaction(ctx, req.ID, tx); err != nil {
+				s.logger.Error("删除旧区域关联失败",
+					zap.Int("account_id", req.ID),
+					zap.Error(err))
+				return fmt.Errorf("删除旧区域关联失败: %w", err)
+			}
+
+			// 创建新的区域关联
+			for _, regionItem := range normalizedRegions {
+				region := &model.CloudAccountRegion{
+					CloudAccountID: req.ID,
+					Region:         regionItem.Region,
+					RegionName:     regionItem.RegionName,
+					IsDefault:      regionItem.IsDefault,
+					Description:    regionItem.Description,
+					Status:         model.CloudAccountRegionEnabled,
+					CreateUserID:   account.CreateUserID, // 保持原创建者
+					CreateUserName: account.CreateUserName,
+				}
+
+				if err := s.dao.CreateRegionInTransaction(ctx, region, tx); err != nil {
+					s.logger.Error("创建新区域关联失败",
+						zap.Int("account_id", req.ID),
+						zap.String("region", regionItem.Region),
+						zap.Error(err))
+					return fmt.Errorf("创建新区域关联失败: %w", err)
+				}
+			}
+
+			s.logger.Info("成功更新云账户区域",
+				zap.Int("account_id", req.ID),
+				zap.Int("region_count", len(normalizedRegions)))
+		}
+
+		s.logger.Info("成功更新云账户",
+			zap.Int("account_id", req.ID),
+			zap.String("name", account.Name),
+			zap.Strings("updated_fields", updateFields),
+			zap.Bool("regions_updated", len(normalizedRegions) > 0))
+
+		return nil
+	}); err != nil {
 		return err
 	}
 
@@ -329,18 +458,9 @@ func (s *cloudAccountService) VerifyCloudAccount(ctx context.Context, req *model
 	}
 
 	// 获取默认区域用于验证凭证
-	defaultRegion := "cn-hangzhou" // 默认区域
-	if len(account.Regions) > 0 {
-		for _, region := range account.Regions {
-			if region.IsDefault {
-				defaultRegion = region.Region
-				break
-			}
-		}
-		// 如果没有找到默认区域，使用第一个区域
-		if defaultRegion == "cn-hangzhou" {
-			defaultRegion = account.Regions[0].Region
-		}
+	defaultRegion, err := treeUtils.GetDefaultRegion(account.Regions)
+	if err != nil {
+		return fmt.Errorf("获取默认区域失败: %w", err)
 	}
 
 	// 根据 Provider 调用相应的云厂商 SDK 验证凭证
@@ -541,91 +661,15 @@ func (s *cloudAccountService) ExportCloudAccount(ctx context.Context, req *model
 	// 根据导出格式处理数据
 	format := req.Format
 	if format == "" {
-		format = "json" // 默认导出为 JSON
+		format = "json"
 	}
 
 	switch format {
 	case "json":
-		return s.exportAsJSON(accounts), nil
+		return treeUtils.ExportAsJSON(accounts), nil
 	case "csv":
-		return s.exportAsCSV(accounts), nil
-	case "excel":
-		// TODO: 实现 Excel 导出
-		return nil, errors.New("Excel 导出功能暂未实现")
+		return treeUtils.ExportAsCSV(accounts), nil
 	default:
-		return nil, fmt.Errorf("不支持的导出格式: %s", format)
+		return nil, fmt.Errorf("不支持的导出格式: %s，仅支持json和csv", format)
 	}
-}
-
-// exportAsJSON 导出为 JSON 格式
-func (s *cloudAccountService) exportAsJSON(accounts []*model.CloudAccount) interface{} {
-	// 为了安全，不导出敏感信息（AccessKey、SecretKey）
-	exportAccounts := make([]model.ExportAccount, 0, len(accounts))
-	for _, account := range accounts {
-		regions := make([]model.ExportRegion, 0, len(account.Regions))
-		for _, region := range account.Regions {
-			regions = append(regions, model.ExportRegion{
-				Region:      region.Region,
-				RegionName:  region.RegionName,
-				IsDefault:   region.IsDefault,
-				Description: region.Description,
-			})
-		}
-
-		exportAccounts = append(exportAccounts, model.ExportAccount{
-			ID:           account.ID,
-			Name:         account.Name,
-			Provider:     account.Provider,
-			ProviderName: treeUtils.GetProviderName(account.Provider),
-			AccountID:    account.AccountID,
-			AccountName:  account.AccountName,
-			AccountAlias: account.AccountAlias,
-			Description:  account.Description,
-			Status:       int8(account.Status),
-			Regions:      regions,
-			CreatedAt:    account.CreatedAt.Format("2006-01-02 15:04:05"),
-		})
-	}
-
-	return exportAccounts
-}
-
-// exportAsCSV 导出为 CSV 格式
-func (s *cloudAccountService) exportAsCSV(accounts []*model.CloudAccount) [][]string {
-	// CSV 表头
-	csvData := [][]string{
-		{"ID", "名称", "云厂商", "账号ID", "账号名称", "账号别名", "描述", "状态", "区域列表", "创建时间"},
-	}
-
-	// 数据行
-	for _, account := range accounts {
-		// 组装区域列表
-		regions := ""
-		for i, region := range account.Regions {
-			if i > 0 {
-				regions += ";"
-			}
-			regions += fmt.Sprintf("%s(%s)", region.Region, region.RegionName)
-		}
-
-		status := "禁用"
-		if account.Status == model.CloudAccountEnabled {
-			status = "启用"
-		}
-
-		csvData = append(csvData, []string{
-			fmt.Sprintf("%d", account.ID),
-			account.Name,
-			treeUtils.GetProviderName(account.Provider),
-			account.AccountID,
-			account.AccountName,
-			account.AccountAlias,
-			account.Description,
-			status,
-			regions,
-			account.CreatedAt.Format("2006-01-02 15:04:05"),
-		})
-	}
-
-	return csvData
 }

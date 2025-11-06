@@ -45,7 +45,6 @@ func NewCloudAccountHandler(service service.CloudAccountService) *CloudAccountHa
 func (h *CloudAccountHandler) RegisterRouters(server *gin.Engine) {
 	accountGroup := server.Group("/api/tree/cloud/account")
 	{
-		// 基础操作
 		accountGroup.GET("/list", h.GetCloudAccountList)
 		accountGroup.GET("/:id/detail", h.GetCloudAccountDetail)
 		accountGroup.POST("/create", h.CreateCloudAccount)
@@ -53,12 +52,8 @@ func (h *CloudAccountHandler) RegisterRouters(server *gin.Engine) {
 		accountGroup.DELETE("/:id/delete", h.DeleteCloudAccount)
 		accountGroup.PUT("/:id/status", h.UpdateCloudAccountStatus)
 		accountGroup.POST("/:id/verify", h.VerifyCloudAccount)
-
-		// 批量操作
 		accountGroup.POST("/batch/delete", h.BatchDeleteCloudAccount)
 		accountGroup.PUT("/batch/status", h.BatchUpdateCloudAccountStatus)
-
-		// 导入导出
 		accountGroup.POST("/import", h.ImportCloudAccount)
 		accountGroup.POST("/export", h.ExportCloudAccount)
 	}
