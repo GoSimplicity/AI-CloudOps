@@ -201,9 +201,9 @@ func (d *cloudAccountDAO) GetByProviderAndRegion(ctx context.Context, provider m
 	// 如果指定了区域，通过JOIN查询特定区域的账户
 	if region != "" {
 		query = query.
-			Joins("JOIN cl_cloud_account_region ON cl_cloud_account.id = cl_cloud_account_region.cloud_account_id").
-			Where("cl_cloud_account_region.region = ?", region).
-			Distinct("cl_cloud_account.*") // 避免重复
+			Joins("JOIN cl_tree_cloud_account_region ON cl_tree_cloud_account.id = cl_tree_cloud_account_region.cloud_account_id").
+			Where("cl_tree_cloud_account_region.region = ?", region).
+			Distinct("cl_tree_cloud_account.*") // 避免重复
 	}
 
 	// 预加载区域信息
