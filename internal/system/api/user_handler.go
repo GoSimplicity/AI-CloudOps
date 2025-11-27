@@ -31,9 +31,9 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/user/service"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
+	userutils "github.com/GoSimplicity/AI-CloudOps/internal/system/utils"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/spf13/viper"
@@ -41,13 +41,13 @@ import (
 
 type UserHandler struct {
 	service service.UserService
-	ijwt    ijwt.Handler
+	jwt     utils.Handler
 }
 
-func NewUserHandler(service service.UserService, ijwt ijwt.Handler) *UserHandler {
+func NewUserHandler(service service.UserService, jwt utils.Handler) *UserHandler {
 	return &UserHandler{
 		service: service,
-		ijwt:    ijwt,
+		jwt:     jwt,
 	}
 }
 
@@ -65,7 +65,7 @@ func (h *UserHandler) RegisterRoutes(server *gin.Engine) {
 		userGroup.POST("/change_password", h.ChangePassword)
 		userGroup.POST("/write_off", h.WriteOff)
 		userGroup.PUT("/profile/update/:id", h.UpdateProfile)
-		userGroup.DELETE("/:id", h.DeleteUser)
+		userGroup.DELETE("/:id/delete", h.DeleteUser)
 		userGroup.GET("/statistics", h.GetUserStatistics)
 	}
 }
@@ -96,7 +96,7 @@ func (h *UserHandler) Login(ctx *gin.Context) {
 			}
 		}
 
-		accessToken, refreshToken, err := h.ijwt.SetLoginToken(ctx, user.ID, user.Username, user.AccountType)
+		accessToken, refreshToken, err := h.jwt.SetLoginToken(ctx, user.ID, user.Username, user.AccountType)
 		if err != nil {
 			return nil, fmt.Errorf("生成令牌失败: %w", err)
 		}
@@ -116,7 +116,7 @@ func (h *UserHandler) Login(ctx *gin.Context) {
 // Logout 用户登出处理
 func (h *UserHandler) Logout(ctx *gin.Context) {
 	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
-		return nil, h.ijwt.ClearToken(ctx)
+		return nil, h.jwt.ClearToken(ctx)
 	})
 }
 
@@ -124,7 +124,11 @@ func (h *UserHandler) Logout(ctx *gin.Context) {
 func (h *UserHandler) Profile(ctx *gin.Context) {
 	var req model.ProfileReq
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc, err := userutils.ExtractClaims(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
 	req.ID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
@@ -136,30 +140,23 @@ func (h *UserHandler) Profile(ctx *gin.Context) {
 func (h *UserHandler) RefreshToken(ctx *gin.Context) {
 	var req model.TokenRequest
 
-	rc := ijwt.RefreshClaims{}
-
-	key := viper.GetString("jwt.key2")
-	token, err := jwt.ParseWithClaims(req.RefreshToken, &rc, func(token *jwt.Token) (interface{}, error) {
-		return []byte(key), nil
-	})
-
-	if err != nil || token == nil || !token.Valid {
-		utils.ErrorWithMessage(ctx, "令牌无效，请重新登录")
-		return
-	}
-
-	if err = h.ijwt.CheckSession(ctx, rc.Ssid); err != nil {
-		utils.ErrorWithMessage(ctx, "会话已过期，请重新登录")
-		return
-	}
-
-	req.UserID = rc.Uid
-	req.Username = rc.Username
-	req.Ssid = rc.Ssid
-	req.AccountType = rc.AccountType
-
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.ijwt.SetJWTToken(ctx, req.UserID, req.Username, req.Ssid, req.AccountType)
+		rc := utils.RefreshClaims{}
+
+		key := viper.GetString("jwt.key2")
+		token, err := jwt.ParseWithClaims(req.RefreshToken, &rc, func(token *jwt.Token) (interface{}, error) {
+			return []byte(key), nil
+		})
+
+		if err != nil || token == nil || !token.Valid {
+			return nil, fmt.Errorf("令牌无效，请重新登录")
+		}
+
+		if err = h.jwt.CheckSession(ctx, rc.Ssid); err != nil {
+			return nil, fmt.Errorf("会话已过期，请重新登录")
+		}
+
+		return h.jwt.SetJWTToken(ctx, rc.Uid, rc.Username, rc.Ssid, rc.AccountType)
 	})
 }
 
@@ -167,7 +164,11 @@ func (h *UserHandler) RefreshToken(ctx *gin.Context) {
 func (h *UserHandler) GetPermCode(ctx *gin.Context) {
 	var req model.GetPermCodeReq
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc, err := userutils.ExtractClaims(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
 	req.ID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
@@ -188,7 +189,11 @@ func (h *UserHandler) GetUserList(ctx *gin.Context) {
 func (h *UserHandler) ChangePassword(ctx *gin.Context) {
 	var req model.ChangePasswordReq
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc, err := userutils.ExtractClaims(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
 	req.UserID = uc.Uid
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
@@ -200,8 +205,14 @@ func (h *UserHandler) ChangePassword(ctx *gin.Context) {
 func (h *UserHandler) WriteOff(ctx *gin.Context) {
 	var req model.WriteOffReq
 
+	uc, err := userutils.ExtractClaims(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.WriteOff(ctx, req.Username, req.Password)
+		return nil, h.service.WriteOff(ctx, uc.Uid, req.Password)
 	})
 }
 
@@ -209,12 +220,23 @@ func (h *UserHandler) WriteOff(ctx *gin.Context) {
 func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
 	var req model.UpdateProfileReq
 
+	uc, err := userutils.ExtractClaims(ctx)
+	if err != nil {
+		utils.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+
 	id, err := utils.GetParamID(ctx)
 	if err != nil {
 		utils.ErrorWithMessage(ctx, "用户ID格式错误")
 		return
 	}
 	req.ID = id
+
+	if uc.Username != "admin" && uc.AccountType != constants.AccountTypeService && uc.Uid != req.ID {
+		utils.ForbiddenError(ctx, "无权限修改该用户信息")
+		return
+	}
 
 	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateProfile(ctx, &req)

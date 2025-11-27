@@ -131,12 +131,6 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 			return
 		}
 
-		// 跳过swagger文档
-		if strings.HasPrefix(path, "/swagger/") {
-			c.Next()
-			return
-		}
-
 		// 跳过静态资源和WebSocket路径
 		if path == "/" || hasPrefix(path, skipPrefixes) || strings.Contains(path, "/exec") {
 			c.Next()

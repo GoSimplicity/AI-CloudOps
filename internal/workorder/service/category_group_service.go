@@ -31,7 +31,7 @@ import (
 	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	userdao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	userdao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	"go.uber.org/zap"
 	"gorm.io/gorm"

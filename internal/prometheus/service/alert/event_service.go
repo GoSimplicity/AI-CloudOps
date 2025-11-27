@@ -36,7 +36,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	userDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/prometheus/alertmanager/types"
 	promModel "github.com/prometheus/common/model"
@@ -102,7 +102,7 @@ func (a *alertManagerEventService) EventAlertSilence(ctx context.Context, req *m
 	}
 
 	// 获取用户信息
-	user, err := a.userDao.GetUserByID(ctx, req.UserID)
+	user, err := a.userDao.GetByID(ctx, req.UserID)
 	if err != nil {
 		a.l.Error("设置静默失败: 无效的用户ID", zap.Int("userId", req.UserID), zap.Error(err))
 		return fmt.Errorf("无效的用户ID: %d, %v", req.UserID, err)
@@ -192,7 +192,7 @@ func (a *alertManagerEventService) EventAlertClaim(ctx context.Context, req *mod
 	}
 
 	// 获取用户信息
-	user, err := a.userDao.GetUserByID(ctx, req.UserID)
+	user, err := a.userDao.GetByID(ctx, req.UserID)
 	if err != nil {
 		a.l.Error("认领告警事件失败: 获取用户信息失败", zap.Error(err))
 		return fmt.Errorf("获取用户信息失败: %v", err)

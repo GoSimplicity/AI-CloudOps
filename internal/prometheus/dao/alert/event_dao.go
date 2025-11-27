@@ -34,7 +34,7 @@ import (
 	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	userDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )

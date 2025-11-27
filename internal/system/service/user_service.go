@@ -28,14 +28,13 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
-	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
-	"go.uber.org/zap"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
+	userutils "github.com/GoSimplicity/AI-CloudOps/internal/system/utils"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -47,7 +46,7 @@ type UserService interface {
 	GetUserDetail(ctx context.Context, uid int) (*model.User, error)
 	GetUserList(ctx context.Context, req *model.GetUserListReq) (model.ListResp[*model.User], error)
 	ChangePassword(ctx context.Context, req *model.ChangePasswordReq) error
-	WriteOff(ctx context.Context, username, password string) error
+	WriteOff(ctx context.Context, uid int, password string) error
 	UpdateProfile(ctx context.Context, req *model.UpdateProfileReq) error
 	DeleteUser(ctx context.Context, uid int) error
 	GetUserStatistics(ctx context.Context) (*model.UserStatistics, error)
@@ -55,38 +54,28 @@ type UserService interface {
 
 type userService struct {
 	dao     dao.UserDAO
-	roleSvc service.RoleService
-	l       *zap.Logger
+	logger  *zap.Logger
+	roleDao dao.RoleDAO
 }
 
-func NewUserService(dao dao.UserDAO, roleSvc service.RoleService, l *zap.Logger) UserService {
+func NewUserService(dao dao.UserDAO, roleDao dao.RoleDAO, logger *zap.Logger) UserService {
 	return &userService{
 		dao:     dao,
-		roleSvc: roleSvc,
-		l:       l,
+		roleDao: roleDao,
+		logger:  logger,
 	}
 }
 
 // SignUp 用户注册
 func (us *userService) SignUp(ctx context.Context, user *model.UserSignUpReq) error {
-	hash, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	hash, err := userutils.HashPassword(user.Password)
 	if err != nil {
+		us.logger.Error("生成密码失败", zap.Error(err))
 		return err
 	}
 
-	user.Password = string(hash)
-
-	if err := us.dao.CreateUser(ctx, &model.User{
-		Username:     user.Username,
-		Password:     user.Password,
-		RealName:     user.RealName,
-		Desc:         user.Desc,
-		Mobile:       user.Mobile,
-		FeiShuUserId: user.FeiShuUserId,
-		AccountType:  user.AccountType,
-		HomePath:     user.HomePath,
-		Enable:       user.Enable,
-	}); err != nil {
+	if err := us.dao.Create(ctx, userutils.BuildUserForCreate(user, hash)); err != nil {
+		us.logger.Error("创建用户失败", zap.Error(err))
 		return err
 	}
 
@@ -95,15 +84,16 @@ func (us *userService) SignUp(ctx context.Context, user *model.UserSignUpReq) er
 
 // Login 用户登录
 func (us *userService) Login(ctx context.Context, user *model.UserLoginReq) (*model.User, error) {
-	u, err := us.dao.GetUserByUsername(ctx, user.Username)
+	u, err := us.dao.GetByUsername(ctx, user.Username)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return &model.User{}, constants.ErrorUserNotExist
 	} else if err != nil {
+		us.logger.Error("获取用户失败", zap.Error(err))
 		return &model.User{}, err
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(user.Password))
-	if err != nil {
+	if err = userutils.ComparePassword(u.Password, user.Password); err != nil {
+		us.logger.Error("密码错误", zap.Error(err))
 		return &model.User{}, constants.ErrorPasswordIncorrect
 	}
 
@@ -112,13 +102,14 @@ func (us *userService) Login(ctx context.Context, user *model.UserLoginReq) (*mo
 
 // GetProfile 获取用户信息
 func (us *userService) GetProfile(ctx context.Context, uid int) (*model.User, error) {
-	return us.dao.GetUserByID(ctx, uid)
+	return us.dao.GetByID(ctx, uid)
 }
 
 // GetPermCode 获取用户权限
 func (us *userService) GetPermCode(ctx context.Context, uid int) ([]string, error) {
-	codes, err := us.dao.GetPermCode(ctx, uid)
+	codes, err := us.dao.GetPermCodes(ctx, uid)
 	if err != nil {
+		us.logger.Error("获取用户权限码失败", zap.Error(err))
 		return nil, err
 	}
 
@@ -127,8 +118,34 @@ func (us *userService) GetPermCode(ctx context.Context, uid int) ([]string, erro
 
 // GetUserList 获取用户列表
 func (us *userService) GetUserList(ctx context.Context, req *model.GetUserListReq) (model.ListResp[*model.User], error) {
-	users, count, err := us.dao.GetUserList(ctx, req.Page, req.Size, req.Search, req.Enable, req.AccountType)
+	page := req.Page
+	if page <= 0 {
+		page = 1
+	}
+	size := req.Size
+	if size <= 0 {
+		size = 10
+	}
+
+	if req.Enable != nil {
+		if *req.Enable == 0 {
+			req.Enable = nil
+		} else if *req.Enable != 1 && *req.Enable != 2 {
+			return model.ListResp[*model.User]{}, fmt.Errorf("用户状态只支持 1(正常)/2(冻结)")
+		}
+	}
+
+	if req.AccountType != nil {
+		if *req.AccountType == 0 {
+			req.AccountType = nil
+		} else if *req.AccountType != 1 && *req.AccountType != 2 {
+			return model.ListResp[*model.User]{}, fmt.Errorf("账号类型只支持 1(普通)/2(服务)")
+		}
+	}
+
+	users, count, err := us.dao.List(ctx, page, size, req.Search, req.Enable, req.AccountType)
 	if err != nil {
+		us.logger.Error("获取用户列表失败", zap.Error(err))
 		return model.ListResp[*model.User]{}, err
 	}
 
@@ -141,80 +158,78 @@ func (us *userService) GetUserList(ctx context.Context, req *model.GetUserListRe
 // ChangePassword 修改密码
 func (us *userService) ChangePassword(ctx context.Context, req *model.ChangePasswordReq) error {
 	if req.Password == req.NewPassword {
+		us.logger.Error("新密码不能与旧密码相同")
 		return errors.New("新密码不能与旧密码相同")
 	}
 
 	// 验证旧密码是否正确
-	user, err := us.dao.GetUserByID(ctx, req.UserID)
+	user, err := us.dao.GetByID(ctx, req.UserID)
 	if err != nil {
+		us.logger.Error("获取用户失败", zap.Error(err))
 		return err
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+	if err := userutils.ComparePassword(user.Password, req.Password); err != nil {
+		us.logger.Error("密码错误", zap.Error(err))
 		return constants.ErrorPasswordIncorrect
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	hash, err := userutils.HashPassword(req.NewPassword)
 	if err != nil {
+		us.logger.Error("生成密码失败", zap.Error(err))
 		return err
 	}
 
 	// 修改密码
-	return us.dao.ChangePassword(ctx, req.UserID, string(hash))
+	return us.dao.ChangePassword(ctx, req.UserID, hash)
 }
 
 // UpdateProfile 修改用户信息
 func (us *userService) UpdateProfile(ctx context.Context, req *model.UpdateProfileReq) error {
 	// 验证用户是否存在
-	user, err := us.dao.GetUserByID(ctx, req.ID)
+	user, err := us.dao.GetByID(ctx, req.ID)
 	if err != nil {
+		us.logger.Error("获取用户失败", zap.Error(err))
 		return err
 	}
 
 	// 更新用户信息
-	user.RealName = req.RealName
-	user.Desc = req.Desc
-	user.Mobile = req.Mobile
-	user.FeiShuUserId = req.FeiShuUserId
-	user.AccountType = req.AccountType
-	user.HomePath = req.HomePath
-	user.Enable = req.Enable
-	user.Email = req.Email
-	user.Avatar = req.Avatar
-
-	return us.dao.UpdateProfile(ctx, user)
+	userutils.ApplyProfileUpdates(user, req)
+	return us.dao.Update(ctx, user)
 }
 
 // WriteOff 注销账号
-func (us *userService) WriteOff(ctx context.Context, username string, password string) error {
+func (us *userService) WriteOff(ctx context.Context, uid int, password string) error {
 	// 验证用户是否存在
-	user, err := us.dao.GetUserByUsername(ctx, username)
+	user, err := us.dao.GetByID(ctx, uid)
 	if err != nil {
+		us.logger.Error("获取用户失败", zap.Error(err))
 		return err
 	}
 
 	// 验证密码是否正确
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+	if err := userutils.ComparePassword(user.Password, password); err != nil {
+		us.logger.Error("密码错误", zap.Error(err))
 		return constants.ErrorPasswordIncorrect
 	}
 
-	return us.dao.WriteOff(ctx, username, password)
+	return us.dao.WriteOff(ctx, uid)
 }
 
 func (us *userService) DeleteUser(ctx context.Context, uid int) error {
 	// 删除用户角色关联
-	if err := us.roleSvc.DeleteRole(ctx, uid); err != nil {
-		us.l.Error("删除用户角色关联失败", zap.Int("uid", uid), zap.Error(err))
+	if err := us.roleDao.RevokeRolesFromUser(ctx, uid, nil); err != nil {
+		us.logger.Error("删除用户角色关联失败", zap.Int("uid", uid), zap.Error(err))
 		return err
 	}
 
-	return us.dao.DeleteUser(ctx, uid)
+	return us.dao.Delete(ctx, uid)
 }
 
 func (us *userService) GetUserDetail(ctx context.Context, uid int) (*model.User, error) {
-	user, err := us.dao.GetUserByID(ctx, uid)
+	user, err := us.dao.GetByID(ctx, uid)
 	if err != nil {
-		us.l.Error("获取用户详情失败", zap.Int("uid", uid), zap.Error(err))
+		us.logger.Error("获取用户详情失败", zap.Int("uid", uid), zap.Error(err))
 		return nil, err
 	}
 
@@ -222,9 +237,9 @@ func (us *userService) GetUserDetail(ctx context.Context, uid int) (*model.User,
 }
 
 func (us *userService) GetUserStatistics(ctx context.Context) (*model.UserStatistics, error) {
-	statistics, err := us.dao.GetUserStatistics(ctx)
+	statistics, err := us.dao.GetStatistics(ctx)
 	if err != nil {
-		us.l.Error("获取用户统计失败", zap.Error(err))
+		us.logger.Error("获取用户统计失败", zap.Error(err))
 		return nil, err
 	}
 

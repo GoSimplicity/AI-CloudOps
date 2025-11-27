@@ -32,7 +32,6 @@ import (
 	prometheusApi "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
 	systemApi "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
 	resourceApi "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
-	userApi "github.com/GoSimplicity/AI-CloudOps/internal/user/api"
 	workorderApi "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
 	"github.com/gin-gonic/gin"
 )
@@ -40,7 +39,7 @@ import (
 // InitGinServer 初始化web服务
 func InitGinServer(
 	m []gin.HandlerFunc,
-	userHdl *userApi.UserHandler,
+	userHdl *systemApi.UserHandler,
 	authApiHdl *systemApi.ApiHandler,
 	authRoleHdl *systemApi.RoleHandler,
 	systemHdl *systemApi.SystemHandler,

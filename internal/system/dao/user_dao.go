@@ -30,22 +30,23 @@ import (
 	"errors"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	userutils "github.com/GoSimplicity/AI-CloudOps/internal/system/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 type UserDAO interface {
-	CreateUser(ctx context.Context, user *model.User) error
-	GetUserByUsername(ctx context.Context, username string) (*model.User, error)
-	GetUserList(ctx context.Context, page, size int, search string, enable int8, accountType int8) ([]*model.User, int64, error)
-	GetUserByID(ctx context.Context, id int) (*model.User, error)
-	GetUserByIDs(ctx context.Context, ids []int) ([]*model.User, error)
-	GetPermCode(ctx context.Context, uid int) ([]string, error)
+	Create(ctx context.Context, user *model.User) error
+	GetByUsername(ctx context.Context, username string) (*model.User, error)
+	List(ctx context.Context, page, size int, search string, enable *int8, accountType *int8) ([]*model.User, int64, error)
+	GetByID(ctx context.Context, id int) (*model.User, error)
+	GetByIDs(ctx context.Context, ids []int) ([]*model.User, error)
+	GetPermCodes(ctx context.Context, uid int) ([]string, error)
 	ChangePassword(ctx context.Context, uid int, password string) error
-	WriteOff(ctx context.Context, username, password string) error
-	UpdateProfile(ctx context.Context, user *model.User) error
-	DeleteUser(ctx context.Context, uid int) error
-	GetUserStatistics(ctx context.Context) (*model.UserStatistics, error)
+	WriteOff(ctx context.Context, uid int) error
+	Update(ctx context.Context, user *model.User) error
+	Delete(ctx context.Context, uid int) error
+	GetStatistics(ctx context.Context) (*model.UserStatistics, error)
 }
 
 type userDAO struct {
@@ -61,9 +62,12 @@ func NewUserDAO(db *gorm.DB, l *zap.Logger) UserDAO {
 }
 
 // CreateUser 创建用户
-func (d *userDAO) CreateUser(ctx context.Context, user *model.User) error {
+func (d *userDAO) Create(ctx context.Context, user *model.User) error {
 	if user == nil {
 		return errors.New("用户信息不能为空")
+	}
+	if err := userutils.RequireNonEmpty(user.Username, "用户名"); err != nil {
+		return err
 	}
 
 	// 使用事务和一次性查询检查唯一性约束
@@ -109,9 +113,9 @@ func (d *userDAO) CreateUser(ctx context.Context, user *model.User) error {
 }
 
 // GetUserByUsername 根据用户名获取用户信息
-func (d *userDAO) GetUserByUsername(ctx context.Context, username string) (*model.User, error) {
-	if username == "" {
-		return nil, errors.New("username 不能为空")
+func (d *userDAO) GetByUsername(ctx context.Context, username string) (*model.User, error) {
+	if err := userutils.RequireNonEmpty(username, "用户名"); err != nil {
+		return nil, err
 	}
 
 	var user model.User
@@ -124,21 +128,28 @@ func (d *userDAO) GetUserByUsername(ctx context.Context, username string) (*mode
 }
 
 // GetAllUsers 获取所有用户
-func (d *userDAO) GetUserList(ctx context.Context, page, size int, search string, enable int8, accountType int8) ([]*model.User, int64, error) {
+func (d *userDAO) List(ctx context.Context, page, size int, search string, enable *int8, accountType *int8) ([]*model.User, int64, error) {
 	var users []*model.User
 	var count int64
+
+	if page <= 0 {
+		page = 1
+	}
+	if size <= 0 {
+		size = 10
+	}
 
 	query := d.db.WithContext(ctx).Model(&model.User{})
 	if search != "" {
 		query = query.Where("username LIKE ? OR real_name LIKE ?", "%"+search+"%", "%"+search+"%")
 	}
 
-	if enable != 0 {
-		query = query.Where("enable = ?", enable)
+	if enable != nil {
+		query = query.Where("enable = ?", *enable)
 	}
 
-	if accountType != 0 {
-		query = query.Where("account_type = ?", accountType)
+	if accountType != nil {
+		query = query.Where("account_type = ?", *accountType)
 	}
 
 	if err := query.Count(&count).Error; err != nil {
@@ -155,9 +166,9 @@ func (d *userDAO) GetUserList(ctx context.Context, page, size int, search string
 }
 
 // GetUserByID 根据用户ID获取用户信息
-func (d *userDAO) GetUserByID(ctx context.Context, id int) (*model.User, error) {
-	if id <= 0 {
-		return nil, errors.New("无效的用户ID")
+func (d *userDAO) GetByID(ctx context.Context, id int) (*model.User, error) {
+	if err := userutils.RequirePositiveID(id, "用户ID"); err != nil {
+		return nil, err
 	}
 
 	var user model.User
@@ -173,22 +184,34 @@ func (d *userDAO) GetUserByID(ctx context.Context, id int) (*model.User, error) 
 }
 
 // GetPermCode 获取用户权限码
-func (d *userDAO) GetPermCode(ctx context.Context, uid int) ([]string, error) {
-	if uid <= 0 {
-		return nil, errors.New("无效的用户ID")
+func (d *userDAO) GetPermCodes(ctx context.Context, uid int) ([]string, error) {
+	if err := userutils.RequirePositiveID(uid, "用户ID"); err != nil {
+		return nil, err
 	}
 
-	// TODO: 实现权限码获取逻辑
-	return []string{}, nil
+	var codes []string
+	if err := d.db.WithContext(ctx).
+		Table("cl_system_apis AS a").
+		Joins("JOIN cl_system_role_apis AS ra ON a.id = ra.api_id").
+		Joins("JOIN cl_system_roles AS r ON ra.role_id = r.id").
+		Joins("JOIN cl_system_user_roles AS ur ON ur.role_id = r.id").
+		Where("ur.user_id = ? AND r.status = ?", uid, 1).
+		Distinct().
+		Pluck("a.path", &codes).Error; err != nil {
+		d.l.Error("获取用户权限码失败", zap.Int("uid", uid), zap.Error(err))
+		return nil, err
+	}
+
+	return codes, nil
 }
 
 // ChangePassword 修改密码
 func (d *userDAO) ChangePassword(ctx context.Context, uid int, password string) error {
-	if uid <= 0 {
-		return errors.New("无效的用户ID")
+	if err := userutils.RequirePositiveID(uid, "用户ID"); err != nil {
+		return err
 	}
-	if password == "" {
-		return errors.New("密码不能为空")
+	if err := userutils.RequireNonEmpty(password, "密码"); err != nil {
+		return err
 	}
 
 	result := d.db.WithContext(ctx).
@@ -211,9 +234,12 @@ func (d *userDAO) ChangePassword(ctx context.Context, uid int, password string) 
 }
 
 // UpdateProfile 更新用户信息
-func (d *userDAO) UpdateProfile(ctx context.Context, user *model.User) error {
+func (d *userDAO) Update(ctx context.Context, user *model.User) error {
 	if user == nil || user.ID <= 0 {
 		return errors.New("无效的用户信息")
+	}
+	if err := userutils.RequirePositiveID(user.ID, "用户ID"); err != nil {
+		return err
 	}
 
 	// 使用事务和一次性查询检查唯一性约束
@@ -275,18 +301,18 @@ func (d *userDAO) UpdateProfile(ctx context.Context, user *model.User) error {
 }
 
 // WriteOff 注销用户
-func (d *userDAO) WriteOff(ctx context.Context, username string, password string) error {
-	if username == "" || password == "" {
-		return errors.New("用户名和密码不能为空")
+func (d *userDAO) WriteOff(ctx context.Context, uid int) error {
+	if err := userutils.RequirePositiveID(uid, "用户ID"); err != nil {
+		return err
 	}
 
 	result := d.db.WithContext(ctx).
 		Model(&model.User{}).
-		Where("username = ?", username).
+		Where("id = ?", uid).
 		Delete(&model.User{})
 
 	if result.Error != nil {
-		d.l.Error("注销用户失败", zap.String("username", username), zap.Error(result.Error))
+		d.l.Error("注销用户失败", zap.Int("uid", uid), zap.Error(result.Error))
 		return result.Error
 	}
 
@@ -298,9 +324,9 @@ func (d *userDAO) WriteOff(ctx context.Context, username string, password string
 }
 
 // DeleteUser 删除用户
-func (d *userDAO) DeleteUser(ctx context.Context, uid int) error {
-	if uid <= 0 {
-		return errors.New("无效的用户ID")
+func (d *userDAO) Delete(ctx context.Context, uid int) error {
+	if err := userutils.RequirePositiveID(uid, "用户ID"); err != nil {
+		return err
 	}
 
 	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -308,6 +334,11 @@ func (d *userDAO) DeleteUser(ctx context.Context, uid int) error {
 		if err := tx.Table("user_apis").Where("user_id = ?", uid).Delete(nil).Error; err != nil {
 			d.l.Warn("删除用户API关联失败", zap.Int("uid", uid), zap.Error(err))
 			// 继续执行，不中断事务
+		}
+
+		// 删除用户角色关联
+		if err := tx.Table("cl_system_user_roles").Where("user_id = ?", uid).Delete(nil).Error; err != nil {
+			d.l.Warn("删除用户角色关联失败", zap.Int("uid", uid), zap.Error(err))
 		}
 
 		// 删除用户
@@ -326,9 +357,14 @@ func (d *userDAO) DeleteUser(ctx context.Context, uid int) error {
 }
 
 // GetUserByIDs 批量获取用户信息
-func (d *userDAO) GetUserByIDs(ctx context.Context, ids []int) ([]*model.User, error) {
+func (d *userDAO) GetByIDs(ctx context.Context, ids []int) ([]*model.User, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("用户ID列表不能为空")
+	}
+	for _, id := range ids {
+		if err := userutils.RequirePositiveID(id, "用户ID"); err != nil {
+			return nil, err
+		}
 	}
 
 	var users []*model.User
@@ -342,7 +378,7 @@ func (d *userDAO) GetUserByIDs(ctx context.Context, ids []int) ([]*model.User, e
 	return users, nil
 }
 
-func (d *userDAO) GetUserStatistics(ctx context.Context) (*model.UserStatistics, error) {
+func (d *userDAO) GetStatistics(ctx context.Context) (*model.UserStatistics, error) {
 	var statistics model.UserStatistics
 
 	// 获取管理员总数

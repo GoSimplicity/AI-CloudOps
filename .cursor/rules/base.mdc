@@ -1,0 +1,38 @@
+---
+alwaysApply: true
+---
+这是一个云原生运维管理平台，Go 1.24.6，Gin + Wire + Gorm，Redis 缓存，MySQL 主库。
+
+## 分层与依赖
+- 统一遵循 `api/service/dao/utils` 四层，禁止跨层直接调用。
+- HTTP 入口只出现于 `api`，业务放 `service`，数据库与外部系统交互放 `dao`，通用方法沉淀在对应 `utils`。
+- 依赖注入通过 `pkg/di` + Wire，新增服务需同步更新注入图和 `generate.go`。
+
+## HTTP 与中间件
+- Gin 处理请求，必须在 `api` 层做参数校验（`validator` / `binding`）与上下文超时控制。
+- Auth 使用 JWT + Casbin，所有需要身份的接口统一通过 `internal/middleware/auth.go`；无需鉴权的路由放 `internal/not_auth`。
+- HTTP 响应用统一结构：`code/message/data`，错误要区分用户错误与系统错误，日志链路包含 request-id。
+
+## 业务与数据
+- Service 层聚合缓存、DAO、第三方接口，保持幂等，可用 `context.Context` 控制超时。
+- DAO 使用 Gorm，SQL 需命名方法并封装分页、排序，数据库表名蛇形，结构体字段驼峰+`gorm` tag。
+- 涉及事务使用 `gorm.Transaction`，在 Service 封装，不向 API 暴露。
+- Redis 仅作为缓存/分布式锁，key 要带业务前缀，失效时间可配置。
+
+## 配置、日志与监控
+- 配置通过 Viper 加载 `config/*.yaml` + 环境变量，禁止硬编码密钥。
+- 日志使用 `zap`，中间件层打印请求摘要，Service/DAO 记录关键业务事件；敏感数据脱敏。
+- 通过 Prometheus 与 Alertmanager 统一指标和告警，新增指标放在对应 `prometheus` 子包。
+
+## 编码规范
+- 全量使用 `goimports` + `golangci-lint`（至少包含 golint、staticcheck）保持风格一致。
+- 错误必须 wrap（`fmt.Errorf` 或 `pkg/errors`），向上抛出的错误信息面向开发，面向用户的提示在 API 层翻译。
+- 注释只写关键逻辑、接口、结构体，保持中英文统一（默认中文）。
+- 新功能必须附带单元测试或集成测试，最少覆盖 Service 层；执行 `go test ./...` 保持通过。
+- 代码中的注释不要出现AI痕迹，应尽量保证精简，直接描述代码逻辑即可。
+
+## 安全与性能
+- 所有外部输入都要校验长度、格式、枚举；密码或密钥统一用 `internal/user/utils/password.go` 等工具。
+- 并发场景使用 `x/sync/errgroup` 或 channel，避免裸 goroutine 漏错误；需要锁时首选 `sync` 包。
+- 关注性能与内存，禁止在热路径频繁分配对象，可利用对象池或重用 buffer。
+- 对外暴露的文件、脚本、K8s 配置要保持最小权限原则，敏感配置走 `env` 或密钥管理。

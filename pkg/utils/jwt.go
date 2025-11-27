@@ -39,6 +39,14 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+const (
+	bearerPrefix                = "Bearer "
+	authorizationHeaderKey      = "Authorization"
+	defaultJWTExpirationMinutes = 30
+	sessionKeyPattern           = "cloudops:user:ssid:%s"
+	tokenBlacklistKeyPattern    = "cloudops:blacklist:token:%s"
+)
+
 type Handler interface {
 	SetLoginToken(ctx *gin.Context, uid int, username string, accountType int8) (string, string, error)
 	SetJWTToken(ctx *gin.Context, uid int, username string, ssid string, accountType int8) (string, error)
@@ -69,6 +77,7 @@ type RefreshClaims struct {
 type handler struct {
 	client        redis.Cmdable
 	signingMethod jwt.SigningMethod
+	jwtExpiration time.Duration
 	rcExpiration  time.Duration
 	key1          []byte
 	key2          []byte
@@ -79,10 +88,15 @@ func NewJWTHandler(c redis.Cmdable) Handler {
 	key1 := viper.GetString("jwt.key1")
 	key2 := viper.GetString("jwt.key2")
 	issuer := viper.GetString("jwt.issuer")
+	expirationMinutes := viper.GetInt64("jwt.expiration")
+	if expirationMinutes <= 0 {
+		expirationMinutes = defaultJWTExpirationMinutes
+	}
 
 	return &handler{
 		client:        c,
 		signingMethod: jwt.SigningMethodHS512,
+		jwtExpiration: time.Minute * time.Duration(expirationMinutes),
 		rcExpiration:  time.Hour * 24 * 7,
 		key1:          []byte(key1),
 		key2:          []byte(key2),
@@ -109,15 +123,6 @@ func (h *handler) SetLoginToken(ctx *gin.Context, uid int, username string, acco
 
 // SetJWTToken 设置短Token
 func (h *handler) SetJWTToken(ctx *gin.Context, uid int, username string, ssid string, accountType int8) (string, error) {
-	// 从配置文件中获取JWT的过期时间
-	expirationMinutes := viper.GetInt64("jwt.expiration")
-
-	// 如果未设置或值无效，设置一个默认值，例如30分钟
-	if expirationMinutes <= 0 {
-		expirationMinutes = 30
-	}
-
-	// 构建用户声明信息
 	uc := UserClaims{
 		Uid:         uid,
 		Username:    username,
@@ -126,19 +131,12 @@ func (h *handler) SetJWTToken(ctx *gin.Context, uid int, username string, ssid s
 		ContentType: ctx.GetHeader("Content-Type"),
 		AccountType: accountType,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * time.Duration(expirationMinutes))),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(h.jwtExpiration)),
 			Issuer:    h.issuer,
 		},
 	}
 
-	token := jwt.NewWithClaims(h.signingMethod, uc)
-	// 进行签名
-	signedString, err := token.SignedString(h.key1)
-	if err != nil {
-		return "", err
-	}
-
-	return signedString, nil
+	return h.signClaims(uc, h.key1)
 }
 
 // setRefreshToken 设置长Token
@@ -154,36 +152,22 @@ func (h *handler) setRefreshToken(_ *gin.Context, uid int, username string, ssid
 		},
 	}
 
-	t := jwt.NewWithClaims(h.signingMethod, rc)
-	signedString, err := t.SignedString(h.key2)
-	if err != nil {
-		return "", err
-	}
-
-	return signedString, nil
+	return h.signClaims(rc, h.key2)
 }
 
 // ExtractToken 提取 Authorization 头部中的 Token
 func (h *handler) ExtractToken(ctx *gin.Context) string {
-	authCode := ctx.GetHeader("Authorization")
-	if authCode == "" {
+	token, err := h.extractBearerToken(ctx)
+	if err != nil {
 		return ""
 	}
-
-	// Authorization 头部格式需为 Bearer string
-	s := strings.Split(authCode, " ")
-
-	if len(s) != 2 {
-		return ""
-	}
-
-	return s[1]
+	return token
 }
 
 // CheckSession 检查会话状态
 func (h *handler) CheckSession(ctx *gin.Context, ssid string) error {
 	// 判断缓存中是否存在指定键
-	c, err := h.client.Exists(ctx, fmt.Sprintf("linkme:user:ssid:%s", ssid)).Result()
+	c, err := h.client.Exists(ctx, fmt.Sprintf(sessionKeyPattern, ssid)).Result()
 	if err != nil {
 		return err
 	}
@@ -223,27 +207,40 @@ func (h *handler) ClearToken(ctx *gin.Context) error {
 
 // 提取 Bearer Token
 func (h *handler) extractBearerToken(ctx *gin.Context) (string, error) {
-	authHeader := ctx.GetHeader("Authorization")
+	authHeader := strings.TrimSpace(ctx.GetHeader(authorizationHeaderKey))
 	if authHeader == "" {
 		return "", errors.New("missing authorization token")
 	}
 
-	const bearerPrefix = "Bearer "
-	if len(authHeader) <= len(bearerPrefix) || authHeader[:len(bearerPrefix)] != bearerPrefix {
+	if !strings.HasPrefix(authHeader, bearerPrefix) {
 		return "", errors.New("invalid authorization token format")
 	}
 
-	return authHeader[len(bearerPrefix):], nil
+	token := strings.TrimSpace(authHeader[len(bearerPrefix):])
+	if token == "" {
+		return "", errors.New("authorization token is empty")
+	}
+	return token, nil
 }
 
 // 将 token 加入 Redis 黑名单
 func (h *handler) addToBlacklist(ctx *gin.Context, authToken string, expiresAt time.Time) error {
 	remainingTime := time.Until(expiresAt)
-	blacklistKey := fmt.Sprintf("blacklist:token:%s", authToken)
+	if remainingTime <= 0 {
+		// 保证Redis中至少缓存一个极短的过期时间，避免永久存留
+		remainingTime = time.Second
+	}
+
+	blacklistKey := fmt.Sprintf(tokenBlacklistKeyPattern, authToken)
 
 	// 将 token 存入 Redis，并设置过期时间
 	if err := h.client.Set(ctx, blacklistKey, "invalid", remainingTime).Err(); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (h *handler) signClaims(claims jwt.Claims, key []byte) (string, error) {
+	t := jwt.NewWithClaims(h.signingMethod, claims)
+	return t.SignedString(key)
 }
