@@ -230,3 +230,23 @@ func getGCPAvailableRegions(ctx context.Context, accessKey, secretKey string, lo
 	// TODO: 实现GCP SDK调用
 	return GetAvailableRegionsByProviderWithoutCredentials(model.ProviderGCP), nil
 }
+
+// GetProviderName 获取云厂商名称
+func GetProviderName(provider model.CloudProvider) string {
+	switch provider {
+	case model.ProviderAliyun:
+		return "阿里云"
+	case model.ProviderTencent:
+		return "腾讯云"
+	case model.ProviderAWS:
+		return "AWS"
+	case model.ProviderHuawei:
+		return "华为云"
+	case model.ProviderAzure:
+		return "Azure"
+	case model.ProviderGCP:
+		return "Google Cloud"
+	default:
+		return "未知"
+	}
+}

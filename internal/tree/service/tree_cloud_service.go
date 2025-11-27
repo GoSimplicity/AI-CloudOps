@@ -48,7 +48,9 @@ type TreeCloudService interface {
 	GetSyncHistory(ctx context.Context, req *model.GetCloudResourceSyncHistoryReq) (model.ListResp[*model.CloudResourceSyncHistory], error)
 	UpdateTreeCloudResource(ctx context.Context, req *model.UpdateTreeCloudResourceReq) error
 	DeleteTreeCloudResource(ctx context.Context, req *model.DeleteTreeCloudResourceReq) error
+	BatchDeleteTreeCloudResource(ctx context.Context, req *model.BatchDeleteTreeCloudResourceReq) error
 	UpdateCloudResourceStatus(ctx context.Context, req *model.UpdateCloudResourceStatusReq) error
+	BatchUpdateCloudResourceStatus(ctx context.Context, req *model.BatchUpdateCloudResourceStatusReq) error
 	BindTreeCloudResource(ctx context.Context, req *model.BindTreeCloudResourceReq) error
 	UnBindTreeCloudResource(ctx context.Context, req *model.UnBindTreeCloudResourceReq) error
 	GetChangeLog(ctx context.Context, req *model.GetCloudResourceChangeLogReq) (model.ListResp[*model.CloudResourceChangeLog], error)
@@ -435,7 +437,7 @@ func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model
 
 	// 更新同步历史记录
 	endTime := time.Now()
-	syncHistory.EndTime = endTime
+	syncHistory.EndTime = &endTime
 	syncHistory.Duration = int(endTime.Sub(startTime).Seconds())
 	syncHistory.TotalCount = resp.TotalCount
 	syncHistory.NewCount = resp.NewCount
@@ -883,4 +885,86 @@ func (s *treeCloudService) GetChangeLog(ctx context.Context, req *model.GetCloud
 		Items: logs,
 		Total: total,
 	}, nil
+}
+
+// BatchDeleteTreeCloudResource 批量删除云资源
+func (s *treeCloudService) BatchDeleteTreeCloudResource(ctx context.Context, req *model.BatchDeleteTreeCloudResourceReq) error {
+	if len(req.IDs) == 0 {
+		return errors.New("批量删除ID列表不能为空")
+	}
+
+	// 检查所有云资源是否存在
+	resources, err := s.dao.BatchGetByIDs(ctx, req.IDs)
+	if err != nil {
+		return err
+	}
+
+	if len(resources) != len(req.IDs) {
+		return errors.New("部分云资源不存在")
+	}
+
+	// 执行批量删除
+	if err := s.dao.BatchDelete(ctx, req.IDs); err != nil {
+		s.logger.Error("批量删除云资源失败", zap.Error(err))
+		return err
+	}
+
+	// 记录删除日志
+	for _, resource := range resources {
+		s.recordChangeLog(ctx, resource, nil, model.ChangeSourceManual, req.OperatorID, req.OperatorName)
+	}
+
+	s.logger.Info("批量删除云资源成功", zap.Ints("ids", req.IDs))
+	return nil
+}
+
+// BatchUpdateCloudResourceStatus 批量更新云资源状态
+func (s *treeCloudService) BatchUpdateCloudResourceStatus(ctx context.Context, req *model.BatchUpdateCloudResourceStatusReq) error {
+	if len(req.IDs) == 0 {
+		return errors.New("批量更新ID列表不能为空")
+	}
+
+	// 检查所有云资源是否存在
+	resources, err := s.dao.BatchGetByIDs(ctx, req.IDs)
+	if err != nil {
+		return err
+	}
+
+	if len(resources) != len(req.IDs) {
+		return errors.New("部分云资源不存在")
+	}
+
+	// 执行批量更新状态
+	if err := s.dao.BatchUpdateStatus(ctx, req.IDs, req.Status); err != nil {
+		s.logger.Error("批量更新云资源状态失败", zap.Error(err))
+		return err
+	}
+
+	// 记录状态变更日志
+	for _, resource := range resources {
+		if resource.Status != req.Status {
+			changeLog := &model.CloudResourceChangeLog{
+				ResourceID:   resource.ID,
+				InstanceID:   resource.InstanceID,
+				ChangeType:   model.ChangeTypeStatusChanged,
+				FieldName:    "status",
+				OldValue:     fmt.Sprintf("%d", resource.Status),
+				NewValue:     fmt.Sprintf("%d", req.Status),
+				ChangeSource: model.ChangeSourceManual,
+				OperatorID:   req.OperatorID,
+				OperatorName: req.OperatorName,
+				ChangeTime:   time.Now(),
+			}
+			go func(log *model.CloudResourceChangeLog) {
+				if err := s.dao.CreateChangeLog(context.Background(), log); err != nil {
+					s.logger.Error("记录状态变更日志失败", zap.Error(err))
+				}
+			}(changeLog)
+		}
+	}
+
+	s.logger.Info("批量更新云资源状态成功",
+		zap.Ints("ids", req.IDs),
+		zap.Int8("status", int8(req.Status)))
+	return nil
 }
