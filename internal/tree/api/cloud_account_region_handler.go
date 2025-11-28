@@ -28,7 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -60,7 +61,7 @@ func (h *CloudAccountRegionHandler) RegisterRouters(server *gin.Engine) {
 func (h *CloudAccountRegionHandler) GetCloudAccountRegionList(ctx *gin.Context) {
 	var req model.GetCloudAccountRegionListReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetCloudAccountRegionList(ctx, &req)
 	})
 }
@@ -69,15 +70,15 @@ func (h *CloudAccountRegionHandler) GetCloudAccountRegionList(ctx *gin.Context) 
 func (h *CloudAccountRegionHandler) GetCloudAccountRegionDetail(ctx *gin.Context) {
 	var req model.GetCloudAccountDetailReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的区域ID")
+		base.ErrorWithMessage(ctx, "无效的区域ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetCloudAccountRegionDetail(ctx, req.ID)
 	})
 }
@@ -86,12 +87,12 @@ func (h *CloudAccountRegionHandler) GetCloudAccountRegionDetail(ctx *gin.Context
 func (h *CloudAccountRegionHandler) CreateCloudAccountRegion(ctx *gin.Context) {
 	var req model.CreateCloudAccountRegionReq
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
 	req.CreateUserID = user.Uid
 	req.CreateUserName = user.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateCloudAccountRegion(ctx, &req)
 	})
 }
@@ -100,12 +101,12 @@ func (h *CloudAccountRegionHandler) CreateCloudAccountRegion(ctx *gin.Context) {
 func (h *CloudAccountRegionHandler) BatchCreateCloudAccountRegion(ctx *gin.Context) {
 	var req model.BatchCreateCloudAccountRegionReq
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
 	req.CreateUserID = user.Uid
 	req.CreateUserName = user.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.BatchCreateCloudAccountRegion(ctx, &req)
 	})
 }
@@ -114,15 +115,15 @@ func (h *CloudAccountRegionHandler) BatchCreateCloudAccountRegion(ctx *gin.Conte
 func (h *CloudAccountRegionHandler) UpdateCloudAccountRegion(ctx *gin.Context) {
 	var req model.UpdateCloudAccountRegionReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的区域ID")
+		base.ErrorWithMessage(ctx, "无效的区域ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateCloudAccountRegion(ctx, &req)
 	})
 }
@@ -131,15 +132,15 @@ func (h *CloudAccountRegionHandler) UpdateCloudAccountRegion(ctx *gin.Context) {
 func (h *CloudAccountRegionHandler) DeleteCloudAccountRegion(ctx *gin.Context) {
 	var req model.DeleteCloudAccountRegionReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的区域ID")
+		base.ErrorWithMessage(ctx, "无效的区域ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.DeleteCloudAccountRegion(ctx, &req)
 	})
 }
@@ -148,15 +149,15 @@ func (h *CloudAccountRegionHandler) DeleteCloudAccountRegion(ctx *gin.Context) {
 func (h *CloudAccountRegionHandler) UpdateCloudAccountRegionStatus(ctx *gin.Context) {
 	var req model.UpdateCloudAccountRegionStatusReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的区域ID")
+		base.ErrorWithMessage(ctx, "无效的区域ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateCloudAccountRegionStatus(ctx, &req)
 	})
 }
@@ -165,7 +166,7 @@ func (h *CloudAccountRegionHandler) UpdateCloudAccountRegionStatus(ctx *gin.Cont
 func (h *CloudAccountRegionHandler) GetAvailableRegions(ctx *gin.Context) {
 	var req model.GetAvailableRegionsReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetAvailableRegions(ctx, &req)
 	})
 }

@@ -33,7 +33,8 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	userutils "github.com/GoSimplicity/AI-CloudOps/internal/system/utils"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	jwt2 "github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/spf13/viper"
@@ -41,10 +42,10 @@ import (
 
 type UserHandler struct {
 	service service.UserService
-	jwt     utils.Handler
+	jwt     jwt2.Handler
 }
 
-func NewUserHandler(service service.UserService, jwt utils.Handler) *UserHandler {
+func NewUserHandler(service service.UserService, jwt jwt2.Handler) *UserHandler {
 	return &UserHandler{
 		service: service,
 		jwt:     jwt,
@@ -74,7 +75,7 @@ func (h *UserHandler) RegisterRoutes(server *gin.Engine) {
 func (h *UserHandler) SignUp(ctx *gin.Context) {
 	var req model.UserSignUpReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.SignUp(ctx, &req)
 	})
 }
@@ -83,7 +84,7 @@ func (h *UserHandler) SignUp(ctx *gin.Context) {
 func (h *UserHandler) Login(ctx *gin.Context) {
 	var req model.UserLoginReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		user, err := h.service.Login(ctx, &req)
 		if err != nil {
 			switch {
@@ -115,7 +116,7 @@ func (h *UserHandler) Login(ctx *gin.Context) {
 
 // Logout 用户登出处理
 func (h *UserHandler) Logout(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	base.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, h.jwt.ClearToken(ctx)
 	})
 }
@@ -126,12 +127,12 @@ func (h *UserHandler) Profile(ctx *gin.Context) {
 
 	uc, err := userutils.ExtractClaims(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 	req.ID = uc.Uid
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetProfile(ctx, req.ID)
 	})
 }
@@ -140,8 +141,8 @@ func (h *UserHandler) Profile(ctx *gin.Context) {
 func (h *UserHandler) RefreshToken(ctx *gin.Context) {
 	var req model.TokenRequest
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
-		rc := utils.RefreshClaims{}
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		rc := jwt2.RefreshClaims{}
 
 		key := viper.GetString("jwt.key2")
 		token, err := jwt.ParseWithClaims(req.RefreshToken, &rc, func(token *jwt.Token) (interface{}, error) {
@@ -166,12 +167,12 @@ func (h *UserHandler) GetPermCode(ctx *gin.Context) {
 
 	uc, err := userutils.ExtractClaims(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 	req.ID = uc.Uid
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetPermCode(ctx, req.ID)
 	})
 }
@@ -180,7 +181,7 @@ func (h *UserHandler) GetPermCode(ctx *gin.Context) {
 func (h *UserHandler) GetUserList(ctx *gin.Context) {
 	var req model.GetUserListReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetUserList(ctx, &req)
 	})
 }
@@ -191,12 +192,12 @@ func (h *UserHandler) ChangePassword(ctx *gin.Context) {
 
 	uc, err := userutils.ExtractClaims(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 	req.UserID = uc.Uid
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.ChangePassword(ctx, &req)
 	})
 }
@@ -207,11 +208,11 @@ func (h *UserHandler) WriteOff(ctx *gin.Context) {
 
 	uc, err := userutils.ExtractClaims(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.WriteOff(ctx, uc.Uid, req.Password)
 	})
 }
@@ -222,23 +223,23 @@ func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
 
 	uc, err := userutils.ExtractClaims(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "用户ID格式错误")
+		base.ErrorWithMessage(ctx, "用户ID格式错误")
 		return
 	}
 	req.ID = id
 
 	if uc.Username != "admin" && uc.AccountType != constants.AccountTypeService && uc.Uid != req.ID {
-		utils.ForbiddenError(ctx, "无权限修改该用户信息")
+		base.ForbiddenError(ctx, "无权限修改该用户信息")
 		return
 	}
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateProfile(ctx, &req)
 	})
 }
@@ -247,15 +248,15 @@ func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
 func (h *UserHandler) DeleteUser(ctx *gin.Context) {
 	var req model.DeleteUserReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "用户ID格式错误")
+		base.ErrorWithMessage(ctx, "用户ID格式错误")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	base.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, h.service.DeleteUser(ctx, req.ID)
 	})
 }
@@ -264,22 +265,22 @@ func (h *UserHandler) DeleteUser(ctx *gin.Context) {
 func (h *UserHandler) GetUserDetail(ctx *gin.Context) {
 	var req model.GetUserDetailReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "用户ID格式错误")
+		base.ErrorWithMessage(ctx, "用户ID格式错误")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetUserDetail(ctx, req.ID)
 	})
 }
 
 // GetUserStatistics 获取用户统计
 func (h *UserHandler) GetUserStatistics(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	base.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.service.GetUserStatistics(ctx)
 	})
 }

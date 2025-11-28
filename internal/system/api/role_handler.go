@@ -28,7 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -73,7 +74,7 @@ func (h *RoleHandler) RegisterRouters(server *gin.Engine) {
 func (h *RoleHandler) ListRoles(ctx *gin.Context) {
 	var req model.ListRolesRequest
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.ListRoles(ctx, &req)
 	})
 }
@@ -82,7 +83,7 @@ func (h *RoleHandler) ListRoles(ctx *gin.Context) {
 func (h *RoleHandler) CreateRole(ctx *gin.Context) {
 	var req model.CreateRoleRequest
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.CreateRole(ctx, &req)
 	})
 }
@@ -91,7 +92,7 @@ func (h *RoleHandler) CreateRole(ctx *gin.Context) {
 func (h *RoleHandler) UpdateRole(ctx *gin.Context) {
 	var req model.UpdateRoleRequest
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.UpdateRole(ctx, &req)
 	})
 }
@@ -100,7 +101,7 @@ func (h *RoleHandler) UpdateRole(ctx *gin.Context) {
 func (h *RoleHandler) DeleteRole(ctx *gin.Context) {
 	var req model.DeleteRoleRequest
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.DeleteRole(ctx, req.ID)
 	})
 }
@@ -109,13 +110,13 @@ func (h *RoleHandler) DeleteRole(ctx *gin.Context) {
 func (h *RoleHandler) GetRoleDetail(ctx *gin.Context) {
 	var req model.GetRoleRequest
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.GetRoleByID(ctx, id)
 	})
 }
@@ -124,7 +125,7 @@ func (h *RoleHandler) GetRoleDetail(ctx *gin.Context) {
 func (h *RoleHandler) AssignApisToRole(ctx *gin.Context) {
 	var req model.AssignRoleApiRequest
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.AssignApisToRole(ctx, req.RoleID, req.ApiIds)
 	})
 }
@@ -133,7 +134,7 @@ func (h *RoleHandler) AssignApisToRole(ctx *gin.Context) {
 func (h *RoleHandler) RevokeApisFromRole(ctx *gin.Context) {
 	var req model.RevokeRoleApiRequest
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.RevokeApisFromRole(ctx, req.RoleID, req.ApiIds)
 	})
 }
@@ -142,13 +143,13 @@ func (h *RoleHandler) RevokeApisFromRole(ctx *gin.Context) {
 func (h *RoleHandler) GetRoleApis(ctx *gin.Context) {
 	var req model.GetRoleApiRequest
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.GetRoleApis(ctx, id)
 	})
 }
@@ -157,11 +158,11 @@ func (h *RoleHandler) GetRoleApis(ctx *gin.Context) {
 func (h *RoleHandler) AssignRolesToUser(ctx *gin.Context) {
 	var req model.AssignRolesToUserRequest
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
 	req.UserID = user.Uid
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.AssignRolesToUser(ctx, req.UserID, req.RoleIds, 0)
 	})
 }
@@ -170,11 +171,11 @@ func (h *RoleHandler) AssignRolesToUser(ctx *gin.Context) {
 func (h *RoleHandler) RevokeRolesFromUser(ctx *gin.Context) {
 	var req model.RevokeRolesFromUserRequest
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
 	req.UserID = user.Uid
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.RevokeRolesFromUser(ctx, req.UserID, req.RoleIds)
 	})
 }
@@ -183,13 +184,13 @@ func (h *RoleHandler) RevokeRolesFromUser(ctx *gin.Context) {
 func (h *RoleHandler) GetRoleUsers(ctx *gin.Context) {
 	var req model.GetRoleUsersRequest
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.GetRoleUsers(ctx, id)
 	})
 }
@@ -198,15 +199,15 @@ func (h *RoleHandler) GetRoleUsers(ctx *gin.Context) {
 func (h *RoleHandler) GetUserRoles(ctx *gin.Context) {
 	var req model.GetUserRolesRequest
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.GetUserRoles(ctx, req.ID)
 	})
 }
@@ -215,10 +216,10 @@ func (h *RoleHandler) GetUserRoles(ctx *gin.Context) {
 func (h *RoleHandler) CheckUserPermission(ctx *gin.Context) {
 	var req model.CheckUserPermissionRequest
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 	req.UserID = user.Uid
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.CheckUserPermission(ctx, req.UserID, req.Method, req.Path)
 	})
 }
@@ -227,15 +228,15 @@ func (h *RoleHandler) CheckUserPermission(ctx *gin.Context) {
 func (h *RoleHandler) GetUserPermissions(ctx *gin.Context) {
 	var req model.GetUserPermissionsRequest
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.GetUserPermissions(ctx, req.ID)
 	})
 }

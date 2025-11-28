@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 )
 
@@ -61,15 +61,15 @@ func (h *K8sSecretHandler) RegisterRouters(server *gin.Engine) {
 func (h *K8sSecretHandler) GetSecretList(ctx *gin.Context) {
 	var req model.GetSecretListReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.secretService.GetSecretList(ctx, &req)
 	})
 }
@@ -77,21 +77,21 @@ func (h *K8sSecretHandler) GetSecretList(ctx *gin.Context) {
 func (h *K8sSecretHandler) GetSecret(ctx *gin.Context) {
 	var req model.GetSecretDetailsReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -99,7 +99,7 @@ func (h *K8sSecretHandler) GetSecret(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.secretService.GetSecret(ctx, &req)
 	})
 }
@@ -107,15 +107,15 @@ func (h *K8sSecretHandler) GetSecret(ctx *gin.Context) {
 func (h *K8sSecretHandler) CreateSecret(ctx *gin.Context) {
 	var req model.CreateSecretReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.secretService.CreateSecret(ctx, &req)
 	})
 }
@@ -123,21 +123,21 @@ func (h *K8sSecretHandler) CreateSecret(ctx *gin.Context) {
 func (h *K8sSecretHandler) UpdateSecret(ctx *gin.Context) {
 	var req model.UpdateSecretReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -145,7 +145,7 @@ func (h *K8sSecretHandler) UpdateSecret(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.secretService.UpdateSecret(ctx, &req)
 	})
 }
@@ -153,21 +153,21 @@ func (h *K8sSecretHandler) UpdateSecret(ctx *gin.Context) {
 func (h *K8sSecretHandler) DeleteSecret(ctx *gin.Context) {
 	var req model.DeleteSecretReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -175,7 +175,7 @@ func (h *K8sSecretHandler) DeleteSecret(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.secretService.DeleteSecret(ctx, &req)
 	})
 }
@@ -183,21 +183,21 @@ func (h *K8sSecretHandler) DeleteSecret(ctx *gin.Context) {
 func (h *K8sSecretHandler) GetSecretYAML(ctx *gin.Context) {
 	var req model.GetSecretYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -205,7 +205,7 @@ func (h *K8sSecretHandler) GetSecretYAML(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.secretService.GetSecretYAML(ctx, &req)
 	})
 }
@@ -213,15 +213,15 @@ func (h *K8sSecretHandler) GetSecretYAML(ctx *gin.Context) {
 func (h *K8sSecretHandler) CreateSecretByYaml(ctx *gin.Context) {
 	var req model.CreateSecretByYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.secretService.CreateSecretByYaml(ctx, &req)
 	})
 }
@@ -229,21 +229,21 @@ func (h *K8sSecretHandler) CreateSecretByYaml(ctx *gin.Context) {
 func (h *K8sSecretHandler) UpdateSecretByYaml(ctx *gin.Context) {
 	var req model.UpdateSecretByYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -251,7 +251,7 @@ func (h *K8sSecretHandler) UpdateSecretByYaml(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.secretService.UpdateSecretByYaml(ctx, &req)
 	})
 }

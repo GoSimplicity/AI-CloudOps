@@ -23,7 +23,7 @@
  *
  */
 
-package utils
+package jwt
 
 import (
 	"errors"

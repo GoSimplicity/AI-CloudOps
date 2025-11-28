@@ -28,12 +28,12 @@ package scrape
 import (
 	"context"
 	"errors"
-
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	scrapeJobDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/utils"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	"go.uber.org/zap"
 )
@@ -159,14 +159,14 @@ func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, req *mo
 	}
 
 	// 检查新的抓取池 IP 是否已被其他池使用
-	if err := utils.CheckPoolIpExists(allPools, pool); err != nil {
+	if err := checkPoolIPConflicts(allPools, pool); err != nil {
 		s.l.Error("检查抓取池 IP 是否存在失败", zap.Error(err))
 		return err
 	}
 
 	// 检查配置有效性
-	if pool.ScrapeInterval <= 0 || pool.ScrapeTimeout <= 0 || pool.ScrapeTimeout > pool.ScrapeInterval {
-		return errors.New("采集间隔和采集超时时间不能小于等于0，且采集超时时间不能大于采集间隔")
+	if err := utils.ValidateScrapeTiming(pool.ScrapeInterval, pool.ScrapeTimeout); err != nil {
+		return err
 	}
 
 	// 创建抓取池
@@ -261,7 +261,7 @@ func (s *scrapePoolService) UpdateMonitorScrapePool(ctx context.Context, req *mo
 	}
 
 	// 检查新的抓取池 IP 是否已被其他池使用
-	if err := utils.CheckPoolIpExists(allPools, pool); err != nil {
+	if err := checkPoolIPConflicts(allPools, pool); err != nil {
 		s.l.Error("检查抓取池 IP 是否存在失败", zap.Error(err))
 		return err
 	}
@@ -320,6 +320,27 @@ func (s *scrapePoolService) DeleteMonitorScrapePool(ctx context.Context, req *mo
 			s.l.Error("删除抓取池后刷新缓存失败", zap.Error(err))
 		}
 	}()
+
+	return nil
+}
+
+// checkPoolIPConflicts 校验待保存的抓取池实例IP是否与其他池冲突
+func checkPoolIPConflicts(pools []*model.MonitorScrapePool, req *model.MonitorScrapePool) error {
+	existing := make(map[string]struct{})
+	for _, pool := range pools {
+		if pool.ID == req.ID {
+			continue
+		}
+		for _, ip := range pool.PrometheusInstances {
+			existing[ip] = struct{}{}
+		}
+	}
+
+	for _, ip := range req.PrometheusInstances {
+		if _, ok := existing[ip]; ok {
+			return fmt.Errorf("PrometheusInstances %s 已存在", ip)
+		}
+	}
 
 	return nil
 }

@@ -26,11 +26,10 @@
 package api
 
 import (
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	scrapeJobService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/scrape"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -59,7 +58,7 @@ func (h *ScrapeJobHandler) RegisterRouters(server *gin.Engine) {
 func (h *ScrapeJobHandler) GetMonitorScrapeJobList(ctx *gin.Context) {
 	var req model.GetMonitorScrapeJobListReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.scrapeJobService.GetMonitorScrapeJobList(ctx, &req)
 	})
 }
@@ -68,11 +67,11 @@ func (h *ScrapeJobHandler) GetMonitorScrapeJobList(ctx *gin.Context) {
 func (h *ScrapeJobHandler) CreateMonitorScrapeJob(ctx *gin.Context) {
 	var req model.CreateMonitorScrapeJobReq
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 	req.UserID = uc.Uid
 	req.CreateUserName = uc.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.scrapeJobService.CreateMonitorScrapeJob(ctx, &req)
 	})
 }
@@ -81,15 +80,15 @@ func (h *ScrapeJobHandler) CreateMonitorScrapeJob(ctx *gin.Context) {
 func (h *ScrapeJobHandler) UpdateMonitorScrapeJob(ctx *gin.Context) {
 	var req model.UpdateMonitorScrapeJobReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
+		base.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.scrapeJobService.UpdateMonitorScrapeJob(ctx, &req)
 	})
 }
@@ -98,15 +97,15 @@ func (h *ScrapeJobHandler) UpdateMonitorScrapeJob(ctx *gin.Context) {
 func (h *ScrapeJobHandler) DeleteMonitorScrapeJob(ctx *gin.Context) {
 	var req model.DeleteMonitorScrapeJobReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
+		base.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.scrapeJobService.DeleteMonitorScrapeJob(ctx, req.ID)
 	})
 }
@@ -115,15 +114,15 @@ func (h *ScrapeJobHandler) DeleteMonitorScrapeJob(ctx *gin.Context) {
 func (h *ScrapeJobHandler) GetMonitorScrapeJobDetail(ctx *gin.Context) {
 	var req model.GetMonitorScrapeJobDetailReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
+		base.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.scrapeJobService.GetMonitorScrapeJobDetail(ctx, &req)
 	})
 }

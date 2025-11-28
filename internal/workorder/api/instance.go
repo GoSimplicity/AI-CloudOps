@@ -28,7 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -66,12 +67,12 @@ func (h *InstanceHandler) RegisterRouters(server *gin.Engine) {
 // CreateInstance 创建工单实例
 func (h *InstanceHandler) CreateInstance(ctx *gin.Context) {
 	var req model.CreateWorkorderInstanceReq
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
 	req.OperatorID = user.Uid
 	req.OperatorName = user.Username
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return nil, h.service.CreateInstance(ctx, &req)
 	})
 }
@@ -79,18 +80,18 @@ func (h *InstanceHandler) CreateInstance(ctx *gin.Context) {
 // CreateInstanceFromTemplate 从模板创建工单实例
 func (h *InstanceHandler) CreateInstanceFromTemplate(ctx *gin.Context) {
 	var req model.CreateWorkorderInstanceFromTemplateReq
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	templateID, err := utils.GetParamID(ctx)
+	templateID, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的模板ID")
+		base.ErrorWithMessage(ctx, "无效的模板ID")
 		return
 	}
 
 	req.OperatorID = user.Uid
 	req.OperatorName = user.Username
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return nil, h.service.CreateInstanceFromTemplate(ctx, templateID, &req)
 	})
 }
@@ -99,41 +100,41 @@ func (h *InstanceHandler) CreateInstanceFromTemplate(ctx *gin.Context) {
 func (h *InstanceHandler) UpdateInstance(ctx *gin.Context) {
 	var req model.UpdateWorkorderInstanceReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		base.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return nil, h.service.UpdateInstance(ctx, &req)
 	})
 }
 
 // DeleteInstance 删除工单实例
 func (h *InstanceHandler) DeleteInstance(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		base.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (any, error) {
+	base.HandleRequest(ctx, nil, func() (any, error) {
 		return nil, h.service.DeleteInstance(ctx, id)
 	})
 }
 
 // DetailInstance 获取工单实例详情
 func (h *InstanceHandler) DetailInstance(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		base.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (any, error) {
+	base.HandleRequest(ctx, nil, func() (any, error) {
 		return h.service.GetInstance(ctx, id)
 	})
 }
@@ -142,7 +143,7 @@ func (h *InstanceHandler) DetailInstance(ctx *gin.Context) {
 func (h *InstanceHandler) ListInstance(ctx *gin.Context) {
 	var req model.ListWorkorderInstanceReq
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return h.service.ListInstance(ctx, &req)
 	})
 }
@@ -151,16 +152,16 @@ func (h *InstanceHandler) ListInstance(ctx *gin.Context) {
 func (h *InstanceHandler) SubmitInstance(ctx *gin.Context) {
 	var req model.SubmitWorkorderInstanceReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		base.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
 	req.ID = id
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return nil, h.service.SubmitInstance(ctx, req.ID, user.Uid, user.Username)
 	})
 }
@@ -169,16 +170,16 @@ func (h *InstanceHandler) SubmitInstance(ctx *gin.Context) {
 func (h *InstanceHandler) AssignInstance(ctx *gin.Context) {
 	var req model.AssignWorkorderInstanceReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		base.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
 	req.ID = id
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return nil, h.service.AssignInstance(ctx, req.ID, req.AssigneeID, user.Uid, user.Username)
 	})
 }
@@ -187,16 +188,16 @@ func (h *InstanceHandler) AssignInstance(ctx *gin.Context) {
 func (h *InstanceHandler) ApproveInstance(ctx *gin.Context) {
 	var req model.ApproveWorkorderInstanceReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		base.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
 	req.ID = id
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return nil, h.service.ApproveInstance(ctx, req.ID, user.Uid, user.Username, req.Comment)
 	})
 }
@@ -205,16 +206,16 @@ func (h *InstanceHandler) ApproveInstance(ctx *gin.Context) {
 func (h *InstanceHandler) RejectInstance(ctx *gin.Context) {
 	var req model.RejectWorkorderInstanceReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		base.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
 	req.ID = id
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return nil, h.service.RejectInstance(ctx, req.ID, user.Uid, user.Username, req.Comment)
 	})
 }
@@ -223,16 +224,16 @@ func (h *InstanceHandler) RejectInstance(ctx *gin.Context) {
 func (h *InstanceHandler) CancelInstance(ctx *gin.Context) {
 	var req model.CancelWorkorderInstanceReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		base.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
 	req.ID = id
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return nil, h.service.CancelInstance(ctx, req.ID, user.Uid, user.Username, req.Comment)
 	})
 }
@@ -241,16 +242,16 @@ func (h *InstanceHandler) CancelInstance(ctx *gin.Context) {
 func (h *InstanceHandler) CompleteInstance(ctx *gin.Context) {
 	var req model.CompleteWorkorderInstanceReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		base.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
 	req.ID = id
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return nil, h.service.CompleteInstance(ctx, req.ID, user.Uid, user.Username, req.Comment)
 	})
 }
@@ -259,16 +260,16 @@ func (h *InstanceHandler) CompleteInstance(ctx *gin.Context) {
 func (h *InstanceHandler) ReturnInstance(ctx *gin.Context) {
 	var req model.ReturnWorkorderInstanceReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		base.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
 	req.ID = id
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return nil, h.service.ReturnInstance(ctx, req.ID, user.Uid, user.Username, req.Comment)
 	})
 }
@@ -276,17 +277,17 @@ func (h *InstanceHandler) ReturnInstance(ctx *gin.Context) {
 // GetAvailableActions 获取可执行动作
 func (h *InstanceHandler) GetAvailableActions(ctx *gin.Context) {
 	var req model.GetAvailableActionsReq
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		base.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
 	req.ID = id
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	utils.HandleRequest(ctx, nil, func() (any, error) {
+	base.HandleRequest(ctx, nil, func() (any, error) {
 		return h.service.GetAvailableActions(ctx, req.ID, user.Uid)
 	})
 }
@@ -294,15 +295,15 @@ func (h *InstanceHandler) GetAvailableActions(ctx *gin.Context) {
 // GetCurrentStep 获取当前步骤
 func (h *InstanceHandler) GetCurrentStep(ctx *gin.Context) {
 	var req model.GetCurrentStepReq
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的工单ID")
+		base.ErrorWithMessage(ctx, "无效的工单ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, nil, func() (any, error) {
+	base.HandleRequest(ctx, nil, func() (any, error) {
 		return h.service.GetCurrentStep(ctx, req.ID)
 	})
 }

@@ -31,7 +31,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/utils"
 	"gopkg.in/yaml.v3"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -294,8 +294,8 @@ func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
 func (p *prometheusConfigCache) CreateBaseConfig(pool *model.MonitorScrapePool) (pc.Config, error) {
 	var config pc.Config
 
-	if pool.ScrapeInterval <= 0 || pool.ScrapeTimeout <= 0 || pool.ScrapeTimeout > pool.ScrapeInterval {
-		return pc.Config{}, fmt.Errorf("采集间隔和采集超时时间不能小于等于0，且采集超时时间不能大于采集间隔")
+	if err := utils.ValidateScrapeTiming(pool.ScrapeInterval, pool.ScrapeTimeout); err != nil {
+		return pc.Config{}, err
 	}
 	config.GlobalConfig = pc.GlobalConfig{
 		ScrapeInterval: utils.GenPromDuration(int(pool.ScrapeInterval)),

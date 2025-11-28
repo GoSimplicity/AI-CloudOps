@@ -23,7 +23,7 @@
  *
  */
 
-package utils
+package base
 
 import (
 	"context"
@@ -33,6 +33,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -54,7 +55,7 @@ func GetUserInfoFromGinContext(c *gin.Context) *UserInfo {
 	// 尝试从gin.Context中获取用户信息
 	if user, exists := c.Get("user"); exists {
 		switch claims := user.(type) {
-		case UserClaims:
+		case jwt.UserClaims:
 			userInfo.UserID = claims.Uid
 			userInfo.Username = claims.Username
 		case map[string]interface{}:

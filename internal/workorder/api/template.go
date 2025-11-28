@@ -28,7 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -57,11 +58,11 @@ func (h *TemplateHandler) RegisterRouters(server *gin.Engine) {
 func (h *TemplateHandler) CreateTemplate(ctx *gin.Context) {
 	var req model.CreateWorkorderTemplateReq
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 	req.OperatorID = user.Uid
 	req.OperatorName = user.Username
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return nil, h.service.CreateTemplate(ctx, &req)
 	})
 }
@@ -70,15 +71,15 @@ func (h *TemplateHandler) CreateTemplate(ctx *gin.Context) {
 func (h *TemplateHandler) UpdateTemplate(ctx *gin.Context) {
 	var req model.UpdateWorkorderTemplateReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的模板ID")
+		base.ErrorWithMessage(ctx, "无效的模板ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return nil, h.service.UpdateTemplate(ctx, &req)
 	})
 }
@@ -86,15 +87,15 @@ func (h *TemplateHandler) UpdateTemplate(ctx *gin.Context) {
 // DeleteTemplate 删除模板
 func (h *TemplateHandler) DeleteTemplate(ctx *gin.Context) {
 	var req model.DeleteWorkorderTemplateReq
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的模板ID")
+		base.ErrorWithMessage(ctx, "无效的模板ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.DeleteTemplate(ctx, &req)
 	})
 }
@@ -103,7 +104,7 @@ func (h *TemplateHandler) DeleteTemplate(ctx *gin.Context) {
 func (h *TemplateHandler) ListTemplate(ctx *gin.Context) {
 	var req model.ListWorkorderTemplateReq
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return h.service.ListTemplate(ctx, &req)
 	})
 }
@@ -112,15 +113,15 @@ func (h *TemplateHandler) ListTemplate(ctx *gin.Context) {
 func (h *TemplateHandler) DetailTemplate(ctx *gin.Context) {
 	var req model.DetailWorkorderTemplateReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的模板ID")
+		base.ErrorWithMessage(ctx, "无效的模板ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.DetailTemplate(ctx, &req)
 	})
 }

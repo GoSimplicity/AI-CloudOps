@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 )
 
@@ -57,15 +57,15 @@ func (h *K8sRBACHandler) RegisterRouters(server *gin.Engine) {
 func (h *K8sRBACHandler) AnalyzeRBACPermissions(ctx *gin.Context) {
 	var req model.AnalyzeRBACPermissionsReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.rbacService.AnalyzeRBACPermissions(ctx, &req)
 	})
 }
@@ -73,15 +73,15 @@ func (h *K8sRBACHandler) AnalyzeRBACPermissions(ctx *gin.Context) {
 func (h *K8sRBACHandler) CheckRBACPermission(ctx *gin.Context) {
 	var req model.CheckRBACPermissionReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.rbacService.CheckRBACPermission(ctx, &req)
 	})
 }

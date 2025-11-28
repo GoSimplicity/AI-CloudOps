@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 )
 
@@ -55,7 +55,7 @@ func (h *InstanceFlowHandler) RegisterRouters(server *gin.Engine) {
 func (h *InstanceFlowHandler) ListInstanceFlows(ctx *gin.Context) {
 	var req model.ListWorkorderInstanceFlowReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.flowService.ListInstanceFlows(ctx, &req)
 	})
 }
@@ -65,14 +65,14 @@ func (h *InstanceFlowHandler) ListInstanceFlows(ctx *gin.Context) {
 func (h *InstanceFlowHandler) DetailInstanceFlow(ctx *gin.Context) {
 	var req model.DetailWorkorderInstanceFlowReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.flowService.DetailInstanceFlow(ctx, req.ID)
 	})
 }

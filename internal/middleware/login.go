@@ -28,8 +28,7 @@ package middleware
 import (
 	"strings"
 
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	_ "github.com/golang-jwt/jwt/v5"

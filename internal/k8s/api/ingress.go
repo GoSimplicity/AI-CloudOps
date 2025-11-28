@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 )
 
@@ -59,15 +59,15 @@ func (h *K8sIngressHandler) RegisterRouters(server *gin.Engine) {
 func (h *K8sIngressHandler) GetIngressList(ctx *gin.Context) {
 	var req model.GetIngressListReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.ingressService.GetIngressList(ctx, &req)
 	})
 }
@@ -75,21 +75,21 @@ func (h *K8sIngressHandler) GetIngressList(ctx *gin.Context) {
 func (h *K8sIngressHandler) GetIngressDetails(ctx *gin.Context) {
 	var req model.GetIngressDetailsReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -97,7 +97,7 @@ func (h *K8sIngressHandler) GetIngressDetails(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.ingressService.GetIngressDetails(ctx, &req)
 	})
 }
@@ -105,21 +105,21 @@ func (h *K8sIngressHandler) GetIngressDetails(ctx *gin.Context) {
 func (h *K8sIngressHandler) GetIngressYaml(ctx *gin.Context) {
 	var req model.GetIngressYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -127,7 +127,7 @@ func (h *K8sIngressHandler) GetIngressYaml(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.ingressService.GetIngressYaml(ctx, &req)
 	})
 }
@@ -135,15 +135,15 @@ func (h *K8sIngressHandler) GetIngressYaml(ctx *gin.Context) {
 func (h *K8sIngressHandler) CreateIngress(ctx *gin.Context) {
 	var req model.CreateIngressReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.ingressService.CreateIngress(ctx, &req)
 	})
 }
@@ -151,15 +151,15 @@ func (h *K8sIngressHandler) CreateIngress(ctx *gin.Context) {
 func (h *K8sIngressHandler) CreateIngressByYaml(ctx *gin.Context) {
 	var req model.CreateIngressByYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.ingressService.CreateIngressByYaml(ctx, &req)
 	})
 }
@@ -167,21 +167,21 @@ func (h *K8sIngressHandler) CreateIngressByYaml(ctx *gin.Context) {
 func (h *K8sIngressHandler) UpdateIngress(ctx *gin.Context) {
 	var req model.UpdateIngressReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -189,7 +189,7 @@ func (h *K8sIngressHandler) UpdateIngress(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.ingressService.UpdateIngress(ctx, &req)
 	})
 }
@@ -197,21 +197,21 @@ func (h *K8sIngressHandler) UpdateIngress(ctx *gin.Context) {
 func (h *K8sIngressHandler) UpdateIngressByYaml(ctx *gin.Context) {
 	var req model.UpdateIngressByYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -219,7 +219,7 @@ func (h *K8sIngressHandler) UpdateIngressByYaml(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.ingressService.UpdateIngressByYaml(ctx, &req)
 	})
 }
@@ -227,21 +227,21 @@ func (h *K8sIngressHandler) UpdateIngressByYaml(ctx *gin.Context) {
 func (h *K8sIngressHandler) DeleteIngress(ctx *gin.Context) {
 	var req model.DeleteIngressReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -249,7 +249,7 @@ func (h *K8sIngressHandler) DeleteIngress(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.ingressService.DeleteIngress(ctx, &req)
 	})
 }

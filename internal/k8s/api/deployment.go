@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 )
 
@@ -66,15 +66,15 @@ func (h *K8sDeploymentHandler) RegisterRouters(server *gin.Engine) {
 func (h *K8sDeploymentHandler) GetDeploymentList(ctx *gin.Context) {
 	var req model.GetDeploymentListReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.deploymentService.GetDeploymentList(ctx, &req)
 	})
 }
@@ -82,21 +82,21 @@ func (h *K8sDeploymentHandler) GetDeploymentList(ctx *gin.Context) {
 func (h *K8sDeploymentHandler) GetDeploymentDetails(ctx *gin.Context) {
 	var req model.GetDeploymentDetailsReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -104,7 +104,7 @@ func (h *K8sDeploymentHandler) GetDeploymentDetails(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.deploymentService.GetDeploymentDetails(ctx, &req)
 	})
 }
@@ -112,21 +112,21 @@ func (h *K8sDeploymentHandler) GetDeploymentDetails(ctx *gin.Context) {
 func (h *K8sDeploymentHandler) GetDeploymentYaml(ctx *gin.Context) {
 	var req model.GetDeploymentYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -134,7 +134,7 @@ func (h *K8sDeploymentHandler) GetDeploymentYaml(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.deploymentService.GetDeploymentYaml(ctx, &req)
 	})
 }
@@ -142,15 +142,15 @@ func (h *K8sDeploymentHandler) GetDeploymentYaml(ctx *gin.Context) {
 func (h *K8sDeploymentHandler) CreateDeployment(ctx *gin.Context) {
 	var req model.CreateDeploymentReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.deploymentService.CreateDeployment(ctx, &req)
 	})
 }
@@ -158,21 +158,21 @@ func (h *K8sDeploymentHandler) CreateDeployment(ctx *gin.Context) {
 func (h *K8sDeploymentHandler) UpdateDeployment(ctx *gin.Context) {
 	var req model.UpdateDeploymentReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -180,7 +180,7 @@ func (h *K8sDeploymentHandler) UpdateDeployment(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.deploymentService.UpdateDeployment(ctx, &req)
 	})
 }
@@ -188,21 +188,21 @@ func (h *K8sDeploymentHandler) UpdateDeployment(ctx *gin.Context) {
 func (h *K8sDeploymentHandler) DeleteDeployment(ctx *gin.Context) {
 	var req model.DeleteDeploymentReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -210,7 +210,7 @@ func (h *K8sDeploymentHandler) DeleteDeployment(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.deploymentService.DeleteDeployment(ctx, &req)
 	})
 }
@@ -218,21 +218,21 @@ func (h *K8sDeploymentHandler) DeleteDeployment(ctx *gin.Context) {
 func (h *K8sDeploymentHandler) RestartDeployment(ctx *gin.Context) {
 	var req model.RestartDeploymentReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -240,7 +240,7 @@ func (h *K8sDeploymentHandler) RestartDeployment(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.deploymentService.RestartDeployment(ctx, &req)
 	})
 }
@@ -248,21 +248,21 @@ func (h *K8sDeploymentHandler) RestartDeployment(ctx *gin.Context) {
 func (h *K8sDeploymentHandler) ScaleDeployment(ctx *gin.Context) {
 	var req model.ScaleDeploymentReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -270,7 +270,7 @@ func (h *K8sDeploymentHandler) ScaleDeployment(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.deploymentService.ScaleDeployment(ctx, &req)
 	})
 }
@@ -278,21 +278,21 @@ func (h *K8sDeploymentHandler) ScaleDeployment(ctx *gin.Context) {
 func (h *K8sDeploymentHandler) GetDeploymentPods(ctx *gin.Context) {
 	var req model.GetDeploymentPodsReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -300,7 +300,7 @@ func (h *K8sDeploymentHandler) GetDeploymentPods(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.deploymentService.GetDeploymentPods(ctx, &req)
 	})
 }
@@ -308,21 +308,21 @@ func (h *K8sDeploymentHandler) GetDeploymentPods(ctx *gin.Context) {
 func (h *K8sDeploymentHandler) GetDeploymentHistory(ctx *gin.Context) {
 	var req model.GetDeploymentHistoryReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -330,7 +330,7 @@ func (h *K8sDeploymentHandler) GetDeploymentHistory(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.deploymentService.GetDeploymentHistory(ctx, &req)
 	})
 }
@@ -338,21 +338,21 @@ func (h *K8sDeploymentHandler) GetDeploymentHistory(ctx *gin.Context) {
 func (h *K8sDeploymentHandler) RollbackDeployment(ctx *gin.Context) {
 	var req model.RollbackDeploymentReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -360,7 +360,7 @@ func (h *K8sDeploymentHandler) RollbackDeployment(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.deploymentService.RollbackDeployment(ctx, &req)
 	})
 }
@@ -368,21 +368,21 @@ func (h *K8sDeploymentHandler) RollbackDeployment(ctx *gin.Context) {
 func (h *K8sDeploymentHandler) PauseDeployment(ctx *gin.Context) {
 	var req model.PauseDeploymentReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -390,7 +390,7 @@ func (h *K8sDeploymentHandler) PauseDeployment(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.deploymentService.PauseDeployment(ctx, &req)
 	})
 }
@@ -398,21 +398,21 @@ func (h *K8sDeploymentHandler) PauseDeployment(ctx *gin.Context) {
 func (h *K8sDeploymentHandler) ResumeDeployment(ctx *gin.Context) {
 	var req model.ResumeDeploymentReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -420,7 +420,7 @@ func (h *K8sDeploymentHandler) ResumeDeployment(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.deploymentService.ResumeDeployment(ctx, &req)
 	})
 }
@@ -428,15 +428,15 @@ func (h *K8sDeploymentHandler) ResumeDeployment(ctx *gin.Context) {
 func (h *K8sDeploymentHandler) CreateDeploymentByYaml(ctx *gin.Context) {
 	var req model.CreateDeploymentByYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.deploymentService.CreateDeploymentByYaml(ctx, &req)
 	})
 }
@@ -444,21 +444,21 @@ func (h *K8sDeploymentHandler) CreateDeploymentByYaml(ctx *gin.Context) {
 func (h *K8sDeploymentHandler) UpdateDeploymentByYaml(ctx *gin.Context) {
 	var req model.UpdateDeploymentByYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -466,7 +466,7 @@ func (h *K8sDeploymentHandler) UpdateDeploymentByYaml(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.deploymentService.UpdateDeploymentByYaml(ctx, &req)
 	})
 }

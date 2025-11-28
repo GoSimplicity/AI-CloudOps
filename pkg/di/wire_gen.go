@@ -38,10 +38,10 @@ import (
 	api5 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
 	dao3 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	service4 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/sse"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/terminal"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/terminal"
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	"github.com/hibiken/asynq"
@@ -55,7 +55,7 @@ import (
 
 func ProvideCmd() *Cmd {
 	cmdable := InitRedis()
-	utilsHandler := utils.NewJWTHandler(cmdable)
+	utilsHandler := jwt.NewJWTHandler(cmdable)
 	logger := InitLogger()
 	db := InitDB()
 	roleDAO := dao.NewRoleDAO(db)
@@ -266,7 +266,7 @@ var DaoSet = wire.NewSet(alert.NewAlertManagerEventDAO, alert.NewAlertManagerOnD
 
 var SSHSet = wire.NewSet(ssh.NewClient)
 
-var UtilSet = wire.NewSet(utils.NewJWTHandler, sse.NewHandler)
+var UtilSet = wire.NewSet(jwt.NewJWTHandler, sse.NewHandler)
 
 var ManagerSet = wire.NewSet(manager.NewClusterManager, manager.NewDeploymentManager, manager.NewNamespaceManager, manager.NewServiceManager, manager.NewNodeManager, manager.NewEventManager, manager.NewStatefulSetManager, manager.NewDaemonSetManager, manager.NewServiceAccountManager, manager.NewTaintManager, manager.NewYamlManager, manager.NewConfigMapManager, manager.NewSecretManager, manager.NewPVManager, manager.NewPVCManager, manager.NewClusterRoleManager, manager.NewClusterRoleBindingManager, manager.NewRoleManager, manager.NewRoleBindingManager, manager.NewIngressManager, manager.NewPodManager)
 

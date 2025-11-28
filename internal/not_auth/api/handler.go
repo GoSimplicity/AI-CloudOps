@@ -31,7 +31,7 @@ import (
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 )
 
@@ -54,15 +54,15 @@ func (n *NotAuthHandler) RegisterRouters(server *gin.Engine) {
 
 // GetBindIps 获取绑定IP地址
 func (n *NotAuthHandler) GetBindIps(ctx *gin.Context) {
-	port, err := utils.GetQueryParam[int](ctx, "port")
+	port, err := base.GetQueryParam[int](ctx, "port")
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误: "+err.Error())
+		base.ErrorWithMessage(ctx, "参数错误: "+err.Error())
 		return
 	}
 
-	idsStr, err := utils.GetQueryParam[string](ctx, "tree_node_ids")
+	idsStr, err := base.GetQueryParam[string](ctx, "tree_node_ids")
 	if err != nil || idsStr == "" {
-		utils.ErrorWithMessage(ctx, "参数错误: 缺少tree_node_ids")
+		base.ErrorWithMessage(ctx, "参数错误: 缺少tree_node_ids")
 		return
 	}
 
@@ -80,7 +80,7 @@ func (n *NotAuthHandler) GetBindIps(ctx *gin.Context) {
 
 	res, err := n.svc.BuildPrometheusServiceDiscovery(ctx, port, ids)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "服务器内部错误")
+		base.ErrorWithMessage(ctx, "服务器内部错误")
 		return
 	}
 

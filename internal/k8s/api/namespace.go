@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 )
 
@@ -56,15 +56,15 @@ func (h *K8sNamespaceHandler) RegisterRouters(server *gin.Engine) {
 func (h *K8sNamespaceHandler) CreateNamespace(ctx *gin.Context) {
 	var req model.K8sNamespaceCreateReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.namespaceService.CreateNamespace(ctx, &req)
 	})
 }
@@ -72,22 +72,22 @@ func (h *K8sNamespaceHandler) CreateNamespace(ctx *gin.Context) {
 func (h *K8sNamespaceHandler) DeleteNamespace(ctx *gin.Context) {
 	var req model.K8sNamespaceDeleteReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.namespaceService.DeleteNamespace(ctx, &req)
 	})
 }
@@ -95,22 +95,22 @@ func (h *K8sNamespaceHandler) DeleteNamespace(ctx *gin.Context) {
 func (h *K8sNamespaceHandler) GetNamespaceDetails(ctx *gin.Context) {
 	var req model.K8sNamespaceGetDetailsReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.namespaceService.GetNamespaceDetails(ctx, &req)
 	})
 }
@@ -118,22 +118,22 @@ func (h *K8sNamespaceHandler) GetNamespaceDetails(ctx *gin.Context) {
 func (h *K8sNamespaceHandler) UpdateNamespace(ctx *gin.Context) {
 	var req model.K8sNamespaceUpdateReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.namespaceService.UpdateNamespace(ctx, &req)
 	})
 }
@@ -141,15 +141,15 @@ func (h *K8sNamespaceHandler) UpdateNamespace(ctx *gin.Context) {
 func (h *K8sNamespaceHandler) ListNamespaces(ctx *gin.Context) {
 	var req model.K8sNamespaceListReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.namespaceService.ListNamespaces(ctx, &req)
 	})
 }

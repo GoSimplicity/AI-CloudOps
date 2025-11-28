@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 )
 
@@ -59,15 +59,15 @@ func (h *K8sClusterRoleHandler) RegisterRouters(server *gin.Engine) {
 func (h *K8sClusterRoleHandler) GetClusterRoleList(ctx *gin.Context) {
 	var req model.GetClusterRoleListReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.clusterRoleService.GetClusterRoleList(ctx, &req)
 	})
 }
@@ -75,22 +75,22 @@ func (h *K8sClusterRoleHandler) GetClusterRoleList(ctx *gin.Context) {
 func (h *K8sClusterRoleHandler) GetClusterRoleDetails(ctx *gin.Context) {
 	var req model.GetClusterRoleDetailsReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.clusterRoleService.GetClusterRoleDetails(ctx, &req)
 	})
 }
@@ -98,22 +98,22 @@ func (h *K8sClusterRoleHandler) GetClusterRoleDetails(ctx *gin.Context) {
 func (h *K8sClusterRoleHandler) GetClusterRoleYaml(ctx *gin.Context) {
 	var req model.GetClusterRoleYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.clusterRoleService.GetClusterRoleYaml(ctx, &req)
 	})
 }
@@ -121,15 +121,15 @@ func (h *K8sClusterRoleHandler) GetClusterRoleYaml(ctx *gin.Context) {
 func (h *K8sClusterRoleHandler) CreateClusterRole(ctx *gin.Context) {
 	var req model.CreateClusterRoleReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.clusterRoleService.CreateClusterRole(ctx, &req)
 	})
 }
@@ -137,15 +137,15 @@ func (h *K8sClusterRoleHandler) CreateClusterRole(ctx *gin.Context) {
 func (h *K8sClusterRoleHandler) CreateClusterRoleByYaml(ctx *gin.Context) {
 	var req model.CreateClusterRoleByYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.clusterRoleService.CreateClusterRoleByYaml(ctx, &req)
 	})
 }
@@ -153,22 +153,22 @@ func (h *K8sClusterRoleHandler) CreateClusterRoleByYaml(ctx *gin.Context) {
 func (h *K8sClusterRoleHandler) UpdateClusterRole(ctx *gin.Context) {
 	var req model.UpdateClusterRoleReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.clusterRoleService.UpdateClusterRole(ctx, &req)
 	})
 }
@@ -176,22 +176,22 @@ func (h *K8sClusterRoleHandler) UpdateClusterRole(ctx *gin.Context) {
 func (h *K8sClusterRoleHandler) UpdateClusterRoleByYaml(ctx *gin.Context) {
 	var req model.UpdateClusterRoleByYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.clusterRoleService.UpdateClusterRoleYaml(ctx, &req)
 	})
 }
@@ -199,22 +199,22 @@ func (h *K8sClusterRoleHandler) UpdateClusterRoleByYaml(ctx *gin.Context) {
 func (h *K8sClusterRoleHandler) DeleteClusterRole(ctx *gin.Context) {
 	var req model.DeleteClusterRoleReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.clusterRoleService.DeleteClusterRole(ctx, &req)
 	})
 }

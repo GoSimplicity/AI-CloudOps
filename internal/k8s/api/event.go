@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 )
 
@@ -64,15 +64,15 @@ func (h *K8sEventHandler) RegisterRouters(server *gin.Engine) {
 func (h *K8sEventHandler) GetEventList(ctx *gin.Context) {
 	var req model.GetEventListReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.eventService.GetEventList(ctx, &req)
 	})
 }
@@ -80,21 +80,21 @@ func (h *K8sEventHandler) GetEventList(ctx *gin.Context) {
 func (h *K8sEventHandler) GetEventDetail(ctx *gin.Context) {
 	var req model.GetEventDetailReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -102,7 +102,7 @@ func (h *K8sEventHandler) GetEventDetail(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.eventService.GetEvent(ctx, &req)
 	})
 }
@@ -110,21 +110,21 @@ func (h *K8sEventHandler) GetEventDetail(ctx *gin.Context) {
 func (h *K8sEventHandler) GetEventsByPod(ctx *gin.Context) {
 	var req model.GetEventsByPodReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	podName, err := utils.GetParamCustomName(ctx, "pod_name")
+	podName, err := base.GetParamCustomName(ctx, "pod_name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -132,7 +132,7 @@ func (h *K8sEventHandler) GetEventsByPod(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.PodName = podName
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.eventService.GetEventsByPod(ctx, &req)
 	})
 }
@@ -140,21 +140,21 @@ func (h *K8sEventHandler) GetEventsByPod(ctx *gin.Context) {
 func (h *K8sEventHandler) GetEventsByDeployment(ctx *gin.Context) {
 	var req model.GetEventsByDeploymentReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	deploymentName, err := utils.GetParamCustomName(ctx, "deployment_name")
+	deploymentName, err := base.GetParamCustomName(ctx, "deployment_name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -162,7 +162,7 @@ func (h *K8sEventHandler) GetEventsByDeployment(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.DeploymentName = deploymentName
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.eventService.GetEventsByDeployment(ctx, &req)
 	})
 }
@@ -170,21 +170,21 @@ func (h *K8sEventHandler) GetEventsByDeployment(ctx *gin.Context) {
 func (h *K8sEventHandler) GetEventsByService(ctx *gin.Context) {
 	var req model.GetEventsByServiceReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	serviceName, err := utils.GetParamCustomName(ctx, "service_name")
+	serviceName, err := base.GetParamCustomName(ctx, "service_name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -192,7 +192,7 @@ func (h *K8sEventHandler) GetEventsByService(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.ServiceName = serviceName
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.eventService.GetEventsByService(ctx, &req)
 	})
 }
@@ -200,22 +200,22 @@ func (h *K8sEventHandler) GetEventsByService(ctx *gin.Context) {
 func (h *K8sEventHandler) GetEventsByNode(ctx *gin.Context) {
 	var req model.GetEventsByNodeReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	nodeName, err := utils.GetParamCustomName(ctx, "node_name")
+	nodeName, err := base.GetParamCustomName(ctx, "node_name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.NodeName = nodeName
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.eventService.GetEventsByNode(ctx, &req)
 	})
 }
@@ -223,7 +223,7 @@ func (h *K8sEventHandler) GetEventsByNode(ctx *gin.Context) {
 func (h *K8sEventHandler) GetEventStatistics(ctx *gin.Context) {
 	var req model.GetEventStatisticsReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.eventService.GetEventStatistics(ctx, &req)
 	})
 }
@@ -231,7 +231,7 @@ func (h *K8sEventHandler) GetEventStatistics(ctx *gin.Context) {
 func (h *K8sEventHandler) GetEventSummary(ctx *gin.Context) {
 	var req model.GetEventSummaryReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.eventService.GetEventSummary(ctx, &req)
 	})
 }
@@ -239,7 +239,7 @@ func (h *K8sEventHandler) GetEventSummary(ctx *gin.Context) {
 func (h *K8sEventHandler) GetEventTimeline(ctx *gin.Context) {
 	var req model.GetEventTimelineReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.eventService.GetEventTimeline(ctx, &req)
 	})
 }
@@ -247,7 +247,7 @@ func (h *K8sEventHandler) GetEventTimeline(ctx *gin.Context) {
 func (h *K8sEventHandler) GetEventTrends(ctx *gin.Context) {
 	var req model.GetEventTrendsReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.eventService.GetEventTrends(ctx, &req)
 	})
 }
@@ -255,7 +255,7 @@ func (h *K8sEventHandler) GetEventTrends(ctx *gin.Context) {
 func (h *K8sEventHandler) GetEventGroupData(ctx *gin.Context) {
 	var req model.GetEventGroupDataReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.eventService.GetEventGroupData(ctx, &req)
 	})
 }
@@ -263,21 +263,21 @@ func (h *K8sEventHandler) GetEventGroupData(ctx *gin.Context) {
 func (h *K8sEventHandler) DeleteEvent(ctx *gin.Context) {
 	var req model.DeleteEventReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -285,7 +285,7 @@ func (h *K8sEventHandler) DeleteEvent(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.eventService.DeleteEvent(ctx, &req)
 	})
 }
@@ -294,7 +294,7 @@ func (h *K8sEventHandler) DeleteEvent(ctx *gin.Context) {
 func (h *K8sEventHandler) CleanupOldEvents(ctx *gin.Context) {
 	var req model.CleanupOldEventsReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.eventService.CleanupOldEvents(ctx, &req)
 	})
 }

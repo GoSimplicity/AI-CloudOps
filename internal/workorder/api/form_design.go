@@ -28,7 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -57,12 +58,12 @@ func (h *FormDesignHandler) RegisterRouters(server *gin.Engine) {
 func (h *FormDesignHandler) CreateFormDesign(ctx *gin.Context) {
 	var req model.CreateWorkorderFormDesignReq
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
 	req.OperatorID = user.Uid
 	req.OperatorName = user.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateFormDesign(ctx, &req)
 	})
 }
@@ -71,13 +72,13 @@ func (h *FormDesignHandler) CreateFormDesign(ctx *gin.Context) {
 func (h *FormDesignHandler) UpdateFormDesign(ctx *gin.Context) {
 	var req model.UpdateWorkorderFormDesignReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateFormDesign(ctx, &req)
 	})
 }
@@ -86,13 +87,13 @@ func (h *FormDesignHandler) UpdateFormDesign(ctx *gin.Context) {
 func (h *FormDesignHandler) DeleteFormDesign(ctx *gin.Context) {
 	var req model.DeleteWorkorderFormDesignReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.DeleteFormDesign(ctx, req.ID)
 	})
 }
@@ -101,7 +102,7 @@ func (h *FormDesignHandler) DeleteFormDesign(ctx *gin.Context) {
 func (h *FormDesignHandler) ListFormDesign(ctx *gin.Context) {
 	var req model.ListWorkorderFormDesignReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.ListFormDesign(ctx, &req)
 	})
 }
@@ -110,13 +111,13 @@ func (h *FormDesignHandler) ListFormDesign(ctx *gin.Context) {
 func (h *FormDesignHandler) DetailFormDesign(ctx *gin.Context) {
 	var req model.DetailWorkorderFormDesignReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetFormDesign(ctx, req.ID)
 	})
 }

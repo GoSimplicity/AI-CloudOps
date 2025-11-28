@@ -29,7 +29,8 @@ import (
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -145,13 +146,13 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 				c.Next()
 				return
 			}
-			utils.ForbiddenError(c, "未登录或登录已过期")
+			base.ForbiddenError(c, "未登录或登录已过期")
 			c.Abort()
 			return
 		}
-		user, ok := userVal.(utils.UserClaims)
+		user, ok := userVal.(jwt.UserClaims)
 		if !ok {
-			utils.ForbiddenError(c, "用户信息异常")
+			base.ForbiddenError(c, "用户信息异常")
 			c.Abort()
 			return
 		}
@@ -172,7 +173,7 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 		method := c.Request.Method
 		methodCode, exists := methodMapping[method]
 		if !exists {
-			utils.ErrorWithMessage(c, "不支持的HTTP方法")
+			base.ErrorWithMessage(c, "不支持的HTTP方法")
 			c.Abort()
 			return
 		}
@@ -180,7 +181,7 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 		// 获取用户角色
 		roles, err := am.roleService.GetUserRoles(c, user.Uid)
 		if err != nil {
-			utils.ErrorWithMessage(c, "获取用户角色失败")
+			base.ErrorWithMessage(c, "获取用户角色失败")
 			c.Abort()
 			return
 		}
@@ -202,7 +203,7 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 		}
 
 		// 无权限访问
-		utils.ForbiddenError(c, "无权限访问该接口")
+		base.ForbiddenError(c, "无权限访问该接口")
 		c.Abort()
 	}
 }

@@ -31,7 +31,7 @@ import (
 	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	pkgUtils "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	pkgUtils "github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )

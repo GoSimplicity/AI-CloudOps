@@ -23,7 +23,7 @@
  *
  */
 
-package utils
+package base
 
 import (
 	"crypto/aes"

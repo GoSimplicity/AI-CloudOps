@@ -3,7 +3,7 @@ package utils
 import (
 	"fmt"
 
-	pkgutils "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	pkgutils "github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 

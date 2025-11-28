@@ -28,7 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -57,12 +58,12 @@ func (h *CategoryGroupHandler) RegisterRouters(server *gin.Engine) {
 func (h *CategoryGroupHandler) CreateCategory(ctx *gin.Context) {
 	var req model.CreateWorkorderCategoryReq
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
 	req.OperatorID = user.Uid
 	req.OperatorName = user.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateCategory(ctx, &req)
 	})
 }
@@ -71,14 +72,14 @@ func (h *CategoryGroupHandler) CreateCategory(ctx *gin.Context) {
 func (h *CategoryGroupHandler) UpdateCategory(ctx *gin.Context) {
 	var req model.UpdateWorkorderCategoryReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateCategory(ctx, &req)
 	})
 }
@@ -87,14 +88,14 @@ func (h *CategoryGroupHandler) UpdateCategory(ctx *gin.Context) {
 func (h *CategoryGroupHandler) DeleteCategory(ctx *gin.Context) {
 	var req model.DeleteWorkorderCategoryReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.DeleteCategory(ctx, req.ID)
 	})
 }
@@ -102,7 +103,7 @@ func (h *CategoryGroupHandler) DeleteCategory(ctx *gin.Context) {
 // ListCategory 获取工单分类列表
 func (h *CategoryGroupHandler) ListCategory(ctx *gin.Context) {
 	var req model.ListWorkorderCategoryReq
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.ListCategory(ctx, req)
 	})
 }
@@ -111,14 +112,14 @@ func (h *CategoryGroupHandler) ListCategory(ctx *gin.Context) {
 func (h *CategoryGroupHandler) DetailCategory(ctx *gin.Context) {
 	var req model.DetailWorkorderCategoryReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetCategory(ctx, req.ID)
 	})
 }

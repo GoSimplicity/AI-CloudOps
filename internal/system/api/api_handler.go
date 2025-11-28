@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 )
 
@@ -57,7 +57,7 @@ func (h *ApiHandler) RegisterRouters(server *gin.Engine) {
 func (h *ApiHandler) ListApis(ctx *gin.Context) {
 	var req model.ListApisRequest
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.ListApis(ctx, &req)
 	})
 }
@@ -66,7 +66,7 @@ func (h *ApiHandler) ListApis(ctx *gin.Context) {
 func (h *ApiHandler) CreateAPI(ctx *gin.Context) {
 	var req model.CreateApiRequest
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.CreateApi(ctx, &req)
 	})
 }
@@ -75,15 +75,15 @@ func (h *ApiHandler) CreateAPI(ctx *gin.Context) {
 func (h *ApiHandler) UpdateAPI(ctx *gin.Context) {
 	var req model.UpdateApiRequest
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.UpdateApi(ctx, &req)
 	})
 }
@@ -92,15 +92,15 @@ func (h *ApiHandler) UpdateAPI(ctx *gin.Context) {
 func (h *ApiHandler) DeleteAPI(ctx *gin.Context) {
 	var req model.DeleteApiRequest
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.DeleteApi(ctx, req.ID)
 	})
 }
@@ -109,22 +109,22 @@ func (h *ApiHandler) DeleteAPI(ctx *gin.Context) {
 func (h *ApiHandler) DetailAPI(ctx *gin.Context) {
 	var req model.GetApiRequest
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.GetApiById(ctx, id)
 	})
 }
 
 // GetApiStatistics 获取API统计
 func (h *ApiHandler) GetApiStatistics(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	base.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.svc.GetApiStatistics(ctx)
 	})
 }

@@ -37,7 +37,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"gorm.io/datatypes"
@@ -159,7 +159,7 @@ func (m *AuditLogMiddleware) AuditLog() gin.HandlerFunc {
 
 		// 获取用户ID
 		var userID int
-		if user, exists := c.MustGet("user").(utils.UserClaims); exists {
+		if user, exists := c.MustGet("user").(jwt.UserClaims); exists {
 			userID = int(user.Uid)
 		}
 

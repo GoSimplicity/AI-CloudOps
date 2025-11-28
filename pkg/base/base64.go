@@ -23,7 +23,7 @@
  *
  */
 
-package utils
+package base
 
 import (
 	"encoding/base64"

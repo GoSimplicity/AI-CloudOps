@@ -23,39 +23,39 @@
  *
  */
 
-package di
+package utils
 
 import (
+	"fmt"
 	"strings"
-	"time"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/middleware"
-	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
-// InitMiddlewares 初始化中间件
-func InitMiddlewares(ih ijwt.Handler, l *zap.Logger, roleSvc service.RoleService, auditSvc service.AuditService) []gin.HandlerFunc {
-	return []gin.HandlerFunc{
-		cors.New(cors.Config{
-			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
-			AllowCredentials: true,
-			AllowHeaders:     []string{"Content-Type", "Authorization", "X-Refresh-Token"},
-			ExposeHeaders:    []string{"x-jwt-token", "x-refresh-token"},
-			AllowOriginFunc: func(origin string) bool {
-				if strings.HasPrefix(origin, "http://localhost") {
-					return true
-				}
-				return strings.Contains(origin, "")
-			},
-			MaxAge: 12 * time.Hour,
-		}),
-		middleware.NewJWTMiddleware(ih).CheckLogin(),
-		middleware.NewLogMiddleware(l).Log(),
-		middleware.NewAuthMiddleware(roleSvc).CheckAuth(),
-		middleware.NewAuditLogMiddleware(auditSvc, l).AuditLog(),
+// CloneMap 克隆一个字符串到字符串的映射
+func CloneMap(original map[string]string) map[string]string {
+	if original == nil {
+		return nil
 	}
+	cloned := make(map[string]string, len(original))
+	for k, v := range original {
+		cloned[k] = v
+	}
+	return cloned
+}
+
+// FormatMap 将 map[string]string 格式化为字符串，每个键值对占一行
+func FormatMap(m map[string]string) string {
+	var builder strings.Builder
+	for k, v := range m {
+		builder.WriteString(fmt.Sprintf("%s=%s ", k, v))
+	}
+	return strings.TrimSpace(builder.String())
+}
+
+// CopyMap 深拷贝一个 map
+func CopyMap[K comparable, V any](src map[K]V) map[K]V {
+	dst := make(map[K]V, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }

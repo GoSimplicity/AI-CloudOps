@@ -28,7 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -57,7 +58,7 @@ func (h *K8sClusterHandler) RegisterRouters(server *gin.Engine) {
 func (h *K8sClusterHandler) GetClusterList(ctx *gin.Context) {
 	var req model.ListClustersReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.clusterService.ListClusters(ctx, &req)
 	})
 }
@@ -65,15 +66,15 @@ func (h *K8sClusterHandler) GetClusterList(ctx *gin.Context) {
 func (h *K8sClusterHandler) GetCluster(ctx *gin.Context) {
 	var req model.GetClusterReq
 
-	id, err := utils.GetCustomParamID(ctx, "cluster_id")
+	id, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.clusterService.GetClusterByID(ctx, &req)
 	})
 }
@@ -81,12 +82,12 @@ func (h *K8sClusterHandler) GetCluster(ctx *gin.Context) {
 func (h *K8sClusterHandler) CreateCluster(ctx *gin.Context) {
 	var req model.CreateClusterReq
 
-	uc := ctx.MustGet("user").(utils.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 
 	req.CreateUserID = uc.Uid
 	req.CreateUserName = uc.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.clusterService.CreateCluster(ctx, &req)
 	})
 }
@@ -94,15 +95,15 @@ func (h *K8sClusterHandler) CreateCluster(ctx *gin.Context) {
 func (h *K8sClusterHandler) UpdateCluster(ctx *gin.Context) {
 	var req model.UpdateClusterReq
 
-	id, err := utils.GetCustomParamID(ctx, "cluster_id")
+	id, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.clusterService.UpdateCluster(ctx, &req)
 	})
 }
@@ -110,15 +111,15 @@ func (h *K8sClusterHandler) UpdateCluster(ctx *gin.Context) {
 func (h *K8sClusterHandler) DeleteCluster(ctx *gin.Context) {
 	var req model.DeleteClusterReq
 
-	id, err := utils.GetCustomParamID(ctx, "cluster_id")
+	id, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.clusterService.DeleteCluster(ctx, &req)
 	})
 }
@@ -127,15 +128,15 @@ func (h *K8sClusterHandler) DeleteCluster(ctx *gin.Context) {
 func (h *K8sClusterHandler) RefreshCluster(ctx *gin.Context) {
 	var req model.RefreshClusterReq
 
-	id, err := utils.GetCustomParamID(ctx, "cluster_id")
+	id, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.clusterService.RefreshClusterStatus(ctx, &req)
 	})
 }

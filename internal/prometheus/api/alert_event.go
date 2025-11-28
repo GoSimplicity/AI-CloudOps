@@ -26,10 +26,10 @@
 package api
 
 import (
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -57,7 +57,7 @@ func (h *AlertEventHandler) RegisterRouters(server *gin.Engine) {
 func (h *AlertEventHandler) GetMonitorAlertEventList(ctx *gin.Context) {
 	var req model.GetMonitorAlertEventListReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.GetMonitorAlertEventList(ctx, &req)
 	})
 }
@@ -66,17 +66,17 @@ func (h *AlertEventHandler) GetMonitorAlertEventList(ctx *gin.Context) {
 func (h *AlertEventHandler) EventAlertSilence(ctx *gin.Context) {
 	var req model.EventAlertSilenceReq
 
-	uc := ctx.MustGet("user").(utils.UserClaims)
-	id, err := utils.GetParamID(ctx)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
+		base.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	req.ID = id
 	req.UserID = uc.Uid
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.EventAlertSilence(ctx, &req)
 	})
 }
@@ -85,17 +85,17 @@ func (h *AlertEventHandler) EventAlertSilence(ctx *gin.Context) {
 func (h *AlertEventHandler) EventAlertClaim(ctx *gin.Context) {
 	var req model.EventAlertClaimReq
 
-	uc := ctx.MustGet("user").(utils.UserClaims)
-	id, err := utils.GetParamID(ctx)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
+		base.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	req.ID = id
 	req.UserID = uc.Uid
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.EventAlertClaim(ctx, &req)
 	})
 }
@@ -104,17 +104,17 @@ func (h *AlertEventHandler) EventAlertClaim(ctx *gin.Context) {
 func (h *AlertEventHandler) EventAlertUnSilence(ctx *gin.Context) {
 	var req model.EventAlertUnSilenceReq
 
-	uc := ctx.MustGet("user").(utils.UserClaims)
-	id, err := utils.GetParamID(ctx)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
+		base.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	req.ID = id
 	req.UserID = uc.Uid
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.EventAlertUnSilence(ctx, &req)
 	})
 }

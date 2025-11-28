@@ -36,8 +36,8 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/mock"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/di"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/fatih/color"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
@@ -244,7 +244,7 @@ func initMock() error {
 }
 
 func showBootInfo(port string) {
-	ips, _ := utils.GetLocalIPs()
+	ips, _ := base.GetLocalIPs()
 	color.Green("AI-CloudOps API 服务启动成功")
 	fmt.Printf("%s  ", color.GreenString("➜"))
 	fmt.Printf("%s    ", color.New(color.Bold).Sprint("Local:"))

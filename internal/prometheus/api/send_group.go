@@ -26,11 +26,10 @@
 package api
 
 import (
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -59,7 +58,7 @@ func (h *SendGroupHandler) RegisterRouters(server *gin.Engine) {
 func (h *SendGroupHandler) GetMonitorSendGroupList(ctx *gin.Context) {
 	var req model.GetMonitorSendGroupListReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.alertSendService.GetMonitorSendGroupList(ctx, &req)
 	})
 }
@@ -68,11 +67,11 @@ func (h *SendGroupHandler) GetMonitorSendGroupList(ctx *gin.Context) {
 func (h *SendGroupHandler) CreateMonitorSendGroup(ctx *gin.Context) {
 	var req model.CreateMonitorSendGroupReq
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 	req.UserID = uc.Uid
 	req.CreateUserName = uc.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.alertSendService.CreateMonitorSendGroup(ctx, &req)
 	})
 }
@@ -81,15 +80,15 @@ func (h *SendGroupHandler) CreateMonitorSendGroup(ctx *gin.Context) {
 func (h *SendGroupHandler) UpdateMonitorSendGroup(ctx *gin.Context) {
 	var req model.UpdateMonitorSendGroupReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
+		base.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.alertSendService.UpdateMonitorSendGroup(ctx, &req)
 	})
 }
@@ -98,15 +97,15 @@ func (h *SendGroupHandler) UpdateMonitorSendGroup(ctx *gin.Context) {
 func (h *SendGroupHandler) DeleteMonitorSendGroup(ctx *gin.Context) {
 	var req model.DeleteMonitorSendGroupReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
+		base.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.alertSendService.DeleteMonitorSendGroup(ctx, &req)
 	})
 }
@@ -115,15 +114,15 @@ func (h *SendGroupHandler) DeleteMonitorSendGroup(ctx *gin.Context) {
 func (h *SendGroupHandler) GetMonitorSendGroup(ctx *gin.Context) {
 	var req model.GetMonitorSendGroupReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
+		base.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.alertSendService.GetMonitorSendGroup(ctx, &req)
 	})
 }

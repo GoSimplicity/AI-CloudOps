@@ -28,8 +28,9 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -63,7 +64,7 @@ func (h *TreeLocalHandler) RegisterRouters(server *gin.Engine) {
 func (h *TreeLocalHandler) GetTreeLocalList(ctx *gin.Context) {
 	var req model.GetTreeLocalResourceListReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetTreeLocalList(ctx, &req)
 	})
 }
@@ -72,15 +73,15 @@ func (h *TreeLocalHandler) GetTreeLocalList(ctx *gin.Context) {
 func (h *TreeLocalHandler) GetTreeLocalDetail(ctx *gin.Context) {
 	var req model.GetTreeLocalResourceDetailReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的资源ID")
+		base.ErrorWithMessage(ctx, "无效的资源ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetTreeLocalDetail(ctx, &req)
 	})
 }
@@ -89,12 +90,12 @@ func (h *TreeLocalHandler) GetTreeLocalDetail(ctx *gin.Context) {
 func (h *TreeLocalHandler) CreateTreeLocal(ctx *gin.Context) {
 	var req model.CreateTreeLocalResourceReq
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
 	req.CreateUserID = user.Uid
 	req.CreateUserName = user.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateTreeLocal(ctx, &req)
 	})
 }
@@ -103,15 +104,15 @@ func (h *TreeLocalHandler) CreateTreeLocal(ctx *gin.Context) {
 func (h *TreeLocalHandler) UpdateTreeLocal(ctx *gin.Context) {
 	var req model.UpdateTreeLocalResourceReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的资源ID")
+		base.ErrorWithMessage(ctx, "无效的资源ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateTreeLocal(ctx, &req)
 	})
 }
@@ -120,15 +121,15 @@ func (h *TreeLocalHandler) UpdateTreeLocal(ctx *gin.Context) {
 func (h *TreeLocalHandler) DeleteTreeLocal(ctx *gin.Context) {
 	var req model.DeleteTreeLocalResourceReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的资源ID")
+		base.ErrorWithMessage(ctx, "无效的资源ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.DeleteTreeLocal(ctx, &req)
 	})
 }
@@ -137,24 +138,24 @@ func (h *TreeLocalHandler) DeleteTreeLocal(ctx *gin.Context) {
 func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
 	var req model.GetTreeLocalResourceDetailReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的资源ID")
+		base.ErrorWithMessage(ctx, "无效的资源ID")
 		return
 	}
 
-	uc := ctx.MustGet("user").(utils.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 	req.ID = id
 
 	ld, err := h.service.GetTreeLocalForConnection(ctx, &req)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "获取主机信息失败: "+err.Error())
+		base.ErrorWithMessage(ctx, "获取主机信息失败: "+err.Error())
 		return
 	}
 
 	defer func() {
 		if closeErr := h.sshClient.Close(); closeErr != nil {
-			utils.ErrorWithMessage(ctx, "关闭SSH连接失败: "+closeErr.Error())
+			base.ErrorWithMessage(ctx, "关闭SSH连接失败: "+closeErr.Error())
 		}
 	}()
 
@@ -171,21 +172,21 @@ func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
 
 	// 建立SSH连接
 	if err := h.sshClient.Connect(sshConfig); err != nil {
-		utils.ErrorWithMessage(ctx, "连接SSH失败: "+err.Error())
+		base.ErrorWithMessage(ctx, "连接SSH失败: "+err.Error())
 		return
 	}
 
 	// 升级WebSocket连接
-	ws, err := utils.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
+	ws, err := ssh.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "升级WebSocket连接失败: "+err.Error())
+		base.ErrorWithMessage(ctx, "升级WebSocket连接失败: "+err.Error())
 		return
 	}
 	defer ws.Close()
 
 	// 启动终端会话
 	if err := h.sshClient.WebTerminal(uc.Uid, ws); err != nil {
-		utils.ErrorWithMessage(ctx, "启动Web终端失败: "+err.Error())
+		base.ErrorWithMessage(ctx, "启动Web终端失败: "+err.Error())
 		return
 	}
 }
@@ -194,15 +195,15 @@ func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
 func (h *TreeLocalHandler) BindTreeLocal(ctx *gin.Context) {
 	var req model.BindTreeLocalResourceReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的资源ID")
+		base.ErrorWithMessage(ctx, "无效的资源ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.BindTreeLocal(ctx, &req)
 	})
 
@@ -212,15 +213,15 @@ func (h *TreeLocalHandler) BindTreeLocal(ctx *gin.Context) {
 func (h *TreeLocalHandler) UnbindTreeLocal(ctx *gin.Context) {
 	var req model.UnBindTreeLocalResourceReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的资源ID")
+		base.ErrorWithMessage(ctx, "无效的资源ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UnBindLocalResource(ctx, &req)
 	})
 }
