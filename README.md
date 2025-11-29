@@ -335,7 +335,7 @@ AI-CloudOps-aiops/
 
 ### 微信交流群
 
-![微信群二维码](https://github.com/user-attachments/assets/6aa7bd2f-ee80-40d0-9301-0fd62292e82f)
+![微信群二维码](![image](https://github.com/user-attachments/assets/c6112b5d-0333-4f3f-8359-f9f2b1916b72))
 
 ## 致谢
 
