@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	systemutils "github.com/GoSimplicity/AI-CloudOps/internal/system/utils"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 )
 
@@ -52,7 +52,7 @@ func (h *SystemHandler) RegisterRouters(server *gin.Engine) {
 
 // GetSystemInfo 获取系统基本信息
 func (h *SystemHandler) GetSystemInfo(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	base.HandleRequest(ctx, nil, func() (interface{}, error) {
 		system, err := h.svc.GetCurrentSystemInfo(ctx)
 		if err != nil {
 			return nil, err
@@ -63,7 +63,7 @@ func (h *SystemHandler) GetSystemInfo(ctx *gin.Context) {
 
 // GetSystemMetrics 获取系统性能指标
 func (h *SystemHandler) GetSystemMetrics(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	base.HandleRequest(ctx, nil, func() (interface{}, error) {
 		system, err := h.svc.GetSystemMetrics(ctx)
 		if err != nil {
 			return nil, err
@@ -74,7 +74,7 @@ func (h *SystemHandler) GetSystemMetrics(ctx *gin.Context) {
 
 // RefreshSystemInfo 刷新系统信息
 func (h *SystemHandler) RefreshSystemInfo(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	base.HandleRequest(ctx, nil, func() (interface{}, error) {
 		system, err := h.svc.RefreshSystemInfo(ctx)
 		if err != nil {
 			return nil, err

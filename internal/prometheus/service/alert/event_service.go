@@ -26,18 +26,19 @@
 package alert
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"time"
-
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/utils"
+	userDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	"github.com/prometheus/alertmanager/types"
 	promModel "github.com/prometheus/common/model"
 	"go.uber.org/zap"
@@ -102,7 +103,7 @@ func (a *alertManagerEventService) EventAlertSilence(ctx context.Context, req *m
 	}
 
 	// 获取用户信息
-	user, err := a.userDao.GetUserByID(ctx, req.UserID)
+	user, err := a.userDao.GetByID(ctx, req.UserID)
 	if err != nil {
 		a.l.Error("设置静默失败: 无效的用户ID", zap.Int("userId", req.UserID), zap.Error(err))
 		return fmt.Errorf("无效的用户ID: %d, %v", req.UserID, err)
@@ -150,12 +151,8 @@ func (a *alertManagerEventService) EventAlertSilence(ctx context.Context, req *m
 		return fmt.Errorf("告警管理器实例未配置")
 	}
 
-	// 构建请求URL
-	alertAddr := fmt.Sprintf("http://%v:9093", alertPool.AlertManagerInstances[0])
-	alertUrl := fmt.Sprintf("%s/api/v1/silences", alertAddr)
-
 	// 发送静默请求
-	silenceID, err := pkg.SendSilenceRequest(ctx, a.l, alertUrl, silenceData)
+	silenceID, err := a.sendSilenceRequest(ctx, alertPool, silenceData)
 	if err != nil {
 		a.l.Error("设置静默失败: 发送静默请求失败", zap.Error(err))
 		return fmt.Errorf("发送静默请求失败: %v", err)
@@ -192,7 +189,7 @@ func (a *alertManagerEventService) EventAlertClaim(ctx context.Context, req *mod
 	}
 
 	// 获取用户信息
-	user, err := a.userDao.GetUserByID(ctx, req.UserID)
+	user, err := a.userDao.GetByID(ctx, req.UserID)
 	if err != nil {
 		a.l.Error("认领告警事件失败: 获取用户信息失败", zap.Error(err))
 		return fmt.Errorf("获取用户信息失败: %v", err)
@@ -355,12 +352,46 @@ func (a *alertManagerEventService) sendSilenceRequest(ctx context.Context, alert
 	}
 
 	alertAddr := fmt.Sprintf("http://%v:9093", alertPool.AlertManagerInstances[0])
-	alertUrl := fmt.Sprintf("%s/api/v1/silences", alertAddr)
+	alertURL := fmt.Sprintf("%s/api/v1/silences", alertAddr)
 
-	silenceID, err := pkg.SendSilenceRequest(ctx, a.l, alertUrl, silenceData)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, alertURL, bytes.NewBuffer(silenceData))
 	if err != nil {
-		return "", fmt.Errorf("发送静默请求失败: %v", err)
+		a.l.Error("sendSilenceRequest failed: create HTTP request error", zap.Error(err))
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		a.l.Error("sendSilenceRequest failed: send HTTP request error", zap.Error(err))
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		a.l.Error("sendSilenceRequest failed: AlertManager response error",
+			zap.Int("status", resp.StatusCode),
+			zap.String("body", string(body)))
+		return "", fmt.Errorf("AlertManager request failed, status: %d, response: %s", resp.StatusCode, string(body))
 	}
 
-	return silenceID, nil
+	var result struct {
+		Status string `json:"status"`
+		Data   struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		a.l.Error("sendSilenceRequest failed: decode response error", zap.Error(err))
+		return "", err
+	}
+
+	if result.Status != "success" {
+		a.l.Error("sendSilenceRequest failed: AlertManager status not success", zap.String("status", result.Status))
+		return "", fmt.Errorf("AlertManager status not success, status: %s", result.Status)
+	}
+
+	return result.Data.ID, nil
 }

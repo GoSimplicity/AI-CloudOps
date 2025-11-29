@@ -28,7 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -63,7 +64,7 @@ func (h *CloudAccountHandler) RegisterRouters(server *gin.Engine) {
 func (h *CloudAccountHandler) GetCloudAccountList(ctx *gin.Context) {
 	var req model.GetCloudAccountListReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetCloudAccountList(ctx, &req)
 	})
 }
@@ -72,15 +73,15 @@ func (h *CloudAccountHandler) GetCloudAccountList(ctx *gin.Context) {
 func (h *CloudAccountHandler) GetCloudAccountDetail(ctx *gin.Context) {
 	var req model.GetCloudAccountDetailReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的账户ID")
+		base.ErrorWithMessage(ctx, "无效的账户ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetCloudAccountDetail(ctx, &req)
 	})
 }
@@ -89,9 +90,9 @@ func (h *CloudAccountHandler) GetCloudAccountDetail(ctx *gin.Context) {
 func (h *CloudAccountHandler) CreateCloudAccount(ctx *gin.Context) {
 	var req model.CreateCloudAccountReq
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateCloudAccount(ctx, &req, user.Uid, user.Username)
 	})
 }
@@ -100,15 +101,15 @@ func (h *CloudAccountHandler) CreateCloudAccount(ctx *gin.Context) {
 func (h *CloudAccountHandler) UpdateCloudAccount(ctx *gin.Context) {
 	var req model.UpdateCloudAccountReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的账户ID")
+		base.ErrorWithMessage(ctx, "无效的账户ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateCloudAccount(ctx, &req)
 	})
 }
@@ -117,15 +118,15 @@ func (h *CloudAccountHandler) UpdateCloudAccount(ctx *gin.Context) {
 func (h *CloudAccountHandler) DeleteCloudAccount(ctx *gin.Context) {
 	var req model.DeleteCloudAccountReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的账户ID")
+		base.ErrorWithMessage(ctx, "无效的账户ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.DeleteCloudAccount(ctx, &req)
 	})
 }
@@ -134,15 +135,15 @@ func (h *CloudAccountHandler) DeleteCloudAccount(ctx *gin.Context) {
 func (h *CloudAccountHandler) UpdateCloudAccountStatus(ctx *gin.Context) {
 	var req model.UpdateCloudAccountStatusReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的账户ID")
+		base.ErrorWithMessage(ctx, "无效的账户ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateCloudAccountStatus(ctx, &req)
 	})
 }
@@ -151,15 +152,15 @@ func (h *CloudAccountHandler) UpdateCloudAccountStatus(ctx *gin.Context) {
 func (h *CloudAccountHandler) VerifyCloudAccount(ctx *gin.Context) {
 	var req model.VerifyCloudAccountReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的账户ID")
+		base.ErrorWithMessage(ctx, "无效的账户ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.VerifyCloudAccount(ctx, &req)
 	})
 }
@@ -168,7 +169,7 @@ func (h *CloudAccountHandler) VerifyCloudAccount(ctx *gin.Context) {
 func (h *CloudAccountHandler) BatchDeleteCloudAccount(ctx *gin.Context) {
 	var req model.BatchDeleteCloudAccountReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.BatchDeleteCloudAccount(ctx, &req)
 	})
 }
@@ -177,7 +178,7 @@ func (h *CloudAccountHandler) BatchDeleteCloudAccount(ctx *gin.Context) {
 func (h *CloudAccountHandler) BatchUpdateCloudAccountStatus(ctx *gin.Context) {
 	var req model.BatchUpdateCloudAccountStatusReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.BatchUpdateCloudAccountStatus(ctx, &req)
 	})
 }
@@ -186,9 +187,9 @@ func (h *CloudAccountHandler) BatchUpdateCloudAccountStatus(ctx *gin.Context) {
 func (h *CloudAccountHandler) ImportCloudAccount(ctx *gin.Context) {
 	var req model.ImportCloudAccountReq
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.ImportCloudAccount(ctx, &req, user.Uid, user.Username)
 	})
 }
@@ -197,7 +198,7 @@ func (h *CloudAccountHandler) ImportCloudAccount(ctx *gin.Context) {
 func (h *CloudAccountHandler) ExportCloudAccount(ctx *gin.Context) {
 	var req model.ExportCloudAccountReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.ExportCloudAccount(ctx, &req)
 	})
 }

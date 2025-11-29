@@ -26,11 +26,10 @@
 package api
 
 import (
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	scrapeJobService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/scrape"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -62,7 +61,7 @@ func (h *ScrapePoolHandler) RegisterRouters(server *gin.Engine) {
 func (h *ScrapePoolHandler) GetMonitorScrapePoolList(ctx *gin.Context) {
 	var req model.GetMonitorScrapePoolListReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.scrapePoolService.GetMonitorScrapePoolList(ctx, &req)
 	})
 }
@@ -71,11 +70,11 @@ func (h *ScrapePoolHandler) GetMonitorScrapePoolList(ctx *gin.Context) {
 func (h *ScrapePoolHandler) CreateMonitorScrapePool(ctx *gin.Context) {
 	var req model.CreateMonitorScrapePoolReq
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 	req.UserID = uc.Uid
 	req.CreateUserName = uc.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.scrapePoolService.CreateMonitorScrapePool(ctx, &req)
 	})
 }
@@ -84,14 +83,14 @@ func (h *ScrapePoolHandler) CreateMonitorScrapePool(ctx *gin.Context) {
 func (h *ScrapePoolHandler) UpdateMonitorScrapePool(ctx *gin.Context) {
 	var req model.UpdateMonitorScrapePoolReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
+		base.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.scrapePoolService.UpdateMonitorScrapePool(ctx, &req)
 	})
 }
@@ -100,15 +99,15 @@ func (h *ScrapePoolHandler) UpdateMonitorScrapePool(ctx *gin.Context) {
 func (h *ScrapePoolHandler) DeleteMonitorScrapePool(ctx *gin.Context) {
 	var req model.DeleteMonitorScrapePoolReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
+		base.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.scrapePoolService.DeleteMonitorScrapePool(ctx, &req)
 	})
 }
@@ -117,15 +116,15 @@ func (h *ScrapePoolHandler) DeleteMonitorScrapePool(ctx *gin.Context) {
 func (h *ScrapePoolHandler) GetMonitorScrapePoolDetail(ctx *gin.Context) {
 	var req model.GetMonitorScrapePoolDetailReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
+		base.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.scrapePoolService.GetMonitorScrapePoolDetail(ctx, &req)
 	})
 }

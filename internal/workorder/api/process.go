@@ -28,7 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -57,11 +58,11 @@ func (h *WorkorderProcessHandler) RegisterRouters(server *gin.Engine) {
 func (h *WorkorderProcessHandler) CreateWorkorderProcess(ctx *gin.Context) {
 	var req model.CreateWorkorderProcessReq
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 	req.OperatorID = user.Uid
 	req.OperatorName = user.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.CreateWorkorderProcess(ctx, &req)
 	})
 }
@@ -70,13 +71,13 @@ func (h *WorkorderProcessHandler) CreateWorkorderProcess(ctx *gin.Context) {
 func (h *WorkorderProcessHandler) UpdateWorkorderProcess(ctx *gin.Context) {
 	var req model.UpdateWorkorderProcessReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateWorkorderProcess(ctx, &req)
 	})
 }
@@ -85,13 +86,13 @@ func (h *WorkorderProcessHandler) UpdateWorkorderProcess(ctx *gin.Context) {
 func (h *WorkorderProcessHandler) DeleteWorkorderProcess(ctx *gin.Context) {
 	var req model.DeleteWorkorderProcessReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.DeleteWorkorderProcess(ctx, req.ID)
 	})
 }
@@ -100,7 +101,7 @@ func (h *WorkorderProcessHandler) DeleteWorkorderProcess(ctx *gin.Context) {
 func (h *WorkorderProcessHandler) ListWorkorderProcess(ctx *gin.Context) {
 	var req model.ListWorkorderProcessReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.ListWorkorderProcess(ctx, &req)
 	})
 }
@@ -109,13 +110,13 @@ func (h *WorkorderProcessHandler) ListWorkorderProcess(ctx *gin.Context) {
 func (h *WorkorderProcessHandler) DetailWorkorderProcess(ctx *gin.Context) {
 	var req model.DetailWorkorderProcessReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.DetailWorkorderProcess(ctx, req.ID)
 	})
 }

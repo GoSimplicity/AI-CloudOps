@@ -33,7 +33,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	userDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -125,7 +125,7 @@ func (s *onDutyService) CreateMonitorOnDutyGroup(ctx context.Context, req *model
 	}
 
 	// 获取并验证所有成员是否存在
-	users, err := s.userDao.GetUserByIDs(ctx, req.UserIDs)
+	users, err := s.userDao.GetByIDs(ctx, req.UserIDs)
 	if err != nil {
 		s.logger.Error("获取成员信息失败", zap.Error(err))
 		return err
@@ -189,7 +189,7 @@ func (s *onDutyService) UpdateMonitorOnDutyGroup(ctx context.Context, req *model
 	}
 
 	// 获取并验证所有成员是否存在
-	users, err := s.userDao.GetUserByIDs(ctx, req.UserIDs)
+	users, err := s.userDao.GetByIDs(ctx, req.UserIDs)
 	if err != nil {
 		s.logger.Error("获取成员信息失败", zap.Error(err))
 		return err
@@ -531,7 +531,7 @@ func (s *onDutyService) findUserByID(ctx context.Context, users []*model.User, i
 			return user
 		}
 	}
-	user, err := s.userDao.GetUserByID(ctx, id)
+	user, err := s.userDao.GetByID(ctx, id)
 	if err == nil && user != nil {
 		return user
 	}

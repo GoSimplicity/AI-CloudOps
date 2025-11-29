@@ -47,7 +47,6 @@ type RoleService interface {
 	UpdateRole(ctx context.Context, req *model.UpdateRoleReq) error
 	DeleteRole(ctx context.Context, req *model.DeleteRoleReq) error
 	CreateRoleByYaml(ctx context.Context, req *model.CreateRoleByYamlReq) error
-
 	GetRoleYaml(ctx context.Context, req *model.GetRoleYamlReq) (*model.K8sYaml, error)
 	UpdateRoleYaml(ctx context.Context, req *model.UpdateRoleByYamlReq) error
 }

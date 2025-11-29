@@ -40,7 +40,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/sse"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -605,7 +605,7 @@ func (s *podService) PodExec(ctx *gin.Context, req *model.PodExecReq) error {
 		return fmt.Errorf("Pod名称不能为空")
 	}
 
-	conn, err := pkg.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
+	conn, err := ssh.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
 		s.logger.Error("升级ws失败", zap.Error(err))
 		return fmt.Errorf("初始化WebSocket失败: %w", err)

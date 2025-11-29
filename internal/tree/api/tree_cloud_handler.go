@@ -28,8 +28,9 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -69,7 +70,7 @@ func (h *TreeCloudHandler) RegisterRouters(server *gin.Engine) {
 func (h *TreeCloudHandler) GetTreeCloudResourceList(ctx *gin.Context) {
 	var req model.GetTreeCloudResourceListReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetTreeCloudResourceList(ctx, &req)
 	})
 }
@@ -78,15 +79,15 @@ func (h *TreeCloudHandler) GetTreeCloudResourceList(ctx *gin.Context) {
 func (h *TreeCloudHandler) GetTreeCloudResourceDetail(ctx *gin.Context) {
 	var req model.GetTreeCloudResourceDetailReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的资源ID")
+		base.ErrorWithMessage(ctx, "无效的资源ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetTreeCloudResourceDetail(ctx, &req)
 	})
 }
@@ -95,19 +96,19 @@ func (h *TreeCloudHandler) GetTreeCloudResourceDetail(ctx *gin.Context) {
 func (h *TreeCloudHandler) UpdateTreeCloudResource(ctx *gin.Context) {
 	var req model.UpdateTreeCloudResourceReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的资源ID")
+		base.ErrorWithMessage(ctx, "无效的资源ID")
 		return
 	}
 
 	// 获取当前用户信息
-	uc := ctx.MustGet("user").(utils.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 	req.ID = id
 	req.OperatorID = uc.Uid
 	req.OperatorName = uc.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateTreeCloudResource(ctx, &req)
 	})
 }
@@ -116,19 +117,19 @@ func (h *TreeCloudHandler) UpdateTreeCloudResource(ctx *gin.Context) {
 func (h *TreeCloudHandler) DeleteTreeCloudResource(ctx *gin.Context) {
 	var req model.DeleteTreeCloudResourceReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的资源ID")
+		base.ErrorWithMessage(ctx, "无效的资源ID")
 		return
 	}
 
 	// 获取当前用户信息
-	uc := ctx.MustGet("user").(utils.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 	req.ID = id
 	req.OperatorID = uc.Uid
 	req.OperatorName = uc.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.DeleteTreeCloudResource(ctx, &req)
 	})
 }
@@ -137,15 +138,15 @@ func (h *TreeCloudHandler) DeleteTreeCloudResource(ctx *gin.Context) {
 func (h *TreeCloudHandler) BindTreeCloudResource(ctx *gin.Context) {
 	var req model.BindTreeCloudResourceReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的资源ID")
+		base.ErrorWithMessage(ctx, "无效的资源ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.BindTreeCloudResource(ctx, &req)
 	})
 }
@@ -154,15 +155,15 @@ func (h *TreeCloudHandler) BindTreeCloudResource(ctx *gin.Context) {
 func (h *TreeCloudHandler) UnBindTreeCloudResource(ctx *gin.Context) {
 	var req model.UnBindTreeCloudResourceReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的资源ID")
+		base.ErrorWithMessage(ctx, "无效的资源ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UnBindTreeCloudResource(ctx, &req)
 	})
 }
@@ -172,11 +173,11 @@ func (h *TreeCloudHandler) SyncTreeCloudResource(ctx *gin.Context) {
 	var req model.SyncTreeCloudResourceReq
 
 	// 获取当前用户信息
-	uc := ctx.MustGet("user").(utils.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 	req.OperatorID = uc.Uid
 	req.OperatorName = uc.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.SyncTreeCloudResource(ctx, &req)
 	})
 }
@@ -185,7 +186,7 @@ func (h *TreeCloudHandler) SyncTreeCloudResource(ctx *gin.Context) {
 func (h *TreeCloudHandler) GetSyncHistory(ctx *gin.Context) {
 	var req model.GetCloudResourceSyncHistoryReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetSyncHistory(ctx, &req)
 	})
 }
@@ -194,7 +195,7 @@ func (h *TreeCloudHandler) GetSyncHistory(ctx *gin.Context) {
 func (h *TreeCloudHandler) GetChangeLog(ctx *gin.Context) {
 	var req model.GetCloudResourceChangeLogReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetChangeLog(ctx, &req)
 	})
 }
@@ -203,15 +204,15 @@ func (h *TreeCloudHandler) GetChangeLog(ctx *gin.Context) {
 func (h *TreeCloudHandler) GetTreeNodeCloudResources(ctx *gin.Context) {
 	var req model.GetTreeNodeCloudResourcesReq
 
-	nodeId, err := utils.GetParamID(ctx)
+	nodeId, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的节点ID")
+		base.ErrorWithMessage(ctx, "无效的节点ID")
 		return
 	}
 
 	req.NodeID = nodeId
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetTreeNodeCloudResources(ctx, &req)
 	})
 }
@@ -220,13 +221,13 @@ func (h *TreeCloudHandler) GetTreeNodeCloudResources(ctx *gin.Context) {
 func (h *TreeCloudHandler) ConnectCloudResourceTerminal(ctx *gin.Context) {
 	var req model.ConnectTreeCloudResourceTerminalReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的资源ID")
+		base.ErrorWithMessage(ctx, "无效的资源ID")
 		return
 	}
 
-	uc := ctx.MustGet("user").(utils.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 	req.ID = id
 	req.UserID = uc.Uid
 
@@ -234,13 +235,13 @@ func (h *TreeCloudHandler) ConnectCloudResourceTerminal(ctx *gin.Context) {
 	detailReq := &model.GetTreeCloudResourceDetailReq{ID: req.ID}
 	cloud, err := h.service.GetTreeCloudResourceForConnection(ctx, detailReq)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "获取云资源信息失败: "+err.Error())
+		base.ErrorWithMessage(ctx, "获取云资源信息失败: "+err.Error())
 		return
 	}
 
 	// 仅支持ECS类型的云资源连接终端
 	if cloud.ResourceType != model.ResourceTypeECS {
-		utils.ErrorWithMessage(ctx, "仅支持ECS类型的云资源连接终端")
+		base.ErrorWithMessage(ctx, "仅支持ECS类型的云资源连接终端")
 		return
 	}
 
@@ -251,7 +252,7 @@ func (h *TreeCloudHandler) ConnectCloudResourceTerminal(ctx *gin.Context) {
 	}
 
 	if ipAddr == "" {
-		utils.ErrorWithMessage(ctx, "云资源没有可用的IP地址")
+		base.ErrorWithMessage(ctx, "云资源没有可用的IP地址")
 		return
 	}
 
@@ -280,28 +281,28 @@ func (h *TreeCloudHandler) ConnectCloudResourceTerminal(ctx *gin.Context) {
 
 	// 建立SSH连接
 	if err := h.sshClient.Connect(sshConfig); err != nil {
-		utils.ErrorWithMessage(ctx, "连接SSH失败: "+err.Error())
+		base.ErrorWithMessage(ctx, "连接SSH失败: "+err.Error())
 		return
 	}
 
 	// 确保SSH连接在函数退出时关闭
 	defer func() {
 		if closeErr := h.sshClient.Close(); closeErr != nil {
-			utils.ErrorWithMessage(ctx, "关闭SSH连接失败: "+closeErr.Error())
+			base.ErrorWithMessage(ctx, "关闭SSH连接失败: "+closeErr.Error())
 		}
 	}()
 
 	// 升级WebSocket连接
-	ws, err := utils.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
+	ws, err := ssh.UpGrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "升级WebSocket连接失败: "+err.Error())
+		base.ErrorWithMessage(ctx, "升级WebSocket连接失败: "+err.Error())
 		return
 	}
 	defer ws.Close()
 
 	// 启动终端会话
 	if err := h.sshClient.WebTerminal(uc.Uid, ws); err != nil {
-		utils.ErrorWithMessage(ctx, "启动Web终端失败: "+err.Error())
+		base.ErrorWithMessage(ctx, "启动Web终端失败: "+err.Error())
 		return
 	}
 }
@@ -310,15 +311,15 @@ func (h *TreeCloudHandler) ConnectCloudResourceTerminal(ctx *gin.Context) {
 func (h *TreeCloudHandler) UpdateCloudResourceStatus(ctx *gin.Context) {
 	var req model.UpdateCloudResourceStatusReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的资源ID")
+		base.ErrorWithMessage(ctx, "无效的资源ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.UpdateCloudResourceStatus(ctx, &req)
 	})
 }
@@ -328,11 +329,11 @@ func (h *TreeCloudHandler) BatchDeleteTreeCloudResource(ctx *gin.Context) {
 	var req model.BatchDeleteTreeCloudResourceReq
 
 	// 获取当前用户信息
-	uc := ctx.MustGet("user").(utils.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 	req.OperatorID = uc.Uid
 	req.OperatorName = uc.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.BatchDeleteTreeCloudResource(ctx, &req)
 	})
 }
@@ -342,11 +343,11 @@ func (h *TreeCloudHandler) BatchUpdateCloudResourceStatus(ctx *gin.Context) {
 	var req model.BatchUpdateCloudResourceStatusReq
 
 	// 获取当前用户信息
-	uc := ctx.MustGet("user").(utils.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 	req.OperatorID = uc.Uid
 	req.OperatorName = uc.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.BatchUpdateCloudResourceStatus(ctx, &req)
 	})
 }

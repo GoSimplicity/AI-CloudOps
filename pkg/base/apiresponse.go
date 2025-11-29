@@ -23,7 +23,7 @@
  *
  */
 
-package utils
+package base
 
 import (
 	"bytes"
@@ -36,56 +36,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
-
-// LabelOption 通用返回结构体，用于前后端交互的数据格式
-type LabelOption struct {
-	Label    string         `json:"label"`
-	Value    string         `json:"value"`
-	Children []*LabelOption `json:"children"`
-}
-
-type K8sBatchRequest struct {
-	Cluster string           `json:"cluster"`
-	Items   []K8sRequestItem `json:"items"`
-}
-
-type K8sRequestItem struct {
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
-}
-
-type K8sObjectRequest struct {
-	Cluster   string `json:"cluster"`
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
-}
-
-type OperationData struct {
-	Success bool   `json:"success"`
-	Error   string `json:"error"`
-}
-
-type SelectOption struct {
-	Label string `json:"label"`
-	Value string `json:"value"`
-}
-
-type KeyValuePair struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
-type SelectOptionInt struct {
-	Label string `json:"label"`
-	Value int    `json:"value"`
-}
-
-type SilenceResponse struct {
-	Status string `json:"status"`
-	Data   struct {
-		SilenceID string `json:"silence_id"`
-	} `json:"data"`
-}
 
 // ApiResponse 通用的API响应结构体
 type ApiResponse struct {
@@ -101,11 +51,6 @@ const (
 )
 
 // ApiData 通用的返回函数，用于标准化API响应格式
-// 参数：
-// - c: gin 上下文
-// - code: 状态码
-// - data: 返回的数据
-// - message: 返回的消息
 func ApiData(c *gin.Context, code int, data interface{}, message string) {
 	c.JSON(http.StatusOK, ApiResponse{
 		Code:    code,

@@ -26,11 +26,11 @@
 package api
 
 import (
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	configService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/config"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 )
 
 type MonitorConfigHandler struct {
@@ -58,7 +58,7 @@ func (h *MonitorConfigHandler) RegisterRouters(server *gin.Engine) {
 func (h *MonitorConfigHandler) GetMonitorConfigList(ctx *gin.Context) {
 	var req model.GetMonitorConfigListReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.GetMonitorConfigList(ctx, &req)
 	})
 }
@@ -67,15 +67,15 @@ func (h *MonitorConfigHandler) GetMonitorConfigList(ctx *gin.Context) {
 func (h *MonitorConfigHandler) GetMonitorConfig(ctx *gin.Context) {
 	var req model.GetMonitorConfigReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.GetMonitorConfigByID(ctx, &req)
 	})
 }
@@ -84,7 +84,7 @@ func (h *MonitorConfigHandler) GetMonitorConfig(ctx *gin.Context) {
 func (h *MonitorConfigHandler) CreateMonitorConfig(ctx *gin.Context) {
 	var req model.CreateMonitorConfigReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.CreateMonitorConfig(ctx, &req)
 	})
 }
@@ -93,15 +93,15 @@ func (h *MonitorConfigHandler) CreateMonitorConfig(ctx *gin.Context) {
 func (h *MonitorConfigHandler) UpdateMonitorConfig(ctx *gin.Context) {
 	var req model.UpdateMonitorConfigReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.UpdateMonitorConfig(ctx, &req)
 	})
 }
@@ -110,15 +110,15 @@ func (h *MonitorConfigHandler) UpdateMonitorConfig(ctx *gin.Context) {
 func (h *MonitorConfigHandler) DeleteMonitorConfig(ctx *gin.Context) {
 	var req model.DeleteMonitorConfigReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.DeleteMonitorConfig(ctx, &req)
 	})
 }

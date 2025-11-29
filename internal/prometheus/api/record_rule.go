@@ -26,11 +26,10 @@
 package api
 
 import (
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -59,7 +58,7 @@ func (h *RecordRuleHandler) RegisterRouters(server *gin.Engine) {
 func (h *RecordRuleHandler) GetMonitorRecordRuleList(ctx *gin.Context) {
 	var req model.GetMonitorRecordRuleListReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.alertRecordService.GetMonitorRecordRuleList(ctx, &req)
 	})
 }
@@ -68,11 +67,11 @@ func (h *RecordRuleHandler) GetMonitorRecordRuleList(ctx *gin.Context) {
 func (h *RecordRuleHandler) CreateMonitorRecordRule(ctx *gin.Context) {
 	var req model.CreateMonitorRecordRuleReq
 
-	uc := ctx.MustGet("user").(ijwt.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 	req.UserID = uc.Uid
 	req.CreateUserName = uc.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.alertRecordService.CreateMonitorRecordRule(ctx, &req)
 	})
 }
@@ -81,15 +80,15 @@ func (h *RecordRuleHandler) CreateMonitorRecordRule(ctx *gin.Context) {
 func (h *RecordRuleHandler) UpdateMonitorRecordRule(ctx *gin.Context) {
 	var req model.UpdateMonitorRecordRuleReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
+		base.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.alertRecordService.UpdateMonitorRecordRule(ctx, &req)
 	})
 }
@@ -98,15 +97,15 @@ func (h *RecordRuleHandler) UpdateMonitorRecordRule(ctx *gin.Context) {
 func (h *RecordRuleHandler) DeleteMonitorRecordRule(ctx *gin.Context) {
 	var req model.DeleteMonitorRecordRuleReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
+		base.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.alertRecordService.DeleteMonitorRecordRule(ctx, &req)
 	})
 }
@@ -115,15 +114,15 @@ func (h *RecordRuleHandler) DeleteMonitorRecordRule(ctx *gin.Context) {
 func (h *RecordRuleHandler) GetMonitorRecordRule(ctx *gin.Context) {
 	var req model.GetMonitorRecordRuleReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "参数错误")
+		base.ErrorWithMessage(ctx, "参数错误")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.alertRecordService.GetMonitorRecordRule(ctx, &req)
 	})
 }

@@ -185,7 +185,6 @@ go run main.go
 Backend service endpoints:
 
 - API Service: [http://localhost:8000](http://localhost:8000)
-- Swagger Documentation: [http://localhost:8000/swagger](http://localhost:8000/swagger)
 
 #### 4. Start AI Service (Optional)
 

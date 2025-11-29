@@ -33,7 +33,7 @@ import (
 	"strings"
 	"time"
 
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/utils"
 	"github.com/spf13/viper"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -193,17 +193,17 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	}
 
 	// 处理告警标签和注释
-	labelMap := pkg.CloneMap(alert.Labels)
+	labelMap := utils.CloneMap(alert.Labels)
 	delete(labelMap, "alertname")
 	delete(labelMap, "severity")
 	delete(labelMap, "alert_rule_id")
 	delete(labelMap, "alert_send_group")
 
-	anno := pkg.CloneMap(alert.Annotations)
+	anno := utils.CloneMap(alert.Annotations)
 	delete(anno, "description_value")
 
-	msgLabel := fmt.Sprintf(`**🛶标签信息：**\n%s`, pkg.FormatMap(labelMap))
-	msgAnno := fmt.Sprintf(`**🚂注释信息：**\n%s`, pkg.FormatMap(anno))
+	msgLabel := fmt.Sprintf(`**🛶标签信息：**\n%s`, utils.FormatMap(labelMap))
+	msgAnno := fmt.Sprintf(`**🚂注释信息：**\n%s`, utils.FormatMap(anno))
 
 	// 构建发送组信息
 	sendGroupUrl := fmt.Sprintf(constant.SendGroupURLTemplate,
@@ -318,7 +318,7 @@ func (wc *webhookContent) SentFeishuGroup(ctx context.Context, msg string, robot
 	url := fmt.Sprintf("%s/%s", viper.GetString("webhook.im_feishu.group_message_api"), robotToken)
 
 	// 发送 HTTP POST 请求
-	response, err := pkg.PostWithJson(ctx, wc.client, wc.l, url, msg, nil, nil)
+	response, err := utils.PostWithJson(ctx, wc.client, wc.l, url, msg, nil, nil)
 	if err != nil {
 		wc.l.Error("发送飞书群聊卡片消息失败",
 			zap.Error(err),
@@ -370,7 +370,7 @@ func (wc *webhookContent) SentFeishuPrivate(ctx context.Context, cardContent str
 		params := map[string]string{"receive_id_type": "user_id"}
 
 		// 发送 HTTP POST 请求
-		response, err := pkg.PostWithJson(ctx, wc.client, wc.l, url, string(data), params, headers)
+		response, err := utils.PostWithJson(ctx, wc.client, wc.l, url, string(data), params, headers)
 		if err != nil {
 			wc.l.Error("发送飞书私聊卡片消息失败",
 				zap.Error(err),

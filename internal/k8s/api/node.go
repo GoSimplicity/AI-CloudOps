@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 )
 
@@ -63,15 +63,15 @@ func (h *K8sNodeHandler) RegisterRouters(server *gin.Engine) {
 func (h *K8sNodeHandler) GetNodeList(ctx *gin.Context) {
 	var req model.GetNodeListReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.nodeService.GetNodeList(ctx, &req)
 	})
 }
@@ -79,22 +79,22 @@ func (h *K8sNodeHandler) GetNodeList(ctx *gin.Context) {
 func (h *K8sNodeHandler) GetNodeDetail(ctx *gin.Context) {
 	var req model.GetNodeDetailReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	nodeName, err := utils.GetParamCustomName(ctx, "node_name")
+	nodeName, err := base.GetParamCustomName(ctx, "node_name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.NodeName = nodeName
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.nodeService.GetNodeDetail(ctx, &req)
 	})
 }
@@ -102,22 +102,22 @@ func (h *K8sNodeHandler) GetNodeDetail(ctx *gin.Context) {
 func (h *K8sNodeHandler) UpdateNodeLabels(ctx *gin.Context) {
 	var req model.UpdateNodeLabelsReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	nodeName, err := utils.GetParamCustomName(ctx, "node_name")
+	nodeName, err := base.GetParamCustomName(ctx, "node_name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.NodeName = nodeName
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.nodeService.UpdateNodeLabels(ctx, &req)
 	})
 }
@@ -125,22 +125,22 @@ func (h *K8sNodeHandler) UpdateNodeLabels(ctx *gin.Context) {
 func (h *K8sNodeHandler) DrainNode(ctx *gin.Context) {
 	var req model.DrainNodeReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	nodeName, err := utils.GetParamCustomName(ctx, "node_name")
+	nodeName, err := base.GetParamCustomName(ctx, "node_name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.NodeName = nodeName
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.nodeService.DrainNode(ctx, &req)
 	})
 }
@@ -148,22 +148,22 @@ func (h *K8sNodeHandler) DrainNode(ctx *gin.Context) {
 func (h *K8sNodeHandler) CordonNode(ctx *gin.Context) {
 	var req model.NodeCordonReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	nodeName, err := utils.GetParamCustomName(ctx, "node_name")
+	nodeName, err := base.GetParamCustomName(ctx, "node_name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.NodeName = nodeName
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.nodeService.CordonNode(ctx, &req)
 	})
 }
@@ -171,22 +171,22 @@ func (h *K8sNodeHandler) CordonNode(ctx *gin.Context) {
 func (h *K8sNodeHandler) UncordonNode(ctx *gin.Context) {
 	var req model.NodeUncordonReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	nodeName, err := utils.GetParamCustomName(ctx, "node_name")
+	nodeName, err := base.GetParamCustomName(ctx, "node_name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.NodeName = nodeName
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.nodeService.UncordonNode(ctx, &req)
 	})
 }
@@ -194,22 +194,22 @@ func (h *K8sNodeHandler) UncordonNode(ctx *gin.Context) {
 func (h *K8sNodeHandler) GetNodeTaints(ctx *gin.Context) {
 	var req model.GetNodeTaintsReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	nodeName, err := utils.GetParamCustomName(ctx, "node_name")
+	nodeName, err := base.GetParamCustomName(ctx, "node_name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.NodeName = nodeName
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.nodeService.GetNodeTaints(ctx, &req)
 	})
 }
@@ -217,22 +217,22 @@ func (h *K8sNodeHandler) GetNodeTaints(ctx *gin.Context) {
 func (h *K8sNodeHandler) AddNodeTaints(ctx *gin.Context) {
 	var req model.AddNodeTaintsReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	nodeName, err := utils.GetParamCustomName(ctx, "node_name")
+	nodeName, err := base.GetParamCustomName(ctx, "node_name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.NodeName = nodeName
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.taintService.AddNodeTaint(ctx, &req)
 	})
 }
@@ -240,22 +240,22 @@ func (h *K8sNodeHandler) AddNodeTaints(ctx *gin.Context) {
 func (h *K8sNodeHandler) DeleteNodeTaints(ctx *gin.Context) {
 	var req model.DeleteNodeTaintsReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	nodeName, err := utils.GetParamCustomName(ctx, "node_name")
+	nodeName, err := base.GetParamCustomName(ctx, "node_name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.NodeName = nodeName
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.taintService.DeleteNodeTaint(ctx, &req)
 	})
 }
@@ -263,22 +263,22 @@ func (h *K8sNodeHandler) DeleteNodeTaints(ctx *gin.Context) {
 func (h *K8sNodeHandler) CheckTaintYaml(ctx *gin.Context) {
 	var req model.CheckTaintYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	nodeName, err := utils.GetParamCustomName(ctx, "node_name")
+	nodeName, err := base.GetParamCustomName(ctx, "node_name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 	req.NodeName = nodeName
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.taintService.CheckTaintYaml(ctx, &req)
 	})
 }

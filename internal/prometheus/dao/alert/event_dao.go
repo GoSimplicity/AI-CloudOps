@@ -31,10 +31,9 @@ import (
 	"net/http"
 	"time"
 
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/utils"
+	userDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -254,7 +253,7 @@ func (d *alertManagerEventDAO) SendMessageToGroup(ctx context.Context, url strin
 	content := fmt.Sprintf(`{"msg_type":"text","content":{"text":"%s"}}`, message)
 
 	// 发送消息到群组
-	body, err := pkg.PostWithJson(ctx, d.httpClient, d.l, url, content, nil, nil)
+	body, err := utils.PostWithJson(ctx, d.httpClient, d.l, url, content, nil, nil)
 	if err != nil {
 		d.l.Error("发送飞书群聊消息失败",
 			zap.Error(err),

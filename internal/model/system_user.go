@@ -76,11 +76,11 @@ type UserSignUpReq struct {
 
 // TokenRequest 刷新令牌请求
 type TokenRequest struct {
-	RefreshToken string `json:"refreshToken" binding:"required"`           // 刷新令牌
-	UserID       int    `json:"user_id" binding:"required"`                // 用户ID
-	Username     string `json:"username" binding:"required"`               // 用户名
-	Ssid         string `json:"ssid" binding:"required"`                   // 会话ID
-	AccountType  int8   `json:"account_type" binding:"required,oneof=1 2"` // 账号类型 1普通用户 2服务账号
+	RefreshToken string `json:"refreshToken" binding:"required"` // 刷新令牌
+	UserID       int    `json:"-"`                               // 服务器侧注入
+	Username     string `json:"-"`                               // 服务器侧注入
+	Ssid         string `json:"-"`                               // 服务器侧注入
+	AccountType  int8   `json:"-"`                               // 服务器侧注入
 }
 
 // ProfileReq 获取用户信息请求
@@ -105,13 +105,12 @@ type ChangePasswordReq struct {
 // GetUserListReq 获取用户列表请求
 type GetUserListReq struct {
 	ListReq
-	Enable      int8 `json:"enable" form:"enable" default:"1"`             // 用户状态 1正常 2冻结
-	AccountType int8 `json:"account_type" form:"account_type" default:"1"` // 账号类型 1普通用户 2服务账号
+	Enable      *int8 `json:"enable" form:"enable" binding:"omitempty"`             // 用户状态 1正常 2冻结
+	AccountType *int8 `json:"account_type" form:"account_type" binding:"omitempty"` // 账号类型 1普通用户 2服务账号
 }
 
 // WriteOffReq 注销账号请求
 type WriteOffReq struct {
-	Username string `json:"username" binding:"required"` // 用户名
 	Password string `json:"password" binding:"required"` // 密码
 }
 

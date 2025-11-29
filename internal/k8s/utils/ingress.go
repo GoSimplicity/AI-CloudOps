@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
@@ -49,7 +49,7 @@ func ConvertToK8sIngress(ingress *networkingv1.Ingress, clusterID int) *model.K8
 		}
 	}
 
-	age := pkg.GetAge(ingress.CreationTimestamp.Time)
+	age := base.GetAge(ingress.CreationTimestamp.Time)
 	status := IngressStatus(ingress)
 
 	rules := make([]model.IngressRule, 0, len(ingress.Spec.Rules))

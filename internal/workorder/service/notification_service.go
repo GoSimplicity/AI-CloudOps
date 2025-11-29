@@ -34,7 +34,7 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	userDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	workorderDao "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/utils"
@@ -377,7 +377,7 @@ func (s *workorderNotificationService) getRecipients(ctx context.Context, notifi
 		case model.RecipientTypeAssignee:
 			if instance.AssigneeID != nil {
 				assigneeName := "处理人"
-				if user, err := s.userDAO.GetUserByID(ctx, *instance.AssigneeID); err == nil {
+				if user, err := s.userDAO.GetByID(ctx, *instance.AssigneeID); err == nil {
 					assigneeName = user.RealName
 				}
 
@@ -397,7 +397,7 @@ func (s *workorderNotificationService) getRecipients(ctx context.Context, notifi
 				}
 
 				userName := "指定用户"
-				if user, err := s.userDAO.GetUserByID(ctx, userID); err == nil {
+				if user, err := s.userDAO.GetByID(ctx, userID); err == nil {
 					userName = user.RealName
 				}
 
@@ -569,7 +569,7 @@ func (s *workorderNotificationService) buildMessageContent(notificationConfig *m
 	// 处理处理人名称
 	assigneeName := "待分配"
 	if instance.AssigneeID != nil {
-		if user, err := s.userDAO.GetUserByID(context.Background(), *instance.AssigneeID); err == nil && user != nil {
+		if user, err := s.userDAO.GetByID(context.Background(), *instance.AssigneeID); err == nil && user != nil {
 			assigneeName = user.RealName
 		}
 	}
@@ -664,7 +664,7 @@ func (s *workorderNotificationService) getRecipientAddress(recipient RecipientIn
 		return ""
 	}
 
-	user, err := s.userDAO.GetUserByID(context.Background(), userID)
+	user, err := s.userDAO.GetByID(context.Background(), userID)
 	if err != nil {
 		s.logger.Error("获取用户信息失败",
 			zap.Int("user_id", userID),

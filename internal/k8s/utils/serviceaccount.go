@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
@@ -38,7 +39,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 )
 
 func BuildServiceAccountResponse(sa *corev1.ServiceAccount, clusterID int) *model.K8sServiceAccount {
@@ -54,7 +54,7 @@ func BuildServiceAccountResponse(sa *corev1.ServiceAccount, clusterID int) *mode
 		Labels:                       sa.Labels,
 		Annotations:                  sa.Annotations,
 		CreatedAt:                    sa.CreationTimestamp.Time.Format(time.RFC3339),
-		Age:                          utils.GetAge(sa.CreationTimestamp.Time),
+		Age:                          base.GetAge(sa.CreationTimestamp.Time),
 		AutomountServiceAccountToken: sa.AutomountServiceAccountToken,
 		ResourceVersion:              sa.ResourceVersion,
 		RawServiceAccount:            sa,

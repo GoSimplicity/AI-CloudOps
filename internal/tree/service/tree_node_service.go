@@ -31,9 +31,9 @@ import (
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	userDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
 	"go.uber.org/zap"
 )
 

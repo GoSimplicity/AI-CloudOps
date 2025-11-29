@@ -56,16 +56,13 @@ import (
 	treeHandler "github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeService "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
-	userHandler "github.com/GoSimplicity/AI-CloudOps/internal/user/api"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
-	userService "github.com/GoSimplicity/AI-CloudOps/internal/user/service"
 	workorderHandler "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
 	workorderDao "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	workorderService "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/sse"
 	pkgSSH "github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/terminal"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/terminal"
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	_ "github.com/google/wire"
@@ -87,7 +84,7 @@ var HandlerSet = wire.NewSet(
 	authHandler.NewApiHandler,
 	authHandler.NewAuditHandler,
 	authHandler.NewSystemHandler,
-	userHandler.NewUserHandler,
+	authHandler.NewUserHandler,
 	notAuthHandler.NewNotAuthHandler,
 	k8sHandler.NewK8sNodeHandler,
 	k8sHandler.NewK8sClusterHandler,
@@ -162,7 +159,7 @@ var ServiceSet = wire.NewSet(
 	k8sService.NewSecretService,
 	k8sService.NewPVService,
 	k8sService.NewPVCService,
-	userService.NewUserService,
+	authService.NewUserService,
 	authService.NewApiService,
 	authService.NewRoleService,
 	authService.NewAuditService,
@@ -204,7 +201,7 @@ var DaoSet = wire.NewSet(
 	scrapeJobDao.NewScrapeJobDAO,
 	scrapeJobDao.NewScrapePoolDAO,
 	configDao.NewMonitorConfigDAO,
-	userDao.NewUserDAO,
+	authDao.NewUserDAO,
 	authDao.NewRoleDAO,
 	authDao.NewApiDAO,
 	authDao.NewAuditDAO,

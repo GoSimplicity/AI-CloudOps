@@ -23,4 +23,36 @@
  *
  */
 
-package utils
+package ssh
+
+import (
+	"net/http"
+	"time"
+
+	"github.com/gorilla/websocket"
+)
+
+const (
+	// WebSocket 升级器配置常量
+	DefaultWSReadBufferSize   = 4096             // 读缓冲区大小（增加以提高性能）
+	DefaultWSWriteBufferSize  = 4096             // 写缓冲区大小（增加以提高性能）
+	DefaultWSHandshakeTimeout = 10 * time.Second // 握手超时时间
+)
+
+// UpGrader 升级HTTP连接为WebSocket连接
+// 包含更好的错误处理和性能配置
+var UpGrader = websocket.Upgrader{
+	ReadBufferSize:    DefaultWSReadBufferSize,
+	WriteBufferSize:   DefaultWSWriteBufferSize,
+	HandshakeTimeout:  DefaultWSHandshakeTimeout,
+	EnableCompression: true, // 启用压缩以提高性能
+	CheckOrigin: func(r *http.Request) bool {
+		// 在生产环境中，应该实现适当的来源检查
+		// 目前为了兼容性允许所有来源
+		return true
+	},
+	Error: func(w http.ResponseWriter, r *http.Request, status int, reason error) {
+		// 自定义错误处理，避免暴露敏感信息
+		http.Error(w, "WebSocket upgrade failed", status)
+	},
+}

@@ -28,7 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -57,15 +58,15 @@ func (h *K8sYamlTaskHandler) RegisterRouters(server *gin.Engine) {
 func (h *K8sYamlTaskHandler) GetYamlTaskList(ctx *gin.Context) {
 	var req model.YamlTaskListReq
 
-	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterId, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, "缺少 'cluster_id' 参数")
+		base.BadRequestError(ctx, "缺少 'cluster_id' 参数")
 		return
 	}
 
 	req.ClusterID = clusterId
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.yamlTaskService.GetYamlTaskList(ctx, &req)
 	})
 }
@@ -73,17 +74,17 @@ func (h *K8sYamlTaskHandler) GetYamlTaskList(ctx *gin.Context) {
 func (h *K8sYamlTaskHandler) CreateYamlTask(ctx *gin.Context) {
 	var req model.YamlTaskCreateReq
 
-	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterId, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, "缺少 'cluster_id' 参数")
+		base.BadRequestError(ctx, "缺少 'cluster_id' 参数")
 		return
 	}
-	uc := ctx.MustGet("user").(utils.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 
 	req.UserID = uc.Uid
 	req.ClusterID = clusterId
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.yamlTaskService.CreateYamlTask(ctx, &req)
 	})
 }
@@ -91,24 +92,24 @@ func (h *K8sYamlTaskHandler) CreateYamlTask(ctx *gin.Context) {
 func (h *K8sYamlTaskHandler) UpdateYamlTask(ctx *gin.Context) {
 	var req model.YamlTaskUpdateReq
 
-	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterId, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, "缺少 'cluster_id' 参数")
+		base.BadRequestError(ctx, "缺少 'cluster_id' 参数")
 		return
 	}
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.BadRequestError(ctx, "缺少 'id' 参数")
+		base.BadRequestError(ctx, "缺少 'id' 参数")
 		return
 	}
-	uc := ctx.MustGet("user").(utils.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 
 	req.UserID = uc.Uid
 	req.ClusterID = clusterId
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.yamlTaskService.UpdateYamlTask(ctx, &req)
 	})
 }
@@ -116,22 +117,22 @@ func (h *K8sYamlTaskHandler) UpdateYamlTask(ctx *gin.Context) {
 func (h *K8sYamlTaskHandler) ApplyYamlTask(ctx *gin.Context) {
 	var req model.YamlTaskExecuteReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.BadRequestError(ctx, "缺少 'id' 参数")
+		base.BadRequestError(ctx, "缺少 'id' 参数")
 		return
 	}
 
-	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterId, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, "缺少 'cluster_id' 参数")
+		base.BadRequestError(ctx, "缺少 'cluster_id' 参数")
 		return
 	}
 
 	req.ID = id
 	req.ClusterID = clusterId
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.yamlTaskService.ApplyYamlTask(ctx, &req)
 	})
 }
@@ -139,22 +140,22 @@ func (h *K8sYamlTaskHandler) ApplyYamlTask(ctx *gin.Context) {
 func (h *K8sYamlTaskHandler) DeleteYamlTask(ctx *gin.Context) {
 	var req model.YamlTaskDeleteReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.BadRequestError(ctx, "缺少 'id' 参数")
+		base.BadRequestError(ctx, "缺少 'id' 参数")
 		return
 	}
 
-	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterId, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, "缺少 'cluster_id' 参数")
+		base.BadRequestError(ctx, "缺少 'cluster_id' 参数")
 		return
 	}
 
 	req.ID = id
 	req.ClusterID = clusterId
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.yamlTaskService.DeleteYamlTask(ctx, &req)
 	})
 }
@@ -162,22 +163,22 @@ func (h *K8sYamlTaskHandler) DeleteYamlTask(ctx *gin.Context) {
 func (h *K8sYamlTaskHandler) GetYamlTaskDetail(ctx *gin.Context) {
 	var req model.YamlTaskDetailReq
 
-	clusterId, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterId, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, "缺少 'cluster_id' 参数")
+		base.BadRequestError(ctx, "缺少 'cluster_id' 参数")
 		return
 	}
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.BadRequestError(ctx, "缺少 'id' 参数")
+		base.BadRequestError(ctx, "缺少 'id' 参数")
 		return
 	}
 
 	req.ID = id
 	req.ClusterID = clusterId
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.yamlTaskService.GetYamlTaskDetail(ctx, &req)
 	})
 }

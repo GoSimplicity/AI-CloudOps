@@ -28,7 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -58,12 +59,12 @@ func (h *InstanceCommentHandler) RegisterRouters(server *gin.Engine) {
 // CreateInstanceComment 创建工单评论
 func (h *InstanceCommentHandler) CreateInstanceComment(ctx *gin.Context) {
 	var req model.CreateWorkorderInstanceCommentReq
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
 	req.OperatorID = user.Uid
 	req.OperatorName = user.Username
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return nil, h.commentService.CreateInstanceComment(ctx, &req)
 	})
 }
@@ -73,15 +74,15 @@ func (h *InstanceCommentHandler) CreateInstanceComment(ctx *gin.Context) {
 func (h *InstanceCommentHandler) UpdateInstanceComment(ctx *gin.Context) {
 	var req model.UpdateWorkorderInstanceCommentReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 
 	req.ID = id
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return nil, h.commentService.UpdateInstanceComment(ctx, &req, user.Uid)
 	})
 }
@@ -89,14 +90,14 @@ func (h *InstanceCommentHandler) UpdateInstanceComment(ctx *gin.Context) {
 // DeleteInstanceComment 删除工单评论
 // DeleteInstanceComment 删除工单评论
 func (h *InstanceCommentHandler) DeleteInstanceComment(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	utils.HandleRequest(ctx, nil, func() (any, error) {
+	base.HandleRequest(ctx, nil, func() (any, error) {
 		return nil, h.commentService.DeleteInstanceComment(ctx, id, user.Uid)
 	})
 }
@@ -104,12 +105,12 @@ func (h *InstanceCommentHandler) DeleteInstanceComment(ctx *gin.Context) {
 // GetInstanceComment 获取工单评论详情
 // GetInstanceComment 获取工单评论详情
 func (h *InstanceCommentHandler) GetInstanceComment(ctx *gin.Context) {
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 
-	utils.HandleRequest(ctx, nil, func() (any, error) {
+	base.HandleRequest(ctx, nil, func() (any, error) {
 		return h.commentService.GetInstanceComment(ctx, id)
 	})
 }
@@ -119,7 +120,7 @@ func (h *InstanceCommentHandler) GetInstanceComment(ctx *gin.Context) {
 func (h *InstanceCommentHandler) ListInstanceComments(ctx *gin.Context) {
 	var req model.ListWorkorderInstanceCommentReq
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return h.commentService.ListInstanceComments(ctx, &req)
 	})
 }
@@ -129,14 +130,14 @@ func (h *InstanceCommentHandler) ListInstanceComments(ctx *gin.Context) {
 func (h *InstanceCommentHandler) GetInstanceCommentsTree(ctx *gin.Context) {
 	var req model.GetInstanceCommentsTreeReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return h.commentService.GetInstanceCommentsTree(ctx, req.ID)
 	})
 }

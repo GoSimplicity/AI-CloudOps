@@ -39,9 +39,9 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/retry"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils/terminal"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/retry"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/terminal"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
@@ -263,7 +263,7 @@ func (m *podManager) BatchDeletePods(ctx context.Context, clusterID int, namespa
 		m.logger.Warn("批量删除Pod失败",
 			zap.Error(err))
 
-		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, "批量删除Pod失败")
+		return base.NewBusinessError(constants.ErrK8sResourceDelete, "批量删除Pod失败")
 	}
 	return nil
 }
@@ -461,7 +461,7 @@ func (m *podManager) PortForward(ctx context.Context, ports []string, dialer htt
 
 	forwarder, err := portforward.New(dialer, ports, stopChan, readyChan, io.Discard, io.Discard)
 	if err != nil {
-		return pkg.NewBusinessError(constants.ErrK8sPortForward, err.Error())
+		return base.NewBusinessError(constants.ErrK8sPortForward, err.Error())
 	}
 
 	// 自动关闭转发

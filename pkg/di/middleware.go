@@ -29,10 +29,9 @@ import (
 	"strings"
 	"time"
 
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/middleware"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

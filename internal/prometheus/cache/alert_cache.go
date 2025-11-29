@@ -35,7 +35,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertPoolDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	configDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/utils"
 	altconfig "github.com/prometheus/alertmanager/config"
 	al "github.com/prometheus/alertmanager/pkg/labels"
 	pm "github.com/prometheus/common/model"

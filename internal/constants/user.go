@@ -27,11 +27,16 @@ package constants
 
 import "errors"
 
-// Http Error Code
+// Http Error Code 与用户常量
 const (
 	UserSignUpFailedErrorCode = 400001 + iota
 	UserExistErrorCode
 	UserNotExistErrorCode
+)
+
+const (
+	AccountTypeUser    int8 = 1 // 普通用户
+	AccountTypeService int8 = 2 // 服务账号
 )
 
 var (

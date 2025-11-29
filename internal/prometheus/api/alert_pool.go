@@ -28,7 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertEventService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -57,7 +58,7 @@ func (h *AlertPoolHandler) RegisterRouters(server *gin.Engine) {
 func (h *AlertPoolHandler) GetMonitorAlertManagerPoolList(ctx *gin.Context) {
 	var req model.GetMonitorAlertManagerPoolListReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.GetMonitorAlertManagerPoolList(ctx, &req)
 	})
 }
@@ -66,11 +67,11 @@ func (h *AlertPoolHandler) GetMonitorAlertManagerPoolList(ctx *gin.Context) {
 func (h *AlertPoolHandler) CreateMonitorAlertManagerPool(ctx *gin.Context) {
 	var req model.CreateMonitorAlertManagerPoolReq
 
-	uc := ctx.MustGet("user").(utils.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 	req.UserID = uc.Uid
 	req.CreateUserName = uc.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.CreateMonitorAlertManagerPool(ctx, &req)
 	})
 }
@@ -79,7 +80,7 @@ func (h *AlertPoolHandler) CreateMonitorAlertManagerPool(ctx *gin.Context) {
 func (h *AlertPoolHandler) UpdateMonitorAlertManagerPool(ctx *gin.Context) {
 	var req model.UpdateMonitorAlertManagerPoolReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.UpdateMonitorAlertManagerPool(ctx, &req)
 	})
 }
@@ -88,15 +89,15 @@ func (h *AlertPoolHandler) UpdateMonitorAlertManagerPool(ctx *gin.Context) {
 func (h *AlertPoolHandler) DeleteMonitorAlertManagerPool(ctx *gin.Context) {
 	var req model.DeleteMonitorAlertManagerPoolReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.DeleteMonitorAlertManagerPool(ctx, &req)
 	})
 }
@@ -105,15 +106,15 @@ func (h *AlertPoolHandler) DeleteMonitorAlertManagerPool(ctx *gin.Context) {
 func (h *AlertPoolHandler) GetMonitorAlertManagerPool(ctx *gin.Context) {
 	var req model.GetMonitorAlertManagerPoolReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.GetMonitorAlertManagerPool(ctx, &req)
 	})
 }

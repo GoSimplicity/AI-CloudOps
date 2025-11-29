@@ -31,7 +31,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 )
 
@@ -68,21 +68,21 @@ func (h *K8sPodHandler) RegisterRouters(server *gin.Engine) {
 func (h *K8sPodHandler) GetPodDetails(ctx *gin.Context) {
 	var req model.GetPodDetailsReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -90,7 +90,7 @@ func (h *K8sPodHandler) GetPodDetails(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.podService.GetPodDetails(ctx, &req)
 	})
 }
@@ -98,15 +98,15 @@ func (h *K8sPodHandler) GetPodDetails(ctx *gin.Context) {
 func (h *K8sPodHandler) GetPodList(ctx *gin.Context) {
 	var req model.GetPodListReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.podService.GetPodList(ctx, &req)
 	})
 }
@@ -115,11 +115,11 @@ func (h *K8sPodHandler) GetPodContainers(ctx *gin.Context) {
 	var req model.GetPodContainersReq
 
 	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(ctx, "参数绑定失败: "+err.Error())
+		base.BadRequestError(ctx, "参数绑定失败: "+err.Error())
 		return
 	}
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.podService.GetPodContainers(ctx, &req)
 	})
 }
@@ -128,12 +128,12 @@ func (h *K8sPodHandler) GetPodLogs(ctx *gin.Context) {
 	var req model.GetPodLogsReq
 
 	if err := ctx.ShouldBindUri(&req); err != nil {
-		utils.BadRequestError(ctx, "参数绑定失败: "+err.Error())
+		base.BadRequestError(ctx, "参数绑定失败: "+err.Error())
 		return
 	}
 
 	if err := ctx.ShouldBindQuery(&req); err != nil {
-		utils.BadRequestError(ctx, "查询参数绑定失败: "+err.Error())
+		base.BadRequestError(ctx, "查询参数绑定失败: "+err.Error())
 		return
 	}
 
@@ -146,7 +146,7 @@ func (h *K8sPodHandler) GetPodLogs(ctx *gin.Context) {
 	ctx.Header("Access-Control-Allow-Headers", "Cache-Control")
 
 	if err := h.podService.GetPodLogs(ctx, &req); err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 }
@@ -154,21 +154,21 @@ func (h *K8sPodHandler) GetPodLogs(ctx *gin.Context) {
 func (h *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
 	var req model.GetPodYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -176,7 +176,7 @@ func (h *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.podService.GetPodYaml(ctx, &req)
 	})
 }
@@ -184,15 +184,15 @@ func (h *K8sPodHandler) GetPodYaml(ctx *gin.Context) {
 func (h *K8sPodHandler) CreatePod(ctx *gin.Context) {
 	var req model.CreatePodReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.podService.CreatePod(ctx, &req)
 	})
 }
@@ -200,15 +200,15 @@ func (h *K8sPodHandler) CreatePod(ctx *gin.Context) {
 func (h *K8sPodHandler) CreatePodByYaml(ctx *gin.Context) {
 	var req model.CreatePodByYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.podService.CreatePodByYaml(ctx, &req)
 	})
 }
@@ -216,21 +216,21 @@ func (h *K8sPodHandler) CreatePodByYaml(ctx *gin.Context) {
 func (h *K8sPodHandler) UpdatePod(ctx *gin.Context) {
 	var req model.UpdatePodReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -238,7 +238,7 @@ func (h *K8sPodHandler) UpdatePod(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.podService.UpdatePod(ctx, &req)
 	})
 }
@@ -246,21 +246,21 @@ func (h *K8sPodHandler) UpdatePod(ctx *gin.Context) {
 func (h *K8sPodHandler) UpdatePodByYaml(ctx *gin.Context) {
 	var req model.UpdatePodByYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -268,7 +268,7 @@ func (h *K8sPodHandler) UpdatePodByYaml(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.podService.UpdatePodByYaml(ctx, &req)
 	})
 }
@@ -276,21 +276,21 @@ func (h *K8sPodHandler) UpdatePodByYaml(ctx *gin.Context) {
 func (h *K8sPodHandler) DeletePod(ctx *gin.Context) {
 	var req model.DeletePodReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -298,7 +298,7 @@ func (h *K8sPodHandler) DeletePod(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.podService.DeletePod(ctx, &req)
 	})
 }
@@ -306,49 +306,49 @@ func (h *K8sPodHandler) DeletePod(ctx *gin.Context) {
 func (h *K8sPodHandler) PodExec(ctx *gin.Context) {
 	var req model.PodExecReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, "集群ID参数错误: "+err.Error())
+		base.BadRequestError(ctx, "集群ID参数错误: "+err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, "命名空间参数错误: "+err.Error())
+		base.BadRequestError(ctx, "命名空间参数错误: "+err.Error())
 		return
 	}
 
-	podName, err := utils.GetParamCustomName(ctx, "name")
+	podName, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, "Pod名称参数错误: "+err.Error())
+		base.BadRequestError(ctx, "Pod名称参数错误: "+err.Error())
 		return
 	}
 
-	container, err := utils.GetParamCustomName(ctx, "container")
+	container, err := base.GetParamCustomName(ctx, "container")
 	if err != nil {
-		utils.BadRequestError(ctx, "容器名称参数错误: "+err.Error())
+		base.BadRequestError(ctx, "容器名称参数错误: "+err.Error())
 		return
 	}
 
 	shell := ctx.DefaultQuery("shell", "sh")
 
 	if clusterID <= 0 {
-		utils.BadRequestError(ctx, "集群ID必须大于0")
+		base.BadRequestError(ctx, "集群ID必须大于0")
 		return
 	}
 
 	if namespace == "" {
-		utils.BadRequestError(ctx, "命名空间不能为空")
+		base.BadRequestError(ctx, "命名空间不能为空")
 		return
 	}
 
 	if podName == "" {
-		utils.BadRequestError(ctx, "Pod名称不能为空")
+		base.BadRequestError(ctx, "Pod名称不能为空")
 		return
 	}
 
 	if container == "" {
-		utils.BadRequestError(ctx, "容器名称不能为空")
+		base.BadRequestError(ctx, "容器名称不能为空")
 		return
 	}
 
@@ -362,7 +362,7 @@ func (h *K8sPodHandler) PodExec(ctx *gin.Context) {
 		}
 	}
 	if !isValidShell {
-		utils.BadRequestError(ctx, "不支持的shell类型: "+shell)
+		base.BadRequestError(ctx, "不支持的shell类型: "+shell)
 		return
 	}
 
@@ -373,7 +373,7 @@ func (h *K8sPodHandler) PodExec(ctx *gin.Context) {
 	req.Shell = shell
 
 	if err := h.podService.PodExec(ctx, &req); err != nil {
-		utils.BadRequestError(ctx, "建立终端连接失败: "+err.Error())
+		base.BadRequestError(ctx, "建立终端连接失败: "+err.Error())
 		return
 	}
 }
@@ -381,21 +381,21 @@ func (h *K8sPodHandler) PodExec(ctx *gin.Context) {
 func (h *K8sPodHandler) PodPortForward(ctx *gin.Context) {
 	var req model.PodPortForwardReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	podName, err := utils.GetParamCustomName(ctx, "name")
+	podName, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -403,7 +403,7 @@ func (h *K8sPodHandler) PodPortForward(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.PodName = podName
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.podService.PodPortForward(ctx, &req)
 	})
 }
@@ -411,27 +411,27 @@ func (h *K8sPodHandler) PodPortForward(ctx *gin.Context) {
 func (h *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
 	var req model.PodFileUploadReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, "集群ID参数错误: "+err.Error())
+		base.BadRequestError(ctx, "集群ID参数错误: "+err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, "命名空间参数错误: "+err.Error())
+		base.BadRequestError(ctx, "命名空间参数错误: "+err.Error())
 		return
 	}
 
-	podName, err := utils.GetParamCustomName(ctx, "name")
+	podName, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, "Pod名称参数错误: "+err.Error())
+		base.BadRequestError(ctx, "Pod名称参数错误: "+err.Error())
 		return
 	}
 
-	container, err := utils.GetParamCustomName(ctx, "container")
+	container, err := base.GetParamCustomName(ctx, "container")
 	if err != nil {
-		utils.BadRequestError(ctx, "容器名称参数错误: "+err.Error())
+		base.BadRequestError(ctx, "容器名称参数错误: "+err.Error())
 		return
 	}
 
@@ -444,39 +444,39 @@ func (h *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
 	}
 
 	if clusterID <= 0 {
-		utils.BadRequestError(ctx, "集群ID必须大于0")
+		base.BadRequestError(ctx, "集群ID必须大于0")
 		return
 	}
 
 	if namespace == "" {
-		utils.BadRequestError(ctx, "命名空间不能为空")
+		base.BadRequestError(ctx, "命名空间不能为空")
 		return
 	}
 
 	if podName == "" {
-		utils.BadRequestError(ctx, "Pod名称不能为空")
+		base.BadRequestError(ctx, "Pod名称不能为空")
 		return
 	}
 
 	if container == "" {
-		utils.BadRequestError(ctx, "容器名称不能为空")
+		base.BadRequestError(ctx, "容器名称不能为空")
 		return
 	}
 
 	if !isValidPath(filePath) {
-		utils.BadRequestError(ctx, "无效的文件路径格式")
+		base.BadRequestError(ctx, "无效的文件路径格式")
 		return
 	}
 
 	if ctx.Request.MultipartForm == nil {
 		if err := ctx.Request.ParseMultipartForm(32 << 20); err != nil {
-			utils.BadRequestError(ctx, "解析上传文件失败: "+err.Error())
+			base.BadRequestError(ctx, "解析上传文件失败: "+err.Error())
 			return
 		}
 	}
 
 	if ctx.Request.MultipartForm == nil || len(ctx.Request.MultipartForm.File) == 0 {
-		utils.BadRequestError(ctx, "未找到上传的文件")
+		base.BadRequestError(ctx, "未找到上传的文件")
 		return
 	}
 
@@ -487,69 +487,69 @@ func (h *K8sPodHandler) PodFileUpload(ctx *gin.Context) {
 	req.FilePath = filePath
 
 	if err := h.podService.PodFileUpload(ctx, &req); err != nil {
-		utils.BadRequestError(ctx, "文件上传失败: "+err.Error())
+		base.BadRequestError(ctx, "文件上传失败: "+err.Error())
 		return
 	}
 
-	utils.Success(ctx)
+	base.Success(ctx)
 }
 
 func (h *K8sPodHandler) PodFileDownload(ctx *gin.Context) {
 	var req model.PodFileDownloadReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, "集群ID参数错误: "+err.Error())
+		base.BadRequestError(ctx, "集群ID参数错误: "+err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, "命名空间参数错误: "+err.Error())
+		base.BadRequestError(ctx, "命名空间参数错误: "+err.Error())
 		return
 	}
 
-	podName, err := utils.GetParamCustomName(ctx, "name")
+	podName, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, "Pod名称参数错误: "+err.Error())
+		base.BadRequestError(ctx, "Pod名称参数错误: "+err.Error())
 		return
 	}
 
-	container, err := utils.GetParamCustomName(ctx, "container")
+	container, err := base.GetParamCustomName(ctx, "container")
 	if err != nil {
-		utils.BadRequestError(ctx, "容器名称参数错误: "+err.Error())
+		base.BadRequestError(ctx, "容器名称参数错误: "+err.Error())
 		return
 	}
 
 	filePath := ctx.Query("file_path")
 
 	if clusterID <= 0 {
-		utils.BadRequestError(ctx, "集群ID必须大于0")
+		base.BadRequestError(ctx, "集群ID必须大于0")
 		return
 	}
 
 	if namespace == "" {
-		utils.BadRequestError(ctx, "命名空间不能为空")
+		base.BadRequestError(ctx, "命名空间不能为空")
 		return
 	}
 
 	if podName == "" {
-		utils.BadRequestError(ctx, "Pod名称不能为空")
+		base.BadRequestError(ctx, "Pod名称不能为空")
 		return
 	}
 
 	if container == "" {
-		utils.BadRequestError(ctx, "容器名称不能为空")
+		base.BadRequestError(ctx, "容器名称不能为空")
 		return
 	}
 
 	if filePath == "" {
-		utils.BadRequestError(ctx, "文件路径不能为空")
+		base.BadRequestError(ctx, "文件路径不能为空")
 		return
 	}
 
 	if !isValidPath(filePath) {
-		utils.BadRequestError(ctx, "无效的文件路径格式")
+		base.BadRequestError(ctx, "无效的文件路径格式")
 		return
 	}
 
@@ -560,7 +560,7 @@ func (h *K8sPodHandler) PodFileDownload(ctx *gin.Context) {
 	req.FilePath = filePath
 
 	if err := h.podService.PodFileDownload(ctx, &req); err != nil {
-		utils.BadRequestError(ctx, "文件下载失败: "+err.Error())
+		base.BadRequestError(ctx, "文件下载失败: "+err.Error())
 		return
 	}
 }

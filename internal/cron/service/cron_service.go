@@ -35,7 +35,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/handler"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/scheduler"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	userDao "github.com/GoSimplicity/AI-CloudOps/internal/user/dao"
+	userDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	"github.com/hibiken/asynq"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
@@ -387,7 +387,7 @@ func (s *cronService) fillCreatedByName(ctx context.Context, job *model.CronJob)
 	}
 
 	// 查询用户信息
-	user, err := s.userDAO.GetUserByID(ctx, job.CreatedBy)
+	user, err := s.userDAO.GetByID(ctx, job.CreatedBy)
 	if err != nil {
 		s.logger.Warn("查询创建者信息失败",
 			zap.Int("jobID", job.ID),

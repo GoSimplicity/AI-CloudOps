@@ -37,7 +37,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	pkg "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -91,7 +91,7 @@ func (s *pvService) GetPVList(ctx context.Context, req *model.GetPVListReq) (mod
 		s.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", req.ClusterID),
 			zap.Error(err))
-		return model.ListResp[*model.K8sPV]{}, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
+		return model.ListResp[*model.K8sPV]{}, base.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
 	listOptions := utils.BuildPVListOptions(req)
@@ -101,7 +101,7 @@ func (s *pvService) GetPVList(ctx context.Context, req *model.GetPVListReq) (mod
 		s.logger.Error("获取PV列表失败",
 			zap.Int("clusterID", req.ClusterID),
 			zap.Error(err))
-		return model.ListResp[*model.K8sPV]{}, pkg.NewBusinessError(constants.ErrK8sResourceList, "获取PV列表失败")
+		return model.ListResp[*model.K8sPV]{}, base.NewBusinessError(constants.ErrK8sResourceList, "获取PV列表失败")
 	}
 
 	entities := make([]*model.K8sPV, 0, len(pvs.Items))
@@ -206,7 +206,7 @@ func (s *pvService) GetPVDetails(ctx context.Context, req *model.GetPVDetailsReq
 	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
+		return nil, base.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
 	pv, err := kubeClient.CoreV1().PersistentVolumes().Get(ctx, req.Name, metav1.GetOptions{})
@@ -215,7 +215,7 @@ func (s *pvService) GetPVDetails(ctx context.Context, req *model.GetPVDetailsReq
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("name", req.Name),
 			zap.Error(err))
-		return nil, pkg.NewBusinessError(constants.ErrK8sResourceGet, "获取PV详情失败")
+		return nil, base.NewBusinessError(constants.ErrK8sResourceGet, "获取PV详情失败")
 	}
 
 	return s.convertPVToEntity(pv, req.ClusterID), nil
@@ -237,7 +237,7 @@ func (s *pvService) GetPVYaml(ctx context.Context, req *model.GetPVYamlReq) (*mo
 	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return nil, pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
+		return nil, base.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
 	pv, err := kubeClient.CoreV1().PersistentVolumes().Get(ctx, req.Name, metav1.GetOptions{})
@@ -246,7 +246,7 @@ func (s *pvService) GetPVYaml(ctx context.Context, req *model.GetPVYamlReq) (*mo
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("name", req.Name),
 			zap.Error(err))
-		return nil, pkg.NewBusinessError(constants.ErrK8sResourceGet, "获取PV失败")
+		return nil, base.NewBusinessError(constants.ErrK8sResourceGet, "获取PV失败")
 	}
 
 	yamlContent, err := utils.PVToYAML(pv)
@@ -319,7 +319,7 @@ func (s *pvService) UpdatePV(ctx context.Context, req *model.UpdatePVReq) error 
 	kubeClient, err := s.client.GetKubeClient(req.ClusterID)
 	if err != nil {
 		s.logger.Error("获取Kubernetes客户端失败", zap.Error(err))
-		return pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
+		return base.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
 	existingPV, err := kubeClient.CoreV1().PersistentVolumes().Get(ctx, req.Name, metav1.GetOptions{})
@@ -328,7 +328,7 @@ func (s *pvService) UpdatePV(ctx context.Context, req *model.UpdatePVReq) error 
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("name", req.Name),
 			zap.Error(err))
-		return pkg.NewBusinessError(constants.ErrK8sResourceGet, "获取现有PV失败")
+		return base.NewBusinessError(constants.ErrK8sResourceGet, "获取现有PV失败")
 	}
 
 	// 基于现有PV对象更新可变字段
@@ -337,7 +337,7 @@ func (s *pvService) UpdatePV(ctx context.Context, req *model.UpdatePVReq) error 
 		s.logger.Error("转换PV更新请求失败",
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("name", req.Name))
-		return pkg.NewBusinessError(constants.ErrInvalidParam, "无效的更新请求")
+		return base.NewBusinessError(constants.ErrInvalidParam, "无效的更新请求")
 	}
 
 	if err := utils.ValidatePV(pv); err != nil {
@@ -377,7 +377,7 @@ func (s *pvService) DeletePV(ctx context.Context, req *model.DeletePVReq) error 
 		s.logger.Error("获取Kubernetes客户端失败",
 			zap.Int("clusterID", req.ClusterID),
 			zap.Error(err))
-		return pkg.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
+		return base.NewBusinessError(constants.ErrK8sClientInit, "无法连接到Kubernetes集群")
 	}
 
 	err = kubeClient.CoreV1().PersistentVolumes().Delete(ctx, req.Name, metav1.DeleteOptions{})
@@ -386,7 +386,7 @@ func (s *pvService) DeletePV(ctx context.Context, req *model.DeletePVReq) error 
 			zap.Int("clusterID", req.ClusterID),
 			zap.String("name", req.Name),
 			zap.Error(err))
-		return pkg.NewBusinessError(constants.ErrK8sResourceDelete, "删除PV失败")
+		return base.NewBusinessError(constants.ErrK8sResourceDelete, "删除PV失败")
 	}
 
 	s.logger.Info("成功删除PV",
@@ -398,10 +398,10 @@ func (s *pvService) DeletePV(ctx context.Context, req *model.DeletePVReq) error 
 // ReclaimPV 回收PV
 func (s *pvService) ReclaimPV(ctx context.Context, req *model.ReclaimPVReq) error {
 	if req == nil {
-		return pkg.NewBusinessError(constants.ErrInvalidParam, "请求不能为空")
+		return base.NewBusinessError(constants.ErrInvalidParam, "请求不能为空")
 	}
 	if req.ClusterID <= 0 || req.Name == "" {
-		return pkg.NewBusinessError(constants.ErrInvalidParam, "参数无效")
+		return base.NewBusinessError(constants.ErrInvalidParam, "参数无效")
 	}
 	return s.pvManager.ReclaimPV(ctx, req.ClusterID, req.Name)
 }
@@ -525,58 +525,58 @@ func (s *pvService) pvStatusToString(status model.K8sPVStatus) string {
 
 func (s *pvService) CreatePVByYaml(ctx context.Context, req *model.CreatePVByYamlReq) error {
 	if req == nil {
-		return pkg.NewBusinessError(constants.ErrInvalidParam, "通过YAML创建PV请求不能为空")
+		return base.NewBusinessError(constants.ErrInvalidParam, "通过YAML创建PV请求不能为空")
 	}
 	if req.ClusterID <= 0 {
-		return pkg.NewBusinessError(constants.ErrInvalidParam, "集群ID不能为空")
+		return base.NewBusinessError(constants.ErrInvalidParam, "集群ID不能为空")
 	}
 	if req.YAML == "" {
-		return pkg.NewBusinessError(constants.ErrInvalidParam, "YAML内容不能为空")
+		return base.NewBusinessError(constants.ErrInvalidParam, "YAML内容不能为空")
 	}
 	pv, err := utils.YAMLToPV(req.YAML)
 	if err != nil {
 		s.logger.Error("解析PV YAML失败", zap.Error(err))
-		return pkg.NewBusinessError(constants.ErrK8sResourceOperation, "解析YAML失败")
+		return base.NewBusinessError(constants.ErrK8sResourceOperation, "解析YAML失败")
 	}
 	if err := utils.ValidatePV(pv); err != nil {
 		s.logger.Error("PV配置验证失败", zap.Error(err))
-		return pkg.NewBusinessError(constants.ErrInvalidParam, "PV配置验证失败")
+		return base.NewBusinessError(constants.ErrInvalidParam, "PV配置验证失败")
 	}
 	if err := s.pvManager.CreatePV(ctx, req.ClusterID, pv); err != nil {
 		s.logger.Error("创建PV失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("name", pv.Name))
-		return pkg.NewBusinessError(constants.ErrK8sResourceCreate, "创建PV失败")
+		return base.NewBusinessError(constants.ErrK8sResourceCreate, "创建PV失败")
 	}
 	return nil
 }
 
 func (s *pvService) UpdatePVByYaml(ctx context.Context, req *model.UpdatePVByYamlReq) error {
 	if req == nil {
-		return pkg.NewBusinessError(constants.ErrInvalidParam, "通过YAML更新PV请求不能为空")
+		return base.NewBusinessError(constants.ErrInvalidParam, "通过YAML更新PV请求不能为空")
 	}
 	if req.ClusterID <= 0 {
-		return pkg.NewBusinessError(constants.ErrInvalidParam, "集群ID不能为空")
+		return base.NewBusinessError(constants.ErrInvalidParam, "集群ID不能为空")
 	}
 	if req.YAML == "" {
-		return pkg.NewBusinessError(constants.ErrInvalidParam, "YAML内容不能为空")
+		return base.NewBusinessError(constants.ErrInvalidParam, "YAML内容不能为空")
 	}
 	desired, err := utils.YAMLToPV(req.YAML)
 	if err != nil {
 		s.logger.Error("解析PV YAML失败", zap.Error(err))
-		return pkg.NewBusinessError(constants.ErrK8sResourceOperation, "解析YAML失败")
+		return base.NewBusinessError(constants.ErrK8sResourceOperation, "解析YAML失败")
 	}
 	if desired.Name == "" {
 		desired.Name = req.Name
 	}
 	if desired.Name != req.Name {
-		return pkg.NewBusinessError(constants.ErrInvalidParam, "请求名称与YAML不一致")
+		return base.NewBusinessError(constants.ErrInvalidParam, "请求名称与YAML不一致")
 	}
 	if err := utils.ValidatePV(desired); err != nil {
 		s.logger.Error("PV配置验证失败", zap.Error(err))
-		return pkg.NewBusinessError(constants.ErrInvalidParam, "PV配置验证失败")
+		return base.NewBusinessError(constants.ErrInvalidParam, "PV配置验证失败")
 	}
 	if err := s.pvManager.UpdatePV(ctx, req.ClusterID, desired); err != nil {
 		s.logger.Error("更新PV失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("name", req.Name))
-		return pkg.NewBusinessError(constants.ErrK8sResourceUpdate, "更新PV失败")
+		return base.NewBusinessError(constants.ErrK8sResourceUpdate, "更新PV失败")
 	}
 	return nil
 }

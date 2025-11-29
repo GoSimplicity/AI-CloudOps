@@ -28,8 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertService "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -63,7 +63,7 @@ func (h *AlertRuleHandler) CreateMonitorAlertRule(ctx *gin.Context) {
 	req.UserID = uc.Uid
 	req.CreateUserName = uc.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.CreateMonitorAlertRule(ctx, &req)
 	})
 }
@@ -72,15 +72,15 @@ func (h *AlertRuleHandler) CreateMonitorAlertRule(ctx *gin.Context) {
 func (h *AlertRuleHandler) UpdateMonitorAlertRule(ctx *gin.Context) {
 	var req model.UpdateMonitorAlertRuleReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.UpdateMonitorAlertRule(ctx, &req)
 	})
 }
@@ -89,15 +89,15 @@ func (h *AlertRuleHandler) UpdateMonitorAlertRule(ctx *gin.Context) {
 func (h *AlertRuleHandler) DeleteMonitorAlertRule(ctx *gin.Context) {
 	var req model.DeleteMonitorAlertRuleReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.DeleteMonitorAlertRule(ctx, &req)
 	})
 }
@@ -106,7 +106,7 @@ func (h *AlertRuleHandler) DeleteMonitorAlertRule(ctx *gin.Context) {
 func (h *AlertRuleHandler) GetMonitorAlertRuleList(ctx *gin.Context) {
 	var req model.GetMonitorAlertRuleListReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.GetMonitorAlertRuleList(ctx, &req)
 	})
 }
@@ -115,7 +115,7 @@ func (h *AlertRuleHandler) GetMonitorAlertRuleList(ctx *gin.Context) {
 func (h *AlertRuleHandler) PromqlExprCheck(ctx *gin.Context) {
 	var promql model.PromqlAlertRuleExprCheckReq
 
-	utils.HandleRequest(ctx, &promql, func() (interface{}, error) {
+	base.HandleRequest(ctx, &promql, func() (interface{}, error) {
 		return h.svc.PromqlExprCheck(ctx, &promql)
 	})
 }
@@ -124,15 +124,15 @@ func (h *AlertRuleHandler) PromqlExprCheck(ctx *gin.Context) {
 func (h *AlertRuleHandler) GetMonitorAlertRule(ctx *gin.Context) {
 	var req model.GetMonitorAlertRuleReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.GetMonitorAlertRule(ctx, &req)
 	})
 }

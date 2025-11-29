@@ -45,15 +45,7 @@ show_setup_result() {
     echo "🎉 Git Hooks 设置完成！"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    echo "📝 注意："
-    echo "  Swagger 自动生成功能已禁用"
-    echo "  请使用以下命令手动生成文档："
-    echo ""
-    echo "  make swagger          - 生成 Swagger 文档"
-    echo "  make swagger-manual   - 使用传统方式生成"
-    echo "  make swagger-validate - 验证生成的文档"
-    echo "  make swagger-clean    - 清理生成的文档"
-    echo ""
+    echo "你可以现在开始愉快地开发啦 🚀"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
@@ -62,9 +54,6 @@ main() {
     log_info "🚀 设置 AI-CloudOps Git Hooks..."
     
     check_git_repo
-    
-    log_warning "Swagger 自动生成功能已被禁用"
-    log_info "文档生成已改为纯手动方式"
     
     show_setup_result
 }

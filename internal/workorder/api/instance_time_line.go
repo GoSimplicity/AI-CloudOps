@@ -28,7 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -55,9 +56,9 @@ func (h *InstanceTimeLineHandler) RegisterRouters(server *gin.Engine) {
 // CreateInstanceTimeLine 创建工单时间线记录
 func (h *InstanceTimeLineHandler) CreateInstanceTimeLine(ctx *gin.Context) {
 	var req model.CreateWorkorderInstanceTimelineReq
-	user := ctx.MustGet("user").(utils.UserClaims)
+	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return h.service.CreateInstanceTimeLine(ctx, &req, user.Uid, user.Username)
 	})
 }
@@ -67,14 +68,14 @@ func (h *InstanceTimeLineHandler) CreateInstanceTimeLine(ctx *gin.Context) {
 func (h *InstanceTimeLineHandler) DetailInstanceTimeLine(ctx *gin.Context) {
 	var req model.DetailWorkorderInstanceTimelineReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return h.service.GetInstanceTimeLine(ctx, req.ID)
 	})
 }
@@ -84,7 +85,7 @@ func (h *InstanceTimeLineHandler) DetailInstanceTimeLine(ctx *gin.Context) {
 func (h *InstanceTimeLineHandler) ListInstanceTimeLine(ctx *gin.Context) {
 	var req model.ListWorkorderInstanceTimelineReq
 
-	utils.HandleRequest(ctx, &req, func() (any, error) {
+	base.HandleRequest(ctx, &req, func() (any, error) {
 		return h.service.ListInstanceTimeLine(ctx, &req)
 	})
 }

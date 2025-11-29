@@ -28,7 +28,8 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/service/alert"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
 
@@ -61,7 +62,7 @@ func (h *OnDutyGroupHandler) RegisterRouters(server *gin.Engine) {
 func (h *OnDutyGroupHandler) GetMonitorOnDutyGroupList(ctx *gin.Context) {
 	var req model.GetMonitorOnDutyGroupListReq
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.alertOnDutyService.GetMonitorOnDutyGroupList(ctx, &req)
 	})
 }
@@ -70,11 +71,11 @@ func (h *OnDutyGroupHandler) GetMonitorOnDutyGroupList(ctx *gin.Context) {
 func (h *OnDutyGroupHandler) CreateMonitorOnDutyGroup(ctx *gin.Context) {
 	var req model.CreateMonitorOnDutyGroupReq
 
-	uc := ctx.MustGet("user").(utils.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 	req.UserID = uc.Uid
 	req.CreateUserName = uc.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.alertOnDutyService.CreateMonitorOnDutyGroup(ctx, &req)
 	})
 }
@@ -83,11 +84,11 @@ func (h *OnDutyGroupHandler) CreateMonitorOnDutyGroup(ctx *gin.Context) {
 func (h *OnDutyGroupHandler) CreateMonitorOnDutyGroupChange(ctx *gin.Context) {
 	var req model.CreateMonitorOnDutyGroupChangeReq
 
-	uc := ctx.MustGet("user").(utils.UserClaims)
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 	req.UserID = uc.Uid
 	req.CreateUserName = uc.Username
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.alertOnDutyService.CreateMonitorOnDutyGroupChange(ctx, &req)
 	})
 }
@@ -96,15 +97,15 @@ func (h *OnDutyGroupHandler) CreateMonitorOnDutyGroupChange(ctx *gin.Context) {
 func (h *OnDutyGroupHandler) UpdateMonitorOnDutyGroup(ctx *gin.Context) {
 	var req model.UpdateMonitorOnDutyGroupReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.alertOnDutyService.UpdateMonitorOnDutyGroup(ctx, &req)
 	})
 }
@@ -113,15 +114,15 @@ func (h *OnDutyGroupHandler) UpdateMonitorOnDutyGroup(ctx *gin.Context) {
 func (h *OnDutyGroupHandler) DeleteMonitorOnDutyGroup(ctx *gin.Context) {
 	var req model.DeleteMonitorOnDutyGroupReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.alertOnDutyService.DeleteMonitorOnDutyGroup(ctx, &req)
 	})
 }
@@ -130,15 +131,15 @@ func (h *OnDutyGroupHandler) DeleteMonitorOnDutyGroup(ctx *gin.Context) {
 func (h *OnDutyGroupHandler) GetMonitorOnDutyGroup(ctx *gin.Context) {
 	var req model.GetMonitorOnDutyGroupReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.alertOnDutyService.GetMonitorOnDutyGroup(ctx, &req)
 	})
 }
@@ -147,15 +148,15 @@ func (h *OnDutyGroupHandler) GetMonitorOnDutyGroup(ctx *gin.Context) {
 func (h *OnDutyGroupHandler) GetMonitorOnDutyGroupFuturePlan(ctx *gin.Context) {
 	var req model.GetMonitorOnDutyGroupFuturePlanReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.alertOnDutyService.GetMonitorOnDutyGroupFuturePlan(ctx, &req)
 	})
 }
@@ -164,15 +165,15 @@ func (h *OnDutyGroupHandler) GetMonitorOnDutyGroupFuturePlan(ctx *gin.Context) {
 func (h *OnDutyGroupHandler) GetMonitorOnDutyHistory(ctx *gin.Context) {
 	var req model.GetMonitorOnDutyHistoryReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.OnDutyGroupID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.alertOnDutyService.GetMonitorOnDutyHistory(ctx, &req)
 	})
 }
@@ -181,15 +182,15 @@ func (h *OnDutyGroupHandler) GetMonitorOnDutyHistory(ctx *gin.Context) {
 func (h *OnDutyGroupHandler) GetMonitorOnDutyGroupChangeList(ctx *gin.Context) {
 	var req model.GetMonitorOnDutyGroupChangeListReq
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, err.Error())
+		base.ErrorWithMessage(ctx, err.Error())
 		return
 	}
 
 	req.OnDutyGroupID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.alertOnDutyService.GetMonitorOnDutyGroupChangeList(ctx, &req)
 	})
 }

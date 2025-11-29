@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 )
 
@@ -61,15 +61,15 @@ func (h *K8sServiceAccountHandler) RegisterRouters(server *gin.Engine) {
 func (h *K8sServiceAccountHandler) GetServiceAccountList(ctx *gin.Context) {
 	var req model.GetServiceAccountListReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.serviceAccountService.GetServiceAccountList(ctx, &req)
 	})
 }
@@ -77,21 +77,21 @@ func (h *K8sServiceAccountHandler) GetServiceAccountList(ctx *gin.Context) {
 func (h *K8sServiceAccountHandler) GetServiceAccountDetails(ctx *gin.Context) {
 	var req model.GetServiceAccountDetailsReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -99,7 +99,7 @@ func (h *K8sServiceAccountHandler) GetServiceAccountDetails(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.serviceAccountService.GetServiceAccountDetails(ctx, &req)
 	})
 }
@@ -107,15 +107,15 @@ func (h *K8sServiceAccountHandler) GetServiceAccountDetails(ctx *gin.Context) {
 func (h *K8sServiceAccountHandler) CreateServiceAccount(ctx *gin.Context) {
 	var req model.CreateServiceAccountReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.serviceAccountService.CreateServiceAccount(ctx, &req)
 	})
 }
@@ -123,15 +123,15 @@ func (h *K8sServiceAccountHandler) CreateServiceAccount(ctx *gin.Context) {
 func (h *K8sServiceAccountHandler) CreateServiceAccountByYaml(ctx *gin.Context) {
 	var req model.CreateServiceAccountByYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
 	req.ClusterID = clusterID
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.serviceAccountService.CreateServiceAccountByYaml(ctx, &req)
 	})
 }
@@ -139,21 +139,21 @@ func (h *K8sServiceAccountHandler) CreateServiceAccountByYaml(ctx *gin.Context) 
 func (h *K8sServiceAccountHandler) UpdateServiceAccount(ctx *gin.Context) {
 	var req model.UpdateServiceAccountReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -161,7 +161,7 @@ func (h *K8sServiceAccountHandler) UpdateServiceAccount(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.serviceAccountService.UpdateServiceAccount(ctx, &req)
 	})
 }
@@ -169,21 +169,21 @@ func (h *K8sServiceAccountHandler) UpdateServiceAccount(ctx *gin.Context) {
 func (h *K8sServiceAccountHandler) DeleteServiceAccount(ctx *gin.Context) {
 	var req model.DeleteServiceAccountReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -191,7 +191,7 @@ func (h *K8sServiceAccountHandler) DeleteServiceAccount(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.serviceAccountService.DeleteServiceAccount(ctx, &req)
 	})
 }
@@ -199,21 +199,21 @@ func (h *K8sServiceAccountHandler) DeleteServiceAccount(ctx *gin.Context) {
 func (h *K8sServiceAccountHandler) GetServiceAccountYaml(ctx *gin.Context) {
 	var req model.GetServiceAccountYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -221,7 +221,7 @@ func (h *K8sServiceAccountHandler) GetServiceAccountYaml(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.serviceAccountService.GetServiceAccountYaml(ctx, &req)
 	})
 }
@@ -229,21 +229,21 @@ func (h *K8sServiceAccountHandler) GetServiceAccountYaml(ctx *gin.Context) {
 func (h *K8sServiceAccountHandler) UpdateServiceAccountYaml(ctx *gin.Context) {
 	var req model.UpdateServiceAccountByYamlReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -251,7 +251,7 @@ func (h *K8sServiceAccountHandler) UpdateServiceAccountYaml(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.serviceAccountService.UpdateServiceAccountYaml(ctx, &req)
 	})
 }
@@ -259,21 +259,21 @@ func (h *K8sServiceAccountHandler) UpdateServiceAccountYaml(ctx *gin.Context) {
 func (h *K8sServiceAccountHandler) GetServiceAccountToken(ctx *gin.Context) {
 	var req model.GetServiceAccountTokenReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -281,7 +281,7 @@ func (h *K8sServiceAccountHandler) GetServiceAccountToken(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.serviceAccountService.GetServiceAccountToken(ctx, &req)
 	})
 }
@@ -289,21 +289,21 @@ func (h *K8sServiceAccountHandler) GetServiceAccountToken(ctx *gin.Context) {
 func (h *K8sServiceAccountHandler) CreateServiceAccountToken(ctx *gin.Context) {
 	var req model.CreateServiceAccountTokenReq
 
-	clusterID, err := utils.GetCustomParamID(ctx, "cluster_id")
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	namespace, err := utils.GetParamCustomName(ctx, "namespace")
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
-	name, err := utils.GetParamCustomName(ctx, "name")
+	name, err := base.GetParamCustomName(ctx, "name")
 	if err != nil {
-		utils.BadRequestError(ctx, err.Error())
+		base.BadRequestError(ctx, err.Error())
 		return
 	}
 
@@ -311,7 +311,7 @@ func (h *K8sServiceAccountHandler) CreateServiceAccountToken(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.ServiceAccountName = name
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.serviceAccountService.CreateServiceAccountToken(ctx, &req)
 	})
 }

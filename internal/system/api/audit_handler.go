@@ -28,7 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -71,7 +71,7 @@ func (h *AuditHandler) RegisterRouters(server *gin.Engine) {
 func (h *AuditHandler) CreateAuditLog(ctx *gin.Context) {
 	var req model.CreateAuditLogRequest
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.CreateAuditLog(ctx, &req)
 	})
 }
@@ -80,7 +80,7 @@ func (h *AuditHandler) CreateAuditLog(ctx *gin.Context) {
 func (h *AuditHandler) BatchCreateAuditLogs(ctx *gin.Context) {
 	var req model.AuditLogBatch
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.BatchCreateAuditLogs(ctx, req.Logs)
 	})
 }
@@ -89,7 +89,7 @@ func (h *AuditHandler) BatchCreateAuditLogs(ctx *gin.Context) {
 func (h *AuditHandler) ListAuditLogs(ctx *gin.Context) {
 	var req model.ListAuditLogsRequest
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.ListAuditLogs(ctx, &req)
 	})
 }
@@ -98,15 +98,15 @@ func (h *AuditHandler) ListAuditLogs(ctx *gin.Context) {
 func (h *AuditHandler) GetAuditLogDetail(ctx *gin.Context) {
 	var req model.GetAuditLogDetailRequest
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的审计日志ID")
+		base.ErrorWithMessage(ctx, "无效的审计日志ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.GetAuditLogDetail(ctx, req.ID)
 	})
 }
@@ -115,21 +115,21 @@ func (h *AuditHandler) GetAuditLogDetail(ctx *gin.Context) {
 func (h *AuditHandler) SearchAuditLogs(ctx *gin.Context) {
 	var req model.SearchAuditLogsRequest
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.SearchAuditLogs(ctx, &req)
 	})
 }
 
 // GetAuditStatistics 获取审计统计信息
 func (h *AuditHandler) GetAuditStatistics(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	base.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.svc.GetAuditStatistics(ctx)
 	})
 }
 
 // GetAuditTypes 获取审计类型列表
 func (h *AuditHandler) GetAuditTypes(ctx *gin.Context) {
-	utils.HandleRequest(ctx, nil, func() (interface{}, error) {
+	base.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.svc.GetAuditTypes(ctx)
 	})
 }
@@ -138,15 +138,15 @@ func (h *AuditHandler) GetAuditTypes(ctx *gin.Context) {
 func (h *AuditHandler) DeleteAuditLog(ctx *gin.Context) {
 	var req model.DeleteAuditLogRequest
 
-	id, err := utils.GetParamID(ctx)
+	id, err := base.GetParamID(ctx)
 	if err != nil {
-		utils.ErrorWithMessage(ctx, "无效的审计日志ID")
+		base.ErrorWithMessage(ctx, "无效的审计日志ID")
 		return
 	}
 
 	req.ID = id
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.DeleteAuditLog(ctx, req.ID)
 	})
 }
@@ -155,7 +155,7 @@ func (h *AuditHandler) DeleteAuditLog(ctx *gin.Context) {
 func (h *AuditHandler) BatchDeleteLogs(ctx *gin.Context) {
 	var req model.BatchDeleteRequest
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.BatchDeleteAuditLogs(ctx, req.IDs)
 	})
 }
@@ -164,7 +164,7 @@ func (h *AuditHandler) BatchDeleteLogs(ctx *gin.Context) {
 func (h *AuditHandler) ArchiveAuditLogs(ctx *gin.Context) {
 	var req model.ArchiveAuditLogsRequest
 
-	utils.HandleRequest(ctx, &req, func() (interface{}, error) {
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.ArchiveAuditLogs(ctx, &req)
 	})
 }

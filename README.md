@@ -184,7 +184,6 @@ go run main.go
 后端服务地址：
 
 - API 服务: [http://localhost:8000](http://localhost:8000)
-- Swagger 文档: [http://localhost:8000/swagger](http://localhost:8000/swagger)
 
 #### 4. 启动 AI 服务 (可选)
 

@@ -32,22 +32,18 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
-	_ "github.com/GoSimplicity/AI-CloudOps/docs"
 	"github.com/GoSimplicity/AI-CloudOps/mock"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/di"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/utils"
 	"github.com/fatih/color"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/hibiken/asynq"
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -104,18 +100,6 @@ func run() error {
 			"time":    time.Now(),
 		})
 	})
-
-	// 条件注册Swagger文档路由
-	if shouldEnableSwagger() {
-		cmd.Server.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-		if viper.GetBool("server.debug") {
-			log.Printf("Swagger文档已启用: http://localhost:%s/swagger/index.html", viper.GetString("server.port"))
-		}
-	} else {
-		if viper.GetBool("server.debug") {
-			log.Printf("Swagger文档已禁用")
-		}
-	}
 
 	// mock数据
 	if viper.GetBool("mock.enabled") && di.IsDBAvailable(db) {
@@ -260,41 +244,14 @@ func initMock() error {
 }
 
 func showBootInfo(port string) {
-	ips, _ := utils.GetLocalIPs()
+	ips, _ := base.GetLocalIPs()
 	color.Green("AI-CloudOps API 服务启动成功")
 	fmt.Printf("%s  ", color.GreenString("➜"))
 	fmt.Printf("%s    ", color.New(color.Bold).Sprint("Local:"))
 	fmt.Printf("%s\n", color.MagentaString("http://localhost:%s/", port))
-	if shouldEnableSwagger() {
-		fmt.Printf("%s  ", color.GreenString("➜"))
-		fmt.Printf("%s  ", color.New(color.Bold).Sprint("Swagger:"))
-		fmt.Printf("%s\n", color.MagentaString("http://localhost:%s/swagger/index.html", port))
-	}
 	for _, ip := range ips {
 		fmt.Printf("%s  ", color.GreenString("➜"))
 		fmt.Printf("%s  ", color.New(color.Bold).Sprint("Network:"))
 		fmt.Printf("%s\n", color.MagentaString("http://%s:%s/", ip, port))
 	}
-}
-
-func isEnvTrue(key string) bool {
-	value := strings.ToLower(os.Getenv(key))
-	return value == "true" || value == "1" || value == "yes" || value == "y" || value == "on"
-}
-
-// 检查是否应该启用Swagger
-func shouldEnableSwagger() bool {
-	// 优先检查环境变量
-	if swaggerEnabled := os.Getenv("SWAGGER_ENABLED"); swaggerEnabled != "" {
-		return isEnvTrue("SWAGGER_ENABLED")
-	}
-
-	// 检查配置文件
-	if viper.IsSet("swagger.enabled") {
-		return viper.GetBool("swagger.enabled")
-	}
-
-	// 默认情况下，开发环境启用，生产环境禁用
-	env := strings.ToLower(os.Getenv("GIN_MODE"))
-	return env != "release" && env != "production"
 }

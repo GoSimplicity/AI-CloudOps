@@ -28,8 +28,7 @@ package middleware
 import (
 	"strings"
 
-	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/utils"
-
+	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	_ "github.com/golang-jwt/jwt/v5"
@@ -57,7 +56,6 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 			path == "/api/user/signup" ||
 			path == "/api/not_auth/getBindIps" || path == "/api/not_auth/getTreeNodeBindIps" ||
 			strings.HasPrefix(path, "/api/monitor/prometheus_configs/") ||
-			strings.HasPrefix(path, "/swagger/") ||
 			path == "/favicon.ico" ||
 			path == "/" {
 			ctx.Next()
