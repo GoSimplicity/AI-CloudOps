@@ -38,7 +38,6 @@ var skipAuthPaths = map[string]bool{
 	"/api/user/login":                  true,
 	"/api/user/logout":                 true,
 	"/api/user/refresh_token":          true,
-	"/api/user/signup":                 true,
 	"/api/user/profile":                true,
 	"/api/user/codes":                  true,
 	"/api/not_auth/getBindIps":         true,
@@ -135,6 +134,12 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 		user, ok := userVal.(jwt.UserClaims)
 		if !ok {
 			base.ForbiddenError(c, "用户信息异常")
+			c.Abort()
+			return
+		}
+
+		if path == "/api/user/signup" && user.Username != "admin" {
+			base.ForbiddenError(c, "仅管理员可创建用户")
 			c.Abort()
 			return
 		}
