@@ -36,7 +36,7 @@ func PromqlExprCheck(expr string) (bool, error) {
 		return false, fmt.Errorf("expression cannot be empty")
 	}
 
-	_, err := parser.ParseExpr(expr)
+	_, err := parser.NewParser(parser.Options{}).ParseExpr(expr)
 	if err != nil {
 		return false, fmt.Errorf("invalid PromQL expression: %v", err)
 	}

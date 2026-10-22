@@ -120,7 +120,7 @@ func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context,
 
 	// 如果存在表达式，则检查 PromQL 语法是否合法
 	if req.Expr != "" {
-		if _, err := parser.ParseExpr(req.Expr); err != nil {
+		if _, err := parser.NewParser(parser.Options{}).ParseExpr(req.Expr); err != nil {
 			a.l.Error("创建记录规则失败：PromQL 语法错误", zap.Error(err))
 			return fmt.Errorf("PromQL 语法错误: %v", err)
 		}
@@ -188,7 +188,7 @@ func (a *alertManagerRecordService) UpdateMonitorRecordRule(ctx context.Context,
 
 	// 如果存在表达式，则检查 PromQL 语法是否合法
 	if req.Expr != "" {
-		if _, err := parser.ParseExpr(req.Expr); err != nil {
+		if _, err := parser.NewParser(parser.Options{}).ParseExpr(req.Expr); err != nil {
 			a.l.Error("更新记录规则失败：PromQL 语法错误", zap.Error(err))
 			return fmt.Errorf("PromQL 语法错误: %v", err)
 		}

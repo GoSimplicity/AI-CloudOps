@@ -236,7 +236,7 @@ func (s *alertManagerRuleService) PromqlExprCheck(ctx context.Context, req *mode
 	}
 
 	// 尝试解析表达式
-	_, err := parser.ParseExpr(req.PromqlExpr)
+	_, err := parser.NewParser(parser.Options{}).ParseExpr(req.PromqlExpr)
 	if err != nil {
 		s.logger.Error("PromQL表达式语法错误", zap.Error(err), zap.String("expr", req.PromqlExpr))
 		return false, errors.New("PromQL表达式语法错误: " + err.Error())
