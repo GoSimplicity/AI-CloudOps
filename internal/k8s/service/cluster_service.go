@@ -32,6 +32,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/connection"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
@@ -143,6 +144,9 @@ func (s *clusterService) CreateCluster(ctx context.Context, req *model.CreateClu
 		Tags:                 req.Tags,
 	}
 
+	if _, err := connection.Parse(cluster.KubeConfigContent); err != nil {
+		return err
+	}
 	if err := utils.ValidateResourceQuantities(cluster); err != nil {
 		return fmt.Errorf("资源配置验证失败: %w", err)
 	}
@@ -247,10 +251,19 @@ func (s *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClu
 		cluster.MemoryLimit = existingCluster.MemoryLimit
 	}
 	oldPolicy := len(existingCluster.RestrictNamespace) > 0 && (existingCluster.CpuRequest != "" || existingCluster.CpuLimit != "" || existingCluster.MemoryRequest != "" || existingCluster.MemoryLimit != "")
-	if oldPolicy && (cluster.ApiServerAddr != existingCluster.ApiServerAddr || cluster.KubeConfigContent != existingCluster.KubeConfigContent) {
-		return fmt.Errorf("更换集群连接前请先清除原命名空间配额配置")
+	if oldPolicy {
+		same, err := connection.SameCluster(existingCluster.KubeConfigContent, cluster.KubeConfigContent)
+		if err != nil {
+			return err
+		}
+		if !same {
+			return fmt.Errorf("更换集群连接前请先清除原命名空间配额配置")
+		}
 	}
 
+	if _, err := connection.Parse(cluster.KubeConfigContent); err != nil {
+		return err
+	}
 	if err := utils.ValidateResourceQuantities(cluster); err != nil {
 		return fmt.Errorf("资源配置验证失败: %w", err)
 	}

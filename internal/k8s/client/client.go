@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/connection"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/openkruise/kruise-api/client/clientset/versioned"
@@ -39,7 +40,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	metricsClient "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
@@ -258,7 +258,7 @@ func (k *k8sClient) initClusterClients(clusterID int) (*kubernetes.Clientset, er
 		return nil, fmt.Errorf("集群%d的kubeconfig为空", clusterID)
 	}
 
-	config, err := clientcmd.RESTConfigFromKubeConfig([]byte(cluster.KubeConfigContent))
+	config, err := connection.Parse(cluster.KubeConfigContent)
 	if err != nil {
 		return nil, fmt.Errorf("解析kubeconfig失败: %w", err)
 	}

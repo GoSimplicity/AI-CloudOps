@@ -33,11 +33,14 @@ def main():
     name = 'cloudops-quota-api-' + uuid4().hex[:10]
     api = API(args.url)
     api.login()
+    require(not api.cluster_rows(name), "Refusing existing cluster record")
     ident = None
+    record_attempted = False
     created = False
     try:
         subprocess.run(kubectl + ['create', 'namespace', name], check=True, capture_output=True)
         created = True
+        record_attempted = True
         api.request('POST', '/api/k8s/cluster/create', {
             'name': name, 'env': 2,
             'api_server_addr': registration['clusters'][0]['cluster']['server'],
@@ -73,6 +76,11 @@ def main():
         require(not row.get('cpu_request') and not row.get('restrict_namespace'), 'Cleared settings not persisted')
         print('PASS quota removal and persisted empty configuration')
     finally:
+        if record_attempted and ident is None:
+            matches = api.cluster_rows(name)
+            require(len(matches) <= 1, "Owned cluster cleanup is ambiguous")
+            if matches:
+                ident = matches[0]['id']
         if ident is not None:
             api.request('DELETE', f'/api/k8s/cluster/{ident}/delete')
         if created:

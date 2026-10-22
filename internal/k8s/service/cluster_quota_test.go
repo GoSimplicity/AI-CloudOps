@@ -14,6 +14,20 @@ import (
 	"gorm.io/gorm"
 )
 
+const quotaKubeconfig = `apiVersion: v1
+kind: Config
+current-context: fixture
+clusters:
+- name: fixture
+  cluster: {server: 'https://127.0.0.1:6443'}
+users:
+- name: fixture
+  user: {token: fixture-token}
+contexts:
+- name: fixture
+  context: {cluster: fixture, user: fixture}
+`
+
 type quotaDAOFixture struct {
 	dao.ClusterDAO
 	stored  model.K8sCluster
@@ -62,7 +76,7 @@ func TestFailedQuotaCreationRetainsRegistrationForCleanup(t *testing.T) {
 	for _, policy := range []bool{false, true} {
 		d := &quotaDAOFixture{}
 		s := NewClusterService(d, nil, &quotaManagerFixture{}, zap.NewNop())
-		req := &model.CreateClusterReq{Name: "quota-test", ApiServerAddr: "https://127.0.0.1:6443", KubeConfigContent: "fixture"}
+		req := &model.CreateClusterReq{Name: "quota-test", ApiServerAddr: "https://127.0.0.1:6443", KubeConfigContent: quotaKubeconfig}
 		if policy {
 			req.CpuRequest = "500"
 			req.RestrictNamespace = model.StringList{"team-a"}
@@ -82,14 +96,14 @@ func TestFailedQuotaCreationRetainsRegistrationForCleanup(t *testing.T) {
 }
 
 func TestFailedQuotaEditRestoresSavedConfiguration(t *testing.T) {
-	d := &quotaDAOFixture{stored: model.K8sCluster{Model: model.Model{ID: 42}, Name: "quota-test", Env: model.EnvDev, ApiServerAddr: "https://127.0.0.1:6443", KubeConfigContent: "fixture", CpuRequest: "100", CpuLimit: "400", RestrictNamespace: model.StringList{"team-a"}}}
+	d := &quotaDAOFixture{stored: model.K8sCluster{Model: model.Model{ID: 42}, Name: "quota-test", Env: model.EnvDev, ApiServerAddr: "https://127.0.0.1:6443", KubeConfigContent: quotaKubeconfig, CpuRequest: "100", CpuLimit: "400", RestrictNamespace: model.StringList{"team-a"}}}
 	client := &quotaClientFixture{}
 	s := NewClusterService(d, client, &quotaManagerFixture{}, zap.NewNop())
 	err := s.UpdateCluster(context.Background(), &model.UpdateClusterReq{ID: 42, Name: "quota-test", CpuRequest: "200", CpuLimit: "400", RestrictNamespace: model.StringList{"team-a"}})
 	if err == nil || !client.removed {
 		t.Fatal("failed edit did not invalidate new client", err)
 	}
-	if d.stored.CpuRequest != "100" || d.stored.KubeConfigContent != "fixture" || d.stored.Env != model.EnvDev {
+	if d.stored.CpuRequest != "100" || d.stored.KubeConfigContent != quotaKubeconfig || d.stored.Env != model.EnvDev {
 		t.Fatal("failed edit lost original configuration")
 	}
 }
