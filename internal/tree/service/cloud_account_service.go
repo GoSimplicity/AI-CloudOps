@@ -38,6 +38,7 @@ import (
 )
 
 type CloudAccountService interface {
+	GetAvailableRegionsForAccount(context.Context, int) ([]model.AvailableRegion, error)
 	GetCloudAccountList(ctx context.Context, req *model.GetCloudAccountListReq) (model.ListResp[*model.CloudAccount], error)
 	GetCloudAccountDetail(ctx context.Context, req *model.GetCloudAccountDetailReq) (*model.CloudAccount, error)
 	CreateCloudAccount(ctx context.Context, req *model.CreateCloudAccountReq, createUserID int, createUserName string) error
@@ -52,8 +53,9 @@ type CloudAccountService interface {
 }
 
 type cloudAccountService struct {
-	logger *zap.Logger
-	dao    dao.CloudAccountDAO
+	clientFactory treeUtils.CloudClientFactory
+	logger        *zap.Logger
+	dao           dao.CloudAccountDAO
 }
 
 func NewCloudAccountService(logger *zap.Logger, dao dao.CloudAccountDAO) CloudAccountService {
@@ -640,4 +642,36 @@ func (s *cloudAccountService) ExportCloudAccount(ctx context.Context, req *model
 	default:
 		return nil, fmt.Errorf("不支持的导出格式: %s，仅支持json和csv", format)
 	}
+}
+
+// GetAvailableRegionsForAccount never returns or accepts credentials in a URL.
+func (s *cloudAccountService) GetAvailableRegionsForAccount(ctx context.Context, id int) ([]model.AvailableRegion, error) {
+	account, err := s.dao.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if account.Status != model.CloudAccountEnabled {
+		return nil, fmt.Errorf("云账号已禁用")
+	}
+	accessKey, err := treeUtils.DecryptPassword(account.AccessKey)
+	if err != nil {
+		return nil, fmt.Errorf("解密访问密钥失败")
+	}
+	secretKey, err := treeUtils.DecryptPassword(account.SecretKey)
+	if err != nil {
+		return nil, fmt.Errorf("解密访问凭据失败")
+	}
+	region, err := treeUtils.GetDefaultRegion(account.Regions)
+	if err != nil {
+		return nil, err
+	}
+	factory := s.clientFactory
+	if factory == nil {
+		factory = treeUtils.NewCloudComputeClient
+	}
+	client, err := factory(account.Provider, accessKey, secretKey, region, s.logger)
+	if err != nil {
+		return nil, err
+	}
+	return client.GetAvailableRegions(ctx)
 }

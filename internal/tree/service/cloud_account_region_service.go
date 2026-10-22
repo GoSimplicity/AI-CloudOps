@@ -305,24 +305,20 @@ func (s *cloudAccountRegionService) UpdateCloudAccountRegionStatus(ctx context.C
 
 // GetAvailableRegions 获取指定云厂商的可用区域列表
 func (s *cloudAccountRegionService) GetAvailableRegions(ctx context.Context, req *model.GetAvailableRegionsReq) (*model.GetAvailableRegionsResp, error) {
-	// 如果请求中包含了凭证信息，尝试通过API动态获取
-	if req.AccessKey != "" && req.SecretKey != "" {
-		regions, err := treeUtils.GetAvailableRegionsByProvider(ctx, req.Provider, req.AccessKey, req.SecretKey, s.logger)
-		if err != nil {
-			return nil, fmt.Errorf("查询云厂商区域失败: %w", err)
-		}
-
-		return &model.GetAvailableRegionsResp{
-			Regions: regions,
-		}, nil
+	if req.AccessKey != "" || req.SecretKey != "" {
+		return nil, fmt.Errorf("禁止在URL中传递云密钥；请保存账号后使用cloud_account_id查询")
 	}
-
-	// 没有凭证信息时，返回默认区域列表
-	regions := treeUtils.GetAvailableRegionsByProviderWithoutCredentials(req.Provider)
-
-	return &model.GetAvailableRegionsResp{
-		Regions: regions,
-	}, nil
+	if req.CloudAccountID > 0 {
+		regions, err := s.cloudAccountService.GetAvailableRegionsForAccount(ctx, req.CloudAccountID)
+		if err != nil {
+			return nil, err
+		}
+		return &model.GetAvailableRegionsResp{Regions: regions}, nil
+	}
+	if req.Provider < model.ProviderAliyun || req.Provider > model.ProviderGCP {
+		return nil, fmt.Errorf("请提供cloud_account_id或provider")
+	}
+	return &model.GetAvailableRegionsResp{Regions: treeUtils.GetAvailableRegionsByProviderWithoutCredentials(req.Provider)}, nil
 }
 
 // GetRegionsByCloudAccountID 根据云账号ID获取区域列表（内部使用）

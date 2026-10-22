@@ -50,14 +50,20 @@ func VerifyAliyunCredentials(ctx context.Context, req *model.VerifyCloudCredenti
 }
 
 func VerifyTencentCredentials(ctx context.Context, req *model.VerifyCloudCredentialsReq, logger *zap.Logger) error {
-	logger.Warn("腾讯云凭证验证功能暂未实现")
-	return fmt.Errorf("腾讯云凭证验证功能暂未实现")
+	client, err := NewTencentClient(req.AccessKey, req.SecretKey, req.Region)
+	if err != nil {
+		return err
+	}
+	return client.VerifyCredentials(ctx)
 }
 
 // VerifyAWSCredentials 验证AWS凭证
 func VerifyAWSCredentials(ctx context.Context, req *model.VerifyCloudCredentialsReq, logger *zap.Logger) error {
-	logger.Warn("AWS凭证验证功能暂未实现")
-	return fmt.Errorf("AWS凭证验证功能暂未实现")
+	client, err := NewAWSClient(req.AccessKey, req.SecretKey, req.Region)
+	if err != nil {
+		return err
+	}
+	return client.VerifyCredentials(ctx)
 }
 
 func VerifyHuaweiCredentials(ctx context.Context, req *model.VerifyCloudCredentialsReq, logger *zap.Logger) error {

@@ -153,7 +153,7 @@ func TestTencentPaginationAndFiltering(t *testing.T) {
 }
 
 func TestTencentIncompleteListingFailsClosed(t *testing.T) {
-	for _, mode := range []string{"empty page", "permission", "cancel"} {
+	for _, mode := range []string{"empty page", "permission", "cancel", "duplicate", "changed total"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -165,6 +165,12 @@ func TestTencentIncompleteListingFailsClosed(t *testing.T) {
 				}
 				if mode == "permission" {
 					return nil, errors.New("AuthFailure")
+				}
+				if mode == "duplicate" {
+					return tencentPage(2, "ins-one"), nil
+				}
+				if mode == "changed total" {
+					return tencentPage(3, "ins-two"), nil
 				}
 				if mode == "cancel" {
 					cancel()

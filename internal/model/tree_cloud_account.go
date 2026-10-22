@@ -229,9 +229,10 @@ type CreateCloudAccountRegionItem struct {
 }
 
 type GetAvailableRegionsReq struct {
-	Provider  CloudProvider `json:"provider" form:"provider" binding:"required,oneof=1 2 3 4 5 6"`
-	AccessKey string        `json:"access_key" form:"access_key"` // 可选，提供时会通过API动态获取
-	SecretKey string        `json:"secret_key" form:"secret_key"` // 可选，提供时会通过API动态获取
+	CloudAccountID int           `json:"cloud_account_id" form:"cloud_account_id" binding:"omitempty,gt=0"`
+	Provider       CloudProvider `json:"provider" form:"provider" binding:"omitempty,oneof=1 2 3 4 5 6"`
+	AccessKey      string        `json:"access_key" form:"access_key"`
+	SecretKey      string        `json:"secret_key" form:"secret_key"`
 }
 
 type AvailableRegion struct {

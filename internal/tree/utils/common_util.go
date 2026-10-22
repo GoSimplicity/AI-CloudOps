@@ -196,16 +196,20 @@ func getAliyunAvailableRegions(ctx context.Context, accessKey, secretKey string,
 }
 
 func getTencentAvailableRegions(ctx context.Context, accessKey, secretKey string, logger *zap.Logger) ([]model.AvailableRegion, error) {
-	logger.Warn("腾讯云区域API尚未实现")
-	// TODO: 实现腾讯云SDK调用
-	return nil, fmt.Errorf("腾讯云区域API尚未实现；不提供凭据时可查看静态区域参考")
+	client, err := NewTencentClient(accessKey, secretKey, "ap-guangzhou")
+	if err != nil {
+		return nil, err
+	}
+	return client.GetAvailableRegions(ctx)
 }
 
 // getAWSAvailableRegions 获取AWS可用区域列表
 func getAWSAvailableRegions(ctx context.Context, accessKey, secretKey string, logger *zap.Logger) ([]model.AvailableRegion, error) {
-	logger.Warn("AWS区域API尚未实现")
-	// TODO: 实现AWS SDK调用
-	return nil, fmt.Errorf("AWS区域API尚未实现；不提供凭据时可查看静态区域参考")
+	client, err := NewAWSClient(accessKey, secretKey, "us-east-1")
+	if err != nil {
+		return nil, err
+	}
+	return client.GetAvailableRegions(ctx)
 }
 
 func getHuaweiAvailableRegions(ctx context.Context, accessKey, secretKey string, logger *zap.Logger) ([]model.AvailableRegion, error) {

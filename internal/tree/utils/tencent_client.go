@@ -94,6 +94,7 @@ func (c *TencentClient) ListInstances(ctx context.Context, ids []string) ([]*mod
 	seen := make(map[string]bool)
 	for _, batch := range batches {
 		var offset int64
+		expectedTotal := int64(-1)
 		for {
 			if err := ctx.Err(); err != nil {
 				return nil, err
@@ -116,6 +117,11 @@ func (c *TencentClient) ListInstances(ctx context.Context, ids []string) ([]*mod
 			}
 			page := response.Response
 			total := *page.TotalCount
+			if expectedTotal < 0 {
+				expectedTotal = total
+			} else if expectedTotal != total {
+				return nil, fmt.Errorf("腾讯云分页总数变化，请重新同步")
+			}
 			if total < 0 {
 				return nil, fmt.Errorf("腾讯云返回无效总数")
 			}
@@ -125,11 +131,12 @@ func (c *TencentClient) ListInstances(ctx context.Context, ids []string) ([]*mod
 					return nil, fmt.Errorf("腾讯云实例响应缺少ID")
 				}
 				id := deref(instance.InstanceId)
-				if !seen[id] {
-					seen[id] = true
-					resources = append(resources, c.convertInstance(instance))
-					progress++
+				if seen[id] {
+					return nil, fmt.Errorf("腾讯云分页返回重复实例，拒绝不完整同步")
 				}
+				seen[id] = true
+				resources = append(resources, c.convertInstance(instance))
+				progress++
 			}
 			offset += int64(len(page.InstanceSet))
 			if offset >= total {

@@ -57,6 +57,7 @@ type TreeCloudService interface {
 }
 
 type treeCloudService struct {
+	clientFactory   treeUtils.CloudClientFactory
 	logger          *zap.Logger
 	dao             dao.TreeCloudDAO
 	cloudAccountDAO dao.CloudAccountDAO
@@ -399,12 +400,8 @@ func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model
 	// 根据不同的云厂商调用对应的同步逻辑，遍历所有区域
 	var syncErr error
 	switch account.Provider {
-	case model.ProviderAliyun:
-		syncErr = s.syncAliyunResourcesForMultipleRegions(ctx, account, accessKey, secretKey, regionsToSync, req, resp)
-	case model.ProviderTencent:
-		syncErr = errors.New("腾讯云资源同步功能暂未实现")
-	case model.ProviderAWS:
-		syncErr = errors.New("AWS资源同步功能暂未实现")
+	case model.ProviderAliyun, model.ProviderTencent, model.ProviderAWS:
+		syncErr = s.syncCloudResourcesForMultipleRegions(ctx, account, accessKey, secretKey, regionsToSync, req, resp)
 	case model.ProviderHuawei:
 		syncErr = errors.New("华为云资源同步功能暂未实现")
 	case model.ProviderAzure:
@@ -457,7 +454,7 @@ func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model
 }
 
 // syncAliyunResourcesWithStats 同步阿里云资源并返回统计信息
-func (s *treeCloudService) syncAliyunResourcesForMultipleRegions(ctx context.Context, account *model.CloudAccount, accessKey, secretKey string, regions []*model.CloudAccountRegion, req *model.SyncTreeCloudResourceReq, resp *model.SyncCloudResourceResp) error {
+func (s *treeCloudService) syncCloudResourcesForMultipleRegions(ctx context.Context, account *model.CloudAccount, accessKey, secretKey string, regions []*model.CloudAccountRegion, req *model.SyncTreeCloudResourceReq, resp *model.SyncCloudResourceResp) error {
 	var regionErrors []error
 	// 遍历每个区域进行同步
 	for _, region := range regions {
@@ -468,17 +465,17 @@ func (s *treeCloudService) syncAliyunResourcesForMultipleRegions(ctx context.Con
 			zap.String("region", region.Region),
 			zap.String("regionName", region.RegionName))
 
-		config := &treeUtils.AliyunSyncConfig{
-			AccessKey:      accessKey,
-			SecretKey:      secretKey,
-			Region:         region.Region,
-			CloudAccountID: account.ID,
-			ResourceType:   0, // 暂时只同步ECS
-			InstanceIDs:    req.InstanceIDs,
-			SyncMode:       req.SyncMode,
+		factory := s.clientFactory
+		if factory == nil {
+			factory = treeUtils.NewCloudComputeClient
+		}
+		provider := account.Provider
+		client, err := factory(provider, accessKey, secretKey, region.Region, s.logger)
+		var resources []*model.TreeCloudResource
+		if err == nil {
+			resources, err = client.ListInstances(ctx, req.InstanceIDs)
 		}
 
-		resources, err := treeUtils.SyncAliyunResources(ctx, config, s.logger)
 		if err != nil {
 			s.logger.Error("同步区域资源失败",
 				zap.String("region", region.Region),
@@ -488,6 +485,7 @@ func (s *treeCloudService) syncAliyunResourcesForMultipleRegions(ctx context.Con
 		}
 
 		for _, resource := range resources {
+			resource.CloudAccountID = account.ID
 			resource.CloudAccountRegionID = region.ID
 			resource.Region = region.Region // 冗余字段，便于查询
 		}
@@ -632,6 +630,8 @@ func (s *treeCloudService) fullSyncResourcesForRegion(ctx context.Context, regio
 func (s *treeCloudService) incrementalSyncResourcesForRegion(ctx context.Context, regionID int, resources []*model.TreeCloudResource, resp *model.SyncCloudResourceResp, autoBind bool, bindNodeID int, operatorID int, operatorName string) error {
 	for _, resource := range resources {
 		resp.TotalCount++
+		syncedAt := time.Now()
+		resource.LastSyncTime = &syncedAt
 
 		// 检查资源是否已存在（通过区域和实例ID查询）
 		existing, err := s.dao.GetByRegionAndInstanceID(ctx, regionID, resource.InstanceID)
@@ -647,7 +647,7 @@ func (s *treeCloudService) incrementalSyncResourcesForRegion(ctx context.Context
 
 		if existing != nil {
 			resource.ID = existing.ID
-			if err := s.dao.Update(ctx, resource); err != nil {
+			if err := s.dao.UpdateMetadata(ctx, resource.ID, providerResourceFields(resource)); err != nil {
 				s.logger.Error("更新区域资源失败", zap.Int("id", existing.ID), zap.Error(err))
 				resp.FailedCount++
 				resp.FailedInstances = append(resp.FailedInstances, resource.InstanceID)
@@ -903,4 +903,16 @@ func (s *treeCloudService) BatchUpdateCloudResourceStatus(ctx context.Context, r
 		zap.Ints("ids", req.IDs),
 		zap.Int8("status", int8(req.Status)))
 	return nil
+}
+
+// Only provider-owned fields are reconciled. Explicit empty values clear stale
+// public IPs and expiry dates without touching local SSH credentials or bindings.
+func providerResourceFields(r *model.TreeCloudResource) map[string]interface{} {
+	return map[string]interface{}{
+		"name": r.Name, "instance_type": r.InstanceType, "status": r.Status,
+		"public_ip": r.PublicIP, "private_ip": r.PrivateIP, "vpc_id": r.VpcID, "zone_id": r.ZoneID,
+		"cpu": r.Cpu, "memory": r.Memory, "disk": r.Disk, "os_type": r.OSType, "os_name": r.OSName,
+		"image_id": r.ImageID, "image_name": r.ImageName, "charge_type": r.ChargeType, "expire_time": r.ExpireTime,
+		"currency": r.Currency, "tags": r.Tags, "last_sync_time": r.LastSyncTime,
+	}
 }

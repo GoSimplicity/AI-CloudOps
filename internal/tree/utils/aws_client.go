@@ -102,10 +102,11 @@ func (c *AWSClient) ListInstances(ctx context.Context, ids []string) ([]*model.T
 					if id == "" {
 						return nil, fmt.Errorf("AWS实例响应缺少ID，拒绝不完整同步")
 					}
-					if !seenIDs[id] {
-						resources = append(resources, c.convertInstance(instance))
-						seenIDs[id] = true
+					if seenIDs[id] {
+						return nil, fmt.Errorf("AWS分页返回重复实例，请重新同步")
 					}
+					resources = append(resources, c.convertInstance(instance))
+					seenIDs[id] = true
 				}
 			}
 			next := aws.ToString(response.NextToken)
