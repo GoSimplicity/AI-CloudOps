@@ -101,8 +101,8 @@ func NewInstanceService(
 }
 
 func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateWorkorderInstanceReq) error {
-	if req.Status < model.InstanceStatusDraft || req.Status > model.InstanceStatusCancelled {
-		return fmt.Errorf("工单状态无效")
+	if req.Status != model.InstanceStatusDraft {
+		return fmt.Errorf("创建工单只能使用草稿状态，请通过提交/审批接口推进流程")
 	}
 	if req.Priority < model.PriorityHigh || req.Priority > model.PriorityLow {
 		return fmt.Errorf("优先级无效")
@@ -315,6 +315,16 @@ func (s *instanceService) UpdateInstance(ctx context.Context, req *model.UpdateW
 		return err
 	}
 
+	if req.Status != 0 && req.Status != ins.Status {
+		return fmt.Errorf("状态变更必须通过工单流转接口")
+	}
+	if req.CompletedAt != nil {
+		return fmt.Errorf("完成时间由工单流转生成，不能直接修改")
+	}
+	if req.AssigneeID != nil && (ins.AssigneeID == nil || *req.AssigneeID != *ins.AssigneeID) {
+		return fmt.Errorf("处理人变更必须通过工单指派接口")
+	}
+
 	// 只有草稿和待处理状态可以更新
 	if ins.Status != model.InstanceStatusDraft && ins.Status != model.InstanceStatusPending {
 		return fmt.Errorf("当前状态的工单不允许修改")
@@ -337,10 +347,7 @@ func (s *instanceService) UpdateInstance(ctx context.Context, req *model.UpdateW
 		Priority:    req.Priority,
 		Tags:        req.Tags,
 		DueDate:     req.DueDate,
-		Status:      req.Status,
-		AssigneeID:  req.AssigneeID,
 		FormData:    req.FormData,
-		CompletedAt: req.CompletedAt,
 	}
 
 	if err := s.dao.UpdateInstance(ctx, instance); err != nil {
