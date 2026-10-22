@@ -4,6 +4,9 @@ go 1.26.10
 
 require (
 	github.com/aliyun/alibaba-cloud-sdk-go v1.63.107
+	github.com/aws/aws-sdk-go-v2 v1.47.3
+	github.com/aws/aws-sdk-go-v2/credentials v1.19.12
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.340.0
 	github.com/casbin/casbin/v2 v2.93.0
 	github.com/gin-contrib/cors v1.7.2
 	github.com/gin-contrib/gzip v1.2.3
@@ -27,6 +30,9 @@ require (
 	github.com/redis/go-redis/v9 v9.8.0
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.19.0
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.3.194
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm v1.3.183
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/region v1.3.194
 	go.uber.org/zap v1.27.1
 	golang.org/x/crypto v0.57.0
 	golang.org/x/sync v0.23.0
@@ -68,20 +74,18 @@ require (
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.41.4 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.32.12 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.19.12 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.20 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.20 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.20 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.6 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.6 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.6 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.7 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.20 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.21 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.8 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.13 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.17 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.9 // indirect
-	github.com/aws/smithy-go v1.24.2 // indirect
+	github.com/aws/smithy-go v1.28.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/bytedance/sonic v1.13.2 // indirect
