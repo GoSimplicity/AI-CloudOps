@@ -228,15 +228,29 @@ func (s *workorderProcessService) UpdateWorkorderProcess(ctx context.Context, re
 		}
 	}
 
-	process := &model.WorkorderProcess{
-		Model:        model.Model{ID: req.ID},
-		Name:         req.Name,
-		Description:  req.Description,
-		FormDesignID: req.FormDesignID,
-		Status:       req.Status,
-		CategoryID:   req.CategoryID,
-		Tags:         req.Tags,
-		IsDefault:    req.IsDefault,
+	// The update API is partial: omitted fields must retain persisted values.
+	updated := *existingProcess
+	process := &updated
+	if req.Name != "" {
+		process.Name = req.Name
+	}
+	if req.Description != nil {
+		process.Description = *req.Description
+	}
+	if req.FormDesignID > 0 {
+		process.FormDesignID = req.FormDesignID
+	}
+	if req.Status != 0 {
+		process.Status = req.Status
+	}
+	if req.CategoryID != nil {
+		process.CategoryID = req.CategoryID
+	}
+	if req.Tags != nil {
+		process.Tags = req.Tags
+	}
+	if req.IsDefault != 0 {
+		process.IsDefault = req.IsDefault
 	}
 
 	if req.Definition != nil {

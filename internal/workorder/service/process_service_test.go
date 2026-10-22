@@ -229,3 +229,37 @@ func TestCreateWorkorderProcessDefaultsDefinitionWhenMissing(t *testing.T) {
 		t.Fatal("expected created process definition to include connections")
 	}
 }
+
+type updateProcessDAO struct {
+	processDAOStub
+	existing, updated *model.WorkorderProcess
+}
+
+func (d *updateProcessDAO) GetProcessByID(context.Context, int) (*model.WorkorderProcess, error) {
+	return d.existing, nil
+}
+func (d *updateProcessDAO) UpdateProcess(_ context.Context, p *model.WorkorderProcess) error {
+	d.updated = p
+	return nil
+}
+func TestPartialProcessUpdate(t *testing.T) {
+	empty := ""
+	for _, tt := range []struct {
+		name        string
+		description *string
+		want        string
+	}{
+		{"omitted description preserved", nil, "keep"}, {"explicit description cleared", &empty, ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			d := &updateProcessDAO{existing: &model.WorkorderProcess{Model: model.Model{ID: 7}, Name: "existing", Description: "keep", FormDesignID: 9, Status: 2, IsDefault: 2, Definition: model.JSONMap{"steps": []any{}}}}
+			s := &workorderProcessService{dao: d, logger: zap.NewNop()}
+			if err := s.UpdateWorkorderProcess(context.Background(), &model.UpdateWorkorderProcessReq{ID: 7, Status: 3, Description: tt.description}); err != nil {
+				t.Fatal(err)
+			}
+			if d.updated.Name != "existing" || d.updated.FormDesignID != 9 || d.updated.Status != 3 || d.updated.IsDefault != 2 || d.updated.Description != tt.want || d.updated.Definition == nil {
+				t.Fatalf("partial update lost persisted fields: %+v", d.updated)
+			}
+		})
+	}
+}
