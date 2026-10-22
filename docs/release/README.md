@@ -78,3 +78,5 @@ python3 scripts/release-smoke.py
 发布模板使用 MySQL 8.4.11 LTS 与 Redis 7.4.11。已有 MySQL 8.0 数据卷升级前必须备份并在副本演练，不能依赖直接降低镜像版本回滚。依据：[MySQL 支持公告](https://www.mysql.com/support/eol-notice.html)、[Redis 7.4 安全修复](https://redis.io/docs/latest/operate/oss_and_stack/stack-with-enterprise/release-notes/redisce/redisce-7.4-release-notes/)。
 
 网络无法稳定访问 npm 官方源时，可在私有 `.env` 中设置 `NPM_REGISTRY=https://registry.npmmirror.com`。默认使用官方源，不关闭 TLS 或变更锁文件。
+
+独立 MCP 服务复用 AIOps 镜像，只在 Compose 内网监听 9000，使用同一服务密钥；AIOps 通过 `MCP_SERVER_URL=http://mcp:9000` 连接。健康检查仅代表进程可用，具体工具仍需要各自的数据源配置。

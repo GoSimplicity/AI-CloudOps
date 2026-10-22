@@ -43,6 +43,11 @@ services:
   prometheus:
     <<: *runtime
     image: prom/prometheus:v3.2.1
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:9090/-/ready]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     command: [--config.file=/etc/prometheus/prometheus.yml, --storage.tsdb.path=/prometheus, --storage.tsdb.retention.time=15d]
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -93,6 +98,7 @@ services:
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD:?Generate .env first}
       PROMETHEUS_HOST: prometheus:9090
+      MCP_SERVER_URL: http://mcp:9000
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.siliconflow.cn/v1}
       LLM_MODEL: ${LLM_MODEL:-Qwen/Qwen2.5-32B-Instruct}
@@ -107,6 +113,22 @@ services:
       timeout: 5s
       retries: 10
       start_period: 120s
+
+  mcp:
+    <<: *runtime
+    image: cloudops-aiops:${RELEASE_VERSION:-local}
+    command: [python, -m, app.mcp.main, --host, 0.0.0.0, --port, "9000"]
+    environment:
+      ENV: production
+      AIOPS_API_KEY: ${AIOPS_API_KEY:?Generate .env first}
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Generate .env first}
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:9000/health]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   web:
     <<: *runtime
