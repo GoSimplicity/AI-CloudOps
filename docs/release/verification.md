@@ -50,3 +50,9 @@ MySQL 8.4.11 / Redis 7.4.11 升级后，通过同源 `http://localhost:18080` �
 证据：前端 `test-results/results.json`、本机 `/tmp/cloudops-web-release-e2e.log` 和父目录 `cloudops-production-*.png`。前端类型检查、245 项单测、生产构建通过。
 
 功能边界仍需如实保留：目前仅实现阿里云 ECS；其余云厂商、部门和自定义通知接收人不能宣称已实现。真实 SSH、模型和外部通知投递尚未验收。历史泄漏的集群凭据需由对应管理员轮换。
+
+## 重启恢复验收
+
+OrbStack 已恢复原 2048 MiB 内存额度；临时 MySQL/Redis 调试端口已移除，最终仅发布回环地址 18080。8 个 Compose 服务全部 healthy，kind 中两个验收 Pod 均恢复 Running/Ready。
+
+恢复检查发现 Nginx 静态上游 IP 缓存导致 502，已按 Nginx 1.28 支持的 `resolver`、共享 `zone` 与 `server ... resolve` 修复。实测强制重建 backend/web 后，网关无需重启即可恢复；完整 smoke/分类持久化再次通过。依据：https://nginx.org/en/docs/http/ngx_http_upstream_module.html#server
