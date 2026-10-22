@@ -26,6 +26,7 @@
 package middleware
 
 import (
+	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	"strings"
 
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
@@ -34,11 +35,13 @@ import (
 
 type JWTMiddleware struct {
 	ijwt.Handler
+	users service.UserService
 }
 
-func NewJWTMiddleware(hdl ijwt.Handler) *JWTMiddleware {
+func NewJWTMiddleware(hdl ijwt.Handler, users service.UserService) *JWTMiddleware {
 	return &JWTMiddleware{
 		Handler: hdl,
+		users:   users,
 	}
 }
 
@@ -77,6 +80,14 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 			return
 		}
 		uc = *parsed
+		user, err := m.users.GetProfile(ctx.Request.Context(), uc.Uid)
+		if err != nil || user == nil || user.Enable != 1 || user.Username != uc.Username {
+			ctx.AbortWithStatus(401)
+			return
+		}
+		// Permissions and account type must reflect persisted state, not stale claims.
+		uc.AccountType = user.AccountType
+		uc.Username = user.Username
 
 		// 检查UserAgent
 		if uc.UserAgent == "" {

@@ -38,7 +38,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func InitMiddlewares(ih ijwt.Handler, l *zap.Logger, roleSvc service.RoleService, auditSvc service.AuditService) []gin.HandlerFunc {
+func InitMiddlewares(ih ijwt.Handler, l *zap.Logger, roleSvc service.RoleService, auditSvc service.AuditService, userSvc service.UserService) []gin.HandlerFunc {
 	return []gin.HandlerFunc{
 		cors.New(cors.Config{
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
@@ -55,7 +55,7 @@ func InitMiddlewares(ih ijwt.Handler, l *zap.Logger, roleSvc service.RoleService
 			},
 			MaxAge: 12 * time.Hour,
 		}),
-		middleware.NewJWTMiddleware(ih).CheckLogin(),
+		middleware.NewJWTMiddleware(ih, userSvc).CheckLogin(),
 		middleware.NewLogMiddleware(l).Log(),
 		middleware.NewAuthMiddleware(roleSvc).CheckAuth(),
 		middleware.NewAuditLogMiddleware(auditSvc, l).AuditLog(),

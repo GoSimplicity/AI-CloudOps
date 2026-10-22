@@ -145,7 +145,11 @@ func (h *UserHandler) RefreshToken(ctx *gin.Context) {
 			return nil, fmt.Errorf("会话已过期，请重新登录")
 		}
 
-		return h.jwt.SetJWTToken(ctx, rc.Uid, rc.Username, rc.Ssid, rc.AccountType)
+		user, err := h.service.GetProfile(ctx.Request.Context(), rc.Uid)
+		if err != nil || user == nil || user.Enable != 1 || user.Username != rc.Username {
+			return nil, fmt.Errorf("账户不可用，请重新登录")
+		}
+		return h.jwt.SetJWTToken(ctx, user.ID, user.Username, rc.Ssid, user.AccountType)
 	})
 }
 
