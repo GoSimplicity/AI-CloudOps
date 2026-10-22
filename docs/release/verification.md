@@ -32,3 +32,9 @@
 - 备份恢复与回滚演练；历史暴露凭据的撤销/轮换。
 
 未配置的外部能力应返回明确不可用原因。此记录不将“未调用”或“使用测试替身”写为真实服务通过。
+
+## 最终运行时回归
+
+MySQL 8.4.11 / Redis 7.4.11 升级后，通过同源 `http://localhost:18080` 再次执行并全部通过：`release-smoke.py --crud`、`workorder_flow.py`、`account_access.py --rbac`，以及省略 Service 协议和类型的 `kubernetes_smoke.py --execute`。最后一轮 Kubernetes 测试 namespace 与集群登记已清理；此前为浏览器验收保留的专用记录不属于生产资源。
+
+当前三仓 commit 与本机构建镜像 ID 保存在被忽略的 `deploy/release/manifest.local`。GitHub 最新状态查询受匿名 API 限流影响，不能把此前成功的 CI 当作最后提交的远端状态。
