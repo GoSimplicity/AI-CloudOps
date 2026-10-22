@@ -262,14 +262,20 @@ func (s *workorderNotificationService) SendWorkorderNotification(ctx context.Con
 		return nil
 	}
 
+	var failures []error
 	for _, notification := range notifications {
 		if err := s.processNotification(ctx, notification, instance, eventType, senderID, customContent...); err != nil {
 			s.logger.Error("处理通知配置失败",
 				zap.Int("notification_id", notification.ID),
 				zap.Int("instance_id", instanceID),
 				zap.Error(err))
+			failures = append(failures, err)
 			continue
 		}
+	}
+
+	if len(failures) > 0 {
+		return errors.Join(failures...)
 	}
 
 	s.logger.Info("工单通知发送完成",
@@ -303,12 +309,7 @@ func (s *workorderNotificationService) processNotification(ctx context.Context, 
 		go func(ch string) {
 			defer wg.Done()
 
-			channelCtx := context.Background()
-			if deadline, ok := ctx.Deadline(); ok {
-				var cancel context.CancelFunc
-				channelCtx, cancel = context.WithDeadline(context.Background(), deadline)
-				defer cancel()
-			}
+			channelCtx := ctx
 
 			if err := s.sendChannelNotification(channelCtx, notification, instance, ch, recipients, eventType, senderID, customContent...); err != nil {
 				s.logger.Error("发送渠道通知失败",
@@ -436,12 +437,7 @@ func (s *workorderNotificationService) sendChannelNotification(ctx context.Conte
 		go func(rec RecipientInfo) {
 			defer wg.Done()
 
-			recipientCtx := context.Background()
-			if deadline, ok := ctx.Deadline(); ok {
-				var cancel context.CancelFunc
-				recipientCtx, cancel = context.WithDeadline(context.Background(), deadline)
-				defer cancel()
-			}
+			recipientCtx := ctx
 
 			recipientAddr := s.getRecipientAddress(recipientCtx, rec, channel)
 			if recipientAddr == "" {

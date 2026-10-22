@@ -7,6 +7,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
+	workorderDao "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
 	"go.uber.org/zap"
 )
 
@@ -42,5 +43,27 @@ func TestNotificationRecipients(t *testing.T) {
 				t.Fatalf("recipients=%v err=%v", recipients, err)
 			}
 		})
+	}
+}
+
+type notificationFailureDAO struct {
+	workorderDao.WorkorderNotificationDAO
+}
+
+func (notificationFailureDAO) GetActiveNotificationsByEventType(context.Context, string, int) ([]*model.WorkorderNotification, error) {
+	return []*model.WorkorderNotification{{RecipientTypes: []string{model.RecipientTypeDept}}}, nil
+}
+
+type notificationInstanceDAO struct {
+	workorderDao.WorkorderInstanceDAO
+}
+
+func (notificationInstanceDAO) GetInstanceByID(context.Context, int) (*model.WorkorderInstance, error) {
+	return &model.WorkorderInstance{}, nil
+}
+func TestSendWorkorderNotificationPropagatesFailure(t *testing.T) {
+	s := &workorderNotificationService{dao: notificationFailureDAO{}, instanceDAO: notificationInstanceDAO{}, logger: zap.NewNop()}
+	if err := s.SendWorkorderNotification(context.Background(), 1, "created"); err == nil {
+		t.Fatal("failed notification reported success")
 	}
 }

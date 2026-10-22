@@ -14,3 +14,12 @@ func TestProfileCannotChangePrivileges(t *testing.T) {
 		}
 	}
 }
+
+func TestCreatePreservesNotificationEmail(t *testing.T) {
+	for _, email := range []string{"", "ops@example.com"} {
+		user := BuildUserForCreate(&model.UserSignUpReq{Email: email}, "hashed")
+		if user.Email != email {
+			t.Fatal("registration lost email")
+		}
+	}
+}

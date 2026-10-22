@@ -35,6 +35,7 @@ func BuildUserForCreate(req *model.UserSignUpReq, hashedPassword string) *model.
 		RealName:     req.RealName,
 		Desc:         req.Desc,
 		Mobile:       req.Mobile,
+		Email:        req.Email,
 		FeiShuUserId: req.FeiShuUserId,
 		AccountType:  req.AccountType,
 		HomePath:     req.HomePath,
