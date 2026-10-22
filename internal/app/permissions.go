@@ -1,0 +1,45 @@
+package app
+
+import (
+	"context"
+	"crypto/sha256"
+	"fmt"
+	"strings"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"gorm.io/gorm/clause"
+)
+
+// bootstrapPermissionCatalog adds discoverable route permissions without granting
+// them or changing administrator-managed metadata on existing entries.
+func (a *App) bootstrapPermissionCatalog(ctx context.Context) error {
+	methods := map[string]int8{"GET": 1, "POST": 2, "PUT": 3, "DELETE": 4}
+	public := map[string]bool{"/api/user/login": true, "/api/user/logout": true, "/api/user/refresh_token": true, "/api/not_auth/getBindIps": true, "/api/not_auth/getTreeNodeBindIps": true}
+	var existing []model.Api
+	if err := a.db.WithContext(ctx).Select("path", "method").Find(&existing).Error; err != nil {
+		return err
+	}
+	seen := make(map[string]bool, len(existing))
+	key := func(method int8, path string) string { return fmt.Sprintf("%d %s", method, path) }
+	for _, api := range existing {
+		seen[key(api.Method, api.Path)] = true
+	}
+	pending := make([]model.Api, 0)
+	for _, route := range a.server.Routes() {
+		method, ok := methods[route.Method]
+		if !ok || !strings.HasPrefix(route.Path, "/api/") || public[route.Path] || seen[key(method, route.Path)] {
+			continue
+		}
+		digest := sha256.Sum256([]byte(route.Method + " " + route.Path))
+		handler := route.Handler[strings.LastIndex(route.Handler, ".")+1:]
+		if len(handler) > 25 {
+			handler = handler[:25]
+		}
+		pending = append(pending, model.Api{Name: fmt.Sprintf("%s %s %x", route.Method, handler, digest[:4]), Path: route.Path, Method: method, Description: route.Method + " " + route.Path, Version: "v1", Category: 2, IsPublic: 0})
+		seen[key(method, route.Path)] = true
+	}
+	if len(pending) == 0 {
+		return nil
+	}
+	return a.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(pending, 100).Error
+}

@@ -174,7 +174,7 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 
 			// 检查API权限
 			for _, api := range role.Apis {
-				if matchWildcardPath(api.Path, path, methodCode, api.Method) {
+				if (api.Path == c.FullPath() && api.Method == methodCode) || matchWildcardPath(api.Path, path, methodCode, api.Method) {
 					c.Next()
 					return
 				}

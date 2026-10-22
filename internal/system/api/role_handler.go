@@ -87,6 +87,12 @@ func (h *RoleHandler) CreateRole(ctx *gin.Context) {
 
 func (h *RoleHandler) UpdateRole(ctx *gin.Context) {
 	var req model.UpdateRoleRequest
+	id, err := base.GetParamID(ctx)
+	if err != nil {
+		base.BadRequestError(ctx, err.Error())
+		return
+	}
+	req.ID = id
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.svc.UpdateRole(ctx.Request.Context(), &req)
@@ -95,6 +101,12 @@ func (h *RoleHandler) UpdateRole(ctx *gin.Context) {
 
 func (h *RoleHandler) DeleteRole(ctx *gin.Context) {
 	var req model.DeleteRoleRequest
+	id, err := base.GetParamID(ctx)
+	if err != nil {
+		base.BadRequestError(ctx, err.Error())
+		return
+	}
+	req.ID = id
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.DeleteRole(ctx.Request.Context(), req.ID)
@@ -154,20 +166,14 @@ func (h *RoleHandler) AssignRolesToUser(ctx *gin.Context) {
 
 	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	req.UserID = user.Uid
-
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.svc.AssignRolesToUser(ctx.Request.Context(), req.UserID, req.RoleIds, 0)
+		return nil, h.svc.AssignRolesToUser(ctx.Request.Context(), req.UserID, req.RoleIds, user.Uid)
 	})
 }
 
 // RevokeRolesFromUser 撤销用户角色
 func (h *RoleHandler) RevokeRolesFromUser(ctx *gin.Context) {
 	var req model.RevokeRolesFromUserRequest
-
-	user := ctx.MustGet("user").(jwt.UserClaims)
-
-	req.UserID = user.Uid
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.svc.RevokeRolesFromUser(ctx.Request.Context(), req.UserID, req.RoleIds)

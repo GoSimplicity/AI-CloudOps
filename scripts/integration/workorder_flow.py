@@ -69,6 +69,15 @@ def main():
         owned.append(('instance', instance))
         assert call(f'/api/workorder/instance/detail/{instance}')['status'] == 1
         print('PASS template instance created as draft')
+        for forbidden in ({'status': 4}, {'assignee_id': uid + 100000}, {'completed_at': '2026-10-22T00:00:00Z'}):
+            try:
+                call(f'/api/workorder/instance/update/{instance}', forbidden, 'PUT')
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError('ordinary edit bypassed workflow authorization')
+        assert call(f'/api/workorder/instance/detail/{instance}')['status'] == 1
+        print('PASS ordinary edits cannot forge workflow state, assignee or completion time')
         call(f'/api/workorder/instance/submit/{instance}', {})
         assert call(f'/api/workorder/instance/detail/{instance}')['status'] == 2
         print('PASS submit draft to pending')

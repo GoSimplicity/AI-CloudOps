@@ -132,6 +132,10 @@ func (a *App) Run(ctx context.Context) error {
 		})
 	})
 
+	if err := a.bootstrapPermissionCatalog(ctx); err != nil {
+		return fmt.Errorf("初始化权限目录失败: %w", err)
+	}
+
 	if a.cfg.Mock.Enabled {
 		if err := a.initMockData(ctx); err != nil {
 			a.logger.Warn("Mock数据初始化失败", zap.Error(err))
