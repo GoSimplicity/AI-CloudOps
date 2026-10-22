@@ -26,13 +26,10 @@
 package middleware
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -49,8 +46,6 @@ const (
 	OperationDelete = "DELETE"
 	OperationQuery  = "VIEW"
 	Unknown         = "UNKNOWN"
-
-	maxBodySize = 1024 * 1024 // 1MB
 )
 
 // 预定义跳过审计的路径
@@ -73,23 +68,6 @@ var operationTypeMap = map[string]string{
 	"PATCH":  OperationUpdate,
 	"DELETE": OperationDelete,
 	"GET":    OperationQuery,
-}
-
-// 使用对象池优化内存使用
-var bufferPool = sync.Pool{
-	New: func() interface{} {
-		return new(bytes.Buffer)
-	},
-}
-
-type bodyLogWriter struct {
-	gin.ResponseWriter
-	body *bytes.Buffer
-}
-
-func (w bodyLogWriter) Write(b []byte) (int, error) {
-	w.body.Write(b)
-	return w.ResponseWriter.Write(b)
 }
 
 type AuditLogMiddleware struct {
@@ -115,39 +93,7 @@ func (m *AuditLogMiddleware) AuditLog() gin.HandlerFunc {
 		startTime := time.Now()
 		traceID := c.GetHeader("X-Trace-ID")
 
-		// 只处理非GET请求的请求体
-		if c.Request.Method != "GET" && c.Request.Body != nil {
-			buf := bufferPool.Get().(*bytes.Buffer)
-			buf.Reset()
-			defer bufferPool.Put(buf)
-
-			// 限制读取大小,避免内存溢出
-			if _, err := io.CopyN(buf, c.Request.Body, maxBodySize); err != nil && err != io.EOF {
-				m.l.Error("读取请求体失败", zap.Error(err))
-			}
-
-			// 尝试将请求体转换为JSON
-			if buf.Len() > 0 {
-				var jsonData interface{}
-				if err := json.Unmarshal(buf.Bytes(), &jsonData); err == nil {
-					if jsonBytes, err := json.Marshal(jsonData); err == nil {
-						requestBody = jsonBytes
-					}
-				}
-			}
-
-			c.Request.Body = io.NopCloser(bytes.NewBuffer(buf.Bytes()))
-		}
-
-		// 包装ResponseWriter以捕获响应体
-		blw := &bodyLogWriter{
-			body:           bufferPool.Get().(*bytes.Buffer),
-			ResponseWriter: c.Writer,
-		}
-		blw.body.Reset()
-		defer bufferPool.Put(blw.body)
-
-		c.Writer = blw
+		// Audit metadata only: bodies can contain passwords, kubeconfigs and large streams.
 		c.Next()
 
 		// 如果是GET请求，不记录审计日志，提前返回
@@ -157,7 +103,7 @@ func (m *AuditLogMiddleware) AuditLog() gin.HandlerFunc {
 
 		// 获取用户ID
 		var userID int
-		if user, exists := c.MustGet("user").(jwt.UserClaims); exists {
+		if user, exists := c.Value("user").(jwt.UserClaims); exists {
 			userID = int(user.Uid)
 		}
 
@@ -167,14 +113,6 @@ func (m *AuditLogMiddleware) AuditLog() gin.HandlerFunc {
 		}
 
 		var responseBody datatypes.JSON
-		if blw.body.Len() > 0 {
-			var jsonData interface{}
-			if err := json.Unmarshal(blw.body.Bytes(), &jsonData); err == nil {
-				if jsonBytes, err := json.Marshal(jsonData); err == nil {
-					responseBody = jsonBytes
-				}
-			}
-		}
 
 		auditLogReq := &model.CreateAuditLogRequest{
 			UserID:        userID,

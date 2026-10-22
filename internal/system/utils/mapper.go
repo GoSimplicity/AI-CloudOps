@@ -48,9 +48,7 @@ func ApplyProfileUpdates(user *model.User, req *model.UpdateProfileReq) {
 	user.Desc = req.Desc
 	user.Mobile = req.Mobile
 	user.FeiShuUserId = req.FeiShuUserId
-	user.AccountType = req.AccountType
 	user.HomePath = req.HomePath
-	user.Enable = req.Enable
 	user.Email = req.Email
 	user.Avatar = req.Avatar
 }

@@ -46,12 +46,6 @@ var skipAuthPaths = map[string]bool{
 	"/favicon.ico":                     true,
 }
 
-// 静态资源和WebSocket路径前缀
-var skipPrefixes = []string{
-	"/api/ai/chat/ws",
-	"/api/tree/local/terminal",
-}
-
 // HTTP方法映射
 var methodMapping = map[string]int8{
 	"GET":    1,
@@ -68,15 +62,6 @@ func NewAuthMiddleware(roleService service.RoleService) *AuthMiddleware {
 	return &AuthMiddleware{
 		roleService: roleService,
 	}
-}
-
-func hasPrefix(path string, prefixes []string) bool {
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(path, prefix) {
-			return true
-		}
-	}
-	return false
 }
 
 func matchWildcardPath(apiPath, requestPath string, methodCode int8, apiMethod int8) bool {
@@ -130,7 +115,7 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 		}
 
 		// 跳过静态资源和WebSocket路径
-		if path == "/" || hasPrefix(path, skipPrefixes) || strings.Contains(path, "/exec") {
+		if path == "/" || path == "/health" {
 			c.Next()
 			return
 		}
@@ -156,12 +141,6 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 
 		// 管理员放行
 		if user.Username == "admin" {
-			c.Next()
-			return
-		}
-
-		// 服务账号放行
-		if user.AccountType == 2 {
 			c.Next()
 			return
 		}

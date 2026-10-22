@@ -117,6 +117,14 @@ func (a *App) Run(ctx context.Context) error {
 
 	a.server.Use(gzip.Gzip(gzip.BestCompression))
 
+	if err := a.registerAIOps(); err != nil {
+		return err
+	}
+	a.server.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
+	if err := a.bootstrapAdmin(ctx); err != nil {
+		return err
+	}
+
 	a.server.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "AI-CloudOps API 服务运行中",
@@ -135,8 +143,10 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	srv := &http.Server{
-		Addr:    ":" + a.cfg.Server.Port,
-		Handler: a.server,
+		Addr:              ":" + a.cfg.Server.Port,
+		Handler:           a.server,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	a.showBootInfo()

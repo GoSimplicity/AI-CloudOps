@@ -26,6 +26,7 @@
 package di
 
 import (
+	"os"
 	"strings"
 	"time"
 
@@ -45,10 +46,12 @@ func InitMiddlewares(ih ijwt.Handler, l *zap.Logger, roleSvc service.RoleService
 			AllowHeaders:     []string{"Content-Type", "Authorization", "X-Refresh-Token"},
 			ExposeHeaders:    []string{"x-jwt-token", "x-refresh-token"},
 			AllowOriginFunc: func(origin string) bool {
-				if strings.HasPrefix(origin, "http://localhost") {
-					return true
+				for _, allowed := range strings.Split(os.Getenv("SERVER_ALLOWED_ORIGINS"), ",") {
+					if strings.TrimSpace(allowed) == origin {
+						return true
+					}
 				}
-				return strings.Contains(origin, "")
+				return false
 			},
 			MaxAge: 12 * time.Hour,
 		}),

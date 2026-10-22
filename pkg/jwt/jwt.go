@@ -115,7 +115,7 @@ func (h *handler) ParseUserClaims(tokenStr string) (*UserClaims, error) {
 	var uc UserClaims
 	token, err := jwt.ParseWithClaims(tokenStr, &uc, func(token *jwt.Token) (interface{}, error) {
 		return h.key1, nil
-	})
+	}, jwt.WithValidMethods([]string{"HS512"}), jwt.WithExpirationRequired(), jwt.WithIssuer(h.issuer))
 	if err != nil {
 		return nil, fmt.Errorf("解析令牌失败: %w", err)
 	}
@@ -132,7 +132,7 @@ func (h *handler) ParseRefreshClaims(tokenStr string) (*RefreshClaims, error) {
 	var rc RefreshClaims
 	token, err := jwt.ParseWithClaims(tokenStr, &rc, func(token *jwt.Token) (interface{}, error) {
 		return h.key2, nil
-	})
+	}, jwt.WithValidMethods([]string{"HS512"}), jwt.WithExpirationRequired())
 	if err != nil {
 		return nil, fmt.Errorf("解析刷新令牌失败: %w", err)
 	}
@@ -227,14 +227,17 @@ func (h *handler) ClearToken(ctx *gin.Context) error {
 	claims := &UserClaims{}
 	token, err := jwt.ParseWithClaims(authToken, claims, func(token *jwt.Token) (interface{}, error) {
 		return h.key1, nil
-	})
+	}, jwt.WithValidMethods([]string{"HS512"}), jwt.WithExpirationRequired(), jwt.WithIssuer(h.issuer))
 
 	if err != nil || !token.Valid {
 		return errors.New("invalid authorization token")
 	}
 
-	// 将 token 加入 Redis 黑名单
-	if err := h.addToBlacklist(ctx, authToken, claims.ExpiresAt.Time); err != nil {
+	// Revoke the shared session, covering both access and refresh tokens.
+	if claims.Ssid == "" {
+		return errors.New("invalid session")
+	}
+	if err := h.client.Set(ctx, fmt.Sprintf(sessionKeyPattern, claims.Ssid), "revoked", h.rcExpiration).Err(); err != nil {
 		return err
 	}
 

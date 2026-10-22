@@ -26,9 +26,6 @@
 package middleware
 
 import (
-	"bytes"
-	"io"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -61,18 +58,9 @@ func (lm *LogMiddleware) Log() gin.HandlerFunc {
 		start := time.Now()
 		path := c.Request.URL.Path
 		method := c.Request.Method
-		bodyBytes, err := io.ReadAll(c.Request.Body)
-		if err != nil {
-			lm.l.Error("请求体读取失败", zap.Error(err))
-			c.AbortWithStatus(http.StatusInternalServerError)
-			return
-		}
-		// 由于读取请求体会消耗掉c.Request.Body，所以需要重新设置回上下文
-		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 		al := AccessLog{
-			Path:    path,
-			Method:  method,
-			ReqBody: string(bodyBytes),
+			Path:   path,
+			Method: method,
 		}
 		c.Next()
 		al.Status = c.Writer.Status()

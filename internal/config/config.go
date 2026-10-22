@@ -27,11 +27,14 @@ package config
 
 import (
 	"fmt"
+	"net/url"
+	"os"
 	"strings"
 	"time"
 )
 
 type Config struct {
+	AIOps        AIOpsConfig        `mapstructure:"aiops"`
 	Server       ServerConfig       `mapstructure:"server"`
 	Log          LogConfig          `mapstructure:"log"`
 	JWT          JWTConfig          `mapstructure:"jwt"`
@@ -61,11 +64,39 @@ func (c *Config) Validate() error {
 	if c.Redis.Addr == "" {
 		return fmt.Errorf("redis.addr 不能为空")
 	}
+	if c.AIOps.BaseURL != "" {
+		u, err := url.Parse(c.AIOps.BaseURL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
+			return fmt.Errorf("aiops.base_url 必须是有效的 HTTP(S) 地址")
+		}
+	}
+	if os.Getenv("ENV") == "production" {
+		for name, key := range map[string]string{"JWT_KEY1": c.JWT.Key1, "JWT_KEY2": c.JWT.Key2, "TREE_PASSWORD_ENCRYPTION_KEY": c.Tree.PasswordEncryptionKey} {
+			if len(key) < 32 || strings.HasPrefix(key, "ebe3vx") {
+				return fmt.Errorf("生产环境 %s 必须配置独立的至少32字符密钥", name)
+			}
+		}
+		if c.JWT.Key1 == c.JWT.Key2 {
+			return fmt.Errorf("JWT 两个密钥不得相同")
+		}
+		if c.Mock.Enabled {
+			return fmt.Errorf("生产环境必须关闭 MOCK_ENABLED")
+		}
+		if c.AIOps.BaseURL != "" && len(c.AIOps.APIKey) < 32 {
+			return fmt.Errorf("生产环境 AIOPS_API_KEY 至少32字符")
+		}
+	}
 	return nil
 }
 
+type AIOpsConfig struct {
+	BaseURL string `mapstructure:"base_url" env:"AIOPS_BASE_URL"`
+	APIKey  string `mapstructure:"api_key" env:"AIOPS_API_KEY"`
+}
+
 type ServerConfig struct {
-	Port string `mapstructure:"port" env:"SERVER_PORT" default:"8889"`
+	AllowedOrigins string `mapstructure:"allowed_origins" env:"SERVER_ALLOWED_ORIGINS"`
+	Port           string `mapstructure:"port" env:"SERVER_PORT" default:"8889"`
 }
 
 type LogConfig struct {

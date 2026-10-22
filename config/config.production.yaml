@@ -26,11 +26,11 @@ prometheus:
   alert_webhook_file_dir: "/tmp/webhook_files"
   httpSdAPI: "http://localhost:8888/api/not_auth/getTreeNodeBindIps"
 mock:
-  enabled: true # 是否开启mock
+  enabled: false # 是否开启mock
 notification:
   # 邮箱配置
   email:
-    enabled: true
+    enabled: false
     smtp_host: "smtp.qq.com"
     smtp_port: 587
     username: "xxx@qq.com"
@@ -42,7 +42,7 @@ notification:
     use_tls: true
   # 飞书配置
   feishu:
-    enabled: true
+    enabled: false
     app_id: "xxx"
     app_secret: "xxx"
     webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/"

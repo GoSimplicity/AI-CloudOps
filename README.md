@@ -352,3 +352,15 @@ AI-CloudOps-aiops/
 **如果觉得项目对您有帮助，请给我们一个 Star ⭐**
 
 [![Star History Chart](https://api.star-history.com/svg?repos=GoSimplicity/AI-CloudOps&type=Date)](https://star-history.com/#GoSimplicity/AI-CloudOps&Date)
+
+### 生产启动安全要求
+
+生产环境设置 `ENV=production`、`MOCK_ENABLED=false`，并分别注入独立的
+`JWT_KEY1`、`JWT_KEY2`、`TREE_PASSWORD_ENCRYPTION_KEY`（至少32字符，不能使用仓库示例值）。
+首次空数据库启动使用 `BOOTSTRAP_ADMIN_PASSWORD`（至少12字符）创建管理员，成功后移除该变量；已有用户不会被重置。
+`SERVER_ALLOWED_ORIGINS` 是逗号分隔的精确 Origin 白名单，留空仅支持同源浏览器访问。
+
+AI 请求通过 Go 的 `/api/v1/*` 网关接受 JWT 和角色权限检查，然后向
+`AIOPS_BASE_URL` 注入 `AIOPS_API_KEY`。该密钥必须与 Python 服务一致（生产至少32字符），不得进入前端配置。
+非管理员需在角色 API 权限中授权相应 `/api/v1/` 路径；服务账号不再自动绕过角色权限。
+`GET /health` 提供进程存活检查，不代表数据库、Redis或外部云服务均已就绪。

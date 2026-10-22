@@ -1,0 +1,10 @@
+.git
+.env
+.env.*
+logs
+data
+tmp
+bin
+.idea
+.DS_Store
+*.log

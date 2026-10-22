@@ -68,6 +68,11 @@ func NewUserService(dao dao.UserDAO, roleDao dao.RoleDAO, logger *zap.Logger) Us
 
 // SignUp 用户注册
 func (us *userService) SignUp(ctx context.Context, user *model.UserSignUpReq) error {
+	if user.Username == "admin" {
+		return fmt.Errorf("保留用户名不可注册")
+	}
+	user.AccountType = 1
+	user.Enable = 1
 	hash, err := userutils.HashPassword(user.Password)
 	if err != nil {
 		us.logger.Error("生成密码失败", zap.Error(err))
@@ -90,6 +95,10 @@ func (us *userService) Login(ctx context.Context, user *model.UserLoginReq) (*mo
 	} else if err != nil {
 		us.logger.Error("获取用户失败", zap.Error(err))
 		return &model.User{}, err
+	}
+
+	if u.Enable != 1 {
+		return &model.User{}, constants.ErrorPasswordIncorrect
 	}
 
 	if err = userutils.ComparePassword(u.Password, user.Password); err != nil {
