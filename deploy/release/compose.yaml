@@ -61,6 +61,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?Generate .env first}
       JWT_KEY1: ${JWT_KEY1:?Generate .env first}
       JWT_KEY2: ${JWT_KEY2:?Generate .env first}
+      JWT_EXPIRATION: "30"
       TREE_PASSWORD_ENCRYPTION_KEY: ${TREE_PASSWORD_ENCRYPTION_KEY:?Generate .env first}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Generate .env first}
       MOCK_ENABLED: "false"
@@ -115,7 +116,7 @@ services:
     environment:
       SERVER_PORT: "80"
       SERVER_ROOT: /public
-      SERVER_PAGE_FALLBACK: /public/index.html
+      SERVER_FALLBACK_PAGE: /public/index.html
       VITE_GLOB_API_URL: /api
       VITE_GLOB_AIOPS_URL: /api/v1
 
@@ -130,7 +131,14 @@ services:
       backend:
         condition: service_healthy
       web:
-        condition: service_started
+        condition: service_healthy
+      aiops:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/health]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
 volumes:
   mysql:

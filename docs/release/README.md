@@ -16,6 +16,12 @@ AI-CloudOps/
 在后端仓库执行：
 
 ```bash
+bash scripts/release-start.sh
+```
+
+该入口检查同级仓库和 Docker，按需生成私有配置，构建并等待服务健康。需要分别执行时：
+
+```bash
 python3 scripts/release-env.py
 docker compose -f deploy/release/compose.yaml config --quiet
 docker compose -f deploy/release/compose.yaml up -d --build --wait --wait-timeout 300
@@ -44,6 +50,10 @@ python3 scripts/release-smoke.py
 升级前备份 MySQL、Redis、AIOps 数据卷及 `.env`，保存三仓 commit SHA 和镜像 digest。尤其保留 `TREE_PASSWORD_ENCRYPTION_KEY`，更换它会影响已存资产密码的解密。先在数据库副本上演练升级；当前 GORM 自动迁移并不等价于可逆迁移。
 
 使用固定 `RELEASE_VERSION` 构建镜像，保留上一版镜像。应用回滚可指定上一版镜像，但数据库结构变化必须依据升级前备份和演练结果处理。`docker compose down` 保留数据卷；不要在生产使用 `down -v`。
+
+`python3 scripts/release-backup.py` 创建权限受限、不会覆盖已有目录的 MySQL 一致性快照和部署密钥备份，记录三仓 commit。默认输出目录 `deploy/release/backups.local` 被 Git 忽略。该脚本明确不包括 Redis 队列和 AIOps 上传文档；完整恢复点还必须在暂停相关写入后保存对应数据卷。备份含资产密文、用户哈希和部署密钥，应存放在加密存储，限制访问。
+
+发布模板将访问令牌有效期设为 30 分钟。沿用当前后端配置契约：`JWT_EXPIRATION` 的单位为分钟。
 
 ## 发布门槛
 
