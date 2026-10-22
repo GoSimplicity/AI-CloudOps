@@ -72,3 +72,9 @@ python3 scripts/release-smoke.py
 
 - [Docker Compose 健康依赖](https://docs.docker.com/compose/how-tos/startup-order/)：依赖容器启动不代表服务就绪。
 - [Docker Compose secrets](https://docs.docker.com/compose/how-tos/use-secrets/)：生产密钥应由部署系统管理；本地 `.env` 适合隔离验收，受 Docker 主机管理员权限保护。
+
+## 运行时版本
+
+发布模板使用 MySQL 8.4.11 LTS 与 Redis 7.4.11。已有 MySQL 8.0 数据卷升级前必须备份并在副本演练，不能依赖直接降低镜像版本回滚。依据：[MySQL 支持公告](https://www.mysql.com/support/eol-notice.html)、[Redis 7.4 安全修复](https://redis.io/docs/latest/operate/oss_and_stack/stack-with-enterprise/release-notes/redisce/redisce-7.4-release-notes/)。
+
+网络无法稳定访问 npm 官方源时，可在私有 `.env` 中设置 `NPM_REGISTRY=https://registry.npmmirror.com`。默认使用官方源，不关闭 TLS 或变更锁文件。
