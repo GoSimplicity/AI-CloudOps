@@ -148,7 +148,7 @@ func (h *K8sPodHandler) GetPodLogs(ctx *gin.Context) {
 		return
 	}
 
-	if err := ctx.ShouldBindQuery(&req); err != nil {
+	if err := base.BindRequest(ctx, &req); err != nil {
 		base.BadRequestError(ctx, "查询参数绑定失败: "+err.Error())
 		return
 	}

@@ -244,7 +244,7 @@ func DeleteWithId(l *zap.Logger, funcName string, timeout int, url string, param
 func HandleRequest(ctx *gin.Context, req interface{}, action func() (interface{}, error)) {
 	if req != nil {
 		// json / form 如果提供了绑定对象，执行数据绑定
-		if err := ctx.ShouldBind(req); err != nil {
+		if err := BindRequest(ctx, req); err != nil {
 			BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
 			return
 		}
