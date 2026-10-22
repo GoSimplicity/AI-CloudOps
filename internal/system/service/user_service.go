@@ -48,7 +48,7 @@ type UserService interface {
 	GetUserList(ctx context.Context, req *model.GetUserListReq) (model.ListResp[*model.User], error)
 	ChangePassword(ctx context.Context, req *model.ChangePasswordReq) error
 	WriteOff(ctx context.Context, uid int, password string) error
-	UpdateProfile(ctx context.Context, req *model.UpdateProfileReq) error
+	UpdateProfile(ctx context.Context, req *model.UpdateProfileReq, allowAccountChanges bool) error
 	DeleteUser(ctx context.Context, uid int) error
 	GetUserStatistics(ctx context.Context) (*model.UserStatistics, error)
 }
@@ -191,7 +191,7 @@ func (us *userService) ChangePassword(ctx context.Context, req *model.ChangePass
 	return us.dao.ChangePassword(ctx, req.UserID, hash)
 }
 
-func (us *userService) UpdateProfile(ctx context.Context, req *model.UpdateProfileReq) error {
+func (us *userService) UpdateProfile(ctx context.Context, req *model.UpdateProfileReq, allowAccountChanges bool) error {
 	user, err := us.dao.GetByID(ctx, req.ID)
 	if err != nil {
 		us.logger.Error("获取用户失败", zap.Error(err))
@@ -199,6 +199,14 @@ func (us *userService) UpdateProfile(ctx context.Context, req *model.UpdateProfi
 	}
 
 	userutils.ApplyProfileUpdates(user, req)
+	if allowAccountChanges {
+		if req.AccountType != 0 {
+			user.AccountType = req.AccountType
+		}
+		if req.Enable != 0 {
+			user.Enable = req.Enable
+		}
+	}
 	return us.dao.Update(ctx, user)
 }
 

@@ -229,7 +229,7 @@ func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
 	}
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.UpdateProfile(ctx.Request.Context(), &req)
+		return nil, h.service.UpdateProfile(ctx.Request.Context(), &req, uc.Username == "admin")
 	})
 }
 
