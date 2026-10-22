@@ -138,16 +138,17 @@ func ValidateService(service *corev1.Service) error {
 	}
 
 	for _, port := range service.Spec.Ports {
-		if port.Port <= 0 {
-			return fmt.Errorf("Service端口必须大于0")
+		if port.Port <= 0 || port.Port > 65535 {
+			return fmt.Errorf("Service端口必须在1到65535之间")
 		}
-		if port.Protocol != corev1.ProtocolTCP && port.Protocol != corev1.ProtocolUDP && port.Protocol != corev1.ProtocolSCTP {
+		// Omitted protocol is defaulted to TCP by the Kubernetes API server.
+		if port.Protocol != "" && port.Protocol != corev1.ProtocolTCP && port.Protocol != corev1.ProtocolUDP && port.Protocol != corev1.ProtocolSCTP {
 			return fmt.Errorf("无效的协议类型: %s", port.Protocol)
 		}
 	}
 
 	switch service.Spec.Type {
-	case corev1.ServiceTypeClusterIP, corev1.ServiceTypeNodePort, corev1.ServiceTypeLoadBalancer, corev1.ServiceTypeExternalName:
+	case "", corev1.ServiceTypeClusterIP, corev1.ServiceTypeNodePort, corev1.ServiceTypeLoadBalancer, corev1.ServiceTypeExternalName:
 		// 有效类型
 	default:
 		return fmt.Errorf("无效的Service类型: %s", service.Spec.Type)

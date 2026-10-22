@@ -28,3 +28,7 @@ AI网关内部凭据隔离、生产默认密钥/Mock配置校验。
 官方依据：[Go漏洞管理](https://go.dev/doc/security/vuln/)、
 [Prometheus安全通告](https://pkg.go.dev/vuln/GO-2026-5710)、
 [OpenTelemetry安全通告](https://pkg.go.dev/vuln/GO-2026-6505)。
+
+历史 `mock/k8s_mock.go` 曾包含嵌入式客户端私钥和集群地址；当前文件已替换为
+无凭据、不可路由的 `example.invalid` 配置。删除当前内容不能撤销 Git 历史中的凭据，
+相关集群管理员必须轮换曾公开的客户端证书/密钥并审查访问记录；本次未改写历史或操作真实集群。
