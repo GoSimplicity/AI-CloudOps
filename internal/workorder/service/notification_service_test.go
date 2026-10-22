@@ -67,3 +67,51 @@ func TestSendWorkorderNotificationPropagatesFailure(t *testing.T) {
 		t.Fatal("failed notification reported success")
 	}
 }
+
+type mixedRecipientDAO struct{ userDao.UserDAO }
+
+func (mixedRecipientDAO) GetByRoleIDs(context.Context, []int) ([]*model.User, error) {
+	return []*model.User{{Model: model.Model{ID: 7}, RealName: "role"}}, nil
+}
+func (mixedRecipientDAO) GetByDepartmentIDs(context.Context, []int) ([]*model.User, error) {
+	return []*model.User{{Model: model.Model{ID: 8}, RealName: "department", Enable: 1}}, nil
+}
+func (mixedRecipientDAO) GetByID(_ context.Context, id int) (*model.User, error) {
+	return &model.User{Model: model.Model{ID: id}, Enable: 1, Email: "Shared@Example.Test", FeiShuUserId: "ou_shared"}, nil
+}
+func TestMixedRecipientSourcesDeduplicatePerChannel(t *testing.T) {
+	s := &workorderNotificationService{userDAO: mixedRecipientDAO{}, logger: zap.NewNop()}
+	config := &model.WorkorderNotification{RecipientTypes: []string{"creator", "role", "dept", "custom"}, RecipientRoles: []string{"1"}, RecipientDepts: []string{"2"}, RecipientAddresses: model.NotificationAddresses{{Channel: "email", Address: "shared@example.test"}, {Channel: "feishu", Address: "oc_team"}}}
+	recipients, err := s.getRecipients(context.Background(), config, &model.WorkorderInstance{OperatorID: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	email, err := s.resolveChannelRecipients(context.Background(), "email", recipients)
+	if err != nil || len(email) != 1 {
+		t.Fatalf("email duplicate delivery: %d %v", len(email), err)
+	}
+	feishu, err := s.resolveChannelRecipients(context.Background(), "feishu", recipients)
+	if err != nil || len(feishu) != 2 {
+		t.Fatalf("feishu routing: %d %v", len(feishu), err)
+	}
+	for _, recipient := range email {
+		if recipient.Channel != "email" || recipient.Address != "shared@example.test" {
+			t.Fatal("wrong channel address")
+		}
+	}
+}
+func TestCustomRecipientValidation(t *testing.T) {
+	for _, item := range []struct {
+		channels, types model.StringList
+		addresses       model.NotificationAddresses
+	}{
+		{[]string{"sms"}, []string{"custom"}, nil},
+		{[]string{"email"}, []string{"custom"}, nil},
+		{[]string{"email"}, []string{"custom"}, model.NotificationAddresses{{Channel: "feishu", Address: "ou_test"}}},
+		{[]string{"email"}, []string{"custom"}, model.NotificationAddresses{{Channel: "email", Address: "bad"}}},
+	} {
+		if err := validateNotificationDestinations(item.channels, item.types, nil, nil, nil, item.addresses); err == nil {
+			t.Fatal("invalid notification accepted")
+		}
+	}
+}

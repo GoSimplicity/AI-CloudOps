@@ -27,6 +27,7 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strconv"
@@ -75,11 +76,14 @@ func NewWorkorderNotificationService(dao workorderDao.WorkorderNotificationDAO, 
 }
 
 func (s *workorderNotificationService) CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error {
+	if err := validateNotificationDestinations(req.Channels, req.RecipientTypes, req.RecipientUsers, req.RecipientRoles, req.RecipientDepts, req.RecipientAddresses); err != nil {
+		return err
+	}
 	return s.dao.CreateNotification(ctx, req)
 }
 
 func (s *workorderNotificationService) UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error {
-	_, err := s.dao.GetNotificationByID(ctx, req.ID)
+	existing, err := s.dao.GetNotificationByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("通知配置不存在")
@@ -87,6 +91,28 @@ func (s *workorderNotificationService) UpdateNotification(ctx context.Context, r
 		return fmt.Errorf("查询通知配置失败: %w", err)
 	}
 
+	channels, types, users, roles, depts, addresses := existing.Channels, existing.RecipientTypes, existing.RecipientUsers, existing.RecipientRoles, existing.RecipientDepts, existing.RecipientAddresses
+	if req.Channels != nil {
+		channels = req.Channels
+	}
+	if req.RecipientTypes != nil {
+		types = req.RecipientTypes
+	}
+	if req.RecipientUsers != nil {
+		users = req.RecipientUsers
+	}
+	if req.RecipientRoles != nil {
+		roles = req.RecipientRoles
+	}
+	if req.RecipientDepts != nil {
+		depts = req.RecipientDepts
+	}
+	if req.RecipientAddresses != nil {
+		addresses = req.RecipientAddresses
+	}
+	if err := validateNotificationDestinations(channels, types, users, roles, depts, addresses); err != nil {
+		return err
+	}
 	return s.dao.UpdateNotification(ctx, req)
 }
 
@@ -144,7 +170,26 @@ func (s *workorderNotificationService) TestSendNotification(ctx context.Context,
 		}
 	}
 
+	selected := req.Channel
+	if selected == "" {
+		if len(notificationConfig.Channels) != 1 {
+			return fmt.Errorf("多渠道测试必须指定channel")
+		}
+		selected = notificationConfig.Channels[0]
+	}
+	found := false
 	for _, channel := range notificationConfig.Channels {
+		if selected == channel {
+			found = true
+		}
+	}
+	if !found {
+		return fmt.Errorf("测试channel不在通知配置中")
+	}
+	if _, err := notification.NormalizeAddress(selected, req.Recipient); err != nil {
+		return err
+	}
+	for _, channel := range []string{selected} {
 		recipientAddr := strings.TrimSpace(req.Recipient)
 		if recipientAddr == "" {
 			return fmt.Errorf("测试通知必须提供明确的接收人地址")
@@ -157,6 +202,7 @@ func (s *workorderNotificationService) TestSendNotification(ctx context.Context,
 			Subject:       notificationConfig.SubjectTemplate,
 			Content:       notificationConfig.MessageTemplate,
 			Priority:      notificationConfig.Priority,
+			Channel:       channel,
 			RecipientType: channel,
 			RecipientID:   "test_user",
 			RecipientAddr: recipientAddr,
@@ -369,10 +415,8 @@ func (s *workorderNotificationService) getRecipients(ctx context.Context, notifi
 		case model.RecipientTypeUser:
 			for _, userIDStr := range notification.RecipientUsers {
 				userID, err := strconv.Atoi(userIDStr)
-				if err != nil {
-					s.logger.Warn("无效的用户ID",
-						zap.String("user_id", userIDStr))
-					continue
+				if err != nil || userID <= 0 {
+					return nil, fmt.Errorf("无效的用户ID")
 				}
 
 				userName := "指定用户"
@@ -402,8 +446,29 @@ func (s *workorderNotificationService) getRecipients(ctx context.Context, notifi
 			for _, user := range users {
 				recipients = append(recipients, RecipientInfo{ID: strconv.Itoa(user.ID), Name: user.RealName, Type: recipientType})
 			}
-		case model.RecipientTypeDept, model.RecipientTypeCustom:
-			return nil, fmt.Errorf("接收人类型 %s 尚无组织/地址配置，请使用用户或角色", recipientType)
+		case model.RecipientTypeDept:
+			ids, err := recipientIDs(notification.RecipientDepts)
+			if err != nil {
+				return nil, err
+			}
+			users, err := s.userDAO.GetByDepartmentIDs(ctx, ids)
+			if err != nil {
+				return nil, fmt.Errorf("查询部门接收人失败: %w", err)
+			}
+			for _, user := range users {
+				recipients = append(recipients, RecipientInfo{ID: strconv.Itoa(user.ID), Name: user.RealName, Type: recipientType})
+			}
+		case model.RecipientTypeCustom:
+			if len(notification.RecipientAddresses) == 0 {
+				return nil, fmt.Errorf("自定义接收地址不能为空")
+			}
+			for _, destination := range notification.RecipientAddresses {
+				normalized, err := normalizeDestination(destination.Channel, destination.Address)
+				if err != nil {
+					return nil, err
+				}
+				recipients = append(recipients, RecipientInfo{ID: fmt.Sprintf("custom:%s:%x", destination.Channel, sha256.Sum256([]byte(normalized))), Name: destination.Name, Type: recipientType, Channel: destination.Channel, Address: normalized})
+			}
 		default:
 			return nil, fmt.Errorf("未知接收人类型: %s", recipientType)
 		}
@@ -430,23 +495,18 @@ func (s *workorderNotificationService) sendChannelNotification(ctx context.Conte
 	subject, content := s.buildMessageContent(notificationConfig, instance, eventType, customContent...)
 
 	var wg sync.WaitGroup
-	recipientErrors := make(chan error, len(recipients))
+	recipientErrors := make(chan error, 2*len(recipients))
 
-	for _, recipient := range recipients {
+	destinations, err := s.resolveChannelRecipients(ctx, channel, recipients)
+	if err != nil {
+		return err
+	}
+	for _, recipient := range destinations {
 		wg.Add(1)
 		go func(rec RecipientInfo) {
 			defer wg.Done()
-
 			recipientCtx := ctx
-
-			recipientAddr := s.getRecipientAddress(recipientCtx, rec, channel)
-			if recipientAddr == "" {
-				s.logger.Warn("无法获取接收人地址",
-					zap.String("recipient_id", rec.ID),
-					zap.String("channel", channel))
-				recipientErrors <- fmt.Errorf("接收人 %s 未配置 %s 地址", rec.ID, channel)
-				return
-			}
+			recipientAddr := rec.Address
 
 			recipientType := s.getRecipientTypeForChannel(channel)
 
@@ -454,6 +514,7 @@ func (s *workorderNotificationService) sendChannelNotification(ctx context.Conte
 				Subject:       subject,
 				Content:       content,
 				Priority:      notificationConfig.Priority,
+				Channel:       channel,
 				RecipientType: recipientType,
 				RecipientID:   rec.ID,
 				RecipientAddr: recipientAddr,
@@ -510,7 +571,7 @@ func (s *workorderNotificationService) sendChannelNotification(ctx context.Conte
 			}
 
 			if err := s.dao.AddSendLog(recipientCtx, log); err != nil {
-				s.logger.Error("记录发送日志失败", zap.Error(err))
+				recipientErrors <- fmt.Errorf("记录发送结果失败: %w", err)
 			}
 		}(recipient)
 	}
@@ -648,6 +709,12 @@ AI-CloudOps 技术运维部
 
 // getRecipientAddress 根据渠道类型获取接收人地址
 func (s *workorderNotificationService) getRecipientAddress(ctx context.Context, recipient RecipientInfo, channel string) string {
+	if recipient.Channel != "" {
+		if recipient.Channel == channel {
+			return recipient.Address
+		}
+		return ""
+	}
 	userID, err := strconv.Atoi(recipient.ID)
 	if err != nil {
 		s.logger.Error("无效的用户ID",
@@ -664,6 +731,9 @@ func (s *workorderNotificationService) getRecipientAddress(ctx context.Context, 
 		return ""
 	}
 
+	if user == nil || user.Enable != 1 {
+		return ""
+	}
 	switch channel {
 	case model.NotificationChannelEmail:
 		if user.Email == "" {
@@ -718,6 +788,9 @@ func (s *workorderNotificationService) getRecipientTypeForChannel(channel string
 
 // SendNotificationByChannels 通过多个渠道发送通知
 func (s *workorderNotificationService) SendNotificationByChannels(ctx context.Context, channels []string, recipient, subject, content string) error {
+	if len(channels) != 1 {
+		return fmt.Errorf("直接发送必须指定单一渠道及对应地址")
+	}
 	if s.notificationMgr == nil {
 		return errors.New("通知管理器未初始化")
 	}
@@ -727,6 +800,7 @@ func (s *workorderNotificationService) SendNotificationByChannels(ctx context.Co
 			Subject:       subject,
 			Content:       content,
 			Priority:      2,
+			Channel:       channel,
 			RecipientType: channel,
 			RecipientAddr: recipient,
 			EventType:     "manual",
@@ -770,7 +844,9 @@ func (s *workorderNotificationService) GetAvailableChannels() *model.ListResp[*m
 }
 
 type RecipientInfo struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Type string `json:"type"`
+	Channel string `json:"channel,omitempty"`
+	Address string `json:"address,omitempty"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Type    string `json:"type"`
 }

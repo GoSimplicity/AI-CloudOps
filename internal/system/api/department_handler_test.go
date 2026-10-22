@@ -103,6 +103,17 @@ func TestDepartmentHTTPPersistenceAndPermissions(t *testing.T) {
 			t.Fatal(deleted)
 		}
 	}
+	for attempt := 0; attempt < 2; attempt++ {
+		_, again := call("POST", "/api/department/create", "admin", map[string]any{"name": "Reusable"})
+		if again["code"] != float64(0) {
+			t.Fatal("deleted sibling name could not be reused")
+		}
+		n := int(again["data"].(map[string]any)["id"].(float64))
+		_, removed := call("DELETE", fmt.Sprintf("/api/department/%d/delete", n), "admin", nil)
+		if removed["code"] != float64(0) {
+			t.Fatal("repeated soft deletion collided")
+		}
+	}
 	_, listed := call("GET", "/api/department/list", "admin", nil)
 	if listed["data"].(map[string]any)["total"] != float64(0) {
 		t.Fatal("deleted departments remain listed")

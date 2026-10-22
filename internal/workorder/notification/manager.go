@@ -125,7 +125,11 @@ func (m *Manager) SendNotification(ctx context.Context, request *SendRequest) (*
 		request.MessageID = uuid.New().String()
 	}
 
-	channel, err := m.getChannel(request.RecipientType)
+	route := request.Channel
+	if route == "" {
+		route = request.RecipientType
+	}
+	channel, err := m.getChannel(route)
 	if err != nil {
 		return &SendResponse{
 			Success:      false,
@@ -136,6 +140,11 @@ func (m *Manager) SendNotification(ctx context.Context, request *SendRequest) (*
 		}, err
 	}
 
+	normalized, validateErr := NormalizeAddress(channel.GetName(), request.RecipientAddr)
+	if validateErr != nil {
+		return nil, validateErr
+	}
+	request.RecipientAddr = normalized
 	if !channel.IsEnabled() {
 		err := fmt.Errorf("通知渠道 %s 未启用", channel.GetName())
 		return &SendResponse{
@@ -179,6 +188,9 @@ func (m *Manager) SendNotification(ctx context.Context, request *SendRequest) (*
 
 		// 发送
 		response, lastErr = channel.Send(ctx, request)
+		if lastErr == nil && (response == nil || !response.Success) {
+			lastErr = fmt.Errorf("通知渠道未确认发送成功")
+		}
 		if lastErr == nil {
 			// 发送成功
 			m.logger.Info("通知发送成功",
@@ -226,8 +238,20 @@ func (m *Manager) SendNotificationAsync(ctx context.Context, request *SendReques
 		asynq.TaskID(request.MessageID),
 	}
 
-	if channel, err := m.getChannel(request.RecipientType); err == nil {
-		opts = append(opts, asynq.MaxRetry(channel.GetMaxRetries()))
+	route := request.Channel
+	if route == "" {
+		route = request.RecipientType
+	}
+	channel, err := m.getChannel(route)
+	if err != nil {
+		return err
+	}
+	if _, err = NormalizeAddress(channel.GetName(), request.RecipientAddr); err != nil {
+		return err
+	}
+	opts = append(opts, asynq.MaxRetry(channel.GetMaxRetries()))
+	if m.queueClient == nil {
+		return fmt.Errorf("通知队列未配置")
 	}
 
 	// 入队
@@ -344,8 +368,7 @@ func (m *Manager) getChannel(recipientType string) (NotificationChannel, error) 
 	case "feishu", "feishu_user", "feishu_group":
 		channelName = model.NotificationChannelFeishu
 	default:
-		// 从地址推断
-		channelName = m.inferChannelFromAddress(recipientType)
+		return nil, fmt.Errorf("未知通知渠道: %s", recipientType)
 	}
 
 	channel, exists := m.channels[channelName]
@@ -354,22 +377,6 @@ func (m *Manager) getChannel(recipientType string) (NotificationChannel, error) 
 	}
 
 	return channel, nil
-}
-
-// inferChannelFromAddress 从地址格式推断渠道类型
-func (m *Manager) inferChannelFromAddress(address string) string {
-	// 邮箱
-	if isValidEmail(address) {
-		return model.NotificationChannelEmail
-	}
-
-	// 飞书ID
-	if len(address) > 0 && (address[0] == 'o' || address[0] == 'u') {
-		return model.NotificationChannelFeishu
-	}
-
-	// 默认邮箱
-	return model.NotificationChannelEmail
 }
 
 func (m *Manager) ProcessNotificationTask(ctx context.Context, task *asynq.Task) error {

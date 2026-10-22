@@ -34,6 +34,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -64,6 +65,7 @@ type FeishuChannel struct {
 	config      FeishuConfig
 	logger      *zap.Logger
 	httpClient  *http.Client
+	tokenMu     sync.Mutex
 	accessToken string
 	tokenExpiry time.Time
 }
@@ -91,19 +93,9 @@ func (f *FeishuChannel) Send(ctx context.Context, request *SendRequest) (*SendRe
 			fmt.Errorf("飞书收件人地址不能为空"), startTime), fmt.Errorf("飞书收件人地址不能为空")
 	}
 
-	// 根据收件人地址格式判断消息类型
-	if f.isChatID(request.RecipientAddr) {
-		// 群消息
-		return f.sendGroupMessage(ctx, request, startTime)
-	} else {
-		// 私聊
-		return f.sendPrivateMessage(ctx, request, startTime)
-	}
-}
-
-// isChatID 判断是否为群聊ID格式
-func (f *FeishuChannel) isChatID(recipientAddr string) bool {
-	return chatIDPattern.MatchString(recipientAddr)
+	// Both chat_id and user identifiers use the authenticated message API.
+	// A chat ID is not a robot-webhook token.
+	return f.sendPrivateMessage(ctx, request, startTime)
 }
 
 // determineRecipientType 识别接收人ID类型
@@ -130,15 +122,6 @@ func (f *FeishuChannel) determineRecipientType(recipientAddr string) (string, er
 		f.logger.Debug("默认为用户ID", zap.String("type", FeishuIDTypeUserID))
 		return FeishuIDTypeUserID, nil
 	}
-}
-
-// sendGroupMessage 发送群聊消息
-func (f *FeishuChannel) sendGroupMessage(ctx context.Context, request *SendRequest, startTime time.Time) (*SendResponse, error) {
-	webhookURL := f.config.GetWebhookURL() + request.RecipientAddr
-
-	message := f.buildGroupMessage(request)
-
-	return f.sendHTTPRequest(ctx, webhookURL, message, request.MessageID, startTime, false)
 }
 
 // sendPrivateMessage 发送私聊消息
@@ -205,7 +188,9 @@ func (f *FeishuChannel) sendHTTPRequest(ctx context.Context, url string, message
 
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	if needAuth {
+		f.tokenMu.Lock()
 		req.Header.Set("Authorization", "Bearer "+f.accessToken)
+		f.tokenMu.Unlock()
 	}
 
 	resp, err := f.httpClient.Do(req)
@@ -238,7 +223,7 @@ func (f *FeishuChannel) sendHTTPRequest(ctx context.Context, url string, message
 		return f.createErrorResponse(messageID, errorMsg, errors.New(errorMsg), startTime), errors.New(errorMsg)
 	}
 
-	if code, ok := response["code"].(float64); ok && code != 0 {
+	if code, ok := response["code"].(float64); !ok || code != 0 {
 		errorMsg := fmt.Sprintf("Feishu API error (code: %.0f): %v", code, response["msg"])
 		f.logger.Error("飞书API返回业务错误",
 			zap.Float64("error_code", code),
@@ -278,6 +263,8 @@ func (f *FeishuChannel) sendHTTPRequest(ctx context.Context, url string, message
 }
 
 func (f *FeishuChannel) ensureAccessToken(ctx context.Context) error {
+	f.tokenMu.Lock()
+	defer f.tokenMu.Unlock()
 	if f.accessToken != "" && time.Now().Before(f.tokenExpiry) {
 		return nil
 	}
@@ -317,17 +304,16 @@ func (f *FeishuChannel) ensureAccessToken(ctx context.Context) error {
 		return fmt.Errorf("parse token response failed: %w", err)
 	}
 
-	if code, ok := tokenResp["code"].(float64); ok && code != 0 {
+	if code, ok := tokenResp["code"].(float64); !ok || code != 0 || resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("get access token error (code: %.0f): %v", code, tokenResp["msg"])
 	}
 
-	if token, ok := tokenResp["tenant_access_token"].(string); ok {
+	if token, ok := tokenResp["tenant_access_token"].(string); ok && token != "" {
 		f.accessToken = token
 		// 设置过期时间（提前5分钟过期以避免边界情况）
 		f.tokenExpiry = time.Now().Add(90*time.Minute - 5*time.Minute)
 
 		f.logger.Debug("飞书访问令牌获取成功",
-			zap.String("token_prefix", token[:10]+"..."),
 			zap.Time("expires_at", f.tokenExpiry))
 
 		return nil

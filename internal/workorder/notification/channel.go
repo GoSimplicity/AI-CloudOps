@@ -48,10 +48,11 @@ type NotificationChannel interface {
 }
 
 type SendRequest struct {
-	MessageID string `json:"message_id"` // 消息ID
-	Subject   string `json:"subject"`    // 主题
-	Content   string `json:"content"`    // 内容
-	Priority  int8   `json:"priority"`   // 优先级 1-高 2-中 3-低
+	Channel   string `json:"channel,omitempty"` // Explicit transport; RecipientType remains for persisted legacy tasks.
+	MessageID string `json:"message_id"`        // 消息ID
+	Subject   string `json:"subject"`           // 主题
+	Content   string `json:"content"`           // 内容
+	Priority  int8   `json:"priority"`          // 优先级 1-高 2-中 3-低
 
 	RecipientType string `json:"recipient_type"` // 接收人类型
 	RecipientID   string `json:"recipient_id"`   // 接收人ID

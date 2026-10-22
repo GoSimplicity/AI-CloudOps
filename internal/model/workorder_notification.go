@@ -24,8 +24,43 @@
 package model
 
 import (
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
 	"time"
 )
+
+// NotificationAddress is an external destination, never an internal user ID.
+type NotificationAddress struct {
+	Channel string `json:"channel"`
+	Address string `json:"address"`
+	Name    string `json:"name,omitempty"`
+}
+type NotificationAddresses []NotificationAddress
+
+func (a NotificationAddresses) Value() (driver.Value, error) {
+	if a == nil {
+		return "[]", nil
+	}
+	b, e := json.Marshal(a)
+	return string(b), e
+}
+func (a *NotificationAddresses) Scan(value interface{}) error {
+	if value == nil {
+		*a = NotificationAddresses{}
+		return nil
+	}
+	var raw []byte
+	switch v := value.(type) {
+	case string:
+		raw = []byte(v)
+	case []byte:
+		raw = v
+	default:
+		return fmt.Errorf("invalid notification address storage")
+	}
+	return json.Unmarshal(raw, a)
+}
 
 // 事件类型
 const (
@@ -122,30 +157,31 @@ const (
 
 type WorkorderNotification struct {
 	Model
-	Name             string     `json:"name" gorm:"column:name;type:varchar(200);not null;index;comment:通知配置名称"`
-	Description      string     `json:"description" gorm:"column:description;type:varchar(1000);comment:通知配置描述"`
-	ProcessID        *int       `json:"process_id" gorm:"column:process_id;index;comment:关联流程ID"`
-	TemplateID       *int       `json:"template_id" gorm:"column:template_id;index;comment:关联模板ID"`
-	CategoryID       *int       `json:"category_id" gorm:"column:category_id;index;comment:关联分类ID"`
-	EventTypes       StringList `json:"event_types" gorm:"column:event_types;type:text;not null;comment:触发事件类型"`
-	TriggerType      string     `json:"trigger_type" gorm:"column:trigger_type;type:varchar(20);not null;default:'immediate';comment:触发类型"`
-	TriggerCondition JSONMap    `json:"trigger_condition" gorm:"column:trigger_condition;type:json;comment:触发条件"`
-	Channels         StringList `json:"channels" gorm:"column:channels;type:text;not null;comment:通知渠道"`
-	RecipientTypes   StringList `json:"recipient_types" gorm:"column:recipient_types;type:text;not null;comment:接收人类型"`
-	RecipientUsers   StringList `json:"recipient_users" gorm:"column:recipient_users;type:text;comment:自定义接收人用户ID"`
-	RecipientRoles   StringList `json:"recipient_roles" gorm:"column:recipient_roles;type:text;comment:接收人角色ID"`
-	RecipientDepts   StringList `json:"recipient_depts" gorm:"column:recipient_depts;type:text;comment:接收人部门ID"`
-	MessageTemplate  string     `json:"message_template" gorm:"column:message_template;type:text;not null;comment:消息模板"`
-	SubjectTemplate  string     `json:"subject_template" gorm:"column:subject_template;type:varchar(500);comment:主题模板"`
-	ScheduledTime    *time.Time `json:"scheduled_time" gorm:"column:scheduled_time;comment:定时发送时间"`
-	RepeatInterval   *int       `json:"repeat_interval" gorm:"column:repeat_interval;comment:重复间隔(分钟)"`
-	MaxRetries       int        `json:"max_retries" gorm:"column:max_retries;not null;default:3;comment:最大重试次数"`
-	RetryInterval    int        `json:"retry_interval" gorm:"column:retry_interval;not null;default:5;comment:重试间隔(分钟)"`
-	Status           int8       `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-启用，2-禁用"`
-	Priority         int8       `json:"priority" gorm:"column:priority;not null;default:2;comment:优先级：1-高，2-中，3-低"`
-	OperatorID       int        `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
-	IsDefault        int8       `json:"is_default" gorm:"column:is_default;not null;default:2;comment:是否默认配置：1-是，2-否"`
-	Settings         JSONMap    `json:"settings" gorm:"column:settings;type:json;comment:通知设置"`
+	Name               string                `json:"name" gorm:"column:name;type:varchar(200);not null;index;comment:通知配置名称"`
+	Description        string                `json:"description" gorm:"column:description;type:varchar(1000);comment:通知配置描述"`
+	ProcessID          *int                  `json:"process_id" gorm:"column:process_id;index;comment:关联流程ID"`
+	TemplateID         *int                  `json:"template_id" gorm:"column:template_id;index;comment:关联模板ID"`
+	CategoryID         *int                  `json:"category_id" gorm:"column:category_id;index;comment:关联分类ID"`
+	EventTypes         StringList            `json:"event_types" gorm:"column:event_types;type:text;not null;comment:触发事件类型"`
+	TriggerType        string                `json:"trigger_type" gorm:"column:trigger_type;type:varchar(20);not null;default:'immediate';comment:触发类型"`
+	TriggerCondition   JSONMap               `json:"trigger_condition" gorm:"column:trigger_condition;type:json;comment:触发条件"`
+	Channels           StringList            `json:"channels" gorm:"column:channels;type:text;not null;comment:通知渠道"`
+	RecipientTypes     StringList            `json:"recipient_types" gorm:"column:recipient_types;type:text;not null;comment:接收人类型"`
+	RecipientUsers     StringList            `json:"recipient_users" gorm:"column:recipient_users;type:text;comment:自定义接收人用户ID"`
+	RecipientRoles     StringList            `json:"recipient_roles" gorm:"column:recipient_roles;type:text;comment:接收人角色ID"`
+	RecipientAddresses NotificationAddresses `json:"recipient_addresses" gorm:"type:text"`
+	RecipientDepts     StringList            `json:"recipient_depts" gorm:"column:recipient_depts;type:text;comment:接收人部门ID"`
+	MessageTemplate    string                `json:"message_template" gorm:"column:message_template;type:text;not null;comment:消息模板"`
+	SubjectTemplate    string                `json:"subject_template" gorm:"column:subject_template;type:varchar(500);comment:主题模板"`
+	ScheduledTime      *time.Time            `json:"scheduled_time" gorm:"column:scheduled_time;comment:定时发送时间"`
+	RepeatInterval     *int                  `json:"repeat_interval" gorm:"column:repeat_interval;comment:重复间隔(分钟)"`
+	MaxRetries         int                   `json:"max_retries" gorm:"column:max_retries;not null;default:3;comment:最大重试次数"`
+	RetryInterval      int                   `json:"retry_interval" gorm:"column:retry_interval;not null;default:5;comment:重试间隔(分钟)"`
+	Status             int8                  `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-启用，2-禁用"`
+	Priority           int8                  `json:"priority" gorm:"column:priority;not null;default:2;comment:优先级：1-高，2-中，3-低"`
+	OperatorID         int                   `json:"operator_id" gorm:"column:operator_id;not null;index;comment:操作人ID"`
+	IsDefault          int8                  `json:"is_default" gorm:"column:is_default;not null;default:2;comment:是否默认配置：1-是，2-否"`
+	Settings           JSONMap               `json:"settings" gorm:"column:settings;type:json;comment:通知设置"`
 }
 
 func (WorkorderNotification) TableName() string {
@@ -157,57 +193,59 @@ type WorkorderNotificationChannel struct {
 }
 
 type CreateWorkorderNotificationReq struct {
-	Name             string     `json:"name" binding:"required"`
-	Description      string     `json:"description"`
-	ProcessID        *int       `json:"process_id"`
-	TemplateID       *int       `json:"template_id"`
-	CategoryID       *int       `json:"category_id"`
-	EventTypes       StringList `json:"event_types" binding:"required"`
-	TriggerType      string     `json:"trigger_type" binding:"required"`
-	TriggerCondition JSONMap    `json:"trigger_condition"`
-	Channels         StringList `json:"channels" binding:"required"`
-	RecipientTypes   StringList `json:"recipient_types" binding:"required"`
-	RecipientUsers   StringList `json:"recipient_users"`
-	RecipientRoles   StringList `json:"recipient_roles"`
-	RecipientDepts   StringList `json:"recipient_depts"`
-	MessageTemplate  string     `json:"message_template" binding:"required"`
-	SubjectTemplate  string     `json:"subject_template"`
-	ScheduledTime    *time.Time `json:"scheduled_time"`
-	RepeatInterval   *int       `json:"repeat_interval"`
-	MaxRetries       int        `json:"max_retries"`
-	RetryInterval    int        `json:"retry_interval"`
-	Status           int8       `json:"status"`
-	Priority         int8       `json:"priority"`
-	IsDefault        int8       `json:"is_default" binding:"omitempty,oneof=1 2"`
-	Settings         JSONMap    `json:"settings"`
-	UserID           int        `json:"-"` // 由中间件注入
+	Name               string                `json:"name" binding:"required"`
+	Description        string                `json:"description"`
+	ProcessID          *int                  `json:"process_id"`
+	TemplateID         *int                  `json:"template_id"`
+	CategoryID         *int                  `json:"category_id"`
+	EventTypes         StringList            `json:"event_types" binding:"required"`
+	TriggerType        string                `json:"trigger_type" binding:"required"`
+	TriggerCondition   JSONMap               `json:"trigger_condition"`
+	Channels           StringList            `json:"channels" binding:"required"`
+	RecipientTypes     StringList            `json:"recipient_types" binding:"required"`
+	RecipientUsers     StringList            `json:"recipient_users"`
+	RecipientRoles     StringList            `json:"recipient_roles"`
+	RecipientAddresses NotificationAddresses `json:"recipient_addresses" gorm:"type:text"`
+	RecipientDepts     StringList            `json:"recipient_depts"`
+	MessageTemplate    string                `json:"message_template" binding:"required"`
+	SubjectTemplate    string                `json:"subject_template"`
+	ScheduledTime      *time.Time            `json:"scheduled_time"`
+	RepeatInterval     *int                  `json:"repeat_interval"`
+	MaxRetries         int                   `json:"max_retries"`
+	RetryInterval      int                   `json:"retry_interval"`
+	Status             int8                  `json:"status"`
+	Priority           int8                  `json:"priority"`
+	IsDefault          int8                  `json:"is_default" binding:"omitempty,oneof=1 2"`
+	Settings           JSONMap               `json:"settings"`
+	UserID             int                   `json:"-"` // 由中间件注入
 }
 
 type UpdateWorkorderNotificationReq struct {
-	ID               int        `json:"id" binding:"required"`
-	Name             string     `json:"name"`
-	Description      string     `json:"description"`
-	ProcessID        *int       `json:"process_id"`
-	TemplateID       *int       `json:"template_id"`
-	CategoryID       *int       `json:"category_id"`
-	EventTypes       StringList `json:"event_types"`
-	TriggerType      string     `json:"trigger_type"`
-	TriggerCondition JSONMap    `json:"trigger_condition"`
-	Channels         StringList `json:"channels"`
-	RecipientTypes   StringList `json:"recipient_types"`
-	RecipientUsers   StringList `json:"recipient_users"`
-	RecipientRoles   StringList `json:"recipient_roles"`
-	RecipientDepts   StringList `json:"recipient_depts"`
-	MessageTemplate  string     `json:"message_template"`
-	SubjectTemplate  string     `json:"subject_template"`
-	ScheduledTime    *time.Time `json:"scheduled_time"`
-	RepeatInterval   *int       `json:"repeat_interval"`
-	MaxRetries       int        `json:"max_retries"`
-	RetryInterval    int        `json:"retry_interval"`
-	Status           int8       `json:"status"`
-	Priority         int8       `json:"priority"`
-	IsDefault        int8       `json:"is_default" binding:"omitempty,oneof=1 2"`
-	Settings         JSONMap    `json:"settings"`
+	ID                 int                   `json:"id" binding:"required"`
+	Name               string                `json:"name"`
+	Description        string                `json:"description"`
+	ProcessID          *int                  `json:"process_id"`
+	TemplateID         *int                  `json:"template_id"`
+	CategoryID         *int                  `json:"category_id"`
+	EventTypes         StringList            `json:"event_types"`
+	TriggerType        string                `json:"trigger_type"`
+	TriggerCondition   JSONMap               `json:"trigger_condition"`
+	Channels           StringList            `json:"channels"`
+	RecipientTypes     StringList            `json:"recipient_types"`
+	RecipientUsers     StringList            `json:"recipient_users"`
+	RecipientRoles     StringList            `json:"recipient_roles"`
+	RecipientAddresses NotificationAddresses `json:"recipient_addresses" gorm:"type:text"`
+	RecipientDepts     StringList            `json:"recipient_depts"`
+	MessageTemplate    string                `json:"message_template"`
+	SubjectTemplate    string                `json:"subject_template"`
+	ScheduledTime      *time.Time            `json:"scheduled_time"`
+	RepeatInterval     *int                  `json:"repeat_interval"`
+	MaxRetries         int                   `json:"max_retries"`
+	RetryInterval      int                   `json:"retry_interval"`
+	Status             int8                  `json:"status"`
+	Priority           int8                  `json:"priority"`
+	IsDefault          int8                  `json:"is_default" binding:"omitempty,oneof=1 2"`
+	Settings           JSONMap               `json:"settings"`
 }
 
 type DeleteWorkorderNotificationReq struct {
@@ -298,6 +336,7 @@ func (WorkorderNotificationQueue) TableName() string {
 
 // TestSendWorkorderNotificationReq 测试发送工单通知
 type TestSendWorkorderNotificationReq struct {
+	Channel        string `json:"channel" binding:"omitempty,oneof=email feishu"`
 	NotificationID int    `json:"notification_id" binding:"required"`
 	Recipient      string `json:"recipient"` // 可选，如果不提供则使用默认测试地址
 }

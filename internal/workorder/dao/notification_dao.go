@@ -64,30 +64,31 @@ func NewNotificationDAO(db *gorm.DB, logger *zap.Logger) WorkorderNotificationDA
 
 func (d *notificationDAO) CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error {
 	notification := &model.WorkorderNotification{
-		Name:             req.Name,
-		Description:      req.Description,
-		ProcessID:        req.ProcessID,
-		TemplateID:       req.TemplateID,
-		CategoryID:       req.CategoryID,
-		EventTypes:       req.EventTypes,
-		TriggerType:      req.TriggerType,
-		TriggerCondition: req.TriggerCondition,
-		Channels:         req.Channels,
-		RecipientTypes:   req.RecipientTypes,
-		RecipientUsers:   req.RecipientUsers,
-		RecipientRoles:   req.RecipientRoles,
-		RecipientDepts:   req.RecipientDepts,
-		MessageTemplate:  req.MessageTemplate,
-		SubjectTemplate:  req.SubjectTemplate,
-		ScheduledTime:    req.ScheduledTime,
-		RepeatInterval:   req.RepeatInterval,
-		MaxRetries:       req.MaxRetries,
-		RetryInterval:    req.RetryInterval,
-		Status:           req.Status,
-		Priority:         req.Priority,
-		OperatorID:       req.UserID,
-		IsDefault:        req.IsDefault,
-		Settings:         req.Settings,
+		Name:               req.Name,
+		Description:        req.Description,
+		ProcessID:          req.ProcessID,
+		TemplateID:         req.TemplateID,
+		CategoryID:         req.CategoryID,
+		EventTypes:         req.EventTypes,
+		TriggerType:        req.TriggerType,
+		TriggerCondition:   req.TriggerCondition,
+		Channels:           req.Channels,
+		RecipientTypes:     req.RecipientTypes,
+		RecipientUsers:     req.RecipientUsers,
+		RecipientRoles:     req.RecipientRoles,
+		RecipientDepts:     req.RecipientDepts,
+		RecipientAddresses: req.RecipientAddresses,
+		MessageTemplate:    req.MessageTemplate,
+		SubjectTemplate:    req.SubjectTemplate,
+		ScheduledTime:      req.ScheduledTime,
+		RepeatInterval:     req.RepeatInterval,
+		MaxRetries:         req.MaxRetries,
+		RetryInterval:      req.RetryInterval,
+		Status:             req.Status,
+		Priority:           req.Priority,
+		OperatorID:         req.UserID,
+		IsDefault:          req.IsDefault,
+		Settings:           req.Settings,
 	}
 
 	if err := d.db.WithContext(ctx).Create(notification).Error; err != nil {
@@ -136,6 +137,9 @@ func (d *notificationDAO) UpdateNotification(ctx context.Context, req *model.Upd
 	}
 	if req.RecipientRoles != nil {
 		updateData["recipient_roles"] = req.RecipientRoles
+	}
+	if req.RecipientAddresses != nil {
+		updateData["recipient_addresses"] = req.RecipientAddresses
 	}
 	if req.RecipientDepts != nil {
 		updateData["recipient_depts"] = req.RecipientDepts
