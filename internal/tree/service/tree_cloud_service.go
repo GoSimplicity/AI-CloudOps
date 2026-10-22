@@ -313,6 +313,9 @@ func (s *treeCloudService) UpdateCloudResourceStatus(ctx context.Context, req *m
 }
 
 func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model.SyncTreeCloudResourceReq) (*model.SyncCloudResourceResp, error) {
+	if req.SyncMode == model.SyncModeFull && len(req.InstanceIDs) > 0 {
+		return nil, fmt.Errorf("指定实例ID只能使用增量同步，避免删除未查询的资源")
+	}
 	startTime := time.Now()
 
 	if req.SyncMode == "" {
@@ -455,8 +458,12 @@ func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model
 
 // syncAliyunResourcesWithStats 同步阿里云资源并返回统计信息
 func (s *treeCloudService) syncAliyunResourcesForMultipleRegions(ctx context.Context, account *model.CloudAccount, accessKey, secretKey string, regions []*model.CloudAccountRegion, req *model.SyncTreeCloudResourceReq, resp *model.SyncCloudResourceResp) error {
+	var regionErrors []error
 	// 遍历每个区域进行同步
 	for _, region := range regions {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		s.logger.Info("开始同步区域资源",
 			zap.String("region", region.Region),
 			zap.String("regionName", region.RegionName))
@@ -476,7 +483,7 @@ func (s *treeCloudService) syncAliyunResourcesForMultipleRegions(ctx context.Con
 			s.logger.Error("同步区域资源失败",
 				zap.String("region", region.Region),
 				zap.Error(err))
-			// 继续同步其他区域，不直接返回错误
+			regionErrors = append(regionErrors, fmt.Errorf("区域 %s 查询失败: %w", region.Region, err))
 			continue
 		}
 
@@ -497,7 +504,7 @@ func (s *treeCloudService) syncAliyunResourcesForMultipleRegions(ctx context.Con
 			s.logger.Error("处理区域资源失败",
 				zap.String("region", region.Region),
 				zap.Error(err))
-			// 继续同步其他区域
+			regionErrors = append(regionErrors, fmt.Errorf("区域 %s 保存失败: %w", region.Region, err))
 			continue
 		}
 
@@ -506,7 +513,7 @@ func (s *treeCloudService) syncAliyunResourcesForMultipleRegions(ctx context.Con
 			zap.Int("resourceCount", len(resources)))
 	}
 
-	return nil
+	return errors.Join(regionErrors...)
 }
 
 func (s *treeCloudService) syncAliyunResourcesWithStats(ctx context.Context, account *model.CloudAccount, accessKey, secretKey string, req *model.SyncTreeCloudResourceReq, resp *model.SyncCloudResourceResp) error {

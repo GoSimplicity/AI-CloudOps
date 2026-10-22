@@ -181,51 +181,51 @@ func getAliyunAvailableRegions(ctx context.Context, accessKey, secretKey string,
 	client, err := NewAliyunClient(accessKey, secretKey, "cn-hangzhou", logger)
 	if err != nil {
 		logger.Error("创建阿里云客户端失败", zap.Error(err))
-		// API调用失败时返回降级方案
-		return GetAvailableRegionsByProviderWithoutCredentials(model.ProviderAliyun), fmt.Errorf("获取阿里云区域列表失败: %w", err)
+		// 真实查询失败应返回错误，静态参考由无凭据接口单独提供
+		return nil, fmt.Errorf("获取阿里云区域列表失败: %w", err)
 	}
 
 	regions, err := client.GetAvailableRegions(ctx)
 	if err != nil {
 		logger.Error("获取阿里云区域列表失败", zap.Error(err))
-		// API调用失败时返回降级方案
-		return GetAvailableRegionsByProviderWithoutCredentials(model.ProviderAliyun), fmt.Errorf("获取阿里云区域列表失败: %w", err)
+		// 真实查询失败应返回错误，静态参考由无凭据接口单独提供
+		return nil, fmt.Errorf("获取阿里云区域列表失败: %w", err)
 	}
 
 	return regions, nil
 }
 
 func getTencentAvailableRegions(ctx context.Context, accessKey, secretKey string, logger *zap.Logger) ([]model.AvailableRegion, error) {
-	logger.Warn("腾讯云区域获取功能暂未实现，返回默认区域列表")
+	logger.Warn("腾讯云区域API尚未实现")
 	// TODO: 实现腾讯云SDK调用
-	return GetAvailableRegionsByProviderWithoutCredentials(model.ProviderTencent), nil
+	return nil, fmt.Errorf("腾讯云区域API尚未实现；不提供凭据时可查看静态区域参考")
 }
 
 // getAWSAvailableRegions 获取AWS可用区域列表
 func getAWSAvailableRegions(ctx context.Context, accessKey, secretKey string, logger *zap.Logger) ([]model.AvailableRegion, error) {
-	logger.Warn("AWS区域获取功能暂未实现，返回默认区域列表")
+	logger.Warn("AWS区域API尚未实现")
 	// TODO: 实现AWS SDK调用
-	return GetAvailableRegionsByProviderWithoutCredentials(model.ProviderAWS), nil
+	return nil, fmt.Errorf("AWS区域API尚未实现；不提供凭据时可查看静态区域参考")
 }
 
 func getHuaweiAvailableRegions(ctx context.Context, accessKey, secretKey string, logger *zap.Logger) ([]model.AvailableRegion, error) {
-	logger.Warn("华为云区域获取功能暂未实现，返回默认区域列表")
+	logger.Warn("华为云区域API尚未实现")
 	// TODO: 实现华为云SDK调用
-	return GetAvailableRegionsByProviderWithoutCredentials(model.ProviderHuawei), nil
+	return nil, fmt.Errorf("华为云区域API尚未实现；不提供凭据时可查看静态区域参考")
 }
 
 // getAzureAvailableRegions 获取Azure可用区域列表
 func getAzureAvailableRegions(ctx context.Context, accessKey, secretKey string, logger *zap.Logger) ([]model.AvailableRegion, error) {
-	logger.Warn("Azure区域获取功能暂未实现，返回默认区域列表")
+	logger.Warn("Azure区域API尚未实现")
 	// TODO: 实现Azure SDK调用
-	return GetAvailableRegionsByProviderWithoutCredentials(model.ProviderAzure), nil
+	return nil, fmt.Errorf("Azure区域API尚未实现；不提供凭据时可查看静态区域参考")
 }
 
 // getGCPAvailableRegions 获取GCP可用区域列表
 func getGCPAvailableRegions(ctx context.Context, accessKey, secretKey string, logger *zap.Logger) ([]model.AvailableRegion, error) {
-	logger.Warn("GCP区域获取功能暂未实现，返回默认区域列表")
+	logger.Warn("GCP区域API尚未实现")
 	// TODO: 实现GCP SDK调用
-	return GetAvailableRegionsByProviderWithoutCredentials(model.ProviderGCP), nil
+	return nil, fmt.Errorf("GCP区域API尚未实现；不提供凭据时可查看静态区域参考")
 }
 
 func GetProviderName(provider model.CloudProvider) string {

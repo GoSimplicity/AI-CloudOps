@@ -309,11 +309,7 @@ func (s *cloudAccountRegionService) GetAvailableRegions(ctx context.Context, req
 	if req.AccessKey != "" && req.SecretKey != "" {
 		regions, err := treeUtils.GetAvailableRegionsByProvider(ctx, req.Provider, req.AccessKey, req.SecretKey, s.logger)
 		if err != nil {
-			s.logger.Warn("通过API获取区域列表失败，返回默认区域列表",
-				zap.String("provider", req.Provider.String()),
-				zap.Error(err))
-			// API调用失败时返回默认区域列表
-			regions = treeUtils.GetAvailableRegionsByProviderWithoutCredentials(req.Provider)
+			return nil, fmt.Errorf("查询云厂商区域失败: %w", err)
 		}
 
 		return &model.GetAvailableRegionsResp{
