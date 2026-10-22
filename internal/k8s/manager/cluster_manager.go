@@ -65,7 +65,7 @@ func (cm *clusterManager) CreateCluster(ctx context.Context, cluster *model.K8sC
 	}
 
 	if err := utils.ValidateResourceQuantities(cluster); err != nil {
-		cm.logger.Warn("资源配额格式验证失败", zap.Error(err))
+		return fmt.Errorf("资源配额格式验证失败: %w", err)
 	}
 
 	// 初始化k8s客户端
@@ -77,7 +77,8 @@ func (cm *clusterManager) CreateCluster(ctx context.Context, cluster *model.K8sC
 	}
 
 	if err := utils.AddClusterResourceLimit(ctx, client, cluster); err != nil {
-		cm.logger.Warn("添加集群资源限制失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
+		_ = cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusError)
+		return fmt.Errorf("应用命名空间配额失败: %w", err)
 	}
 
 	if err := cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusRunning); err != nil {
@@ -109,7 +110,8 @@ func (cm *clusterManager) UpdateCluster(ctx context.Context, cluster *model.K8sC
 	}
 
 	if err := utils.AddClusterResourceLimit(ctx, client, cluster); err != nil {
-		cm.logger.Warn("添加集群资源限制失败", zap.Int("clusterID", cluster.ID), zap.Error(err))
+		_ = cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusError)
+		return fmt.Errorf("应用命名空间配额失败: %w", err)
 	}
 
 	if err := cm.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusRunning); err != nil {

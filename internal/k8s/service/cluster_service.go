@@ -154,6 +154,10 @@ func (s *clusterService) CreateCluster(ctx context.Context, req *model.CreateClu
 
 	if err := s.clusterMgr.CreateCluster(ctx, cluster); err != nil {
 		s.logger.Error("创建集群失败", zap.Error(err))
+		if len(cluster.RestrictNamespace) > 0 && (cluster.CpuRequest != "" || cluster.CpuLimit != "" || cluster.MemoryRequest != "" || cluster.MemoryLimit != "") {
+			_ = s.dao.UpdateClusterStatus(ctx, cluster.ID, model.StatusError)
+			return fmt.Errorf("配额配置未完成，集群登记 %d 已保留为异常状态，请修正后更新或删除: %w", cluster.ID, err)
+		}
 		if rollbackErr := s.dao.DeleteCluster(ctx, cluster.ID); rollbackErr != nil {
 			s.logger.Error("回滚失败", zap.Error(rollbackErr))
 		}
@@ -210,6 +214,43 @@ func (s *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClu
 		MemoryLimit:          req.MemoryLimit,
 	}
 
+	if cluster.Name == "" {
+		cluster.Name = existingCluster.Name
+	}
+	if cluster.ApiServerAddr == "" {
+		cluster.ApiServerAddr = existingCluster.ApiServerAddr
+	}
+	if cluster.KubeConfigContent == "" {
+		cluster.KubeConfigContent = existingCluster.KubeConfigContent
+	}
+	if cluster.Env == 0 {
+		cluster.Env = existingCluster.Env
+	}
+	if cluster.Version == "" {
+		cluster.Version = existingCluster.Version
+	}
+	if cluster.ActionTimeoutSeconds == 0 {
+		cluster.ActionTimeoutSeconds = existingCluster.ActionTimeoutSeconds
+	}
+	if cluster.Tags == nil {
+		cluster.Tags = existingCluster.Tags
+	}
+	if cluster.RestrictNamespace == nil {
+		cluster.RestrictNamespace = existingCluster.RestrictNamespace
+	}
+
+	if req.RestrictNamespace == nil && req.CpuRequest == "" && req.CpuLimit == "" && req.MemoryRequest == "" && req.MemoryLimit == "" {
+		cluster.RestrictNamespace = existingCluster.RestrictNamespace
+		cluster.CpuRequest = existingCluster.CpuRequest
+		cluster.CpuLimit = existingCluster.CpuLimit
+		cluster.MemoryRequest = existingCluster.MemoryRequest
+		cluster.MemoryLimit = existingCluster.MemoryLimit
+	}
+	oldPolicy := len(existingCluster.RestrictNamespace) > 0 && (existingCluster.CpuRequest != "" || existingCluster.CpuLimit != "" || existingCluster.MemoryRequest != "" || existingCluster.MemoryLimit != "")
+	if oldPolicy && (cluster.ApiServerAddr != existingCluster.ApiServerAddr || cluster.KubeConfigContent != existingCluster.KubeConfigContent) {
+		return fmt.Errorf("更换集群连接前请先清除原命名空间配额配置")
+	}
+
 	if err := utils.ValidateResourceQuantities(cluster); err != nil {
 		return fmt.Errorf("资源配置验证失败: %w", err)
 	}
@@ -221,9 +262,42 @@ func (s *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClu
 
 	if err := s.clusterMgr.UpdateCluster(ctx, cluster); err != nil {
 		s.logger.Error("更新集群客户端失败", zap.Error(err))
-		return fmt.Errorf("更新集群客户端失败: %w", err)
+		rollbackErr := s.dao.UpdateCluster(ctx, existingCluster)
+		if rollbackErr != nil {
+			return fmt.Errorf("更新集群失败: %v; 配置回滚失败: %w", err, rollbackErr)
+		}
+		s.client.RemoveCluster(cluster.ID)
+		return fmt.Errorf("更新失败，已恢复登记配置；部分远端配额可能已生效，请重试: %w", err)
 	}
-
+	if oldPolicy {
+		var removed []string
+		active := cluster.CpuRequest != "" || cluster.CpuLimit != "" || cluster.MemoryRequest != "" || cluster.MemoryLimit != ""
+		targets := map[string]bool{}
+		if active {
+			for _, ns := range cluster.RestrictNamespace {
+				targets[ns] = true
+			}
+		}
+		for _, ns := range existingCluster.RestrictNamespace {
+			if !targets[ns] {
+				removed = append(removed, ns)
+			}
+		}
+		if len(removed) > 0 {
+			client, err := s.client.GetKubeClient(cluster.ID)
+			if err == nil {
+				err = utils.RemoveClusterResourceLimits(ctx, client, cluster.ID, removed)
+			}
+			if err != nil {
+				rollbackErr := s.dao.UpdateCluster(ctx, existingCluster)
+				if rollbackErr != nil {
+					return fmt.Errorf("清理配额失败: %v; 配置回滚失败: %w", err, rollbackErr)
+				}
+				s.client.RemoveCluster(cluster.ID)
+				return fmt.Errorf("清理配额失败，已保留原登记配置；请重试完成剩余清理: %w", err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -236,7 +310,7 @@ func (s *clusterService) DeleteCluster(ctx context.Context, req *model.DeleteClu
 		return err
 	}
 
-	_, err := s.dao.GetClusterByID(ctx, req.ID)
+	cluster, err := s.dao.GetClusterByID(ctx, req.ID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return fmt.Errorf("集群不存在，ID: %d", req.ID)
@@ -246,6 +320,15 @@ func (s *clusterService) DeleteCluster(ctx context.Context, req *model.DeleteClu
 		return fmt.Errorf("查询集群失败: %w", err)
 	}
 
+	if len(cluster.RestrictNamespace) > 0 && (cluster.CpuRequest != "" || cluster.CpuLimit != "" || cluster.MemoryRequest != "" || cluster.MemoryLimit != "") {
+		client, err := s.client.GetKubeClient(req.ID)
+		if err == nil {
+			err = utils.RemoveClusterResourceLimits(ctx, client, req.ID, cluster.RestrictNamespace)
+		}
+		if err != nil {
+			return fmt.Errorf("清理平台配额失败，集群登记仍保留: %w", err)
+		}
+	}
 	s.client.RemoveCluster(req.ID)
 
 	if err := s.dao.DeleteCluster(ctx, req.ID); err != nil {

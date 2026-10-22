@@ -152,7 +152,7 @@ func (d *clusterDAO) UpdateCluster(ctx context.Context, cluster *model.K8sCluste
 		return errors.New("集群名称不能为空")
 	}
 
-	result := d.db.WithContext(ctx).Model(cluster).Where("id = ?", cluster.ID).Updates(cluster)
+	result := d.db.WithContext(ctx).Model(cluster).Where("id = ?", cluster.ID).Select("name", "api_server_addr", "kube_config_content", "action_timeout_seconds", "tags", "restrict_namespace", "status", "env", "version", "cpu_request", "cpu_limit", "memory_request", "memory_limit").Updates(cluster)
 	if result.Error != nil {
 		d.l.Error("UpdateCluster: 更新集群失败",
 			zap.Int("id", cluster.ID),
