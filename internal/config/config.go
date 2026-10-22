@@ -76,6 +76,9 @@ func (c *Config) Validate() error {
 				return fmt.Errorf("生产环境 %s 必须配置独立的至少32字符密钥", name)
 			}
 		}
+		if len(c.Tree.PasswordEncryptionKey) != 32 {
+			return fmt.Errorf("TREE_PASSWORD_ENCRYPTION_KEY 必须恰好32字节")
+		}
 		if c.JWT.Key1 == c.JWT.Key2 {
 			return fmt.Errorf("JWT 两个密钥不得相同")
 		}

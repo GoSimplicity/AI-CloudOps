@@ -219,7 +219,7 @@ func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
 	}
 	req.ID = id
 
-	if uc.Username != "admin" && uc.AccountType != constants.AccountTypeService && uc.Uid != req.ID {
+	if uc.Username != "admin" && uc.Uid != req.ID {
 		base.ForbiddenError(ctx, "无权限修改该用户信息")
 		return
 	}

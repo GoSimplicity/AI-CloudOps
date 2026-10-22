@@ -1,6 +1,7 @@
 package di
 
 import (
+	ws "github.com/GoSimplicity/AI-CloudOps/pkg/websocket"
 	"net/http"
 	"time"
 
@@ -17,10 +18,7 @@ func InitWebSocketUpgrader() *websocket.Upgrader {
 		WriteBufferSize:   4096,
 		HandshakeTimeout:  10 * time.Second,
 		EnableCompression: true,
-		CheckOrigin: func(r *http.Request) bool {
-			// 生产环境应按需校验来源，这里保持与历史行为一致以兼容前端
-			return true
-		},
+		CheckOrigin:       ws.CheckOrigin,
 		Error: func(w http.ResponseWriter, r *http.Request, status int, reason error) {
 			http.Error(w, "WebSocket 升级失败", status)
 		},

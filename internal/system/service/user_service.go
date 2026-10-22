@@ -29,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -68,7 +69,8 @@ func NewUserService(dao dao.UserDAO, roleDao dao.RoleDAO, logger *zap.Logger) Us
 
 // SignUp 用户注册
 func (us *userService) SignUp(ctx context.Context, user *model.UserSignUpReq) error {
-	if user.Username == "admin" {
+	user.Username = strings.TrimSpace(user.Username)
+	if strings.EqualFold(user.Username, "admin") {
 		return fmt.Errorf("保留用户名不可注册")
 	}
 	user.AccountType = 1

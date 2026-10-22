@@ -112,10 +112,15 @@ func (c *client) Connect(config *Config) error {
 		config.Timeout = 10
 	}
 
+	hostKeyCallback, err := HostKeyCallback()
+	if err != nil {
+		return err
+	}
+
 	// 构建SSH配置
 	sshConfig := &ssh.ClientConfig{
 		User:            config.Username,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 注意：生产环境建议使用安全的主机密钥验证
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         time.Duration(config.Timeout) * time.Second,
 	}
 

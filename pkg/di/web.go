@@ -91,7 +91,8 @@ func InitGinServer(
 	k8sPVCHdl *k8sApi.K8sPVCHandler,
 	cronJobHdl *cronApi.CronJobHandler,
 ) *gin.Engine {
-	server := gin.Default()
+	server := gin.New()
+	server.Use(gin.Recovery())
 	server.Use(m...)
 	userHdl.RegisterRoutes(server)
 	authApiHdl.RegisterRouters(server)

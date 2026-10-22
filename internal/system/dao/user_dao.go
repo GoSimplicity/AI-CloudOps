@@ -36,6 +36,7 @@ import (
 )
 
 type UserDAO interface {
+	GetByRoleIDs(ctx context.Context, ids []int) ([]*model.User, error)
 	Create(ctx context.Context, user *model.User) error
 	GetByUsername(ctx context.Context, username string) (*model.User, error)
 	List(ctx context.Context, page, size int, search string, enable *int8, accountType *int8) ([]*model.User, int64, error)
@@ -382,4 +383,16 @@ func (d *userDAO) GetStatistics(ctx context.Context) (*model.UserStatistics, err
 	}
 
 	return &statistics, nil
+}
+
+func (d *userDAO) GetByRoleIDs(ctx context.Context, ids []int) ([]*model.User, error) {
+	users := make([]*model.User, 0)
+	if len(ids) == 0 {
+		return users, nil
+	}
+	err := d.db.WithContext(ctx).Model(&model.User{}).Distinct("cl_system_users.*").
+		Joins("JOIN cl_system_user_roles ur ON ur.user_id = cl_system_users.id").
+		Joins("JOIN cl_system_roles r ON r.id = ur.role_id").
+		Where("ur.role_id IN ? AND r.status = 1 AND cl_system_users.enable = 1", ids).Find(&users).Error
+	return users, err
 }

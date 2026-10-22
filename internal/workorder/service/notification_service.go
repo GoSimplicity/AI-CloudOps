@@ -30,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -144,22 +145,9 @@ func (s *workorderNotificationService) TestSendNotification(ctx context.Context,
 	}
 
 	for _, channel := range notificationConfig.Channels {
-		var recipientAddr string
-		if req.Recipient != "" {
-			recipientAddr = req.Recipient
-		} else {
-			switch channel {
-			case model.NotificationChannelEmail:
-				recipientAddr = "xxx@163.com"
-			case model.NotificationChannelFeishu:
-				recipientAddr = "xxx"
-			case model.NotificationChannelSMS:
-				recipientAddr = "13800138000"
-			case model.NotificationChannelWebhook:
-				recipientAddr = "https://webhook.site/test"
-			default:
-				recipientAddr = "test_recipient"
-			}
+		recipientAddr := strings.TrimSpace(req.Recipient)
+		if recipientAddr == "" {
+			return fmt.Errorf("测试通知必须提供明确的接收人地址")
 		}
 
 		// 创建模拟的实例ID用于测试
@@ -219,6 +207,8 @@ func (s *workorderNotificationService) TestSendNotification(ctx context.Context,
 		if err != nil {
 			log.Status = 4
 			log.ErrorMessage = err.Error()
+			_ = s.dao.AddSendLog(ctx, log)
+			return fmt.Errorf("测试通知发送失败: %w", err)
 		} else if response != nil {
 			log.Status = 3
 			if response.ExternalID != "" {
@@ -343,9 +333,7 @@ func (s *workorderNotificationService) processNotification(ctx context.Context, 
 	}
 
 	if len(errors) > 0 {
-		s.logger.Warn("部分渠道发送失败，但其他渠道已成功发送",
-			zap.Strings("errors", errors),
-			zap.Int("notification_id", notification.ID))
+		return fmt.Errorf("通知渠道失败: %s", strings.Join(errors, "; "))
 	}
 
 	return nil
@@ -398,17 +386,40 @@ func (s *workorderNotificationService) getRecipients(ctx context.Context, notifi
 				})
 			}
 		case model.RecipientTypeRole:
-			s.logger.Info("角色用户通知暂未实现",
-				zap.Strings("roles", notification.RecipientRoles))
-		case model.RecipientTypeDept:
-			s.logger.Info("部门用户通知暂未实现",
-				zap.Strings("depts", notification.RecipientDepts))
-		case model.RecipientTypeCustom:
-			s.logger.Info("自定义用户通知暂未实现")
+			ids := make([]int, 0, len(notification.RecipientRoles))
+			for _, raw := range notification.RecipientRoles {
+				id, err := strconv.Atoi(raw)
+				if err != nil || id <= 0 {
+					return nil, fmt.Errorf("无效角色ID: %s", raw)
+				}
+				ids = append(ids, id)
+			}
+			users, err := s.userDAO.GetByRoleIDs(ctx, ids)
+			if err != nil {
+				return nil, fmt.Errorf("查询角色接收人失败: %w", err)
+			}
+			for _, user := range users {
+				recipients = append(recipients, RecipientInfo{ID: strconv.Itoa(user.ID), Name: user.RealName, Type: recipientType})
+			}
+		case model.RecipientTypeDept, model.RecipientTypeCustom:
+			return nil, fmt.Errorf("接收人类型 %s 尚无组织/地址配置，请使用用户或角色", recipientType)
+		default:
+			return nil, fmt.Errorf("未知接收人类型: %s", recipientType)
 		}
 	}
 
-	return recipients, nil
+	unique := make([]RecipientInfo, 0, len(recipients))
+	seen := make(map[string]bool)
+	for _, recipient := range recipients {
+		if !seen[recipient.ID] {
+			seen[recipient.ID] = true
+			unique = append(unique, recipient)
+		}
+	}
+	if len(unique) == 0 {
+		return nil, fmt.Errorf("没有可用的通知接收人")
+	}
+	return unique, nil
 }
 
 // sendChannelNotification 通过指定渠道发送通知
@@ -432,11 +443,12 @@ func (s *workorderNotificationService) sendChannelNotification(ctx context.Conte
 				defer cancel()
 			}
 
-			recipientAddr := s.getRecipientAddress(rec, channel)
+			recipientAddr := s.getRecipientAddress(recipientCtx, rec, channel)
 			if recipientAddr == "" {
 				s.logger.Warn("无法获取接收人地址",
 					zap.String("recipient_id", rec.ID),
 					zap.String("channel", channel))
+				recipientErrors <- fmt.Errorf("接收人 %s 未配置 %s 地址", rec.ID, channel)
 				return
 			}
 
@@ -516,9 +528,7 @@ func (s *workorderNotificationService) sendChannelNotification(ctx context.Conte
 	}
 
 	if len(errors) > 0 {
-		s.logger.Warn("部分接收人发送失败，但其他接收人已成功发送",
-			zap.Strings("errors", errors),
-			zap.String("channel", channel))
+		return fmt.Errorf("通知发送失败: %s", strings.Join(errors, "; "))
 	}
 
 	return nil
@@ -641,7 +651,7 @@ AI-CloudOps 技术运维部
 }
 
 // getRecipientAddress 根据渠道类型获取接收人地址
-func (s *workorderNotificationService) getRecipientAddress(recipient RecipientInfo, channel string) string {
+func (s *workorderNotificationService) getRecipientAddress(ctx context.Context, recipient RecipientInfo, channel string) string {
 	userID, err := strconv.Atoi(recipient.ID)
 	if err != nil {
 		s.logger.Error("无效的用户ID",
@@ -650,7 +660,7 @@ func (s *workorderNotificationService) getRecipientAddress(recipient RecipientIn
 		return ""
 	}
 
-	user, err := s.userDAO.GetByID(context.Background(), userID)
+	user, err := s.userDAO.GetByID(ctx, userID)
 	if err != nil {
 		s.logger.Error("获取用户信息失败",
 			zap.Int("user_id", userID),

@@ -147,9 +147,7 @@ func NewManager(config *Config, logger *zap.Logger) Manager {
 	upgrader := &websocket.Upgrader{
 		ReadBufferSize:  cfg.ReadBufferSize,
 		WriteBufferSize: cfg.WriteBufferSize,
-		CheckOrigin: func(r *http.Request) bool {
-			return !cfg.CheckOrigin || true // 不检查来源或通过检查
-		},
+		CheckOrigin:     CheckOrigin,
 	}
 
 	return &manager{
@@ -348,8 +346,6 @@ func NewSimpleUpgrader() *websocket.Upgrader {
 	return &websocket.Upgrader{
 		ReadBufferSize:  DefaultReadBufferSize,
 		WriteBufferSize: DefaultWriteBufferSize,
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
+		CheckOrigin:     CheckOrigin,
 	}
 }

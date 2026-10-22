@@ -78,6 +78,9 @@ func Load() (*Config, *ExternalConfig, error) {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	readErr := viper.ReadInConfig()
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+		return nil, nil, fmt.Errorf("读取配置文件失败: %w", readErr)
+	}
 
 	bindEnvVars()
 
@@ -111,6 +114,9 @@ func LoadWebhook() (*WebhookConfig, error) {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	readErr := viper.ReadInConfig()
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+		return nil, fmt.Errorf("读取Webhook配置文件失败: %w", readErr)
+	}
 
 	bindWebhookEnvVars()
 

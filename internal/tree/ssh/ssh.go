@@ -2,6 +2,7 @@ package ssh
 
 import (
 	"fmt"
+	sshclient "github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
 	"strings"
 	"sync"
 	"time"
@@ -84,10 +85,15 @@ func (s *ecsSSH) Connect(ip string, port int, username string, password string, 
 		port = 22
 	}
 
+	hostKeyCallback, err := sshclient.HostKeyCallback()
+	if err != nil {
+		return err
+	}
+
 	// 配置SSH客户端
 	config := &ssh.ClientConfig{
 		User:            s.Username,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         10 * time.Second,
 	}
 
