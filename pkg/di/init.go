@@ -41,6 +41,7 @@ func InitTables(db *gorm.DB) error {
 	return db.AutoMigrate(
 		// auth
 		&model.User{},
+		&model.Department{},
 		&model.Api{},
 		&model.AuditLog{},
 		&model.Role{},

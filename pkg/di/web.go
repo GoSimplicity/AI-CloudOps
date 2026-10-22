@@ -40,6 +40,7 @@ import (
 func InitGinServer(
 	m []gin.HandlerFunc,
 	userHdl *systemApi.UserHandler,
+	departmentHdl *systemApi.DepartmentHandler,
 	authApiHdl *systemApi.ApiHandler,
 	authRoleHdl *systemApi.RoleHandler,
 	systemHdl *systemApi.SystemHandler,
@@ -95,6 +96,7 @@ func InitGinServer(
 	server.Use(gin.Recovery())
 	server.Use(m...)
 	userHdl.RegisterRoutes(server)
+	departmentHdl.RegisterRouters(server)
 	authApiHdl.RegisterRouters(server)
 	authRoleHdl.RegisterRouters(server)
 	systemHdl.RegisterRouters(server)

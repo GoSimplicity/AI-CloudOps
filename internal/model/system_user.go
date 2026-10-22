@@ -28,6 +28,7 @@ package model
 // User 用户模型
 type User struct {
 	Model
+	DepartmentID int    `json:"department_id" gorm:"not null;default:0;index"`
 	Username     string `json:"username" gorm:"type:varchar(100);not null;comment:用户登录名"`                             // 用户登录名，唯一且非空
 	Password     string `json:"-" gorm:"type:varchar(255);not null;comment:用户登录密码"`                                   // 用户登录密码，非空，JSON序列化时忽略
 	RealName     string `json:"real_name" gorm:"type:varchar(100);comment:用户真实姓名"`                                    // 用户真实姓名
@@ -106,6 +107,7 @@ type WriteOffReq struct {
 }
 
 type UpdateProfileReq struct {
+	DepartmentID *int   `json:"department_id"`                                    // Rejected: use the dedicated administrative endpoint.
 	ID           int    `json:"id" form:"id" binding:"required"`                  // 用户ID
 	RealName     string `json:"real_name" binding:"required"`                     // 真实姓名
 	Desc         string `json:"desc"`                                             // 描述

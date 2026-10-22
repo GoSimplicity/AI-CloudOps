@@ -36,6 +36,7 @@ import (
 )
 
 type UserDAO interface {
+	GetByDepartmentIDs(ctx context.Context, ids []int) ([]*model.User, error)
 	GetByRoleIDs(ctx context.Context, ids []int) ([]*model.User, error)
 	Create(ctx context.Context, user *model.User) error
 	GetByUsername(ctx context.Context, username string) (*model.User, error)
@@ -394,5 +395,22 @@ func (d *userDAO) GetByRoleIDs(ctx context.Context, ids []int) ([]*model.User, e
 		Joins("JOIN cl_system_user_roles ur ON ur.user_id = cl_system_users.id").
 		Joins("JOIN cl_system_roles r ON r.id = ur.role_id").
 		Where("ur.role_id IN ? AND r.status = 1 AND cl_system_users.enable = 1", ids).Find(&users).Error
+	return users, err
+}
+
+// GetByDepartmentIDs resolves exact departments, never implicit descendants.
+func (d *userDAO) GetByDepartmentIDs(ctx context.Context, ids []int) ([]*model.User, error) {
+	if len(ids) == 0 {
+		return nil, errors.New("部门ID不能为空")
+	}
+	var count int64
+	if err := d.db.WithContext(ctx).Model(&model.Department{}).Where("id IN ?", ids).Count(&count).Error; err != nil {
+		return nil, err
+	}
+	if count != int64(len(ids)) {
+		return nil, errors.New("部门不存在")
+	}
+	users := []*model.User{}
+	err := d.db.WithContext(ctx).Where("department_id IN ? AND enable = ?", ids, 1).Order("id").Find(&users).Error
 	return users, err
 }

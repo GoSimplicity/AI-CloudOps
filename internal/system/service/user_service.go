@@ -192,6 +192,9 @@ func (us *userService) ChangePassword(ctx context.Context, req *model.ChangePass
 }
 
 func (us *userService) UpdateProfile(ctx context.Context, req *model.UpdateProfileReq, allowAccountChanges bool) error {
+	if req.DepartmentID != nil {
+		return fmt.Errorf("部门归属只能通过管理员部门分配接口修改")
+	}
 	user, err := us.dao.GetByID(ctx, req.ID)
 	if err != nil {
 		us.logger.Error("获取用户失败", zap.Error(err))

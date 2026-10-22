@@ -32,3 +32,17 @@ func TestAccountChangesRequireAdministratorAuthority(t *testing.T) {
 		}
 	}
 }
+
+func TestProfileCannotChangeDepartment(t *testing.T) {
+	department := 4
+	d := &accountUpdateDAO{user: &model.User{DepartmentID: 2}}
+	s := &userService{dao: d, logger: zap.NewNop()}
+	for _, admin := range []bool{false, true} {
+		if err := s.UpdateProfile(context.Background(), &model.UpdateProfileReq{DepartmentID: &department}, admin); err == nil {
+			t.Fatal("profile accepted organization assignment")
+		}
+		if d.user.DepartmentID != 2 {
+			t.Fatal("department was modified")
+		}
+	}
+}
