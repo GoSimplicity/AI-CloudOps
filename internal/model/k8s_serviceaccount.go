@@ -107,7 +107,7 @@ type CreateServiceAccountTokenReq struct {
 	ClusterID          int    `json:"cluster_id" binding:"required" comment:"集群ID"`
 	Namespace          string `json:"namespace" binding:"required" comment:"命名空间"`
 	ServiceAccountName string `json:"service_account_name" binding:"required" comment:"ServiceAccount名称"`
-	ExpirationSeconds  *int64 `json:"expiration_seconds" comment:"令牌过期时间（秒）"`
+	ExpirationSeconds  *int64 `json:"expiration_seconds" comment:"令牌过期时间（秒），不传或0为3600，允许600~3600"`
 }
 
 // K8sServiceAccount ServiceAccount主model
@@ -134,6 +134,14 @@ type ServiceAccountTokenInfo struct {
 	CreatedAt         string `json:"created_at"`
 	ExpirationTime    string `json:"expiration_time"`
 }
+
+// POST /token（TokenRequest）的有效期约束（秒）。不传或传 0 使用默认值；
+// 下限为 K8s TokenRequest 允许的最小值 600，上限 3600，越界返回参数错误且不调用 K8s。
+const (
+	ServiceAccountTokenDefaultExpirationSeconds int64 = 3600
+	ServiceAccountTokenMinExpirationSeconds     int64 = 600
+	ServiceAccountTokenMaxExpirationSeconds     int64 = 3600
+)
 
 // K8sServiceAccountTokenRoute ServiceAccount token 接口的完整路由（权限码对应的 path）。
 // GET 读取 SA 名下的 token Secret，POST 通过 TokenRequest 签发新 token；两者都只允许按该路由 + 方法显式授权，
@@ -166,7 +174,7 @@ type ServiceAccountTokenAuditRecord struct {
 	ServiceAccount    string `json:"service_account"`
 	ServiceAccountUID string `json:"service_account_uid,omitempty"`
 	SecretName        string `json:"secret_name,omitempty"`        // GET：返回的 token 所在 Secret 名称
-	ExpirationSeconds *int64 `json:"expiration_seconds,omitempty"` // POST：请求的有效期
+	ExpirationSeconds *int64 `json:"expiration_seconds,omitempty"` // POST：生效的有效期（越界被拒时为请求值）
 	Success           bool   `json:"success"`
 	IssuedAt          string `json:"issued_at"` // RFC3339 UTC
 }

@@ -28,6 +28,7 @@ package api
 import (
 	"errors"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
@@ -306,7 +307,8 @@ func (h *K8sSecretHandler) RevealSecret(ctx *gin.Context) {
 }
 
 // handleAuditedRequest 与 base.HandleRequest 相同，但同步审计写入失败（service.ErrAuditWriteFailed）时
-// 返回 HTTP 500 而不是 200+code=1，使网关/监控与审计告警能看到真实的失败状态。响应中不含任何明文。
+// 返回 HTTP 500 而不是 200+code=1，使网关/监控与审计告警能看到真实的失败状态；
+// service 返回的参数错误（BusinessError{constants.ErrInvalidParam}）返回 HTTP 400。响应中不含任何明文。
 func handleAuditedRequest(ctx *gin.Context, req interface{}, action func() (interface{}, error)) {
 	if req != nil {
 		if err := base.BindRequest(ctx, req); err != nil {
@@ -318,6 +320,12 @@ func handleAuditedRequest(ctx *gin.Context, req interface{}, action func() (inte
 	if err != nil {
 		if errors.Is(err, service.ErrAuditWriteFailed) {
 			base.InternalServerErrorWithDetails(ctx, map[string]interface{}{}, err.Error())
+			return
+		}
+		// 参数错误（如 TokenRequest 有效期越界）按项目约定返回 HTTP 400 + code=1
+		var bizErr *base.BusinessError
+		if errors.As(err, &bizErr) && errors.Is(bizErr.Code, constants.ErrInvalidParam) {
+			base.BadRequestError(ctx, err.Error())
 			return
 		}
 		base.ErrorWithMessage(ctx, err.Error())

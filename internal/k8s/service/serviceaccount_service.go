@@ -33,10 +33,12 @@ import (
 	"slices"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	systemService "github.com/GoSimplicity/AI-CloudOps/internal/system/service"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"go.uber.org/zap"
 	authv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -341,9 +343,17 @@ func (s *serviceAccountService) CreateServiceAccountToken(ctx context.Context, r
 		ExpirationSeconds: req.ExpirationSeconds,
 	}
 
+	// 有效期校验必须在调用 K8s 之前完成：越界直接拒绝（400），不签发 token，但仍写审计
+	expiration, err := normalizeTokenExpiration(req.ExpirationSeconds)
+	if err != nil {
+		_ = s.writeTokenAudit(ctx, actor, record, model.ServiceAccountTokenCreateAuditOperation, "POST", start, http.StatusBadRequest, err)
+		return nil, err
+	}
+	record.ExpirationSeconds = &expiration
+
 	tokenRequest := &authv1.TokenRequest{
 		Spec: authv1.TokenRequestSpec{
-			ExpirationSeconds: req.ExpirationSeconds,
+			ExpirationSeconds: &expiration,
 		},
 	}
 
@@ -368,15 +378,32 @@ func (s *serviceAccountService) CreateServiceAccountToken(ctx context.Context, r
 		zap.String("name", req.ServiceAccountName),
 		zap.Int("user_id", actor.UserID))
 
-	expiration := req.ExpirationSeconds
+	if tokenResp.Spec.ExpirationSeconds != nil {
+		expiration = *tokenResp.Spec.ExpirationSeconds
+	}
 	if tokenResp.Status.ExpirationTimestamp.IsZero() {
-		return &model.ServiceAccountTokenInfo{Token: tokenResp.Status.Token, ExpirationSeconds: expiration}, nil
+		return &model.ServiceAccountTokenInfo{Token: tokenResp.Status.Token, ExpirationSeconds: &expiration}, nil
 	}
 	return &model.ServiceAccountTokenInfo{
 		Token:             tokenResp.Status.Token,
-		ExpirationSeconds: expiration,
+		ExpirationSeconds: &expiration,
 		ExpirationTime:    tokenResp.Status.ExpirationTimestamp.Time.Format("2006-01-02T15:04:05Z"),
 	}, nil
+}
+
+// normalizeTokenExpiration 校验 TokenRequest 有效期：nil 或 0 取默认值 3600；
+// 小于 600 或大于 3600（含负数）返回参数错误（BusinessError{ErrInvalidParam}，handler 映射为 HTTP 400）。
+func normalizeTokenExpiration(requested *int64) (int64, error) {
+	if requested == nil || *requested == 0 {
+		return model.ServiceAccountTokenDefaultExpirationSeconds, nil
+	}
+	v := *requested
+	if v < model.ServiceAccountTokenMinExpirationSeconds || v > model.ServiceAccountTokenMaxExpirationSeconds {
+		return 0, base.NewBusinessError(constants.ErrInvalidParam, fmt.Sprintf("expiration_seconds 取值范围为 %d~%d 秒（不传或传 0 默认 %d），当前为 %d",
+			model.ServiceAccountTokenMinExpirationSeconds, model.ServiceAccountTokenMaxExpirationSeconds,
+			model.ServiceAccountTokenDefaultExpirationSeconds, v))
+	}
+	return v, nil
 }
 
 func serviceAccountGetError(namespace, name string, err error) error {

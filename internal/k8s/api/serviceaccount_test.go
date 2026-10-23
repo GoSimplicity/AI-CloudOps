@@ -29,6 +29,7 @@ const (
 type handlerSAManager struct {
 	manager.ServiceAccountManager
 	tokenTarget string
+	tokenReq    *authv1.TokenRequest
 }
 
 func (handlerSAManager) GetServiceAccount(_ context.Context, _ int, namespace, name string) (*corev1.ServiceAccount, error) {
@@ -47,6 +48,7 @@ func (handlerSAManager) GetServiceAccountSecrets(_ context.Context, _ int, names
 
 func (m *handlerSAManager) CreateServiceAccountToken(_ context.Context, _ int, _, name string, tr *authv1.TokenRequest) (*authv1.TokenRequest, error) {
 	m.tokenTarget = name
+	m.tokenReq = tr.DeepCopy()
 	out := tr.DeepCopy()
 	out.Status.Token = handlerIssuedToken
 	return out, nil
@@ -148,6 +150,61 @@ func TestServiceAccountTokenEndpointsAuditFailureReturns500WithoutToken(t *testi
 			body := rec.Body.String()
 			if strings.Contains(body, handlerOwnToken) || strings.Contains(body, handlerIssuedToken) {
 				t.Fatal("审计失败时响应中出现了 token")
+			}
+		})
+	}
+}
+
+func TestServiceAccountTokenCreateExpirationValidation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tt := range []struct {
+		name, body string
+		wantHTTP   int
+		wantExp    int64 // 传给 K8s 的有效期；0 表示不应调用 K8s
+	}{
+		{"不传", `{}`, 200, 3600},
+		{"传0", `{"expiration_seconds":0}`, 200, 3600},
+		{"599", `{"expiration_seconds":599}`, 400, 0},
+		{"600", `{"expiration_seconds":600}`, 200, 600},
+		{"3600", `{"expiration_seconds":3600}`, 200, 3600},
+		{"3601", `{"expiration_seconds":3601}`, 400, 0},
+		{"负数", `{"expiration_seconds":-1}`, 400, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			audit := &recordingAudit{}
+			mgr := &handlerSAManager{}
+			engine := newSATokenEngine(service.NewServiceAccountService(mgr, audit, zap.NewNop()))
+			req := httptest.NewRequest("POST", "/api/k8s/serviceaccount/3/ops/app/token", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			engine.ServeHTTP(rec, req)
+			if rec.Code != tt.wantHTTP || rec.Header().Get("Cache-Control") != "no-store" {
+				t.Fatalf("status=%d headers=%v body=%s", rec.Code, rec.Header(), rec.Body.String())
+			}
+			var resp struct {
+				Code int                           `json:"code"`
+				Data model.ServiceAccountTokenInfo `json:"data"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatal(err)
+			}
+			audit.mu.Lock()
+			defer audit.mu.Unlock()
+			if len(audit.sync) != 1 || audit.sync[0].StatusCode != tt.wantHTTP {
+				t.Fatalf("应写一条状态码为 %d 的审计: %+v", tt.wantHTTP, audit.sync)
+			}
+			if tt.wantExp == 0 {
+				if resp.Code != 1 || resp.Data.Token != "" || strings.Contains(rec.Body.String(), handlerIssuedToken) {
+					t.Fatalf("越界应返回参数错误且不含 token: %s", rec.Body.String())
+				}
+				if mgr.tokenTarget != "" || mgr.tokenReq != nil {
+					t.Fatal("越界时不应调用 K8s TokenRequest")
+				}
+				return
+			}
+			if resp.Code != 0 || resp.Data.Token != handlerIssuedToken || mgr.tokenReq == nil ||
+				mgr.tokenReq.Spec.ExpirationSeconds == nil || *mgr.tokenReq.Spec.ExpirationSeconds != tt.wantExp {
+				t.Fatalf("应以 %d 秒签发: %s %+v", tt.wantExp, rec.Body.String(), mgr.tokenReq)
 			}
 		})
 	}

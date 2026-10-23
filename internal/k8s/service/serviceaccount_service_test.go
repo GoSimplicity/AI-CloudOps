@@ -7,8 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"go.uber.org/zap"
 	authv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -313,5 +315,65 @@ func TestUpdateServiceAccountKeepsExistingSecretRefs(t *testing.T) {
 	svc = NewServiceAccountService(fx, &auditFixture{}, zap.NewNop())
 	if err := svc.UpdateServiceAccount(context.Background(), &model.UpdateServiceAccountReq{ClusterID: 1, Namespace: "ops", Name: "app"}); err == nil || fx.updated != nil {
 		t.Fatalf("SA 不存在应报错且不更新: %v", err)
+	}
+}
+
+func TestCreateServiceAccountTokenExpirationBounds(t *testing.T) {
+	i64 := func(v int64) *int64 { return &v }
+	for _, tt := range []struct {
+		name      string
+		requested *int64
+		want      int64 // 期望传给 K8s 的值；0 表示应被拒绝
+	}{
+		{"不传默认3600", nil, 3600},
+		{"传0默认3600", i64(0), 3600},
+		{"599低于下限", i64(599), 0},
+		{"600下限", i64(600), 600},
+		{"3600上限", i64(3600), 3600},
+		{"3601高于上限", i64(3601), 0},
+		{"负数", i64(-1), 0},
+		{"负的600", i64(-600), 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			audit := &auditFixture{}
+			fx := &saManagerFixture{}
+			svc := NewServiceAccountService(fx, audit, zap.NewNop())
+			got, err := svc.CreateServiceAccountToken(context.Background(), &model.CreateServiceAccountTokenReq{
+				ClusterID: 1, Namespace: "ops", ServiceAccountName: "app", ExpirationSeconds: tt.requested,
+			}, saActor)
+			if len(audit.logs) != 1 {
+				t.Fatalf("应写且只写一条审计: %+v", audit.logs)
+			}
+			var rec model.ServiceAccountTokenAuditRecord
+			if err := json.Unmarshal(audit.logs[0].RequestBody, &rec); err != nil {
+				t.Fatal(err)
+			}
+			if tt.want == 0 {
+				var bizErr *base.BusinessError
+				if got != nil || !errors.As(err, &bizErr) || !errors.Is(bizErr.Code, constants.ErrInvalidParam) {
+					t.Fatalf("越界应返回参数错误且不返回 token: %+v %v", got, err)
+				}
+				if fx.tokenTarget != "" || fx.tokenReq != nil {
+					t.Fatalf("越界时不应调用 K8s TokenRequest: target=%q", fx.tokenTarget)
+				}
+				if audit.logs[0].StatusCode != 400 || rec.Success || rec.ExpirationSeconds == nil || *rec.ExpirationSeconds != *tt.requested {
+					t.Fatalf("越界审计应为 400、success=false、记录请求值: %+v %s", audit.logs[0], audit.logs[0].RequestBody)
+				}
+				assertNoToken(t, audit.logs, fixtureIssuedToken)
+				return
+			}
+			if err != nil || got == nil || got.Token != fixtureIssuedToken {
+				t.Fatalf("应签发成功: %+v %v", got, err)
+			}
+			if fx.tokenReq == nil || fx.tokenReq.Spec.ExpirationSeconds == nil || *fx.tokenReq.Spec.ExpirationSeconds != tt.want {
+				t.Fatalf("传给 K8s 的有效期应为 %d: %+v", tt.want, fx.tokenReq)
+			}
+			if got.ExpirationSeconds == nil || *got.ExpirationSeconds != tt.want {
+				t.Fatalf("响应有效期应为 %d: %+v", tt.want, got.ExpirationSeconds)
+			}
+			if audit.logs[0].StatusCode != 200 || rec.ExpirationSeconds == nil || *rec.ExpirationSeconds != tt.want {
+				t.Fatalf("审计应记录生效有效期 %d: %s", tt.want, audit.logs[0].RequestBody)
+			}
+		})
 	}
 }

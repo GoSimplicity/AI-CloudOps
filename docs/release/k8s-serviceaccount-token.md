@@ -22,13 +22,23 @@
 
 返回结构 `{token, expiration_seconds, created_at, expiration_time}` 不变。
 
-注意：Kubernetes 1.24+ 默认不再自动生成 token Secret，`sa.secrets` 通常为空，此时 GET 一般返回“没有 token Secret”。推荐改用 POST（TokenRequest）签发短期 token。
+注意：Kubernetes 1.24 及以上的集群（`LegacyServiceAccountTokenNoAutoGeneration` 默认开启）通常**不会**再为 SA 自动生成 token Secret，`sa.secrets` 一般为空，GET `/token` 基本拿不到结果（返回 `code=1`，提示没有属于自己的 token Secret）。除非手工创建了带 `kubernetes.io/service-account.name` 注解的 `kubernetes.io/service-account-token` Secret，否则**主要入口是 POST（TokenRequest）**签发短期 token。
 
 ### 1.2 POST `/token`（TokenRequest）
 
 - 请求体 `{"expiration_seconds": 600}`；`cluster_id`、`namespace`、`service_account_name` 以 URL 为准，请求体里的同名字段会被 URL 值覆盖。
+- `expiration_seconds`（秒）：
+
+  | 请求值 | 结果 |
+  | --- | --- |
+  | 不传 / `null` / `0` | 按默认 **3600** 签发 |
+  | `600` ~ `3600`（含边界） | 按请求值签发 |
+  | `< 600`（含负数）或 `> 3600` | **HTTP 400**，`code=1`，`msg` 说明取值范围；**不调用 K8s、不签发 token**；同步写一条审计（`status_code=400`、`success=false`、`expiration_seconds` 为请求值） |
+  | 非整数（如字符串） | 绑定失败，HTTP 400（与其他接口的绑定错误一致，此时不进入 service、不写 token 审计） |
+
+  下限 600 是 K8s TokenRequest 允许的最小值；上限 3600 是本平台的策略上限。校验在调用 K8s 之前完成。响应中的 `expiration_seconds` 为实际签发使用的值（不传时为 3600）。
 - K8s 返回错误时审计记录真实状态码（403/404/…）。
-- **审计写入失败时不返回 token（HTTP 500）。但 token 已由 K8s 签发**，TokenRequest 签发的 token 无法单独吊销，会在 `expiration_seconds` 到期前保持有效（调用方拿不到它）。如需立即失效，只能删除并重建该 SA。
+- **审计写入失败时不返回 token（HTTP 500）。但 token 已由 K8s 签发**，TokenRequest 签发的 token 无法单独吊销，会在 `expiration_seconds` 到期前保持有效（调用方拿不到它）。由于有效期上限为 3600，这类“签发了但没交出去”的 token **最多有效 1 小时**。如需立即失效，只能删除并重建该 SA。
 
 ### 1.3 创建 / 更新 SA 的 `secrets` 字段
 
@@ -67,7 +77,7 @@
 | `http_method` | `GET` | `POST` |
 | `target_type` | `k8s_serviceaccount_token` | 同左 |
 | `target_id` | `<cluster_id>/<namespace>/<sa>` | 同左 |
-| `status_code` | 200 / 404 / K8s 真实状态码 | 200 / K8s 真实状态码 |
+| `status_code` | 200 / 404 / K8s 真实状态码 | 200 / 400（有效期越界）/ K8s 真实状态码 |
 | `user_id`、`ip_address`、`user_agent`、`trace_id`、`endpoint`、`duration`、`error_msg` | 照常 | 照常 |
 | `response_body` | 空 | 空 |
 
@@ -88,7 +98,7 @@
 }
 ```
 
-POST 的 `action` 为 `k8s_serviceaccount_token_create`，不含 `secret_name`，含 `expiration_seconds`（请求值）。**任何审计字段都不含 token。** 请求失败（SA 不存在、无合法 token Secret、K8s 拒绝）也会写审计，`success=false`。通用审计中间件对 GET 不记录；对 POST 另记一条 `CREATE` 元数据记录，不记录请求体和响应体。
+POST 的 `action` 为 `k8s_serviceaccount_token_create`，不含 `secret_name`，含 `expiration_seconds`（生效值：不传时记 3600；越界被拒时记请求值）。**任何审计字段都不含 token。** 请求失败（SA 不存在、无合法 token Secret、有效期越界、K8s 拒绝）也会写审计，`success=false`。通用审计中间件对 GET 不记录；对 POST 另记一条 `CREATE` 元数据记录，不记录请求体和响应体。
 
 ## 5. 兼容性影响
 
@@ -96,6 +106,7 @@ POST 的 `action` 为 `k8s_serviceaccount_token_create`，不含 `secret_name`�
 - 依赖“借挂 token Secret”拿 token 的用法失效（这正是要堵的越权路径）。
 - 创建/更新时传 `secrets` 不再生效，但请求不会失败。
 - `/token` 响应不可缓存（`no-store`）。
+- POST `/token` 的 `expiration_seconds` 超出 600~3600 时由原来的“透传给 K8s”改为 HTTP 400；不传时由“交给 K8s 默认”改为由平台显式传 3600（K8s API 默认值同为 3600，实际效果不变）。
 - 审计库不可用时 `/token` 返回 HTTP 500。
 
 ## 6. 回滚
