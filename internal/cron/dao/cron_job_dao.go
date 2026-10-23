@@ -44,6 +44,7 @@ type CronJobDAO interface {
 	UpdateCronJob(ctx context.Context, job *model.CronJob) error
 	DeleteCronJob(ctx context.Context, id int) error
 	UpdateCronJobStatus(ctx context.Context, id int, status model.CronJobStatus) error
+	CompareAndSwapCronJobStatus(ctx context.Context, id int, from, to model.CronJobStatus) (bool, error)
 	UpdateCronJobRunInfo(ctx context.Context, id int, lastRunTime *time.Time, status int8, duration int, output, errorMsg string) error
 	GetEnabledCronJobs(ctx context.Context) ([]*model.CronJob, error)
 	UpdateNextRunTime(ctx context.Context, id int, nextRunTime time.Time) error
@@ -276,7 +277,7 @@ func (d *cronJobDAO) UpdateCronJobRunInfo(ctx context.Context, id int, lastRunTi
 func (d *cronJobDAO) GetEnabledCronJobs(ctx context.Context) ([]*model.CronJob, error) {
 	var jobs []*model.CronJob
 	if err := d.db.WithContext(ctx).
-		Where("status = ?", model.CronJobStatusEnabled).
+		Where("status IN ?", []model.CronJobStatus{model.CronJobStatusEnabled, model.CronJobStatusRunning}).
 		Find(&jobs).Error; err != nil {
 		d.logger.Error("获取启用的任务失败", zap.Error(err))
 		return nil, err
@@ -292,4 +293,10 @@ func (d *cronJobDAO) UpdateNextRunTime(ctx context.Context, id int, nextRunTime 
 		return err
 	}
 	return nil
+}
+
+// CompareAndSwapCronJobStatus 仅修改预期状态，避免执行器覆盖人工停用
+func (d *cronJobDAO) CompareAndSwapCronJobStatus(ctx context.Context, id int, from, to model.CronJobStatus) (bool, error) {
+	result := d.db.WithContext(ctx).Model(&model.CronJob{}).Where("id = ? AND status = ?", id, from).Update("status", to)
+	return result.RowsAffected == 1, result.Error
 }

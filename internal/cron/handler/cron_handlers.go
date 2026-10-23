@@ -121,8 +121,12 @@ func (h *CronHandlers) ProcessTask(ctx context.Context, t *asynq.Task) error {
 	}
 
 	startTime := time.Now()
-	if err := h.cronDAO.UpdateCronJobStatus(ctx, payload.JobID, model.CronJobStatusRunning); err != nil {
-		h.logger.Error("更新任务状态失败", zap.Int("jobID", payload.JobID), zap.Error(err))
+	claimed, err := h.cronDAO.CompareAndSwapCronJobStatus(ctx, payload.JobID, model.CronJobStatusEnabled, model.CronJobStatusRunning)
+	if err != nil {
+		return fmt.Errorf("获取任务执行权失败: %w", err)
+	}
+	if !claimed {
+		return nil
 	}
 
 	var result *ExecutionResult
@@ -242,11 +246,14 @@ func (h *CronHandlers) ProcessTask(ctx context.Context, t *asynq.Task) error {
 		output = "执行成功"
 	}
 
-	if err := h.cronDAO.UpdateCronJobRunInfo(ctx, payload.JobID, &startTime, status, duration, output, result.ErrorMsg); err != nil {
+	// 任务取消后仍有界保存结果并释放执行状态，不覆盖人工禁用
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := h.cronDAO.UpdateCronJobRunInfo(cleanupCtx, payload.JobID, &startTime, status, duration, output, result.ErrorMsg); err != nil {
 		h.logger.Error("更新任务运行信息失败", zap.Int("jobID", payload.JobID), zap.Error(err))
 	}
 
-	if err := h.cronDAO.UpdateCronJobStatus(ctx, payload.JobID, model.CronJobStatusEnabled); err != nil {
+	if _, err := h.cronDAO.CompareAndSwapCronJobStatus(cleanupCtx, payload.JobID, model.CronJobStatusRunning, model.CronJobStatusEnabled); err != nil {
 		h.logger.Error("恢复任务状态失败", zap.Int("jobID", payload.JobID), zap.Error(err))
 	}
 
