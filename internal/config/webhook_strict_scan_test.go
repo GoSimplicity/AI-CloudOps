@@ -258,17 +258,20 @@ func TestLoadWebhookRejectsDottedKeys(t *testing.T) {
 	})
 }
 
-// 第 6 点：带引号的 "<<" 不是合并键（viper/yaml.v3 解码时却会合并），一律拒绝
+// 第 6 点：带引号或带 tag 的 << 一律拒绝（只支持不带引号、不带 tag 的 <<）。
+// yaml.v3 里只有带引号的 "<<"（无 tag）是普通键，不会合并；!!merge "<<"、!!merge << 都会真的合并
 func TestLoadWebhookRejectsQuotedMergeKey(t *testing.T) {
 	for _, c := range []struct{ name, body string }{
 		{"C1-double-quoted", strictHead + "  \"<<\": {fixed_workers: 7}\n"},
 		{"single-quoted", strictHead + "  '<<': {fixed_workers: 7}\n"},
 		{"root", "\"<<\": {other: 1}\n" + strictHead},
 		{"tagged-str", strictHead + "  !!str <<: {fixed_workers: 7}\n"},
+		{"tagged-merge-quoted", strictHead + "  !!merge \"<<\": {fixed_workers: 7}\n"},
+		{"tagged-merge-plain", strictHead + "  !!merge <<: {fixed_workers: 7}\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			_, err, _ := strictLoad(t, "webhook.yaml", c.body, nil)
-			expectStartupFailure(t, err, "<<")
+			expectStartupFailure(t, err, "带引号或带 tag 的 << 不被支持")
 		})
 	}
 }
@@ -477,6 +480,16 @@ func TestLoadWebhookMergePrecedence(t *testing.T) {
 			t.Fatalf("got fw=%d dum=%d", cfg.FixedWorkers, cfg.DefaultUpgradeMinutes)
 		}
 	})
+	// 第三轮 P3-4：合并来源自身带 <<（多级合并链）时，深层来源的条目同样要检查
+	const h = "webhook:\n  port: \"8889\"\n"
+	t.Run("N1-chain-bad-int", func(t *testing.T) {
+		_, err, _ := strictLoad(t, "webhook.yaml", "i: &i {fixed_workers: 0x10}\no: &o {<<: *i}\n"+h+"  <<: *o\n", nil)
+		expectStartupFailure(t, err, "配置文件中的 webhook.fixed_workers")
+	})
+	t.Run("N3-chain-case-dup", func(t *testing.T) {
+		_, err, _ := strictLoad(t, "webhook.yaml", "i: &i {Fixed_Workers: 3}\no: &o {<<: *i}\n"+h+"  <<: *o\n  fixed_workers: 2\n", nil)
+		expectStartupFailure(t, err, "webhook.fixed_workers 有仅大小写不同或完全相同的同层重复键")
+	})
 	t.Run("overridden-parent-scalar-ok", func(t *testing.T) {
 		body := "b: &b {im_feishu: 5}\nwebhook:\n  port: \"8889\"\n  <<: *b\n  im_feishu:\n    request_timeout_seconds: 9\n"
 		cfg, err, _ := strictLoad(t, "webhook.yaml", body, nil)
@@ -573,11 +586,12 @@ func TestLoadWebhookIntEnvTrimsASCIISpace(t *testing.T) {
 		_, err, _ := strictLoad(t, "webhook.yaml", strictHead+"  fixed_workers: \" 10\"\n", nil)
 		expectStartupFailure(t, err, "配置文件中的 webhook.fixed_workers")
 	})
+	// 第三轮 P3-7：URL 类字段改为去首尾空白（见 TestLoadWebhookURLFieldsTrimmed），其余字符串环境变量仍原样保留
 	t.Run("string-env-kept-as-is", func(t *testing.T) {
-		cfg, err, _ := strictLoad(t, "webhook.yaml", strictHead, map[string]string{"WEBHOOK_FRONT_DOMAIN": " http://f.example \n"})
+		cfg, err, _ := strictLoad(t, "webhook.yaml", strictHead, map[string]string{"WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_ID": " cli_a \n"})
 		expectLoaded(t, cfg, err)
-		if cfg.FrontDomain != " http://f.example \n" {
-			t.Fatalf("字符串环境变量应原样保留, got %q", cfg.FrontDomain)
+		if cfg.ImFeishu.PrivateRobotAppID != " cli_a \n" {
+			t.Fatalf("非 URL 字符串环境变量应原样保留, got %q", cfg.ImFeishu.PrivateRobotAppID)
 		}
 	})
 }
@@ -682,14 +696,13 @@ func TestWebhookScanSurvivorGaps(t *testing.T) {
 	t.Run("invalid-map-key-truncated", func(t *testing.T) {
 		_, err, _ := strictLoad(t, "webhook.yaml", strictHead+"  ? {fake-leak-secret: 1}\n  : 1\n", nil)
 		expectStartupFailure(t, err)
-		if !strings.HasSuffix(err.Error(), "invalid map key") {
-			t.Fatalf("invalid map key 之后的内容应整体丢弃: %v", err)
+		if !strings.HasSuffix(err.Error(), "配置文件解析失败: 键不是合法的 map 键") {
+			t.Fatalf("invalid map key 只输出白名单原因: %v", err)
 		}
 	})
 	// viper 读取时已拒绝同层多个 <<（mapping key 重复），结构扫描自身的检查只能直接调用扫描函数验证
 	t.Run("scan-multiple-merge-keys", func(t *testing.T) {
-		p := writeWebhookFileNamed(t, "webhook.yaml", "a: &a {fixed_workers: 3}\nb: &b {fixed_workers: 4}\n"+strictHead+"  <<: *a\n  <<: *b\n")
-		scan, err := scanWebhookConfigFile(p)
+		scan, err := scanWebhookConfigData([]byte("a: &a {fixed_workers: 3}\nb: &b {fixed_workers: 4}\n"+strictHead+"  <<: *a\n  <<: *b\n"), false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -698,8 +711,7 @@ func TestWebhookScanSurvivorGaps(t *testing.T) {
 		}
 	})
 	t.Run("scan-parse-error-sanitized", func(t *testing.T) {
-		p := writeWebhookFileNamed(t, "webhook.yaml", strictHead+"  im_feishu:\n    private_robot_app_secret: \"fake-leak-secret\n  x: [\n")
-		_, err := scanWebhookConfigFile(p)
+		_, err := scanWebhookConfigData([]byte(strictHead+"  im_feishu:\n    private_robot_app_secret: \"fake-leak-secret\n  x: [\n"), false)
 		if err == nil || strings.Contains(err.Error(), "fake-leak") || !strings.Contains(err.Error(), "配置文件第 4 行") {
 			t.Fatalf("扫描层解析错误应脱敏并保留行号, got %v", err)
 		}
