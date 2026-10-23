@@ -17,7 +17,8 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     exit 1
 fi
 
-chmod +x .githooks/* 2>/dev/null || true
+# 只给钩子脚本加可执行位（不改动 README 等文档的文件模式）
+find .githooks -maxdepth 1 -type f ! -name "*.md" -exec chmod +x {} + 2>/dev/null || true
 
 # 在 linked worktree 中写入 worktree 级配置，避免修改主仓库/其他 worktree 共享的 .git/config。
 git_dir="$(cd "$(git rev-parse --git-dir)" && pwd)"
