@@ -130,15 +130,24 @@ def _netloc_port(netloc):
     return tail.rpartition(":")[2] if ":" in tail else None
 
 
+def _has_http_scheme_fold(base):
+    """对齐 w1 119c332 alert_cache.go 的 hasPrefixFold(base, "http://") || hasPrefixFold(base, "https://")：
+    按字节长度切出前缀再 strings.EqualFold。前缀全是 ASCII，等价于只做 ASCII 大小写折叠；
+    ſ（U+017F）、全角字母等占的字节数不同，不会被认成 http(s)://。"""
+    b = base.encode("utf-8")
+    return b[:7].lower() == b"http://" or b[:8].lower() == b"https://"
+
+
 def _split_alert_url(url):
-    """按 alert_cache.go buildWebhookURL 的规则拆地址：TrimSpace 后以小写 http:// 或 https:// 开头才算完整 URL
-    （区分大小写的前缀判断），不含 :// 时按 host:port 走 http；其他带 :// 的写法（含大写 HTTPS://）在代码里会拼出
-    http://HTTPS://... 的错误地址，这里直接报错，不做小写化。"""
+    """按 alert_cache.go buildWebhookURL 的规则拆地址（w1 119c332 起）：TrimSpace 后以 http:// 或 https:// 开头
+    （不区分大小写，HTTP://、Https:// 也算）才是完整 URL，不含 :// 时按 host:port 走 http；其他带 :// 的写法
+    （ftp://、httpſ:// 等）在代码里会拼出 http://ftp://... 的错误地址，这里直接报错。
+    注：合入 w1 前本分支 db97f42 的代码仍用区分大小写的 strings.HasPrefix。"""
     base = url.strip()
-    if base.startswith(("http://", "https://")):
-        parts = urlsplit(base)
+    if _has_http_scheme_fold(base):
+        parts = urlsplit(base)  # urlsplit 会把 scheme 转成小写
     elif "://" in base:
-        raise ValueError(f"scheme 必须是小写 http/https（代码区分大小写）: {base.split('://', 1)[0]!r}")
+        raise ValueError(f"scheme 只能是 http/https（不区分大小写）: {base.split('://', 1)[0]!r}")
     else:
         parts = urlsplit("http://" + base)
     _ascii_port(_netloc_port(parts.netloc))
@@ -183,7 +192,7 @@ def _alert_target(addr):
     """
     receive = "/api/v1/alerts/receive"
     base = addr.strip()
-    parts = _split_alert_url(base)  # 校验 scheme 大小写与端口
+    parts = _split_alert_url(base)  # 校验 scheme 与端口
     if "://" in base:
         u = base.rstrip("/")
         full = u if receive in u else u + receive
@@ -285,9 +294,14 @@ class WebhookPortConsistencyTests(unittest.TestCase):
         self.assertEqual(_url_port("https://h/x"), 443)
         self.assertEqual(_url_port(" https://h:9443/x \n"), 9443)
         self.assertEqual(_url_port("h:8889"), 8889)
+        # w1 119c332 起 scheme 不区分大小写（alert_cache.go hasPrefixFold），大写写法按 scheme 取端口
+        self.assertEqual(_url_port("HTTPS://h/x"), 443)
+        self.assertEqual(_url_port("HTTP://h:8889/x"), 8889)
+        self.assertEqual(_url_port("Http://h:8889/x"), 8889)
+        self.assertEqual(_url_port("hTTps://h:9443/x"), 9443)
+        # "httpſ://"（U+017F，与 s 大小写折叠）字节长度不同，hasPrefixFold 不认，代码会按 host:port 拼错地址
         for bad in ("ftp://h:21/x", "http://h:0/x", "http://h:8889suffix/x", "http://h:70000/x",
-                    "http://h:８８８９/x", "h:８８８９",
-                    "HTTPS://h/x", "HTTP://h:8889/x", "Http://h:8889/x", "hTTps://h:9443/x"):
+                    "http://h:８８８９/x", "h:８８８９", "httpſ://h:8889/x", "ＨTTP://h:8889/x"):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 _url_port(bad)
 
@@ -426,9 +440,23 @@ class GroupFormatParserTests(unittest.TestCase):
 
 
 class AlertAddrSchemeDocTests(unittest.TestCase):
-    """env.example 须写明告警地址的 scheme 必须小写（代码按区分大小写的前缀判断）。"""
+    """env.example 写明告警地址 scheme 建议小写、不区分大小写（w1 119c332 alert_cache.go hasPrefixFold）；
+    不再写“必须小写 / 代码区分大小写”这类合入 w1 后会过时的说法。"""
 
-    def test_env_example_documents_lowercase_scheme(self):
+    SCHEME_DOCS = ("env.example", "deploy/release/env.example", "deploy/release/compose.yaml", "docs/release/README.md")
+    # 旧文案（7b47940）原句片段；新文案里“合入前的旧代码区分大小写”是如实的历史说明，不算过时
+    STALE = ("scheme 必须是小写", "（代码区分大小写", "代码按区分大小写的前缀判断，HTTP://",
+             "会被当成 host:port 拼出", "会被当成 host:port，拼出")
+
+    def test_release_docs_drop_stale_case_sensitive_wording(self):
+        for rel in self.SCHEME_DOCS:
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            with self.subTest(file=rel):
+                for stale in self.STALE:
+                    self.assertFalse(stale in text, f"{rel} 仍有合入 w1 后过时的说法 {stale!r}")
+                self.assertTrue("不区分大小写" in text, f"{rel} 没写 scheme 不区分大小写")
+
+    def test_env_example_recommends_lowercase_scheme_case_insensitive(self):
         lines = (ROOT / "env.example").read_text(encoding="utf-8").splitlines()
         idx = next(i for i, line in enumerate(lines) if line.startswith("PROMETHEUS_ALERT_WEBHOOK_ADDR="))
         block = []
@@ -437,7 +465,8 @@ class AlertAddrSchemeDocTests(unittest.TestCase):
                 break
             block.append(line)
         text = "\n".join(block)
-        self.assertIn("scheme 必须是小写 http:// 或 https://", text)
+        self.assertIn("scheme 建议写小写 http:// 或 https://，不区分大小写", text)
+        self.assertNotIn("必须是小写", text)
         value = lines[idx].split("=", 1)[1].strip()
         self.assertTrue(value.startswith(("http://", "https://")) or "://" not in value, value)
 
@@ -510,8 +539,11 @@ class AlertAddrFullUrlTests(unittest.TestCase):
         self.assertEqual(_alert_target("http://h:1"), ("http", "h", 1, "/api/v1/alerts/receive"))
         self.assertEqual(_alert_target("h:2"), ("http", "h", 2, "/api/v1/alerts/receive"))
         self.assertEqual(_alert_target("https://h/x"), ("https", "h", 443, "/x/api/v1/alerts/receive"))
+        # w1 119c332：大写 scheme 也是完整 URL（不再拼成 http://HTTP://...）
+        self.assertEqual(_alert_target("HTTP://h:1/api/v1/alerts/receive"), ("http", "h", 1, "/api/v1/alerts/receive"))
+        self.assertEqual(_alert_target(" Https://h/x/ "), ("https", "h", 443, "/x/api/v1/alerts/receive"))
         with self.assertRaises(ValueError):
-            _alert_target("HTTP://h:1/api/v1/alerts/receive")
+            _alert_target("httpſ://h:1/api/v1/alerts/receive")
 
 
 _GODOTENV_CASES = [

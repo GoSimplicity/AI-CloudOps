@@ -153,17 +153,19 @@ def _netloc_port(netloc):
 def _alert_addr_target(addr):
     """解析 PROMETHEUS_ALERT_WEBHOOK_ADDR，返回 (主机名, 端口, 路径)。
 
-    对齐 alert_cache.go buildWebhookURL：先 TrimSpace；以小写 http:// 或 https:// 开头（区分大小写）才是完整 URL，
-    不含 :// 时按 host:port 走 http。其他带 :// 的写法（ftp://、大写 HTTPS:// 等）在代码里会拼成
-    http://HTTPS://... 的错误地址，这里抛 ValueError，不做小写化；端口不是 1-65535 的 ASCII 数字
-    （如 8889suffix、８８８９）同样抛 ValueError。
+    对齐 alert_cache.go buildWebhookURL（w1 119c332 起）：先 TrimSpace；以 http:// 或 https:// 开头
+    （hasPrefixFold，不区分大小写，HTTPS:// 也算）才是完整 URL，不含 :// 时按 host:port 走 http。
+    其他带 :// 的写法（ftp://、httpſ:// 等，hasPrefixFold 按字节切前缀，只折叠 ASCII）在代码里会拼成
+    http://ftp://... 的错误地址，这里抛 ValueError；端口不是 1-65535 的 ASCII 数字（如 8889suffix、８８８９）同样抛 ValueError。
+    合入 w1 前本分支 db97f42 的代码仍区分大小写，所以文档统一建议写小写。
     """
     from urllib.parse import urlsplit
     base = addr.strip()
-    if base.startswith(("http://", "https://")):
-        url = urlsplit(base)
+    head = base.encode("utf-8")
+    if head[:7].lower() == b"http://" or head[:8].lower() == b"https://":
+        url = urlsplit(base)  # urlsplit 会把 scheme 转成小写
     elif "://" in base:
-        raise ValueError(f"告警地址 scheme 必须是小写 http/https（代码区分大小写），实际 {base.split('://', 1)[0]!r}")
+        raise ValueError(f"告警地址 scheme 只能是 http/https（不区分大小写），实际 {base.split('://', 1)[0]!r}")
     else:
         url = urlsplit("http://" + base)
     _ascii_port(_netloc_port(url.netloc))
@@ -389,10 +391,18 @@ class AlertAddrBoundaryTests(unittest.TestCase):
             with self.subTest(addr=addr), self.assertRaises(ValueError):
                 _alert_addr_target(addr)
 
-    def test_rejects_uppercase_scheme(self):
-        # 代码 strings.HasPrefix 区分大小写：HTTPS:// 不会被识别成 URL，不能在测试里小写化后放过
-        for addr in ("HTTPS://webhook:9443/x", "HTTP://webhook:8889/api/v1/alerts/receive",
-                     "Http://webhook:8889/api/v1/alerts/receive", "hTTps://webhook/x"):
+    def test_accepts_uppercase_scheme(self):
+        # w1 119c332 起 alert_cache.go 用 hasPrefixFold，scheme 不区分大小写：大写写法也是完整 URL
+        for addr, want in (("HTTPS://webhook:9443/x", ("webhook", 9443, "/x")),
+                           ("HTTP://webhook:8889/api/v1/alerts/receive", ("webhook", 8889, "/api/v1/alerts/receive")),
+                           ("Http://webhook:8889/api/v1/alerts/receive", ("webhook", 8889, "/api/v1/alerts/receive")),
+                           ("hTTps://webhook/x", ("webhook", 443, "/x"))):
+            with self.subTest(addr=addr):
+                self.assertEqual(_alert_addr_target(addr), want)
+
+    def test_rejects_non_ascii_lookalike_scheme(self):
+        # hasPrefixFold 按字节长度切前缀：ſ（U+017F）、全角 Ｈ 不会被认成 http(s)://，代码会按 host:port 拼错地址
+        for addr in ("httpſ://webhook:8889/x", "ＨTTP://webhook:8889/x"):
             with self.subTest(addr=addr), self.assertRaises(ValueError):
                 _alert_addr_target(addr)
 
