@@ -108,25 +108,28 @@ AI-CloudOps/
 - Node.js 22 and pnpm 9 (for the [web console](https://github.com/GoSimplicity/AI-CloudOps-web))
 - Python 3.11 (optional, for the [AIOps service](https://github.com/GoSimplicity/AI-CloudOps-aiops))
 
-### 1. Start MySQL, Redis and Prometheus
+### 1. Create `.env`, then start MySQL, Redis and Prometheus
 
-The root `docker-compose.yaml` starts the development dependencies (the application services in it are commented out):
+The root `docker-compose.yaml` starts the development dependencies (the application services in it are commented out). It reads `MYSQL_ROOT_PASSWORD` and `REDIS_PASSWORD` from `.env` and refuses to start if either is unset or empty, so create and fill `.env` **before** running Compose:
 
 ```bash
 git clone https://github.com/GoSimplicity/AI-CloudOps.git
 cd AI-CloudOps
+cp env.example .env
+# Edit .env and fill in at least (generate secrets with e.g. `openssl rand -hex 24`; never commit .env):
+#   MYSQL_ROOT_PASSWORD=<random>     # root password of the Compose MySQL
+#   REDIS_PASSWORD=<random>          # Compose Redis runs with --requirepass
+#   REDIS_ADDR=localhost:36379       # Compose Redis is published on 36379
+#   MYSQL_ADDR=root:<MYSQL_ROOT_PASSWORD>@tcp(localhost:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local
+#   BOOTSTRAP_ADMIN_PASSWORD=<>= 12 chars>   # creates the `admin` user on first start
 docker compose up -d
 ```
 
-This exposes MySQL on `3306`, Redis on `36379` and Prometheus on `9090`. The credentials in this file are development defaults only.
+This exposes MySQL on `3306`, Redis on `36379` and Prometheus on `9090`, using the passwords from your `.env`.
 
-### 2. Configure and run the backend
+### 2. Run the backend
 
 ```bash
-cp env.example .env
-# Edit .env. With the dev Compose file, Redis listens on localhost:36379:
-#   REDIS_ADDR=localhost:36379
-# Set BOOTSTRAP_ADMIN_PASSWORD (>= 12 chars) to create the `admin` user on first start.
 go run main.go
 ```
 
