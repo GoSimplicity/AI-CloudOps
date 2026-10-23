@@ -9,6 +9,7 @@
 #         本人负责的范围内提到 JWT_EXPIRATION 的每个文档都写明单位为分钟，且不再出现 JWT_EXPIRATION=3600。
 #   合入   也可在合入 sched/w1-mantou 后的工作区运行：馒头新增的 w1-*.md 只登记；“8888 改为 8889”同行说明不算旧值。
 #   Redis REDIS_PASSWORD 值为空且注释标明 compose 必填。
+#   整数  WEBHOOK_* 整数字段的注释与取值符合 sched/w1-mantou 0146077 的范围（review3f）。
 #
 # 用法: scripts/tests/security/test-env-example.sh [--rev <git-rev>]   （不带 --rev 检查工作区；对修复前版本运行应报 FAIL）
 # 只读：不修改任何文件；config/ 仅读取作对照。兼容 macOS（bash 3.2 / BSD grep、sed、awk）。
@@ -87,6 +88,11 @@ if grep -q '^WEBHOOK_PORT=' "$TMP/env"; then
     grep -F -q '不生效' "$TMP/wp-pre.txt" && ok "WEBHOOK_PORT 合入前一段写明不生效" || bad "WEBHOOK_PORT 合入前一段未写明不生效"
     if grep -E -q '不生效|不改变|不受' "$TMP/wp-post.txt"; then bad "WEBHOOK_PORT 合入后一段仍写不生效（与 bb410eb 实测不符）"
     else ok "WEBHOOK_PORT 合入后一段与 bb410eb 行为一致（未写不生效）"; fi
+    # review3f（0146077 实测）：根节点分两种情况——平铺的 webhook 字段拒绝启动；没有根节点也没有 webhook 字段只告警继续启动
+    for kw in '拒绝启动' '[配置告警]' '继续启动' '前导零' '未定义'; do
+        if grep -F -q -e "$kw" "$TMP/wp-post.txt"; then ok "WEBHOOK_PORT 合入后一段含「${kw}」"
+        else bad "WEBHOOK_PORT 合入后一段缺「${kw}」（根节点两种情况、前导零、port/PORT 同写须写清）"; fi
+    done
 else
     ok "env.example 未设置 WEBHOOK_PORT"
 fi
@@ -95,6 +101,23 @@ if grep -q '^WEBHOOK_MYSQL_ADDR=' "$TMP/env"; then
     if grep -F -q '合入 sched/w1-mantou 前' "$TMP/wm.txt" && grep -F -q '合入 sched/w1-mantou 后' "$TMP/wm.txt" && grep -F -q '不读此变量' "$TMP/wm.txt"; then
         ok "WEBHOOK_MYSQL_ADDR 注释分别说明合入前（不读）/合入后（必填）"
     else bad "WEBHOOK_MYSQL_ADDR 注释未区分合入前（webhook 不读此变量）与合入后（必填）"; fi
+fi
+# 整数字段（sched/w1-mantou 0146077）：注释写明负数拒绝、>= 1 / >= 0、0 表示不设超时、非整数写法启动失败；取值本身合规
+if grep -q '^WEBHOOK_FIXED_WORKERS=' "$TMP/env"; then
+    block WEBHOOK_FIXED_WORKERS >"$TMP/wi.txt"
+    for kw in '0146077' '拒绝负数' '>= 1' '>= 0' '不设超时' '10.0' '前导零'; do
+        if grep -F -q -e "$kw" "$TMP/wi.txt"; then ok "整数字段注释含「${kw}」"
+        else bad "整数字段注释缺「${kw}」"; fi
+    done
+    for k in WEBHOOK_FIXED_WORKERS:1 WEBHOOK_DEFAULT_UPGRADE_MINUTES:1 WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS:1 WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS:0; do
+        n="${k%%:*}"; lo="${k#*:}"; v="$(val "$n")"
+        case "$v" in
+            '') ok "${n} 留空（取配置文件/默认值）" ;;
+            0) [ "$lo" -eq 0 ] && ok "${n}=0 合规（>= 0）" || bad "${n}=0 不合规（要求 >= ${lo}）" ;;
+            *[!0-9]*|0*) bad "${n}='${v}' 不是不带前导零的十进制整数" ;;
+            *) ok "${n}=${v} 合规（>= ${lo}）" ;;
+        esac
+    done
 fi
 aw="$(val PROMETHEUS_ALERT_WEBHOOK_ADDR)"
 case "$aw" in
