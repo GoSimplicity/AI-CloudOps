@@ -132,6 +132,68 @@ class ReleaseTests(unittest.TestCase):
                 self.assertIn(message, result.stdout + result.stderr)
 
 
+# 告警地址只允许 http/https；没写端口时按 scheme 取默认端口
+_DEFAULT_PORTS = {"http": 80, "https": 443}
+
+
+def _alert_addr_target(addr):
+    """解析 PROMETHEUS_ALERT_WEBHOOK_ADDR，返回 (主机名, 端口, 路径)。
+
+    代码接受完整 URL 和 host:port 两种写法，后者按 http 处理。scheme 不是 http/https、端口不是 1-65535 的纯数字
+    （如 8889suffix）时抛 ValueError（端口格式由 urllib 校验）。
+    """
+    from urllib.parse import urlsplit
+    url = urlsplit(addr if "://" in addr else "http://" + addr)
+    scheme = url.scheme.lower()
+    if scheme not in _DEFAULT_PORTS:
+        raise ValueError(f"告警地址只允许 http/https，实际 scheme={url.scheme!r}")
+    port = url.port
+    if port is None:
+        port = _DEFAULT_PORTS[scheme]
+    if not 1 <= port <= 65535:
+        raise ValueError(f"告警地址端口超出 1-65535: {port}")
+    return url.hostname, port, url.path
+
+
+def _webhook_root_port(text):
+    """从 webhook.yaml 文本取 webhook 根节点下的 port，没有时返回 None。
+
+    不依赖固定缩进：以 webhook: 下第一个子键的缩进为准，只认这一层的 port（更深层的嵌套键不算）。
+    值只能是纯数字（可加单/双引号，后面只能跟空白或 # 注释），8889suffix 这类写法、重复的 port、
+    超出 1-65535 都抛 ValueError。不依赖 PyYAML，macOS 自带 python3 也能跑。
+    """
+    import re
+    ports, in_root, child = [], False, None
+    for raw in text.splitlines():
+        body = raw.lstrip(" \t")
+        if not body or body.startswith("#"):
+            continue
+        indent = len(raw) - len(body)
+        if indent == 0:  # 顶层键
+            in_root = re.match(r"webhook[ \t]*:[ \t]*(#.*)?$", raw) is not None
+            child = None
+            continue
+        if not in_root:
+            continue
+        if "\t" in raw[:indent]:
+            raise ValueError("webhook.yaml 缩进里有 Tab")
+        if child is None:
+            child = indent
+        if indent != child or not re.match(r"port[ \t]*:", body):
+            continue
+        m = re.fullmatch(r"port[ \t]*:[ \t]*(?:\"(\d+)\"|'(\d+)'|(\d+))[ \t]*(?:#.*)?", body)
+        if not m:
+            raise ValueError(f"webhook.port 不是纯数字: {body!r}")
+        ports.append(int(next(g for g in m.groups() if g)))
+    if len(ports) > 1:
+        raise ValueError(f"webhook.port 重复 {len(ports)} 次")
+    if not ports:
+        return None
+    if not 1 <= ports[0] <= 65535:
+        raise ValueError(f"webhook.port 超出 1-65535: {ports[0]}")
+    return ports[0]
+
+
 def _compose_env(home):
     """compose 测试的隔离环境，探测（_compose_tools）和执行（ReleaseComposeWebhookAddrTests）共用。
 
@@ -190,33 +252,93 @@ class ReleaseComposeWebhookAddrTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, "compose config --quiet 失败（输出已省略）")
 
     def test_backend_alert_webhook_addr_targets_webhook_port(self):
-        from urllib.parse import urlsplit
-        import re
         addr = self._jq('.services.backend.environment.PROMETHEUS_ALERT_WEBHOOK_ADDR // ""')
         self.assertTrue(addr, "backend 未设置 PROMETHEUS_ALERT_WEBHOOK_ADDR（代码默认 localhost:8889 在容器里指向 backend 自己）")
-        url = urlsplit(addr if "://" in addr else "http://" + addr)
-        self.assertEqual(url.hostname, "webhook")
+        host, port, path = _alert_addr_target(addr)
+        self.assertEqual(host, "webhook")
         self.assertEqual(self._jq('.services.webhook | type'), "object", "compose 里没有 webhook 服务")
         self.assertEqual(self._jq('.services.backend.network_mode // ""'), "", "backend 用了 network_mode，服务名不可解析")
         self.assertEqual(self._jq('.services.webhook.environment.WEBHOOK_PORT // ""'), "",
                          "webhook 设了 WEBHOOK_PORT，需同步检查本测试")
         # webhook 实际端口：镜像内 config/webhook.yaml 的 webhook.port
-        port, in_webhook = None, False
-        for line in (ROOT / "config/webhook.yaml").read_text().splitlines():
-            if line and not line[0].isspace():
-                in_webhook = line.split("#")[0].strip() == "webhook:"
-                continue
-            m = re.match(r'^  port:[ \t]*"?(\d+)"?', line) if in_webhook else None
-            if m:
-                port = int(m.group(1))
-        self.assertIsNotNone(port, "config/webhook.yaml 里没找到 webhook.port（必须在 webhook: 根节点下）")
-        self.assertEqual(url.port or 80, port)
-        self.assertIn(url.path.rstrip("/"), ("", "/api/v1/alerts/receive"))
+        listen = _webhook_root_port((ROOT / "config/webhook.yaml").read_text())
+        self.assertIsNotNone(listen, "config/webhook.yaml 里没找到 webhook.port（必须在 webhook: 根节点下）")
+        self.assertEqual(port, listen)
+        self.assertIn(path.rstrip("/"), ("", "/api/v1/alerts/receive"))
         # 与 webhook 健康检查、alertmanager.yml 的端口一致
         health = self._jq('.services.webhook.healthcheck.test | join(" ")')
-        self.assertIn(f"127.0.0.1:{url.port}/", health)
-        self.assertIn(f"http://webhook:{url.port}/api/v1/alerts/receive",
+        self.assertIn(f"127.0.0.1:{port}/", health)
+        self.assertIn(f"http://webhook:{port}/api/v1/alerts/receive",
                       (ROOT / "deploy/release/alertmanager.yml").read_text())
+
+class AlertAddrBoundaryTests(unittest.TestCase):
+    """告警地址解析边界（r3inc P3-3）：scheme 白名单、按 scheme 取默认端口。不需要 Docker"""
+
+    def test_accepts_http_https_and_host_port(self):
+        self.assertEqual(_alert_addr_target("http://webhook:8889/api/v1/alerts/receive"),
+                         ("webhook", 8889, "/api/v1/alerts/receive"))
+        self.assertEqual(_alert_addr_target("HTTPS://webhook:9443/x")[1], 9443)
+        self.assertEqual(_alert_addr_target("webhook:8889"), ("webhook", 8889, ""))
+
+    def test_rejects_non_http_scheme(self):
+        for addr in ("ftp://webhook:8889/api/v1/alerts/receive", "ws://webhook:8889/api/v1/alerts/receive",
+                     "file://webhook:8889/api/v1/alerts/receive", "unix://webhook:8889/x"):
+            with self.subTest(addr=addr), self.assertRaises(ValueError):
+                _alert_addr_target(addr)
+
+    def test_default_port_follows_scheme(self):
+        self.assertEqual(_alert_addr_target("http://webhook/api/v1/alerts/receive")[1], 80)
+        self.assertEqual(_alert_addr_target("https://webhook/api/v1/alerts/receive")[1], 443)
+
+    def test_https_without_port_is_not_80(self):
+        # 负向：https 不写端口时不能当成 80，否则 webhook 监听 80 时会被误判为一致
+        self.assertNotEqual(_alert_addr_target("https://webhook/api/v1/alerts/receive")[1], 80)
+
+    def test_rejects_bad_port(self):
+        for addr in ("http://webhook:8889suffix/x", "http://webhook:0/x", "http://webhook:65536/x"):
+            with self.subTest(addr=addr), self.assertRaises(ValueError):
+                _alert_addr_target(addr)
+
+
+class WebhookYamlPortBoundaryTests(unittest.TestCase):
+    """webhook.yaml 根节点端口解析边界（r3inc P3-3）。全部是运行时拼出的合成 YAML，不读主机文件"""
+
+    def test_two_space_indent(self):
+        text = 'webhook:\n  front_domain: "x"\n  port: "8889"  # HTTP 服务端口\n'
+        self.assertEqual(_webhook_root_port(text), 8889)
+
+    def test_quote_styles_and_comment(self):
+        for value in ("8889", '"8889"', "'8889'", '"8889" # c', "8889\t# c"):
+            with self.subTest(value=value):
+                self.assertEqual(_webhook_root_port(f"webhook:\n  port: {value}\n"), 8889)
+
+    def test_four_space_indent(self):
+        # 负向：缩进不是两个空格时也必须找到 webhook.port
+        text = 'webhook:\n    im_feishu:\n      port: "1"\n    port: "9999"\n'
+        self.assertEqual(_webhook_root_port(text), 9999)
+
+    def test_nested_port_is_not_root_port(self):
+        text = 'webhook:\n  im_feishu:\n    port: "1"\n  alert_manager_api: "x"\n'
+        self.assertIsNone(_webhook_root_port(text))
+
+    def test_port_outside_webhook_root_ignored(self):
+        text = 'server:\n  port: "1234"\nwebhook:\n  min_workers: 1\n'
+        self.assertIsNone(_webhook_root_port(text))
+
+    def test_rejects_suffix_after_digits(self):
+        # 负向：8889suffix 不能被截成 8889
+        for value in ("8889suffix", '"8889"suffix', "8889 suffix", '"8889suffix"', "88 89"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                _webhook_root_port(f"webhook:\n  port: {value}\n")
+
+    def test_rejects_tab_indent(self):
+        with self.assertRaises(ValueError):
+            _webhook_root_port("webhook:\n\tport: 8889\n")
+
+    def test_rejects_duplicate_and_out_of_range(self):
+        for text in ('webhook:\n  port: "8889"\n  port: "8890"\n', "webhook:\n  port: 0\n", "webhook:\n  port: 65536\n"):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                _webhook_root_port(text)
 
 
 class ComposeProbeEnvTests(unittest.TestCase):
