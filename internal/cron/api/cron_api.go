@@ -67,10 +67,10 @@ func (api *CronJobHandler) CreateCronJob(ctx *gin.Context) {
 
 	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	req.CreatedBy = user.Uid
-	req.CreatedByName = user.Username
-
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		// 创建者始终来自认证信息
+		req.CreatedBy = user.Uid
+		req.CreatedByName = user.Username
 		return nil, api.cronService.CreateCronJob(ctx.Request.Context(), &req)
 	})
 }

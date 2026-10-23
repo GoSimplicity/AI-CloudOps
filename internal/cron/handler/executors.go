@@ -92,9 +92,9 @@ func (h *CommandExecutor) Execute(ctx context.Context, task *CommandTask) (strin
 	}
 
 	// 执行命令并捕获输出
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	stdout, stderr := newOutputBuffer(), newOutputBuffer()
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	h.logger.Info("执行命令",
 		zap.String("command", task.Command),
@@ -183,9 +183,13 @@ func (h *HTTPExecutor) Execute(ctx context.Context, task *HTTPTask) (string, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxTaskOutputBytes+1))
 	if err != nil {
 		return "", fmt.Errorf("读取响应失败: %w", err)
+	}
+
+	if len(body) > maxTaskOutputBytes {
+		return strings.ToValidUTF8(string(body[:maxTaskOutputBytes]), "") + outputTruncatedMarker, fmt.Errorf("HTTP响应超过%d字节限制", maxTaskOutputBytes)
 	}
 
 	response := string(body)
@@ -244,9 +248,9 @@ func (h *ScriptExecutor) Execute(ctx context.Context, task *ScriptTask) (string,
 	cmd := exec.CommandContext(ctx, interpreter, "-c", task.Content)
 
 	// 执行并捕获输出
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	stdout, stderr := newOutputBuffer(), newOutputBuffer()
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	h.logger.Info("执行脚本",
 		zap.String("type", task.Type),
@@ -273,4 +277,36 @@ func (h *ScriptExecutor) Execute(ctx context.Context, task *ScriptTask) (string,
 
 	h.logger.Info("脚本执行成功", zap.String("type", task.Type))
 	return output, nil
+}
+
+// 为 MySQL TEXT 的 65535 字节预算预留双流标记空间，超限内容继续消费
+const maxTaskOutputBytes = (32 << 10) - 128
+const outputTruncatedMarker = "[输出已截断]"
+
+type outputBuffer struct {
+	buffer    bytes.Buffer
+	truncated bool
+}
+
+func newOutputBuffer() *outputBuffer { return &outputBuffer{} }
+
+// Write 按 io.Writer 契约返回已消费长度，丢弃超限部分
+func (b *outputBuffer) Write(p []byte) (int, error) {
+	size := len(p)
+	remaining := maxTaskOutputBytes - b.buffer.Len()
+	if len(p) > remaining {
+		p = p[:remaining]
+		b.truncated = true
+	}
+	_, _ = b.buffer.Write(p)
+	return size, nil
+}
+
+func (b *outputBuffer) Len() int { return b.buffer.Len() }
+
+func (b *outputBuffer) String() string {
+	if b.truncated {
+		return strings.ToValidUTF8(b.buffer.String(), "") + outputTruncatedMarker
+	}
+	return b.buffer.String()
 }
