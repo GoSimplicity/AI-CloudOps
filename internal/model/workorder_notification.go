@@ -199,7 +199,7 @@ type CreateWorkorderNotificationReq struct {
 	TemplateID         *int                  `json:"template_id"`
 	CategoryID         *int                  `json:"category_id"`
 	EventTypes         StringList            `json:"event_types" binding:"required"`
-	TriggerType        string                `json:"trigger_type" binding:"required"`
+	TriggerType        string                `json:"trigger_type" binding:"required,oneof=immediate"`
 	TriggerCondition   JSONMap               `json:"trigger_condition"`
 	Channels           StringList            `json:"channels" binding:"required"`
 	RecipientTypes     StringList            `json:"recipient_types" binding:"required"`
@@ -228,7 +228,7 @@ type UpdateWorkorderNotificationReq struct {
 	TemplateID         *int                  `json:"template_id"`
 	CategoryID         *int                  `json:"category_id"`
 	EventTypes         StringList            `json:"event_types"`
-	TriggerType        string                `json:"trigger_type"`
+	TriggerType        string                `json:"trigger_type" binding:"omitempty,oneof=immediate"`
 	TriggerCondition   JSONMap               `json:"trigger_condition"`
 	Channels           StringList            `json:"channels"`
 	RecipientTypes     StringList            `json:"recipient_types"`

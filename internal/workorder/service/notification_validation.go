@@ -5,10 +5,21 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
 )
+
+func validateImmediateNotification(trigger string, scheduled *time.Time, repeat *int, condition model.JSONMap, partial bool) error {
+	if trigger != model.TriggerTypeImmediate && !(partial && trigger == "") {
+		return fmt.Errorf("1.0仅支持immediate即时通知，尚不支持延迟、定时或条件触发")
+	}
+	if scheduled != nil || repeat != nil || len(condition) != 0 {
+		return fmt.Errorf("1.0即时通知不能设置尚未实现的定时、重复或条件参数")
+	}
+	return nil
+}
 
 func recipientIDs(raw []string) ([]int, error) {
 	ids := []int{}

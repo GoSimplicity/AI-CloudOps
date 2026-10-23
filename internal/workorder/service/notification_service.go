@@ -76,6 +76,9 @@ func NewWorkorderNotificationService(dao workorderDao.WorkorderNotificationDAO, 
 }
 
 func (s *workorderNotificationService) CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error {
+	if err := validateImmediateNotification(req.TriggerType, req.ScheduledTime, req.RepeatInterval, req.TriggerCondition, false); err != nil {
+		return err
+	}
 	if err := validateNotificationDestinations(req.Channels, req.RecipientTypes, req.RecipientUsers, req.RecipientRoles, req.RecipientDepts, req.RecipientAddresses); err != nil {
 		return err
 	}
@@ -83,6 +86,9 @@ func (s *workorderNotificationService) CreateNotification(ctx context.Context, r
 }
 
 func (s *workorderNotificationService) UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error {
+	if err := validateImmediateNotification(req.TriggerType, req.ScheduledTime, req.RepeatInterval, req.TriggerCondition, true); err != nil {
+		return err
+	}
 	existing, err := s.dao.GetNotificationByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -91,6 +97,13 @@ func (s *workorderNotificationService) UpdateNotification(ctx context.Context, r
 		return fmt.Errorf("查询通知配置失败: %w", err)
 	}
 
+	trigger := existing.TriggerType
+	if req.TriggerType != "" {
+		trigger = req.TriggerType
+	}
+	if req.Status == 1 && trigger != model.TriggerTypeImmediate {
+		return errors.New("不能启用尚未实现的非即时触发配置，请先明确改为immediate")
+	}
 	channels, types, users, roles, depts, addresses := existing.Channels, existing.RecipientTypes, existing.RecipientUsers, existing.RecipientRoles, existing.RecipientDepts, existing.RecipientAddresses
 	if req.Channels != nil {
 		channels = req.Channels
@@ -334,6 +347,9 @@ func (s *workorderNotificationService) SendWorkorderNotification(ctx context.Con
 
 func (s *workorderNotificationService) processNotification(ctx context.Context, notification *model.WorkorderNotification,
 	instance *model.WorkorderInstance, eventType string, senderID int, customContent ...string) error {
+	if notification == nil || notification.TriggerType != model.TriggerTypeImmediate {
+		return errors.New("非即时触发通知尚未实现，已阻止自动发送")
+	}
 
 	recipients, err := s.getRecipients(ctx, notification, instance)
 	if err != nil {

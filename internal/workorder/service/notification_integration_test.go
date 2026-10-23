@@ -91,7 +91,7 @@ func TestDepartmentCustomNotificationRealLocalInbox(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := &workorderNotificationService{userDAO: userdao.NewUserDAO(db, zap.NewNop()), dao: workdao.NewNotificationDAO(db, zap.NewNop()), notificationMgr: manager, logger: zap.NewNop()}
-	config := &model.WorkorderNotification{Model: model.Model{ID: 1}, Channels: []string{"feishu"}, RecipientTypes: []string{"dept", "custom"}, RecipientDepts: []string{strconv.Itoa(department.ID)}, RecipientAddresses: model.NotificationAddresses{{Channel: "feishu", Address: "ou_member"}, {Channel: "feishu", Address: "oc_team"}}, MessageTemplate: "local integration"}
+	config := &model.WorkorderNotification{Model: model.Model{ID: 1}, TriggerType: model.TriggerTypeImmediate, Channels: []string{"feishu"}, RecipientTypes: []string{"dept", "custom"}, RecipientDepts: []string{strconv.Itoa(department.ID)}, RecipientAddresses: model.NotificationAddresses{{Channel: "feishu", Address: "ou_member"}, {Channel: "feishu", Address: "oc_team"}}, MessageTemplate: "local integration"}
 	instance := &model.WorkorderInstance{Model: model.Model{ID: 1}, Title: "Local only"}
 	if err = svc.processNotification(context.Background(), config, instance, "instance_created", 1); err != nil {
 		t.Fatal(err)
