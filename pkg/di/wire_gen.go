@@ -42,7 +42,6 @@ import (
 	service4 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/sse"
-	"github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/terminal"
 	"github.com/google/wire"
 )
@@ -218,13 +217,13 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	treeNodeHandler := api6.NewTreeNodeHandler(treeNodeService)
 	treeLocalDAO := dao2.NewTreeLocalDAO(db, logger)
 	treeLocalService := service5.NewTreeLocalService(logger, treeLocalDAO)
-	sshClient := ssh.NewClient(logger)
+	terminalClientFactory := InitTerminalClientFactory(logger)
 	upgrader := InitWebSocketUpgrader()
-	treeLocalHandler := api6.NewTreeLocalHandler(treeLocalService, sshClient, upgrader, logger)
+	treeLocalHandler := api6.NewTreeLocalHandler(treeLocalService, terminalClientFactory, upgrader, logger)
 	treeCloudDAO := dao2.NewTreeCloudDAO(db, logger)
 	cloudAccountDAO := dao2.NewCloudAccountDAO(db, logger)
 	treeCloudService := service5.NewTreeCloudService(logger, treeCloudDAO, cloudAccountDAO)
-	treeCloudHandler := api6.NewTreeCloudHandler(treeCloudService, sshClient, upgrader, logger)
+	treeCloudHandler := api6.NewTreeCloudHandler(treeCloudService, terminalClientFactory, upgrader, logger)
 	cloudAccountService := service5.NewCloudAccountService(logger, cloudAccountDAO)
 	cloudAccountHandler := api6.NewCloudAccountHandler(cloudAccountService)
 	cloudAccountRegionDAO := dao2.NewCloudAccountRegionDAO(db, logger)
@@ -270,7 +269,9 @@ var ServiceSet = wire.NewSet(service3.NewClusterService, service3.NewDeploymentS
 
 var DaoSet = wire.NewSet(alert.NewAlertManagerEventDAO, alert.NewAlertManagerOnDutyDAO, alert.NewAlertManagerPoolDAO, alert.NewAlertManagerRecordDAO, alert.NewAlertManagerRuleDAO, alert.NewAlertManagerSendDAO, scrape.NewScrapeJobDAO, scrape.NewScrapePoolDAO, config2.NewMonitorConfigDAO, dao.NewUserDAO, dao.NewDepartmentDAO, dao.NewRoleDAO, dao.NewApiDAO, dao.NewAuditDAO, dao3.NewClusterDAO, dao3.NewYamlTaskDAO, dao3.NewYamlTemplateDAO, dao4.NewWorkorderFormDesignDAO, dao4.NewTemplateDAO, dao4.NewWorkorderInstanceDAO, dao4.NewProcessDAO, dao4.NewWorkorderCategoryDAO, dao4.NewWorkorderInstanceCommentDAO, dao4.NewInstanceFlowDAO, dao4.NewInstanceTimeLineDAO, dao4.NewNotificationDAO, dao2.NewTreeNodeDAO, dao2.NewTreeLocalDAO, dao2.NewTreeCloudDAO, dao2.NewCloudAccountDAO, dao2.NewCloudAccountRegionDAO, dao5.NewCronJobDAO)
 
-var SSHSet = wire.NewSet(ssh.NewClient)
+var SSHSet = wire.NewSet(
+	InitTerminalClientFactory,
+)
 
 var UtilSet = wire.NewSet(
 	InitJWTConfig,

@@ -26,8 +26,12 @@
 package ssh
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
@@ -36,12 +40,14 @@ import (
 
 // TerminalReader 实现从WebSocket读取数据的io.Reader接口
 type TerminalReader struct {
-	conn   *websocket.Conn
-	logger *zap.Logger
+	conn         *websocket.Conn
+	logger       *zap.Logger
+	onDisconnect context.CancelFunc
 }
 
 // TerminalWriter 实现向WebSocket写入数据的io.Writer接口
 type TerminalWriter struct {
+	mu     sync.Mutex
 	conn   *websocket.Conn
 	logger *zap.Logger
 }
@@ -52,9 +58,8 @@ func (r *TerminalReader) Read(p []byte) (n int, err error) {
 	_, message, err := r.conn.ReadMessage()
 	if err != nil {
 		r.logger.Error("从WebSocket读取消息失败", zap.Error(err))
-		// 发送关闭消息
-		if closeErr := r.conn.WriteMessage(websocket.CloseMessage, []byte{}); closeErr != nil {
-			r.logger.Error("发送WebSocket关闭消息失败", zap.Error(closeErr))
+		if r.onDisconnect != nil {
+			r.onDisconnect()
 		}
 		return 0, fmt.Errorf("从WebSocket读取消息失败: %w", err)
 	}
@@ -76,6 +81,8 @@ func (r *TerminalReader) Read(p []byte) (n int, err error) {
 
 // Write 向WebSocket发送终端输出数据
 func (w *TerminalWriter) Write(p []byte) (n int, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if len(p) == 0 {
 		return 0, nil
 	}
@@ -92,6 +99,48 @@ func (w *TerminalWriter) Write(p []byte) (n int, err error) {
 
 // WebTerminal 提供Web终端功能
 func (c *client) WebTerminal(userID int, conn *websocket.Conn) error {
+	return c.WebTerminalContext(context.Background(), userID, conn)
+}
+
+// WebTerminalContext 只中断当前连接捕获的传输，最终Close由会话所有者执行
+func (c *client) WebTerminalContext(parent context.Context, userID int, conn *websocket.Conn) error {
+	if parent == nil || conn == nil {
+		return fmt.Errorf("终端上下文与WebSocket不能为空")
+	}
+	if err := parent.Err(); err != nil {
+		return err
+	}
+	transport := c.sshClient
+	if transport == nil {
+		return fmt.Errorf("SSH客户端未连接")
+	}
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
+	var setupExpired atomic.Bool
+	setupTimer := time.AfterFunc(10*time.Second, func() { setupExpired.Store(true); cancel() })
+	defer setupTimer.Stop()
+	interrupted := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		defer close(interrupted)
+		_ = transport.Close()
+		_ = conn.Close()
+	})
+	defer func() {
+		if !stop() {
+			<-interrupted
+		}
+	}()
+	err := c.webTerminal(userID, conn, cancel, func() { setupTimer.Stop() })
+	if parent.Err() != nil {
+		return parent.Err()
+	}
+	if setupExpired.Load() {
+		return fmt.Errorf("SSH终端初始化超时: %w", context.DeadlineExceeded)
+	}
+	return err
+}
+
+func (c *client) webTerminal(userID int, conn *websocket.Conn, onDisconnect context.CancelFunc, onStarted func()) error {
 	if conn == nil {
 		return fmt.Errorf("WebSocket连接不能为空")
 	}
@@ -150,7 +199,7 @@ func (c *client) WebTerminal(userID int, conn *websocket.Conn) error {
 		return fmt.Errorf("%s: %w", errMsg, err)
 	}
 
-	reader := &TerminalReader{conn: conn, logger: c.logger}
+	reader := &TerminalReader{conn: conn, logger: c.logger, onDisconnect: onDisconnect}
 	writer := &TerminalWriter{conn: conn, logger: c.logger}
 
 	// 将WebSocket连接设置为SSH会话的输入输出流
@@ -168,6 +217,7 @@ func (c *client) WebTerminal(userID int, conn *websocket.Conn) error {
 		return fmt.Errorf("%s: %w", errMsg, err)
 	}
 
+	onStarted()
 	c.logger.Info("Web终端SSH会话已启动", zap.Int("用户ID", userID))
 
 	// 等待SSH会话结束（阻塞直到用户退出或连接断开）

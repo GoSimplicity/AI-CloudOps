@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -31,6 +32,7 @@ type Server struct {
 	KnownHosts   string
 	Started      chan string
 	StallSession bool
+	Terminal     bool
 	signer       ssh.Signer
 	listener     net.Listener
 	mu           sync.Mutex
@@ -38,7 +40,9 @@ type Server struct {
 	wait         sync.WaitGroup
 }
 
-func Start(t *testing.T, stallSession bool) *Server {
+func Start(t *testing.T, stallSession bool) *Server { return start(t, stallSession, false) }
+func StartTerminal(t *testing.T) *Server            { return start(t, false, true) }
+func start(t *testing.T, stallSession, terminal bool) *Server {
 	t.Helper()
 	_, key, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -58,7 +62,7 @@ func Start(t *testing.T, stallSession bool) *Server {
 	}
 	host, port, _ := net.SplitHostPort(listener.Addr().String())
 	number, _ := strconv.Atoi(port)
-	server := &Server{Host: host, Port: number, Key: string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: private})), signer: signer, listener: listener, connections: map[net.Conn]bool{}, Started: make(chan string, 8), StallSession: stallSession}
+	server := &Server{Host: host, Port: number, Key: string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: private})), signer: signer, listener: listener, connections: map[net.Conn]bool{}, Started: make(chan string, 8), StallSession: stallSession, Terminal: terminal}
 	server.KnownHosts = filepath.Join(t.TempDir(), "known_hosts")
 	if err := os.WriteFile(server.KnownHosts, []byte(knownhosts.Line([]string{listener.Addr().String()}, signer.PublicKey())+"\n"), 0600); err != nil {
 		t.Fatal(err)
@@ -144,6 +148,20 @@ func (s *Server) serve(conn net.Conn) {
 			defer sessions.Done()
 			defer accepted.Close()
 			for request := range channelRequests {
+				if s.Terminal && request.Type == "pty-req" {
+					_ = request.Reply(true, nil)
+					continue
+				}
+				if s.Terminal && request.Type == "shell" {
+					_ = request.Reply(true, nil)
+					select {
+					case s.Started <- "shell":
+					default:
+					}
+					_, _ = io.Copy(accepted, accepted)
+					_, _ = accepted.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{0}))
+					return
+				}
 				if request.Type != "exec" {
 					_ = request.Reply(false, nil)
 					continue

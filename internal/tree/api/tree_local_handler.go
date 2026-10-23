@@ -26,6 +26,7 @@
 package api
 
 import (
+	"context"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
@@ -36,17 +37,27 @@ import (
 	"go.uber.org/zap"
 )
 
+type TerminalClient interface {
+	ConnectContext(context.Context, *ssh.Config) error
+	WebTerminalContext(context.Context, int, *websocket.Conn) error
+	Close() error
+}
+type TerminalClientFactory func() TerminalClient
+
 type TreeLocalHandler struct {
 	service    service.TreeLocalService
-	sshClient  ssh.Client
+	newSSH     TerminalClientFactory
 	wsUpgrader *websocket.Upgrader
 	logger     *zap.Logger
 }
 
-func NewTreeLocalHandler(service service.TreeLocalService, sshClient ssh.Client, wsUpgrader *websocket.Upgrader, logger *zap.Logger) *TreeLocalHandler {
+func NewTreeLocalHandler(service service.TreeLocalService, factory TerminalClientFactory, wsUpgrader *websocket.Upgrader, logger *zap.Logger) *TreeLocalHandler {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	return &TreeLocalHandler{
 		service:    service,
-		sshClient:  sshClient,
+		newSSH:     factory,
 		wsUpgrader: wsUpgrader,
 		logger:     logger,
 	}
@@ -154,9 +165,18 @@ func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
 		return
 	}
 
+	if h.newSSH == nil {
+		base.ErrorWithMessage(ctx, "SSH客户端工厂未初始化")
+		return
+	}
+	client := h.newSSH()
+	if client == nil {
+		base.ErrorWithMessage(ctx, "SSH客户端未初始化")
+		return
+	}
 	defer func() {
-		if closeErr := h.sshClient.Close(); closeErr != nil {
-			base.ErrorWithMessage(ctx, "关闭SSH连接失败: "+closeErr.Error())
+		if client.Close() != nil {
+			h.logger.Warn("关闭独立SSH连接失败")
 		}
 	}()
 
@@ -172,7 +192,7 @@ func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
 	}
 
 	// 建立SSH连接
-	if err := h.sshClient.Connect(sshConfig); err != nil {
+	if err := client.ConnectContext(ctx.Request.Context(), sshConfig); err != nil {
 		base.ErrorWithMessage(ctx, "连接SSH失败: "+err.Error())
 		return
 	}
@@ -195,8 +215,8 @@ func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
 	}()
 
 	// 启动终端会话
-	if err := h.sshClient.WebTerminal(uc.Uid, ws); err != nil {
-		base.ErrorWithMessage(ctx, "启动Web终端失败: "+err.Error())
+	if err := client.WebTerminalContext(ctx.Request.Context(), uc.Uid, ws); err != nil {
+		h.logger.Warn("Web终端会话已结束")
 		return
 	}
 }

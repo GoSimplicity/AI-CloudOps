@@ -27,7 +27,9 @@ package ssh
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"strings"
@@ -77,6 +79,7 @@ type Client interface {
 	Close() error
 	// WebTerminal 提供Web终端功能
 	WebTerminal(userID int, conn *websocket.Conn) error
+	WebTerminalContext(context.Context, int, *websocket.Conn) error
 }
 
 // client SSH客户端实现
@@ -205,7 +208,7 @@ func (c *client) CloseSession(userID int) error {
 		return fmt.Errorf("用户%d的会话不存在", userID)
 	}
 
-	if err := session.Close(); err != nil {
+	if err := session.Close(); err != nil && !closedSSHError(err) {
 		c.logger.Error("关闭SSH会话失败", zap.Int("用户ID", userID), zap.Error(err))
 		return fmt.Errorf("关闭SSH会话失败: %w", err)
 	}
@@ -242,7 +245,7 @@ func (c *client) Close() error {
 	c.sessionMux.Lock()
 	for userID, session := range c.sessions {
 		if session != nil {
-			if err := session.Close(); err != nil {
+			if err := session.Close(); err != nil && !closedSSHError(err) {
 				c.logger.Error("关闭会话失败", zap.Int("用户ID", userID), zap.Error(err))
 				errors = append(errors, fmt.Sprintf("关闭用户%d会话失败: %v", userID, err))
 			}
@@ -253,7 +256,7 @@ func (c *client) Close() error {
 
 	// 关闭客户端连接
 	if c.sshClient != nil {
-		if err := c.sshClient.Close(); err != nil {
+		if err := c.sshClient.Close(); err != nil && !closedSSHError(err) {
 			c.logger.Error("关闭SSH客户端失败", zap.Error(err))
 			errors = append(errors, fmt.Sprintf("关闭SSH客户端失败: %v", err))
 		}
@@ -307,3 +310,6 @@ func (c *client) getAuthMethod(config *Config) (ssh.AuthMethod, error) {
 		return nil, fmt.Errorf("不支持的认证方式: %d", config.Mode)
 	}
 }
+
+// 连接取消或远端正常退出后的重复关闭不属于资源清理失败
+func closedSSHError(err error) bool { return errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) }

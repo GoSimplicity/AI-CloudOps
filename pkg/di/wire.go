@@ -63,7 +63,6 @@ import (
 	workorderService "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/sse"
-	pkgSSH "github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/terminal"
 	"github.com/google/wire"
 	_ "github.com/google/wire"
@@ -219,7 +218,7 @@ var DaoSet = wire.NewSet(
 )
 
 var SSHSet = wire.NewSet(
-	pkgSSH.NewClient,
+	InitTerminalClientFactory,
 )
 
 var UtilSet = wire.NewSet(
