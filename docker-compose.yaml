@@ -55,6 +55,8 @@ services:
   #    env_file:
   #      - .env
   #    environment:
+  #      # 本地开发栈显式 development；不依赖 .env 是否写了 ENV（未设置会拒绝启动，镜像默认是 production）
+  #      - ENV=development
   #      - GOPROXY=https://goproxy.cn,direct
   #      - TZ=Asia/Shanghai
   #    networks:
