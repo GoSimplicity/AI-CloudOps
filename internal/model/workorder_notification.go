@@ -253,6 +253,7 @@ type DeleteWorkorderNotificationReq struct {
 }
 
 type ListWorkorderNotificationReq struct {
+	Channel    string `json:"channel" form:"channel" binding:"omitempty,oneof=email feishu sms webhook"`
 	Page       int    `json:"page" form:"page"`
 	PageSize   int    `json:"page_size" form:"page_size"`
 	Name       string `json:"name" form:"name"`

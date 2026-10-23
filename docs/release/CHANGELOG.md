@@ -190,3 +190,9 @@
 - 随机限权MySQL库验证完整/幂等迁移和YAML CRUD，finally清理0；拒绝skip/未匹配测试冒充验收
 - 三仓integration增加模型注册、真实隔离MySQL与启动后YAML双list业务码门槛
 - 先红后绿、真实MySQL、DI smoke/race/vet及全仓Go测试通过，见 [startup-schema.md](startup-schema.md)；共享镜像由主流程统一更新
+
+## 工单通知渠道数据库筛选
+
+- 通知list新增可选channel枚举email/feishu/sms/webhook，分页保留page_size
+- MySQL8.4与SQLite按顶层JSON字符串精确匹配，在count和分页前应用，非LIKE或当前页筛选
+- 同数据在真实SQLite与隔离MySQL覆盖多页/总数、大小写/子串/嵌套/非数组/无效JSON与叠加条件；先红后绿、race/vet、全仓test/build通过；integration增加MySQL门槛，见 [notification-channel-filter.md](notification-channel-filter.md)

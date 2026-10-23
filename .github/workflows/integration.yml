@@ -56,6 +56,8 @@ jobs:
         run: docker compose -f deploy/release/compose.yaml up -d --build --wait --wait-timeout 300
       - name: Isolated MySQL full migration and YAML persistence
         run: python scripts/integration/schema_smoke.py --mysql-migration
+      - name: Isolated MySQL notification channel pagination
+        run: python scripts/integration/schema_smoke.py --mysql-notification
       - name: Gateway and session acceptance
         run: python scripts/release-smoke.py --crud
       - name: Real RBAC and workorder lifecycle

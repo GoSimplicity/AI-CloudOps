@@ -87,7 +87,7 @@ def isolated_mysql(container=None, package="./pkg/di", test="TestMySQLStartupMig
         left = admin(f"SELECT (SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='{name}')+(SELECT COUNT(*) FROM mysql.user WHERE User='{name}');")
         if left.strip() != b"0":
             raise SchemaError("隔离测试资源未清理完成")
-    print("PASS isolated MySQL migration regression and owned resource cleanup")
+    print("PASS isolated MySQL regression and owned resource cleanup")
 
 
 def api_check(base):
@@ -120,12 +120,16 @@ def api_check(base):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://localhost:18080")
-    parser.add_argument("--mysql-migration", action="store_true")
+    database = parser.add_mutually_exclusive_group()
+    database.add_argument("--mysql-migration", action="store_true")
+    database.add_argument("--mysql-notification", action="store_true")
     parser.add_argument("--container")
     args = parser.parse_args()
     try:
         if args.mysql_migration:
             isolated_mysql(args.container)
+        elif args.mysql_notification:
+            isolated_mysql(args.container, "./internal/workorder/dao", "TestMySQLNotificationChannelPagination")
         else:
             api_check(args.url)
     except (SchemaError, KeyError, ValueError):

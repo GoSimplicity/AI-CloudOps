@@ -231,6 +231,12 @@ func (d *notificationDAO) ListNotification(ctx context.Context, req *model.ListW
 		db = db.Where("is_default = ?", *req.IsDefault)
 	}
 
+	filtered, filterErr := notificationChannelFilter(db, req.Channel)
+	if filterErr != nil {
+		return nil, filterErr
+	}
+	db = filtered
+
 	if err := db.Count(&total).Error; err != nil {
 		d.logger.Error("获取通知配置总数失败", zap.Error(err))
 		return nil, fmt.Errorf("获取通知配置总数失败: %w", err)
