@@ -45,15 +45,21 @@
 2. 上线前用只读 SQL 盘点会受精确鉴权影响的授予（在数据库副本或只读账号执行）：
 
    ```sql
-   -- 含 * 但不是 /* 或末尾 * 的授予：上线后不再生效
+   -- 含 * 但不是“恰好一个且位于末尾”的授予：上线后不再生效
    SELECT id, path, method FROM cl_system_apis
    WHERE deleted_at = 0 AND path LIKE '%*%'
-     AND path <> '/*' AND path NOT LIKE '%*' ;
+     AND NOT (path LIKE '%*' AND path NOT LIKE '%*%*') ;
+   -- 被角色引用、不含 * 也不含 : 的授予：若写的是真实路径（如 /api/tree/cloud/9/status）
+   -- 而不是模板，上线后不再生效；请与 gin 路由表人工核对
+   SELECT DISTINCT a.id, a.path, a.method FROM cl_system_apis a
+   JOIN cl_system_role_apis ra ON ra.api_id = a.id
+   WHERE a.deleted_at = 0 AND a.path NOT LIKE '%*%' AND a.path NOT LIKE '%:%' ;
    -- 已存在的同名角色（引导不会提升它们）
    SELECT id, name, code, is_system, status FROM cl_system_roles
    WHERE deleted_at = 0 AND (code = 'super_admin' OR name = '超级管理员');
    ```
    第一条结果里形如 `/api/v1/*path` 的 gin 通配模板仍然有效（与模板完全相等），其余需要改成末尾 `*` 或具体模板。
+   第二条结果中，启动时 `bootstrapPermissionCatalog` 自动补录的条目都是路由模板，不受影响；需要关注的是手工录入的真实路径。上线后也可以用受影响用户调用 `GET /api/user/permissions`，列表里缺失的就是不再生效的授予。
 3. 部署新版本，启动日志确认无 `初始化超级管理员角色失败`。
 4. 验证：以 admin 登录，`GET /api/user/permissions` 返回 `super_admin=true`、`permissions=["*"]`；以普通测试账号验证契约第 3.1 节的拒绝用例。
 
