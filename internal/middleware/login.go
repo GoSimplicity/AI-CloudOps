@@ -124,6 +124,8 @@ func browserWebSocketRequest(c *gin.Context) bool {
 	switch c.FullPath() {
 	case "/api/tree/local/terminal/:id", "/api/tree/cloud/:id/terminal", "/api/k8s/pod/:cluster_id/:namespace/:name/containers/:container/exec":
 		return true
+	case "/api/v1/*path":
+		return c.Request.URL.Path == "/api/v1/assistant/stream"
 	default:
 		return false
 	}
