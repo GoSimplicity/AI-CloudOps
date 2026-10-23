@@ -77,7 +77,8 @@ func (s *clusterService) ListClusters(ctx context.Context, req *model.ListCluste
 		return model.ListResp[*model.K8sCluster]{}, fmt.Errorf("查询所有集群失败: %w", err)
 	}
 
-	utils.CleanClusterSensitiveInfoList(list)
+	// kubeconfig 由 model.K8sCluster.MarshalJSON 统一屏蔽并转换为 has_kube_config，
+	// 这里保留原值以便正确计算该标志。
 
 	return model.ListResp[*model.K8sCluster]{
 		Total: total,
@@ -224,6 +225,7 @@ func (s *clusterService) UpdateCluster(ctx context.Context, req *model.UpdateClu
 	if cluster.ApiServerAddr == "" {
 		cluster.ApiServerAddr = existingCluster.ApiServerAddr
 	}
+	// kubeconfig 选填：不传或空字符串保留原值；非空则整段替换，下方 connection.Parse 与创建接口执行相同校验
 	if cluster.KubeConfigContent == "" {
 		cluster.KubeConfigContent = existingCluster.KubeConfigContent
 	}
