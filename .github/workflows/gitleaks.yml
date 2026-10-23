@@ -45,21 +45,19 @@ jobs:
           PUSH_BEFORE: ${{ github.event.before }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
         run: |
           set -euo pipefail
           git config --global --add safe.directory "$PWD"
           # 历史中已存在的密钥由 SEC-01B（轮换/是否重写历史）处理，CI 只扫描本次新增的提交，
           # 避免存量历史阻塞所有流水线；新提交中出现任何密钥都会使 job 失败。
-          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_BASE_SHA" ]; then
-            range="${PR_BASE_SHA}..${HEAD_SHA}"
-          elif [ -n "${PUSH_BEFORE:-}" ] && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ] \
-               && git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
-            range="${PUSH_BEFORE}..${HEAD_SHA}"
-          else
-            # 新分支首推：扫描不在默认分支上的提交；无默认分支信息时只扫 HEAD 提交。
-            base="$(git merge-base "${HEAD_SHA}" origin/HEAD 2>/dev/null || true)"
-            if [ -n "$base" ] && [ "$base" != "$HEAD_SHA" ]; then range="${base}..${HEAD_SHA}"; else range="-1 ${HEAD_SHA}"; fi
-          fi
+          # 范围计算见 .github/scripts/gitleaks-range.sh：首推 / force-push 时按默认分支的 merge-base 确定范围，
+          # 推送默认分支本身且无可用 before 时全量扫描；无法确定完整范围则失败（不再退化成只扫 HEAD）。
+          range="$(bash .github/scripts/gitleaks-range.sh)"
+          # gitleaks 8.30.1 在 git log 报错（如无效范围）时仍以 0 退出，这里先校验范围可解析。
+          git rev-list ${range} >/dev/null
           echo "gitleaks scan range: ${range}"
           # --diff-merges=first-parent：merge 提交按相对第一父提交的差异输出，
           # 冲突解决 / evil merge 中引入的内容也会被扫描（默认 git log -p 不输出 merge 提交的差异）。

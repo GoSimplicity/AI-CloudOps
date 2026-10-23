@@ -84,7 +84,7 @@ gl_checkout() { # gl_checkout <head-sha> [extra refspec]
 # 用法: gl_run_scan EVENT_NAME=push PUSH_BEFORE=... HEAD_SHA=... DEFAULT_BRANCH=main REF_NAME=main
 gl_run_scan() {
     local f="$GL_TMP/scan-step.sh"; gl_extract_run "$f" "Scan new commits"
-    ( cd "$GL_WS" && env -u PR_BASE_SHA EVENT_NAME= PUSH_BEFORE= PR_BASE_SHA= HEAD_SHA= DEFAULT_BRANCH= REF_NAME= "$@" \
+    ( cd "$GL_WS" && env -u PR_BASE_SHA EVENT_NAME= PUSH_BEFORE= PR_BASE_SHA= HEAD_SHA= DEFAULT_BRANCH= REF_NAME= REF_TYPE= "$@" \
         bash --noprofile --norc -eo pipefail "$f" ) >"$GL_TMP/scan.out" 2>&1
 }
 
