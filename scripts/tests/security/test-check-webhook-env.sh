@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# review3f/review3g：scripts/check-webhook-env.sh 的回归测试（规则对应 sched/w1-mantou 0146077 的 loader 校验）。
+# review3f/review3g/review3h(P3-e)：scripts/check-webhook-env.sh 的回归测试（规则对应 sched/w1-mantou 0146077 的 loader 校验）。
 # 每个用例分别用 sh、bash、bash --posix 运行被测脚本（机器上没有的解释器跳过），断言退出码与指定字段的结论；
 # 另断言输出里不出现任何取值（合成的哨兵数字 / 合成密钥）。只读：样本写在 mktemp 目录；config/ 只读取。
 # 用法: scripts/tests/security/test-check-webhook-env.sh      兼容 macOS（bash 3.2 / BSD grep、sed、awk）。
@@ -172,5 +172,15 @@ case_ "哨兵值不回显" 0 "webhook.fixed_workers: 合规（配置文件）" -
 case_ "CRLF 文件" 0 "webhook.port: 合规（配置文件）|webhook.fixed_workers: 合规（配置文件）" -- -- $C "$TMP/crlf.yaml"
 case_ "--env-file（引号、export、密钥行）" 0 "webhook.fixed_workers: 合规（环境变量 WEBHOOK_FIXED_WORKERS）|webhook.port: 合规（环境变量 WEBHOOK_PORT）" -- -- --env-file "$TMP/a.env"
 case_ "--config 文件不存在" 2 "配置文件不可读" -- -- $C "$TMP/nope.yaml"
+# review3h P3-e：临时文件用 mktemp 创建并检查；TMPDIR 不可用时报错退出 2，不得继续出结论；运行后不留临时文件
+case_ "TMPDIR 不存在" 2 "无法创建临时文件" -- "TMPDIR=$TMP/no-such-dir" -- $C "$TMP/repo.yaml"
+case_ "TMPDIR 不存在（无 --config）" 2 "无法创建临时文件" -- "TMPDIR=$TMP/no-such-dir" --
+mkdir "$TMP/td"
+for s in $SHELLS "bash --posix"; do
+    N=$((N+1)); rc=0
+    env -i PATH="$PATH" TMPDIR="$TMP/td" $s "$CHK" $C "$TMP/repo.yaml" >"$TMP/out" 2>&1 || rc=$?
+    left="$(ls -A "$TMP/td" | wc -l | tr -d ' ')"
+    if [ "$rc" -eq 0 ] && [ "$left" = 0 ]; then ok "运行后 TMPDIR 无残留（${s}）"; else bad "运行后 TMPDIR 残留 ${left} 个 / 退出码 ${rc}（${s}）"; fi
+done
 echo "共 ${N} 次运行（解释器:${SHELLS} bash --posix）；失败 ${FAILS} 项"
 [ "$FAILS" -eq 0 ]

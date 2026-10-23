@@ -108,10 +108,14 @@ parse_cfg() {
 }
 
 TAB="$(printf '\t')"
-P="${TMPDIR:-/tmp}/check-webhook-env.$$"
-trap 'rm -f "$P"' EXIT
-trap 'rm -f "$P"; exit 2' HUP INT TERM
-: >"$P"
+# 临时文件（review3h P3-e）：用 mktemp 创建（不用可预测的 $$ 文件名），创建失败或不是普通空文件就退出 2，不继续出结论
+P=""
+trap '[ -z "$P" ] || rm -f "$P"' EXIT
+trap '[ -z "$P" ] || rm -f "$P"; exit 2' HUP INT TERM
+P="$(mktemp "${TMPDIR:-/tmp}/check-webhook-env.XXXXXX" 2>/dev/null)" || P=""
+if [ -z "$P" ] || [ ! -f "$P" ] || [ -L "$P" ] || [ -s "$P" ]; then
+    echo "无法创建临时文件（检查 TMPDIR 是否存在且可写）" >&2; P=""; exit 2
+fi
 if [ -n "$CFG" ]; then parse_cfg "$CFG" >"$P" || { echo "配置文件解析失败" >&2; exit 2; }; fi
 
 # ---------- 根节点 ----------
