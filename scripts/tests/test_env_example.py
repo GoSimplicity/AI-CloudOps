@@ -34,9 +34,10 @@ def _url_port(url):
 
 
 def _go_default(key):
-    # internal/config/loader.go 里 viper.SetDefault("<key>", "<value>") 的值（只读解析）
+    # internal/config/loader.go 里 <recv>.SetDefault("<key>", "<value>") 的值（只读解析）；
+    # 接收者不限于 viper：sched/w1-mantou 的 webhook 默认值写成 v.SetDefault("webhook.port", "8889")
     text = (ROOT / "internal/config/loader.go").read_text(encoding="utf-8")
-    found = re.findall(r'viper\.SetDefault\("' + re.escape(key) + r'",\s*"([^"]*)"\)', text)
+    found = re.findall(r'\b[A-Za-z_][A-Za-z0-9_]*\.SetDefault\(\s*"' + re.escape(key) + r'",\s*"([^"]*)"\s*\)', text)
     if len(found) != 1:
         raise AssertionError(f"loader.go 中 {key} 默认值应恰好 1 处，实际 {len(found)}")
     return found[0]
@@ -102,18 +103,152 @@ class WebhookPortConsistencyTests(unittest.TestCase):
                 _url_port(bad)
 
 
+_GROUP_API_CALL = r'viper\.GetString\(\s*"webhook\.im_feishu\.group_message_api"\s*\)'
+_GO_TRIMS = ("TrimSpace", "TrimRight", "TrimLeft", "TrimSuffix", "TrimPrefix", "Trim")
+
+
+def _go_string(lit):
+    # 只接受不含转义的 Go 解释型字符串字面量；其他写法直接报错，避免静默误判
+    m = re.fullmatch(r'"([^"\\]*)"', lit.strip())
+    if m is None:
+        raise AssertionError(f"不支持的 Go 字符串字面量: {lit!r}")
+    return m.group(1)
+
+
+def _go_call_args(text, open_paren):
+    """从 text[open_paren] 的 '(' 起，按顶层逗号切分实参；跳过字符串/字符/反引号字面量。返回 (实参列表, 右括号后位置)。"""
+    if text[open_paren] != "(":
+        raise AssertionError("期望 '('")
+    depth, i, start, args = 0, open_paren, open_paren + 1, []
+    while i < len(text):
+        c = text[i]
+        if c in "\"'":
+            i += 1
+            while text[i] != c:
+                i += 2 if text[i] == "\\" else 1
+        elif c == "`":
+            i = text.index("`", i + 1)
+        elif c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+            if depth == 0:
+                args.append(text[start:i].strip())
+                return [a for a in args if a], i + 1
+        elif c == "," and depth == 1:
+            args.append(text[start:i].strip())
+            start = i + 1
+        i += 1
+    raise AssertionError("Go 调用括号不配对")
+
+
+def _group_base_transform(expr):
+    """把 Sprintf 第一个 %s 的实参解释成对 group_message_api 取值的变换（只认 viper.GetString 与 strings.Trim* 包装）。"""
+    expr = expr.strip()
+    if re.fullmatch(_GROUP_API_CALL, expr):
+        return lambda s: s
+    m = re.match(r"strings\.(" + "|".join(_GO_TRIMS) + r")\s*(?=\()", expr)
+    if m is None:
+        raise AssertionError(f"group_message_api 外层包装不认识，需补充测试解析: {expr!r}")
+    args, end = _go_call_args(expr, m.end())
+    if expr[end:].strip():
+        raise AssertionError(f"包装调用后还有多余内容: {expr!r}")
+    fn = m.group(1)
+    inner = _group_base_transform(args[0])
+    if fn == "TrimSpace":
+        if len(args) != 1:
+            raise AssertionError(f"strings.TrimSpace 参数个数不对: {expr!r}")
+        return lambda s: inner(s).strip()
+    if len(args) != 2:
+        raise AssertionError(f"strings.{fn} 参数个数不对: {expr!r}")
+    cut = _go_string(args[1])
+    ops = {
+        "TrimRight": lambda s: s.rstrip(cut) if cut else s,
+        "TrimLeft": lambda s: s.lstrip(cut) if cut else s,
+        "Trim": lambda s: s.strip(cut) if cut else s,
+        "TrimSuffix": lambda s: s[:-len(cut)] if cut and s.endswith(cut) else s,
+        "TrimPrefix": lambda s: s[len(cut):] if cut and s.startswith(cut) else s,
+    }
+    op = ops[fn]
+    return lambda s: op(inner(s))
+
+
+def _group_format(text):
+    """content.go 中用 group_message_api 拼群消息 URL 的 fmt.Sprintf：返回 (格式串, 对 base 的变换)。
+
+    兼容：fmt.Sprintf("%s/%s", viper.GetString(...), robotToken)（本分支）、
+    fmt.Sprintf("%s/%s", strings.TrimRight(viper.GetString(...), "/"), robotToken)（sched/w1-mantou 2026deb）
+    以及再套一层 strings.TrimSpace(...) 等 strings.Trim* 包装。
+    """
+    calls = []
+    for m in re.finditer(r"\bfmt\.Sprintf\s*(?=\()", text):
+        args, _ = _go_call_args(text, m.end())
+        if any("group_message_api" in a for a in args):
+            calls.append(args)
+    if len(calls) != 1:
+        raise AssertionError(f"content.go 中群消息 URL 拼接应恰好 1 处，实际 {len(calls)}")
+    args = calls[0]
+    if len(args) != 3 or args[2] != "robotToken":
+        raise AssertionError(f"群消息 URL 拼接实参不是 (格式, base, robotToken): {args!r}")
+    fmt = _go_string(args[0])
+    if fmt.count("%s") != 2 or fmt.replace("%s", "").count("%") != 0:
+        raise AssertionError(f"群消息 URL 格式串应恰好两个 %s: {fmt!r}")
+    return fmt, _group_base_transform(args[1])
+
+
+class GroupFormatParserTests(unittest.TestCase):
+    """_group_format 对几种 Go 写法的解析（合成代码片段）。"""
+
+    BASE = "https://open.feishu.cn/open-apis/bot/v2/hook"
+    API = 'viper.GetString("webhook.im_feishu.group_message_api")'
+
+    def _build(self, snippet, base, token="t"):
+        fmt, transform = _group_format(snippet)
+        return fmt % (transform(base), token)
+
+    def test_old_form(self):
+        snippet = f'url := fmt.Sprintf("%s/%s", {self.API}, robotToken)'
+        self.assertEqual(self._build(snippet, self.BASE), self.BASE + "/t")
+        self.assertEqual(self._build(snippet, self.BASE + "/"), self.BASE + "//t")
+
+    def test_w1_trim_right_form(self):
+        snippet = f'url := fmt.Sprintf("%s/%s", strings.TrimRight({self.API}, "/"), robotToken)'
+        for base in (self.BASE, self.BASE + "/", self.BASE + "///"):
+            with self.subTest(base=base):
+                self.assertEqual(self._build(snippet, base), self.BASE + "/t")
+
+    def test_extra_outer_wrapper(self):
+        snippet = ('url := fmt.Sprintf(\n\t"%s/%s",\n\tstrings.TrimSpace(strings.TrimRight(\n\t\t'
+                   + self.API + ', "/")),\n\trobotToken,\n)')
+        self.assertEqual(self._build(snippet, " " + self.BASE + "/"), self.BASE + "/t")
+        snippet = f'url := fmt.Sprintf("%s/%s", strings.TrimRight(strings.TrimSpace({self.API}), "/"), robotToken)'
+        self.assertEqual(self._build(snippet, self.BASE + "/ \t"), self.BASE + "/t")
+
+    def test_unknown_or_ambiguous_forms_fail_loudly(self):
+        for snippet in (
+            f'u := fmt.Sprintf("%s/%s", strings.ToLower({self.API}), robotToken)',
+            f'u := fmt.Sprintf("%s/%s", {self.API}, otherToken)',
+            f'u := fmt.Sprintf("%s/%s/%s", {self.API}, robotToken)',
+            'u := fmt.Sprintf("%s/%s", base, robotToken)',
+            f'a := fmt.Sprintf("%s/%s", {self.API}, robotToken)\nb := fmt.Sprintf("%s/%s", {self.API}, robotToken)',
+        ):
+            with self.subTest(snippet=snippet), self.assertRaises(AssertionError):
+                _group_format(snippet)
+
+
 class FeishuGroupMessageUrlTests(unittest.TestCase):
     """P3-8：WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API 按 content.go SentFeishuGroup 的拼接方式须得到群机器人 webhook 地址。"""
 
     CONTENT_GO = "internal/prometheus/webhook/content/content.go"
     EVENT_GO = "internal/prometheus/service/alert/event_service.go"
 
-    def _group_format(self):
-        text = (ROOT / self.CONTENT_GO).read_text(encoding="utf-8")
-        m = re.findall(r'fmt\.Sprintf\("([^"]*)",\s*viper\.GetString\("webhook\.im_feishu\.group_message_api"\),\s*robotToken\)', text)
-        self.assertEqual(len(m), 1, "content.go 中群消息 URL 拼接应恰好 1 处")
-        self.assertEqual(m[0].count("%s"), 2)
-        return m[0]
+    def _build(self, base, token):
+        fmt, transform = _group_format((ROOT / self.CONTENT_GO).read_text(encoding="utf-8"))
+        return fmt % (transform(base), token)
+
+    def _strips_trailing_slash(self):
+        _, transform = _group_format((ROOT / self.CONTENT_GO).read_text(encoding="utf-8"))
+        return transform("x/") == "x"
 
     def _reference_format(self):
         # 后端 event_service.go 用同一个群机器人 token 直接拼出的地址，作为期望值来源
@@ -123,9 +258,9 @@ class FeishuGroupMessageUrlTests(unittest.TestCase):
         return m[0]
 
     def test_group_message_url_from_env_example(self):
-        token = f"r3inc-synthetic-{os.getpid()}"
+        token = f"r4-synthetic-{os.getpid()}"
         base = _env_example()["WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API"]
-        url = self._group_format() % (base, token)
+        url = self._build(base, token)
         expected = self._reference_format() % token
         parts = urlsplit(url)
         self.assertNotIn("//", parts.path, f"拼出的路径有重复斜杠: {url}")
@@ -133,16 +268,25 @@ class FeishuGroupMessageUrlTests(unittest.TestCase):
         self.assertEqual(parts.path.rsplit("/", 1)[-1], token)
 
     def test_wrong_group_message_bases_are_detected(self):
-        # 负向：旧示例值（im/v1/messages）、带尾斜杠（config/webhook.yaml 现值）、缺 hook 段都拼不出正确地址
-        token = f"r3inc-synthetic-{os.getpid()}"
+        # 负向：旧示例值（im/v1/messages）、缺 hook 段在任何写法下都拼不出正确地址
+        token = f"r4-synthetic-{os.getpid()}"
         expected = self._reference_format() % token
         for base in ("https://open.feishu.cn/open-apis/im/v1/messages",
-                     "https://open.feishu.cn/open-apis/bot/v2/hook/",
                      "https://open.feishu.cn/open-apis/bot/v2"):
             with self.subTest(base=base):
-                url = self._group_format() % (base, token)
-                self.assertTrue(url != expected or "//" in urlsplit(url).path)
-                self.assertNotEqual(url, expected)
+                self.assertNotEqual(self._build(base, token), expected)
+
+    def test_trailing_slash_base_follows_code_semantics(self):
+        # 带尾斜杠（config/webhook.yaml 现值）：本分支原样拼接得到 hook//<token>（错误）；
+        # sched/w1-mantou 的 strings.TrimRight(..., "/") 会去掉尾斜杠，得到正确地址
+        token = f"r4-synthetic-{os.getpid()}"
+        expected = self._reference_format() % token
+        url = self._build("https://open.feishu.cn/open-apis/bot/v2/hook/", token)
+        if self._strips_trailing_slash():
+            self.assertEqual(url, expected)
+        else:
+            self.assertNotEqual(url, expected)
+            self.assertIn("//", urlsplit(url).path)
 
 
 if __name__ == "__main__":
