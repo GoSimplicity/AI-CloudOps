@@ -2,9 +2,12 @@ package envmode
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // unsetForTest 在 t.Setenv 登记恢复之后真正删掉 ENV，覆盖“未设置”而不只是“空串”。
@@ -105,5 +108,51 @@ func TestCurrentAndIsProduction(t *testing.T) {
 		if got := IsProduction(); got != tt.prod {
 			t.Errorf("ENV=%q(set=%v): IsProduction() = %v, want %v", tt.raw, tt.set, got, tt.prod)
 		}
+	}
+}
+
+// P2-2：回显上限按字符（rune）计数，16 个字符以内经 %q 回显，17 个起只报长度。
+// 多字节用例防止按字节计数（M10），16/17 两侧用例防止边界错位（M12）。
+func TestParseEchoBoundaryCountsRunes(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		raw   string
+		runes int
+		shown bool
+	}{
+		{"ascii-16", strings.Repeat("q", 16), 16, true},
+		{"ascii-17", strings.Repeat("q", 17), 17, false},
+		{"cjk-16", strings.Repeat("环", 16), 16, true}, // 48 字节
+		{"cjk-17", strings.Repeat("环", 17), 17, false},
+		{"latin1-16", strings.Repeat("é", 16), 16, true}, // 32 字节
+		{"emoji-5", strings.Repeat("😀", 5), 5, true},     // 20 字节
+		{"mixed-16", "dev环境" + strings.Repeat("x", 11), 16, true},
+		{"mixed-17", "dev环境" + strings.Repeat("x", 12), 17, false},
+		{"padded-cjk-16", "  " + strings.Repeat("产", 16) + "\t", 16, true}, // 先去首尾空白再计数
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse(tt.raw)
+			if !errors.Is(err, ErrUnknown) {
+				t.Fatalf("Parse(%q) 应返回 ErrUnknown，got %v", tt.raw, err)
+			}
+			trimmed := strings.TrimSpace(tt.raw)
+			if n := utf8.RuneCountInString(trimmed); n != tt.runes {
+				t.Fatalf("用例自检：字符数 %d，期望 %d", n, tt.runes)
+			}
+			msg := err.Error()
+			quoted := strconv.Quote(trimmed)
+			if tt.shown {
+				if !strings.Contains(msg, quoted) || strings.Contains(msg, "不回显") {
+					t.Fatalf("%d 个字符应原样回显，got %q", tt.runes, msg)
+				}
+				return
+			}
+			if strings.Contains(msg, trimmed) || strings.Contains(msg, quoted) {
+				t.Fatalf("%d 个字符不应回显原值，got %q", tt.runes, msg)
+			}
+			if want := fmt.Sprintf("（长度 %d，不回显）", tt.runes); !strings.Contains(msg, want) {
+				t.Fatalf("应按字符数报长度 %q，got %q", want, msg)
+			}
+		})
 	}
 }
