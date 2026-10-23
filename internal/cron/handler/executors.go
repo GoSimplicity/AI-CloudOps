@@ -100,7 +100,7 @@ func (h *CommandExecutor) Execute(ctx context.Context, task *CommandTask) (strin
 		zap.String("command", task.Command),
 		zap.Any("args", task.Args))
 
-	err := cmd.Run()
+	err := runTaskCommand(cmd)
 
 	// 合并标准输出和错误输出
 	output := strings.TrimSpace(stdout.String())
@@ -258,7 +258,7 @@ func (h *ScriptExecutor) Execute(ctx context.Context, task *ScriptTask) (string,
 		zap.String("type", task.Type),
 		zap.String("interpreter", interpreter))
 
-	err := cmd.Run()
+	err := runTaskCommand(cmd)
 
 	// 合并标准输出和错误输出
 	output := strings.TrimSpace(stdout.String())
@@ -311,4 +311,16 @@ func (b *outputBuffer) String() string {
 		return strings.ToValidUTF8(b.buffer.String(), "") + outputTruncatedMarker
 	}
 	return b.buffer.String()
+}
+
+// runTaskCommand 同时限制进程终止和继承管道的等待时间
+func runTaskCommand(cmd *exec.Cmd) error {
+	cmd.WaitDelay = 2 * time.Second
+	configureTaskProcess(cmd)
+	err := cmd.Run()
+	// 父进程先退出而子进程仍持有管道时，WaitDelay返回后也清理进程组
+	if err != nil && cmd.Process != nil && cmd.Cancel != nil {
+		_ = cmd.Cancel()
+	}
+	return err
 }
