@@ -171,7 +171,8 @@ func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, er
 		// 只列出键名和变量名，不输出值
 		return nil, nil, fmt.Errorf("Webhook 端口 %s（环境变量 WEBHOOK_PORT）必须是 1-65535 的纯数字", webhookPortKey)
 	}
-	merged.vals[webhookPortKey] = port
+	// 去掉前导零后的规范值（如 000080 → 80）同时用于监听和全局 webhook.port
+	merged.vals[webhookPortKey] = normalizePort(port)
 
 	cfg, err := decodeWebhookConfig(merged)
 	if err != nil {
@@ -278,19 +279,31 @@ func decodeWebhookConfig(merged webhookValues) (*WebhookConfig, error) {
 	return cfg, nil
 }
 
-// isValidPort 端口必须是纯 ASCII 数字且在 1-65535 之间（调用方先去首尾空白）
+// isValidPort 端口必须是纯 ASCII 数字且在 1-65535 之间（调用方先去首尾空白）。
+// 先去掉前导零再查长度和范围：000080 视为 80；全是零（0、0000）仍拒绝
 func isValidPort(s string) bool {
-	if s == "" || len(s) > 5 {
+	if s == "" {
 		return false
 	}
-	n := 0
 	for _, r := range s {
 		if r < '0' || r > '9' {
 			return false
 		}
+	}
+	t := strings.TrimLeft(s, "0")
+	if t == "" || len(t) > 5 {
+		return false
+	}
+	n := 0
+	for _, r := range t {
 		n = n*10 + int(r-'0')
 	}
 	return n >= 1 && n <= 65535
+}
+
+// normalizePort 去掉合法端口的前导零（000080 → 80），只在 isValidPort 通过后调用
+func normalizePort(s string) string {
+	return strings.TrimLeft(s, "0")
 }
 
 func setDefaults() {

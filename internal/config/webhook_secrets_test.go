@@ -262,7 +262,7 @@ func TestLoadWebhookPortFromEnvOnlyOrDefault(t *testing.T) {
 func TestLoadWebhookRejectsInvalidPort(t *testing.T) {
 	t.Setenv(WebhookMySQLAddrEnv, fakeWebhookDSN)
 	t.Setenv("WEBHOOK_PORT", "")
-	for _, bad := range []string{"", "   ", "abc", "0", "65536", "-1", "+80", "80a", "8 0", "99999999999999999999"} {
+	for _, bad := range []string{"", "   ", "abc", "0", "0000", "00000000", "65536", "065536", "0000065536", "-1", "+80", "80a", "8 0", "0x50", "99999999999999999999"} {
 		t.Run("bad/"+bad, func(t *testing.T) {
 			viper.Reset()
 			t.Cleanup(viper.Reset)
@@ -294,6 +294,10 @@ func TestLoadWebhookRejectsInvalidPort(t *testing.T) {
 		{"env", "webhook:\n  port: \"8889\"\n", " 9998\t", "9998"},
 		{"unquoted-int", "webhook:\n  port: 65535\n", "", "65535"},
 		{"min", "webhook:\n  port: \"1\"\n", "", "1"},
+		{"leading-zeros", "webhook:\n  port: \"000080\"\n", "", "80"},
+		{"leading-zeros-max", "webhook:\n  port: \"0000065535\"\n", "", "65535"},
+		{"leading-zeros-env", "webhook:\n  port: \"8889\"\n", " 0009998 ", "9998"},
+		{"leading-zeros-min", "webhook:\n  port: \"0001\"\n", "", "1"},
 	} {
 		t.Run("ok/"+tc.name, func(t *testing.T) {
 			viper.Reset()
@@ -307,5 +311,73 @@ func TestLoadWebhookRejectsInvalidPort(t *testing.T) {
 				t.Fatalf("got cfg=%q 全局=%q, want %q", cfg.Port, viper.GetString("webhook.port"), tc.want)
 			}
 		})
+	}
+}
+
+// isValidPort 先去前导零再查长度和范围；normalizePort 去掉前导零
+func TestIsValidPortLeadingZeros(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		ok   bool
+		norm string
+	}{
+		{"80", true, "80"},
+		{"000080", true, "80"},
+		{"0000000000000080", true, "80"},
+		{"065535", true, "65535"},
+		{"01", true, "1"},
+		{"0", false, ""},
+		{"0000", false, ""},
+		{"065536", false, ""},
+		{"0123456", false, ""},
+		{"00-1", false, ""},
+		{"", false, ""},
+	} {
+		if got := isValidPort(tc.in); got != tc.ok {
+			t.Errorf("isValidPort(%q) = %v, want %v", tc.in, got, tc.ok)
+			continue
+		}
+		if tc.ok && normalizePort(tc.in) != tc.norm {
+			t.Errorf("normalizePort(%q) = %q, want %q", tc.in, normalizePort(tc.in), tc.norm)
+		}
+	}
+}
+
+// 整数字段严格解析：字符串形式的 10.0、带空白、小数一律启动失败且不发布到全局；
+// 未加引号的 YAML 浮点数（10.0）由 YAML 解析为数值，仍按截断接受（记录当前行为）
+func TestLoadWebhookIntegerFieldsStrict(t *testing.T) {
+	t.Setenv(WebhookMySQLAddrEnv, fakeWebhookDSN)
+	t.Setenv("WEBHOOK_PORT", "")
+	for _, bad := range []string{"10.0", " 10", "10 ", "10.5", "1e1", "abc"} {
+		t.Run("env/"+bad, func(t *testing.T) {
+			viper.Reset()
+			t.Cleanup(viper.Reset)
+			t.Setenv("WEBHOOK_FIXED_WORKERS", bad)
+			if _, _, err := loadWebhookFromFile(writeWebhookYAML(t, "webhook:\n  port: \"8889\"\n")); err == nil || IsNonFatal(err) {
+				t.Fatalf("WEBHOOK_FIXED_WORKERS=%q 应导致启动失败, got %v", bad, err)
+			}
+			if len(viper.AllKeys()) != 0 {
+				t.Fatal("失败时不应发布任何键到全局 viper")
+			}
+		})
+	}
+	t.Setenv("WEBHOOK_FIXED_WORKERS", "")
+	for _, bad := range []string{`"10.0"`, `" 10"`, `"10.5"`} {
+		t.Run("yaml-quoted/"+bad, func(t *testing.T) {
+			viper.Reset()
+			t.Cleanup(viper.Reset)
+			if _, _, err := loadWebhookFromFile(writeWebhookYAML(t, "webhook:\n  port: \"8889\"\n  fixed_workers: "+bad+"\n")); err == nil {
+				t.Fatalf("fixed_workers: %s 应导致启动失败", bad)
+			}
+		})
+	}
+	viper.Reset()
+	t.Cleanup(viper.Reset)
+	cfg, _, err := loadWebhookFromFile(writeWebhookYAML(t, "webhook:\n  port: \"8889\"\n  fixed_workers: 10.0\n"))
+	if err != nil {
+		t.Fatalf("未加引号的 YAML 数值 10.0 当前仍被接受: %v", err)
+	}
+	if cfg.FixedWorkers != 10 || viper.GetInt("webhook.fixed_workers") != 10 {
+		t.Fatalf("YAML 10.0 应截断为 10 且 cfg 与全局一致, got cfg=%d 全局=%d", cfg.FixedWorkers, viper.GetInt("webhook.fixed_workers"))
 	}
 }

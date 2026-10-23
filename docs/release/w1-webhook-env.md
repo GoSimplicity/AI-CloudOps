@@ -10,7 +10,14 @@
 - 解码为返回的 `WebhookConfig`（`cmd/webhook` 用其中的 `Port` 监听）；
 - 发布到全局 viper 的 `webhook.*`（webhook 子系统其余代码通过 `viper.Get*("webhook.…")` 读取）。
 
-两处取值完全一致（有逐字段比对的测试，含嵌套的 `im_feishu`）。`mysql.*` 等其他键不发布到全局。
+合并值只取 `webhook.*` 下的**叶子键**（跳过 `webhook.im_feishu` 这类父键），按键名排序后只构造一次，解码与发布按同一顺序写入同一份值。
+因此**加载成功时**，`cfg` 的每个字段与全局 viper 按对应类型读取（`GetString` / `GetInt`）的结果一致（有逐字段比对的测试，含嵌套的 `im_feishu`，
+并覆盖 `im_feishu:` 为 null 与 `{}` 两种写法各 200 次重复加载）。注意两点：全局里存的是合并后的原始值（例如环境变量给的是字符串 `"3"`），
+直接 `viper.Get` 拿到的类型可能与 `cfg` 字段类型不同；**加载失败**（端口非法、整数字段解析失败等）时不向全局发布任何键。
+`mysql.*` 等其他键不发布到全局。
+
+> e1c57de 之前这一点并不总成立：配置文件写成 `im_feishu:`（子键全部注释掉，值为 null）时，父键 `webhook.im_feishu` 的默认值 map
+> 会按随机顺序覆盖子键的环境变量，`WEBHOOK_IM_FEISHU_*`（包括 `WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET`）约一半概率丢失，cfg 与全局也可能不一致。
 
 ## 支持的环境变量
 
@@ -34,11 +41,15 @@
 
 说明：
 
-- 整数项接受字符串形式（如 `WEBHOOK_FIXED_WORKERS=3`）。
+- 整数项接受字符串形式（如 `WEBHOOK_FIXED_WORKERS=3`）。**整数字段不再接受 `10.0`、带空格或小数的写法**：环境变量或加引号的 YAML 字符串
+  为 `10.0`、`" 10"`、`"10 "`、`10.5`、`1e1` 时 webhook **启动失败**（之前全局侧按 cast 宽松解析：`10.0` 当作 10，带空格或小数静默变成 0）。
+  例外与细节（当前行为，有测试记录）：未加引号的 YAML 数值（`fixed_workers: 10.0`、`10.5`）由 YAML 解析成浮点数，仍被接受并**截断**为 10；
+  字符串按 Go 的进制前缀解析，`010` 为八进制 8、`0x10` 为 16、`+10` 为 10，`cfg` 与全局两侧结果相同。
+  整数解析失败的报错来自解码库，会带出该整数字段的取值（这些字段都不是凭据）。
 - 环境变量设为空串视为未设置，回落到配置文件/默认值。
-- **端口校验**：`webhook.port` 取合并后的值并去首尾空白，必须是 1–65535 的纯数字（`" 9998 "` 可以，
-  `""`、`abc`、`0`、`65536`、`-1`、`+80` 不行），否则 webhook 启动失败；报错只列出键名 `webhook.port` 和变量名 `WEBHOOK_PORT`，不含取值。
-  去空白后的值同时用于监听和全局 `webhook.port`。
+- **端口校验**：`webhook.port` 取合并后的值并去首尾空白，必须是纯数字；先去掉前导零，再要求在 1–65535 之间（`" 9998 "`、`000080` 可以，
+  `""`、`abc`、`0`、`0000`、`65536`、`065536`、`-1`、`+80`、`0x50` 不行），否则 webhook 启动失败；报错只列出键名 `webhook.port` 和变量名 `WEBHOOK_PORT`，不含取值。
+  去空白、去前导零后的值（如 `000080` → `80`）同时用于监听和全局 `webhook.port`。
 - `webhook.yaml` 里还有 `alert_receive_queue_size`、`min_workers` 等不在结构体中的键，它们没有 `env` 标签，不在上表中，
   不承诺可用环境变量覆盖。
 
@@ -71,7 +82,10 @@
   是否指向 webhook 的实际端口，否则告警可能发到主后端（主后端默认也是 8889）。
 - 配置文件存在但没写 `port` 时，之前 `cfg.Port` 为空串（监听地址为 `":"`），现在取 `WEBHOOK_PORT`，未设置则取默认值 **8889**。
   配置文件整个缺失时，之前已经取默认值 8889（但同样忽略 `WEBHOOK_PORT`），现在 `WEBHOOK_PORT` 也会生效。
-- `webhook.port` 非法（空、非纯数字、超出 1–65535）时现在加载配置阶段即失败；之前不做校验，直接拼进监听地址。
+- `webhook.port` 非法（空、非纯数字、去前导零后超出 1–65535）时现在加载配置阶段即失败；之前不做校验，直接拼进监听地址。
+  带前导零的合法端口（如 `000080`）规范为 `80`。
+- 整数字段（`fixed_workers`、`default_upgrade_minutes`、`common_map_renew_interval_seconds`、`im_feishu.request_timeout_seconds`）
+  由宽松改为严格：环境变量或带引号的 YAML 写成 `10.0`、带空格或小数时**启动失败**（见上文“说明”）。升级前请检查 `.env` 与 `webhook.yaml`。
 - **不再支持没有 `webhook` 根节点的旧格式（平铺写法）**，此类配置文件现在加载即失败，请把 `port`、`fixed_workers` 等键移到 `webhook:` 下。
   排查结论：仓库内唯一的 webhook 配置文件 `config/webhook.yaml` 自引入起（3c47234）就带 `webhook` 根节点；`deploy/`（Kubernetes、release Compose、nginx、
   Prometheus）、`Dockerfile`、`docker-compose.yaml` 中没有 webhook 配置文件，也没有 Helm values 或 ConfigMap 承载 webhook 配置。
