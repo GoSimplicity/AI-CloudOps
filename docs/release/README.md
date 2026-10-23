@@ -88,3 +88,11 @@ python3 scripts/release-smoke.py
 后端发布镜像包含 Bash、Python3 和 Node.js，分别支持现有 shell、Python、JavaScript 脚本类型。运行命令具有后端容器的权限，应限制相关菜单/API 的角色授权。任务输出按持久化字段预算截断并标明，不将超限数据无限缓存在内存中。
 
 `GET /health` 仅确认 HTTP 进程存活；`GET /ready` 在两秒总期限内检查数据库与 Redis，依赖不可用返回 503。就绪不包含模型、集群或外部通知能力，相关能力仍需分别验收。发布 smoke 的检查在 Python 优化模式下也生效。
+
+内部 MCP 可用确定性工具做无外部变更的实际验收：
+
+```sh
+docker compose -f deploy/release/compose.yaml exec -T aiops python - < scripts/integration/mcp_smoke.py
+```
+
+脚本使用容器内部配置的服务密钥，不将其输出或写入命令行。

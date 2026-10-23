@@ -74,3 +74,10 @@ OrbStack 已恢复原 2048 MiB 内存额度；临时 MySQL/Redis 调试端口已
 ### 本轮定时调度回归
 
 `GOTOOLCHAIN=auto go test -race ./internal/cron/scheduler` 通过。覆盖重复重载保持单条目、变更替换、查询失败保留、删除精确注销及幂等移除。底层使用真实 Asynq 内存条目，不启动 Redis 连接或实际定时执行。
+
+### 本轮隔离容器与 MCP
+
+- MySQL 8.4.11、Redis 7.4.11、Prometheus 和 AIOps/MCP/前端容器实际启动为 healthy
+- `docker compose -f deploy/release/compose.yaml exec -T aiops python - < scripts/integration/mcp_smoke.py` 通过：真实内网鉴权列工具、计算器结果 14、匿名工具访问 401
+- 尚未配置真实模型或外部通知，不将 MCP 算术调用等同于 LLM 或 Kubernetes 工具全部验收
+- 后端镜像重建遇到 Alpine 索引瞬时 I/O 失败，独立验证索引恢复可达后已重试；最终运行时结果另记
