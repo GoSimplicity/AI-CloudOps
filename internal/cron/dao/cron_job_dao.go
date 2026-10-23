@@ -37,6 +37,9 @@ import (
 )
 
 type CronJobDAO interface {
+	AcquireCronJobLease(context.Context, int, string) (bool, error)
+	RenewCronJobLease(context.Context, int, string) (bool, error)
+	CompleteCronJobLease(context.Context, int, string, *time.Time, int8, int, string, string) (bool, error)
 	CreateCronJob(ctx context.Context, job *model.CronJob) error
 	GetCronJob(ctx context.Context, id int) (*model.CronJob, error)
 	GetCronJobByName(ctx context.Context, name string) (*model.CronJob, error)

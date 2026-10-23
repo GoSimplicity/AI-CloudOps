@@ -51,6 +51,8 @@ const (
 // CronJob 定时任务模型 - 简洁设计
 type CronJob struct {
 	Model
+	LeaseOwner      string             `json:"-" gorm:"type:varchar(64);not null;default:'';comment:执行租约归属"`
+	LeaseExpiresAt  int64              `json:"-" gorm:"not null;default:0;comment:执行租约到期Unix秒"`
 	Name            string             `json:"name" gorm:"type:varchar(100);not null;uniqueIndex;comment:任务名称"`
 	Description     string             `json:"description" gorm:"type:text;comment:任务描述"`
 	JobType         CronJobType        `json:"job_type" gorm:"type:tinyint(1);not null;default:2;index:idx_job_type;comment:任务类型 1系统任务 2命令行 3HTTP 4脚本 5SSH"`
