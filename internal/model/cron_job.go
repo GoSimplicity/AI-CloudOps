@@ -55,7 +55,7 @@ type CronJob struct {
 	LeaseExpiresAt  int64              `json:"-" gorm:"not null;default:0;comment:执行租约到期Unix秒"`
 	Name            string             `json:"name" gorm:"type:varchar(100);not null;uniqueIndex;comment:任务名称"`
 	Description     string             `json:"description" gorm:"type:text;comment:任务描述"`
-	JobType         CronJobType        `json:"job_type" gorm:"type:tinyint(1);not null;index:idx_job_type;comment:任务类型 1系统任务 2命令行 3HTTP 4脚本 5SSH"`
+	JobType         CronJobType        `json:"job_type" gorm:"type:tinyint(1);not null;default:2;index:idx_job_type;comment:任务类型 1系统任务 2命令行 3HTTP 4脚本 5SSH"`
 	Status          CronJobStatus      `json:"status" gorm:"type:tinyint(1);not null;default:1;index:idx_status;comment:任务状态 1启用 2禁用 3运行中 4错误"`
 	IsBuiltIn       int8               `json:"is_built_in" gorm:"type:tinyint(1);not null;default:0;index:idx_builtin;comment:是否为内置任务 1是 2否"`
 	Schedule        string             `json:"schedule" gorm:"type:varchar(100);not null;comment:调度表达式"`
