@@ -99,7 +99,7 @@ gl_run_scan() {
     gl_extract_run "$f" "Scan new commits"
     set +e
     ( cd "$GL_WS" && env -u PR_BASE_SHA -u GITLEAKS_CONFIG -u GITLEAKS_CONFIG_TOML RUNNER_TEMP="$GL_RT" \
-        EVENT_NAME= PUSH_BEFORE= PR_BASE_SHA= HEAD_SHA= DEFAULT_BRANCH= REF_NAME= REF_TYPE= "$@" \
+        EVENT_NAME= PUSH_BEFORE= PR_BASE_SHA= PR_BASE_REF= HEAD_SHA= DEFAULT_BRANCH= REF_NAME= REF_TYPE= "$@" \
         bash --noprofile --norc -eo pipefail "$f" ) >"$GL_TMP/scan.out" 2>&1
     rc=$?
     if [ "$GL_STEP" = "tree" ]; then

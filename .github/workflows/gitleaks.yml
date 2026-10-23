@@ -46,6 +46,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PUSH_BEFORE: ${{ github.event.before }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_BASE_REF: ${{ github.base_ref }}
           HEAD_SHA: ${{ github.sha }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           REF_NAME: ${{ github.ref_name }}
@@ -63,9 +64,10 @@ jobs:
           echo "gitleaks scan range: ${range}"
           # --diff-merges=first-parent：merge 提交按相对第一父提交的差异输出，
           # 冲突解决 / evil merge 中引入的内容也会被扫描（默认 git log -p 不输出 merge 提交的差异）。
-          # 配置与指纹忽略列表取自“基准提交”（PR base / push before / merge-base），不信任本次提交中的版本：
-          # 否则 PR 可以在提交密钥的同时修改 .gitleaks.toml / .gitleaksignore 放行它。基准上没有则用默认规则 / 空列表。
-          # 因此 PR 中对这两个文件的修改要等合入后才对后续扫描生效（见 .github/scripts/gitleaks-base-config.sh）。
+          # 配置与指纹忽略列表只取自默认分支上的提交，不信任本次提交中的版本：push 默认分支 / PR 进默认分支用范围起点，
+          # push 其他分支 / tag、PR 进其他分支一律用 origin/<默认分支>（扫描起点 before 可能是攻击者上一次推送的、
+          # 已经把 .gitleaks.toml 改成全部放行的提交，review3g N2）。策略提交上没有则用默认规则 / 空列表。
+          # 因此对这两个文件的修改要等合入默认分支后才对后续扫描生效（见 .github/scripts/gitleaks-base-config.sh）。
           bash .github/scripts/gitleaks-base-config.sh "${range}" "${RUNNER_TEMP}/gitleaks-base"
           # --ignore-gitleaks-allow：源码中的 "gitleaks:allow" 行内注释不豁免任何发现。
           gitleaks git --redact --no-banner --verbose --exit-code 1 --ignore-gitleaks-allow \

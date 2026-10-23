@@ -19,6 +19,8 @@
 #     - 推的是默认分支本身   -> 全量扫描 HEAD 可达的全部历史（无更早的基线可比较）
 #     - 其他分支 / tag        -> <merge-base origin/<default> HEAD>..<HEAD>
 #     - 缺少默认分支信息、没有 origin/<default>、无共同祖先、浅克隆 -> 失败
+# 注意：本脚本只决定“扫描哪些提交”。范围起点（如 push 的 before）不是可信的策略来源——
+#   gitleaks 配置 / 忽略列表由 gitleaks-base-config.sh 另行从默认分支选取（review3g N2）。
 set -euo pipefail
 
 ZERO=0000000000000000000000000000000000000000

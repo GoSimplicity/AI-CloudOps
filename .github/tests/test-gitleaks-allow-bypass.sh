@@ -58,7 +58,7 @@ pr_push() {
     git -C "$GL_DEV" add -A; git -C "$GL_DEV" commit -qm pr
     git -C "$GL_DEV" push -q origin HEAD:feature; HEAD_SHA="$(git -C "$GL_DEV" rev-parse HEAD)"
     gl_checkout "$HEAD_SHA"
-    PR_ARGS="EVENT_NAME=pull_request PR_BASE_SHA=$BASE_SHA HEAD_SHA=$HEAD_SHA DEFAULT_BRANCH=main REF_NAME=1/merge REF_TYPE=branch"
+    PR_ARGS="EVENT_NAME=pull_request PR_BASE_SHA=$BASE_SHA PR_BASE_REF=main HEAD_SHA=$HEAD_SHA DEFAULT_BRANCH=main REF_NAME=1/merge REF_TYPE=branch"
 }
 
 # 16：新提交中带 gitleaks:allow
@@ -109,7 +109,7 @@ if gl_has .github/scripts/gitleaks-base-config.sh; then
     gl_new_origin u1; printf '%s\n' "$ALLOW_ALL" >"$GL_DEV/.gitleaks.toml"; printf 'x:y:1\n' >"$GL_DEV/.gitleaksignore"
     git -C "$GL_DEV" add -A; git -C "$GL_DEV" commit -qm base; h="$(git -C "$GL_DEV" rev-parse HEAD)"
     gl_src .github/scripts/gitleaks-base-config.sh >"$GL_TMP/bc.sh"
-    rc=0; (cd "$GL_DEV" && bash "$GL_TMP/bc.sh" "$h" "$GL_TMP/u1out") >"$GL_TMP/u1.log" 2>&1 || rc=$?
+    rc=0; (cd "$GL_DEV" && EVENT_NAME=push DEFAULT_BRANCH=main REF_NAME=main REF_TYPE=branch bash "$GL_TMP/bc.sh" "$h" "$GL_TMP/u1out") >"$GL_TMP/u1.log" 2>&1 || rc=$?
     if [ "$rc" -eq 0 ] && ! grep -q allowlists "$GL_TMP/u1out/gitleaks.toml" && grep -q 'useDefault = true' "$GL_TMP/u1out/gitleaks.toml" \
         && [ ! -s "$GL_TMP/u1out/gitleaksignore" ] && [ ! -e "$GL_DEV/.gitleaksignore" ]; then
         echo "PASS [U1 无基准（全量扫描）时用默认规则、空忽略列表，不用 HEAD 的文件，并移走工作区 .gitleaksignore]"
@@ -117,7 +117,7 @@ if gl_has .github/scripts/gitleaks-base-config.sh; then
     gl_new_origin u2; printf '[extend]\npath = "evil.toml"\n' >"$GL_DEV/.gitleaks.toml"; printf 'a\n' >"$GL_DEV/a"
     git -C "$GL_DEV" add -A; git -C "$GL_DEV" commit -qm base; b="$(git -C "$GL_DEV" rev-parse HEAD)"
     printf 'b\n' >"$GL_DEV/a"; git -C "$GL_DEV" commit -qam two; h="$(git -C "$GL_DEV" rev-parse HEAD)"
-    rc=0; (cd "$GL_DEV" && bash "$GL_TMP/bc.sh" "$b..$h" "$GL_TMP/u2out") >"$GL_TMP/u2.log" 2>&1 || rc=$?
+    rc=0; (cd "$GL_DEV" && EVENT_NAME=push DEFAULT_BRANCH=main REF_NAME=main REF_TYPE=branch bash "$GL_TMP/bc.sh" "$b..$h" "$GL_TMP/u2out") >"$GL_TMP/u2.log" 2>&1 || rc=$?
     if [ "$rc" -ne 0 ] && grep -q 'extend' "$GL_TMP/u2.log"; then echo "PASS [U2 基准配置 [extend] path 指向工作区文件时拒绝]"
     else echo "FAIL [U2 基准配置使用 [extend] path 时应失败] rc=${rc}"; GL_FAILS=$((GL_FAILS+1)); fi
 else
