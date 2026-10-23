@@ -66,6 +66,46 @@ class ReleaseTests(unittest.TestCase):
         self.assertTrue(lines[1].endswith("config --quiet"))
         self.assertTrue(lines[2].endswith("up -d --build --wait --wait-timeout 300"))
 
+    def test_smoke_rejects_unhealthy_service_in_optimized_python(self):
+        import sys
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        import threading
+
+        class Unhealthy(BaseHTTPRequestHandler):
+            def do_GET(self):
+                failed = self.path == self.server.fail_path
+                self.send_response(503 if failed else 200)
+                self.end_headers()
+                status = "unavailable" if failed else ("ok" if self.path == "/health" else "ready")
+                self.wfile.write(('{"status":"' + status + '"}').encode())
+
+            def log_message(self, *_args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Unhealthy)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            env_file = self.parent / "smoke.env"
+            env_file.write_text("BOOTSTRAP_ADMIN_PASSWORD=private-test-value\n")
+            for path, message in (("/health", "Backend health failed"), ("/ready", "Backend readiness failed")):
+                server.fail_path = path
+                for flags in ([], ["-O"]):
+                    with self.subTest(path=path, flags=flags):
+                        result = subprocess.run(
+                            [sys.executable, *flags, str(ROOT / "scripts/release-smoke.py"),
+                             "--url", f"http://127.0.0.1:{server.server_port}", "--env-file", str(env_file)],
+                            capture_output=True, text=True, timeout=10,
+                        )
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn(message, result.stderr)
+                        self.assertNotIn("PASS bootstrap", result.stdout)
+                        self.assertNotIn("private-test-value", result.stdout + result.stderr)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
     def test_release_paths_match_github_case(self):
         for name in ("scripts/release-start.sh", "scripts/release-backup.py", "deploy/release/compose.yaml"):
             content = (ROOT / name).read_text()

@@ -30,3 +30,10 @@
 - Node.js 使用 `-e` 执行脚本，替代仅语法检查的 `-c`，运行错误按真实失败返回
 - 发布后端镜像包含 Bash、Python3、Node，匹配已有脚本类型契约
 - `go test -race -tags=smoke ./internal/cron/handler` 通过：真实 Bash/Python/Node 输出、Node 运行异常、取消与已有输出边界
+
+## 2026-10-23：依赖就绪与可靠发布验收
+
+- 后端新增并发检查数据库和 Redis 的 `/ready`，共享两秒期限，失败返回通用 503；`/health` 保留独立存活检查
+- 注入现有 Redis 连接并启用请求上下文超时，更新 Wire、鉴权放行、Compose 健康探针及网关路由
+- 发布 smoke 必须同时通过健康与就绪检查；所有准入判断改为显式运行时检查，避免 Python `-O` 绕过 assert
+- 本机假故障 HTTP 服务回归覆盖健康/就绪失败及正常/优化模式，不输出测试密钥
