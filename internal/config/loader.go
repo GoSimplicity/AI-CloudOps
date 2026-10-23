@@ -32,6 +32,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/GoSimplicity/AI-CloudOps/pkg/envmode"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -59,18 +60,11 @@ func Load() (*Config, *ExternalConfig, error) {
 	configFile := pflag.String("config", "", "配置文件路径")
 	pflag.Parse()
 
-	if *configFile == "" {
-		env := os.Getenv("ENV")
-		if env == "" {
-			env = "development"
-		}
-		switch env {
-		case "production":
-			*configFile = "config/config.production.yaml"
-		default:
-			*configFile = "config/config.development.yaml"
-		}
+	file, err := resolveConfigFile(*configFile)
+	if err != nil {
+		return nil, nil, err
 	}
+	*configFile = file
 
 	viper.SetConfigFile(*configFile)
 	setDefaults()
@@ -101,6 +95,22 @@ func Load() (*Config, *ExternalConfig, error) {
 	}
 
 	return cfg, ext, nil
+}
+
+// resolveConfigFile 校验 ENV 并给出要读的配置文件：不论是否传了 --config，
+// ENV 未设置、为空（含只有空白）或无法识别都拒绝启动；未传 --config 时按规范化后的 ENV 选默认文件。
+func resolveConfigFile(flagValue string) (string, error) {
+	mode, err := envmode.Current()
+	if err != nil {
+		return "", fmt.Errorf("启动环境校验失败: %w", err)
+	}
+	if flagValue != "" {
+		return flagValue, nil
+	}
+	if mode == envmode.Production {
+		return "config/config.production.yaml", nil
+	}
+	return "config/config.development.yaml", nil
 }
 
 // LoadWebhook 加载 Webhook 子系统配置，支持优先级：环境变量 > 配置文件 > 默认值。

@@ -28,9 +28,10 @@ package config
 import (
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 	"time"
+
+	"github.com/GoSimplicity/AI-CloudOps/pkg/envmode"
 )
 
 type Config struct {
@@ -73,7 +74,8 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("aiops.base_url 必须是有效的 HTTP(S) 地址")
 		}
 	}
-	if os.Getenv("ENV") == "production" {
+	// 失败即关闭：ENV 未设置/无法识别时同样执行生产校验（启动入口 Load 已先行拒绝这两种情况）
+	if envmode.IsProduction() {
 		for name, key := range map[string]string{"JWT_KEY1": c.JWT.Key1, "JWT_KEY2": c.JWT.Key2, "TREE_PASSWORD_ENCRYPTION_KEY": c.Tree.PasswordEncryptionKey} {
 			if len(key) < 32 || strings.HasPrefix(key, "ebe3vx") {
 				return fmt.Errorf("生产环境 %s 必须配置独立的至少32字符密钥", name)
