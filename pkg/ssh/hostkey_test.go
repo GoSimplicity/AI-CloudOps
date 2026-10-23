@@ -90,3 +90,18 @@ type fakeAddr struct{ s string }
 
 func (a *fakeAddr) Network() string { return "tcp" }
 func (a *fakeAddr) String() string  { return a.s }
+
+// （来自 w1）生产别名的大小写/首尾空白变体都按生产处理（判定以 pkg/envmode 为准）
+func TestHostKeyCallbackRequiresKnownHostsInProductionVariants(t *testing.T) {
+	t.Setenv("SSH_KNOWN_HOSTS", "")
+	for _, env := range []string{"production", " Production ", "PRODUCTION"} {
+		t.Setenv("ENV", env)
+		if _, err := HostKeyCallback(); err == nil {
+			t.Fatalf("ENV=%q 未配置 SSH_KNOWN_HOSTS 时应报错", env)
+		}
+	}
+	t.Setenv("ENV", "development")
+	if _, err := HostKeyCallback(); err != nil {
+		t.Fatalf("开发环境不应报错: %v", err)
+	}
+}

@@ -37,7 +37,7 @@ import (
 	"github.com/google/wire"
 )
 
-func InitWebServer() *Cmd {
+func InitWebServer(dsn MySQLDSN) *Cmd {
 	wire.Build(
 		InitLogger,
 		InitGinServer,

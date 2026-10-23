@@ -4,18 +4,18 @@ log:
   dir: "./logs"
   level: "warn"
 jwt:
-  key1: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l"
-  key2: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0z"
+  key1: "" # 敏感信息，不写入配置文件；由环境变量 JWT_KEY1 注入（必需）
+  key2: "" # 敏感信息，不写入配置文件；由环境变量 JWT_KEY2 注入（必需）
   issuer: "K5mBPBYNQeNWEBvCTE5msog3KSGTdhmx"
-  expiration: 3600
+  expiration: 30 # 访问令牌有效期，单位：分钟（30 = 30 分钟）
 redis:
   addr: "redis:6379"
-  password: "v6SxhWHyZC7S"
+  password: "" # 敏感信息，不写入配置文件；由环境变量 REDIS_PASSWORD 注入（可选）
 mysql:
-  addr: "root:root@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local"
+  addr: "" # 敏感信息，不写入配置文件；由环境变量 MYSQL_ADDR 注入（必需）
 tree:
   check_status_cron: "@every 300s"
-  password_encryption_key: "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l"
+  password_encryption_key: "" # 敏感信息，不写入配置文件；由环境变量 TREE_PASSWORD_ENCRYPTION_KEY 注入（必需）
 k8s:
   refresh_cron: "@every 300s"
 prometheus:
@@ -33,8 +33,8 @@ notification:
     enabled: false
     smtp_host: "smtp.qq.com"
     smtp_port: 587
-    username: "xxx@qq.com"
-    password: "xxx"
+    username: "" # 敏感信息，不写入配置文件；由环境变量 NOTIFICATION_EMAIL_USERNAME 注入（启用邮件时必需）
+    password: "" # 敏感信息，不写入配置文件；由环境变量 NOTIFICATION_EMAIL_PASSWORD 注入（启用邮件时必需）
     from_name: "AI-CloudOps"
     max_retries: 3
     retry_interval: "5m"
@@ -43,11 +43,13 @@ notification:
   # 飞书配置
   feishu:
     enabled: false
-    app_id: "xxx"
-    app_secret: "xxx"
+    app_id: "" # 敏感信息，不写入配置文件；由环境变量 NOTIFICATION_FEISHU_APP_ID 注入（启用飞书时必需）
+    app_secret: "" # 敏感信息，不写入配置文件；由环境变量 NOTIFICATION_FEISHU_APP_SECRET 注入（启用飞书时必需）
     webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/"
     private_message_api: "https://open.feishu.cn/open-apis/im/v1/messages"
     tenant_access_token_api: "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
     max_retries: 3
     retry_interval: "5m"
     timeout: "10s"
+cron:
+  allow_local_exec: false # 是否允许命令行(2)/脚本(4)任务在后端主机本地执行；默认关闭，对应环境变量 CRON_ALLOW_LOCAL_EXEC

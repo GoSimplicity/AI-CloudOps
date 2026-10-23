@@ -100,6 +100,14 @@ type GetCronJobListReq struct {
 	Search  string         `json:"search" form:"search"`
 }
 
+// CronJobListResp 定时任务列表响应：在通用 {items,total} 之外附带只读的本地执行开关状态
+type CronJobListResp struct {
+	ListResp[*CronJob]
+	// AllowLocalExec 只读，取自 cron.allow_local_exec（环境变量 CRON_ALLOW_LOCAL_EXEC）；
+	// 为 false 时命令行(2)、脚本(4)任务不能创建/编辑/触发，到点也不执行
+	AllowLocalExec bool `json:"allow_local_exec"`
+}
+
 type CreateCronJobReq struct {
 	Name           string       `json:"name" binding:"required,min=1,max=100"`
 	Description    string       `json:"description" binding:"max=500"`

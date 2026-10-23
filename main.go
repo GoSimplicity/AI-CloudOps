@@ -27,6 +27,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -45,9 +46,8 @@ func main() {
 }
 
 func run() error {
-	if err := godotenv.Load(); err != nil {
-		// 允许不提供 .env，但不允许静默忽略
-		_, _ = fmt.Fprintf(os.Stderr, "加载.env失败，将继续使用环境变量/配置文件: %v\n", err)
+	if err := loadDotEnv(dotEnvFile); err != nil {
+		return err
 	}
 
 	cfg, _, err := config.Load()
@@ -68,4 +68,23 @@ func run() error {
 	defer stop()
 
 	return application.Run(ctx)
+}
+
+// dotEnvFile 启动时读取的本地环境变量文件
+const dotEnvFile = ".env"
+
+// errDotEnvInvalid .env 存在但无法读取或解析。固定文案：godotenv 的原始错误可能包含
+// 出错行的原文（即密钥明文），因此不得输出或包装原始错误
+var errDotEnvInvalid = errors.New("加载 .env 失败：文件无法读取或格式错误（为避免泄露密钥，不显示具体内容），请检查该文件")
+
+// loadDotEnv 加载 .env：文件不存在时继续使用环境变量/配置文件；存在但出错时启动失败
+func loadDotEnv(path string) error {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		_, _ = fmt.Fprintln(os.Stderr, "未找到 .env，将使用环境变量/配置文件")
+		return nil
+	}
+	if err := godotenv.Load(path); err != nil {
+		return errDotEnvInvalid
+	}
+	return nil
 }

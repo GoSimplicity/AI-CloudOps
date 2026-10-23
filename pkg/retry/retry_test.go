@@ -130,8 +130,12 @@ func TestRunRetryWithConcurrency(t *testing.T) {
 
 		taskFunc := func(ctx context.Context) error {
 			c := atomic.AddInt32(&concurrent, 1)
-			if c > maxConcurrent {
-				atomic.StoreInt32(&maxConcurrent, c)
+			// 原子地更新最大并发数，避免测试自身的数据竞争
+			for {
+				m := atomic.LoadInt32(&maxConcurrent)
+				if c <= m || atomic.CompareAndSwapInt32(&maxConcurrent, m, c) {
+					break
+				}
 			}
 			time.Sleep(50 * time.Millisecond)
 			atomic.AddInt32(&concurrent, -1)
@@ -150,8 +154,8 @@ func TestRunRetryWithConcurrency(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
-		if maxConcurrent > 2 {
-			t.Fatalf("expected max concurrent <= 2, got %d", maxConcurrent)
+		if got := atomic.LoadInt32(&maxConcurrent); got > 2 {
+			t.Fatalf("expected max concurrent <= 2, got %d", got)
 		}
 	})
 }

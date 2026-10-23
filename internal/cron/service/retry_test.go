@@ -45,7 +45,7 @@ func TestCreateRetryDTOOmittedAndExplicitZero(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			context, _ := gin.CreateTestContext(httptest.NewRecorder())
-			context.Request = httptest.NewRequest("POST", "/", strings.NewReader(`{"name":"job","job_type":2,"schedule":"@every 1h","command":"true"`+tt.extra+`}`))
+			context.Request = httptest.NewRequest("POST", "/", strings.NewReader(`{"name":"job","job_type":3,"schedule":"@every 1h","http_url":"http://fake.invalid"`+tt.extra+`}`))
 			context.Request.Header.Set("Content-Type", "application/json")
 			var request model.CreateCronJobReq
 			err := context.ShouldBindJSON(&request)
