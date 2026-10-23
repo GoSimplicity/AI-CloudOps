@@ -214,7 +214,7 @@ All settings can be provided as environment variables (see [`env.example`](env.e
 | `MOCK_ENABLED` | Seed mock data for development. Must be `false` in production. |
 | `LLM_API_KEY`, `LLM_BASE_URL`, `ALIYUN_ACCESS_KEY_ID`, `ALIYUN_ACCESS_KEY_SECRET`, `TAVILY_API_KEY` | External service credentials (environment variables only). |
 | `NOTIFICATION_EMAIL_*`, `NOTIFICATION_FEISHU_*` | Email (SMTP) and Feishu notification channels. |
-| `WEBHOOK_*` | Settings for the alert webhook service in `cmd/webhook`. `WEBHOOK_PORT` defaults to `8889` (previously `8888`), matching `config/webhook.yaml`, and must be a number between 1 and 65535. Environment variables override `config/webhook.yaml`, which overrides defaults; `WEBHOOK_MYSQL_ADDR` (full DSN) is required. See [docs/release/w1-webhook-env.md](docs/release/w1-webhook-env.md). |
+| `WEBHOOK_*` | Settings for the alert webhook service in `cmd/webhook`. `WEBHOOK_PORT` defaults to `8889` (previously `8888`), matching `config/webhook.yaml`, and must be a number between 1 and 65535. Integer fields accept decimal integers only (no `10.5`, `010`, `0x10`, `+3`) and are bounded: `WEBHOOK_FIXED_WORKERS` 1–1024, `WEBHOOK_DEFAULT_UPGRADE_MINUTES` 1–10080, `WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS` 1–86400, `WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS` 0–600 (0 = no timeout). Scalar settings written as a map/list, or `im_feishu` written as a scalar/list, fail startup; unknown keys under `webhook:` are ignored with a warning. Environment variables override `config/webhook.yaml`, which overrides defaults; `WEBHOOK_MYSQL_ADDR` (full DSN) is required. See [docs/release/w1-webhook-env.md](docs/release/w1-webhook-env.md). |
 
 ### Production security requirements
 

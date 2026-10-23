@@ -72,7 +72,10 @@ func TestCollectWebhookLeafValuesSkipsParentKeys(t *testing.T) {
 	}
 	bindStructEnvVars(v, reflect.TypeOf(WebhookConfig{}), "webhook")
 
-	m := collectWebhookLeafValues(v)
+	m, err := collectWebhookLeafValues(v, webhookFileScan{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := m.vals["webhook.im_feishu"]; ok {
 		t.Fatal("父键 webhook.im_feishu 不应进入合并值")
 	}
@@ -85,8 +88,8 @@ func TestCollectWebhookLeafValuesSkipsParentKeys(t *testing.T) {
 		t.Fatalf("应有 12 个叶子键, got keys=%d vals=%d", len(m.keys), len(m.vals))
 	}
 	for _, key := range m.keys {
-		if isMapValue(m.vals[key]) {
-			t.Fatalf("%s 的值不应是 map", key)
+		if _, composite := webhookCompositeKind(m.vals[key]); composite {
+			t.Fatalf("%s 的值不应是 map 或列表", key)
 		}
 	}
 }

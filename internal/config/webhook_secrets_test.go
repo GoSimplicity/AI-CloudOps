@@ -343,8 +343,8 @@ func TestIsValidPortLeadingZeros(t *testing.T) {
 	}
 }
 
-// 整数字段严格解析：字符串形式的 10.0、带空白、小数一律启动失败且不发布到全局；
-// 未加引号的 YAML 浮点数（10.0）由 YAML 解析为数值，仍按截断接受（记录当前行为）
+// 整数字段严格解析：只接受十进制整数。字符串形式的 10.0、带空白、小数一律启动失败且不发布到全局；
+// 未加引号的 YAML 浮点数（10.0、10.5）按节点原始文本校验，同样启动失败（不再截断）
 func TestLoadWebhookIntegerFieldsStrict(t *testing.T) {
 	t.Setenv(WebhookMySQLAddrEnv, fakeWebhookDSN)
 	t.Setenv("WEBHOOK_PORT", "")
@@ -362,22 +362,16 @@ func TestLoadWebhookIntegerFieldsStrict(t *testing.T) {
 		})
 	}
 	t.Setenv("WEBHOOK_FIXED_WORKERS", "")
-	for _, bad := range []string{`"10.0"`, `" 10"`, `"10.5"`} {
-		t.Run("yaml-quoted/"+bad, func(t *testing.T) {
+	for _, bad := range []string{`"10.0"`, `" 10"`, `"10.5"`, `10.0`, `10.5`} {
+		t.Run("yaml/"+bad, func(t *testing.T) {
 			viper.Reset()
 			t.Cleanup(viper.Reset)
-			if _, _, err := loadWebhookFromFile(writeWebhookYAML(t, "webhook:\n  port: \"8889\"\n  fixed_workers: "+bad+"\n")); err == nil {
+			if _, _, err := loadWebhookFromFile(writeWebhookYAML(t, "webhook:\n  port: \"8889\"\n  fixed_workers: "+bad+"\n")); err == nil || IsNonFatal(err) {
 				t.Fatalf("fixed_workers: %s 应导致启动失败", bad)
 			}
+			if len(viper.AllKeys()) != 0 {
+				t.Fatal("失败时不应发布任何键到全局 viper")
+			}
 		})
-	}
-	viper.Reset()
-	t.Cleanup(viper.Reset)
-	cfg, _, err := loadWebhookFromFile(writeWebhookYAML(t, "webhook:\n  port: \"8889\"\n  fixed_workers: 10.0\n"))
-	if err != nil {
-		t.Fatalf("未加引号的 YAML 数值 10.0 当前仍被接受: %v", err)
-	}
-	if cfg.FixedWorkers != 10 || viper.GetInt("webhook.fixed_workers") != 10 {
-		t.Fatalf("YAML 10.0 应截断为 10 且 cfg 与全局一致, got cfg=%d 全局=%d", cfg.FixedWorkers, viper.GetInt("webhook.fixed_workers"))
 	}
 }
