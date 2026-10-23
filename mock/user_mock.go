@@ -31,14 +31,17 @@ import (
 	"log"
 	"os"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/envmode"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
 const (
-	AdminUsername    = "admin"
-	AdminAccountType = 2
+	AdminUsername = "admin"
+	// AdminAccountType 与 bootstrapAdmin 创建的管理员保持一致：管理员是人工登录账号，不是服务账号。
+	AdminAccountType = constants.AccountTypeUser
 
 	// MockAdminPasswordEnv 是 mock 管理员口令的环境变量名。未设置时不创建 mock 管理员。
 	MockAdminPasswordEnv = "MOCK_ADMIN_PASSWORD"
@@ -57,14 +60,27 @@ type UserMock struct {
 func NewUserMock(db *gorm.DB) *UserMock {
 	return &UserMock{
 		db:     db,
-		getenv: os.Getenv,
+		getenv: takeSecretEnv,
 	}
+}
+
+// takeSecretEnv 读取口令类环境变量后立即从进程环境中删除，避免被 cron 等子进程继承。
+func takeSecretEnv(key string) string {
+	value := os.Getenv(key)
+	if err := os.Unsetenv(key); err != nil {
+		log.Printf("[SECURITY] 清除环境变量 %s 失败，子进程可能继承该变量: %v\n", key, err)
+	}
+	return value
 }
 
 // CreateUserAdmin 在空用户表上创建 mock 管理员。
 // 口令只从环境变量 MOCK_ADMIN_PASSWORD 读取，代码中不再内置任何口令；
-// 未设置时跳过创建（不生成、不落盘、不打印口令），设置但不足 12 字符时返回错误。
+// 口令读取后立即从进程环境中删除；未设置时跳过创建（不生成、不落盘、不打印口令）。
+// 设置但不足 12 字符时：生产环境返回错误；非生产环境打印 [SECURITY] 告警并跳过创建。
 func (u *UserMock) CreateUserAdmin() error {
+	// 先读取（并清除）口令，保证即使用户表非空也不会把口令留在进程环境中。
+	password := u.getenv(MockAdminPasswordEnv)
+
 	// 检查是否已经初始化过用户
 	var count int64
 	if err := u.db.Model(&model.User{}).Count(&count).Error; err != nil {
@@ -75,13 +91,16 @@ func (u *UserMock) CreateUserAdmin() error {
 		return nil
 	}
 
-	password := u.getenv(MockAdminPasswordEnv)
 	if password == "" {
 		log.Printf("[用户模块Mock] 未设置 %s，跳过创建 mock 管理员；如需本地管理员，请设置该变量（至少%d字符）或使用 BOOTSTRAP_ADMIN_PASSWORD\n", MockAdminPasswordEnv, MinMockAdminPasswordLen)
 		return nil
 	}
 	if len(password) < MinMockAdminPasswordLen {
-		return ErrMockAdminPasswordTooShort
+		if envmode.IsProduction() {
+			return ErrMockAdminPasswordTooShort
+		}
+		log.Printf("[SECURITY] %s 少于%d字符，非生产环境跳过创建 mock 管理员；请改为至少%d字符的强口令后重启\n", MockAdminPasswordEnv, MinMockAdminPasswordLen, MinMockAdminPasswordLen)
+		return nil
 	}
 
 	log.Println("[用户模块Mock开始]")

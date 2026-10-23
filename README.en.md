@@ -193,12 +193,12 @@ All settings can be provided as environment variables (see [`env.example`](env.e
 | `MYSQL_ADDR`, `REDIS_ADDR`, `REDIS_PASSWORD` | Database and Redis connection. |
 | `JWT_KEY1`, `JWT_KEY2`, `JWT_ISSUER`, `JWT_EXPIRATION` | JWT signing keys and settings. `JWT_EXPIRATION` is in minutes. |
 | `TREE_PASSWORD_ENCRYPTION_KEY` | Key used to encrypt stored host passwords. Keep it safe: changing it breaks decryption of existing credentials. |
-| `BOOTSTRAP_ADMIN_PASSWORD` | Creates the `admin` account on the first start with an empty database (min. 12 characters). Remove it after the first successful start. Existing users are never reset. |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Creates the `admin` account on the first start with an empty database (min. 12 characters). Remove it after the first successful start. Existing users are never reset. Too short: startup fails in production; outside production a `[SECURITY]` warning is logged and creation is skipped. The variable is removed from the process environment right after it is read. |
 | `SSH_KNOWN_HOSTS` | Path to an operator-verified OpenSSH `known_hosts` file used for web terminal and SSH connections. |
 | `AIOPS_BASE_URL` | URL of the AIOps service, e.g. `http://aiops:8080`. Enables the `/api/v1/*` gateway. |
 | `AIOPS_API_KEY` | Shared service key sent to the AIOps service as `X-API-Key`. Must match the Python service. Never put it in frontend config. |
 | `MOCK_ENABLED` | Seed mock data for development. Defaults to `true` in development/test and `false` in production; enabling it in production is rejected at startup. |
-| `MOCK_ADMIN_PASSWORD` | Password for the mock `admin` account (min. 12 characters), only used when mock is enabled and the user table is empty. If unset, no mock admin is created. There is no built-in password. |
+| `MOCK_ADMIN_PASSWORD` | Password for the mock `admin` account (min. 12 characters), only used when mock is enabled and the user table is empty. If unset, no mock admin is created. There is no built-in password. Too short: error in production, warning and skip elsewhere. Removed from the process environment right after it is read. |
 | `LLM_API_KEY`, `LLM_BASE_URL`, `ALIYUN_ACCESS_KEY_ID`, `ALIYUN_ACCESS_KEY_SECRET`, `TAVILY_API_KEY` | External service credentials (environment variables only). |
 | `NOTIFICATION_EMAIL_*`, `NOTIFICATION_FEISHU_*` | Email (SMTP) and Feishu notification channels. |
 | `WEBHOOK_*` | Settings for the alert webhook service in `cmd/webhook`. |

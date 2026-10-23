@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"
@@ -75,6 +76,7 @@ func TestCreateUserAdminSkipsWithoutEnvPassword(t *testing.T) {
 }
 
 func TestCreateUserAdminRejectsShortPassword(t *testing.T) {
+	t.Setenv("ENV", "production")
 	db := newUserMockDB(t)
 	short := strings.Repeat("s", MinMockAdminPasswordLen-1)
 	logs := captureLog(t)
@@ -127,5 +129,83 @@ func TestNewUserMockReadsProcessEnv(t *testing.T) {
 	t.Setenv(MockAdminPasswordEnv, fixturePassword)
 	if got := NewUserMock(nil).getenv(MockAdminPasswordEnv); got != fixturePassword {
 		t.Fatal("默认应从进程环境变量读取口令")
+	}
+	if os.Getenv(MockAdminPasswordEnv) != "" {
+		t.Fatal("读取后应立即清除环境变量")
+	}
+	if _, ok := os.LookupEnv(MockAdminPasswordEnv); ok {
+		t.Fatal("读取后应从进程环境中删除")
+	}
+}
+
+func TestCreateUserAdminWarnsOnShortPasswordOutsideProduction(t *testing.T) {
+	for _, env := range []string{"development", "Dev", "test"} {
+		t.Run(env, func(t *testing.T) {
+			t.Setenv("ENV", env)
+			db := newUserMockDB(t)
+			short := strings.Repeat("s", MinMockAdminPasswordLen-1)
+			logs := captureLog(t)
+			if err := newMockWithEnv(db, short).CreateUserAdmin(); err != nil {
+				t.Fatalf("非生产环境短口令只告警: %v", err)
+			}
+			if n := countUsers(t, db); n != 0 {
+				t.Fatalf("短口令不应创建管理员, users=%d", n)
+			}
+			out := logs.String()
+			if !strings.Contains(out, "[SECURITY]") || !strings.Contains(out, MockAdminPasswordEnv) {
+				t.Fatal("应打印显眼的 [SECURITY] 告警并指明变量")
+			}
+			if strings.Contains(out, short) {
+				t.Fatal("日志不得包含口令")
+			}
+		})
+	}
+}
+
+func TestCreateUserAdminCountErrorPropagates(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, _ := db.DB()
+	t.Cleanup(func() { _ = pool.Close() })
+	logs := captureLog(t)
+	// 未建表：用户计数查询必然失败，错误必须透传而不是被当作空表继续创建
+	err = newMockWithEnv(db, fixturePassword).CreateUserAdmin()
+	if err == nil || !strings.Contains(err.Error(), "查询用户数量失败") {
+		t.Fatalf("err=%v", err)
+	}
+	if strings.Contains(err.Error(), fixturePassword) || strings.Contains(logs.String(), fixturePassword) {
+		t.Fatal("错误与日志不得包含口令")
+	}
+}
+
+func TestCreateUserAdminClearsProcessEnvEvenWhenUsersExist(t *testing.T) {
+	t.Setenv("ENV", "development")
+	t.Setenv(MockAdminPasswordEnv, fixturePassword)
+	db := newUserMockDB(t)
+	if err := db.Create(&model.User{Username: "someone", Password: "hash", RealName: "x", Enable: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := NewUserMock(db).CreateUserAdmin(); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := os.LookupEnv(MockAdminPasswordEnv); ok {
+		t.Fatal("即使跳过创建也应清除口令环境变量")
+	}
+}
+
+func TestCreateUserAdminUsesUserAccountType(t *testing.T) {
+	t.Setenv("ENV", "development")
+	db := newUserMockDB(t)
+	if err := newMockWithEnv(db, fixturePassword).CreateUserAdmin(); err != nil {
+		t.Fatal(err)
+	}
+	var admin model.User
+	if err := db.Where("username = ?", AdminUsername).First(&admin).Error; err != nil {
+		t.Fatal(err)
+	}
+	if admin.AccountType != constants.AccountTypeUser || AdminAccountType != constants.AccountTypeUser {
+		t.Fatalf("mock 管理员应与 bootstrap 一致使用 AccountTypeUser, got=%d", admin.AccountType)
 	}
 }

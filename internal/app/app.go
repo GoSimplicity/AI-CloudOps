@@ -159,6 +159,8 @@ func (a *App) Run(ctx context.Context) error {
 			a.logger.Warn("Mock数据初始化失败", zap.Error(err))
 		}
 	}
+	// 管理员口令只在启动阶段使用：无论是否读取过，都在启动 cron/asynq 等可能派生子进程的组件前清除。
+	a.scrubAdminPasswordEnv()
 
 	if err := a.initK8sClients(ctx); err != nil {
 		a.logger.Warn("K8s客户端初始化失败", zap.Error(err))
