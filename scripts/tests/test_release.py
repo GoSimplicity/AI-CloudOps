@@ -250,13 +250,26 @@ def _compose_tools():
         return False
 
 
-@unittest.skipUnless(_compose_tools(), "需要 docker compose 和 jq（只做 compose config，不连 Docker 守护进程、不启动服务）")
+_COMPOSE_OK = _compose_tools()
+_COMPOSE_MISSING = "需要 docker compose 和 jq（只做 compose config，不连 Docker 守护进程、不启动服务）"
+
+
+def _compose_required():
+    """CI 里（CI=true/1，GitHub Actions、GitLab CI 都会设置）或显式 RELEASE_TESTS_REQUIRE_COMPOSE=1 时，缺 compose 算失败。"""
+    return (os.environ.get("CI", "").strip().lower() in ("true", "1")
+            or os.environ.get("RELEASE_TESTS_REQUIRE_COMPOSE", "").strip() == "1")
+
+
 class ReleaseComposeWebhookAddrTests(unittest.TestCase):
     """backend 的 PROMETHEUS_ALERT_WEBHOOK_ADDR 必须指向 webhook 服务、端口与 webhook 实际监听端口一致"""
 
     COMPOSE = ROOT / "deploy/release/compose.yaml"
 
     def setUp(self):
+        if not _COMPOSE_OK:
+            if _compose_required():
+                self.fail(_COMPOSE_MISSING + "；CI=true 或 RELEASE_TESTS_REQUIRE_COMPOSE=1 时不允许跳过")
+            self.skipTest(_COMPOSE_MISSING + "（本地跳过；设 RELEASE_TESTS_REQUIRE_COMPOSE=1 可强制执行）")
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         # 合成 .env：compose 中所有 ${X:?…} 必填变量都给运行时拼出的占位值，不读仓库或主机上的真实 .env
@@ -469,7 +482,9 @@ class ComposeProbeEnvTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {**self.environ, **(extra or {})}, clear=True):
             self.assertTrue(_compose_tools(), "探测应找到 compose 插件")
             case = ReleaseComposeWebhookAddrTests("test_compose_config_quiet")
-            case.setUp()  # 直接调用，绕过类级 skip，保证在没有真实 Docker 的机器上也会执行
+            # 直接调用 setUp；_COMPOSE_OK 换成本次探测结果，保证在没有真实 Docker 的机器上也会执行
+            with mock.patch.dict(globals(), {"_COMPOSE_OK": True}):
+                case.setUp()
             try:
                 case.test_compose_config_quiet()
             finally:
@@ -499,6 +514,36 @@ class ComposeProbeEnvTests(unittest.TestCase):
         with mock.patch.dict(os.environ, self.environ, clear=True), \
                 mock.patch.object(subprocess, "run", side_effect=timeout):
             self.assertFalse(_compose_tools())
+
+
+class ComposeRequiredGateTests(unittest.TestCase):
+    """缺 compose 时：CI=true / RELEASE_TESTS_REQUIRE_COMPOSE=1 判失败，本地 skip。不需要真实 Docker。"""
+
+    def _run_gated(self, environ, ok=False):
+        from unittest import mock
+        result = unittest.TestResult()
+        with mock.patch.dict(os.environ, {"PATH": os.environ.get("PATH", ""), **environ}, clear=True), \
+                mock.patch.dict(globals(), {"_COMPOSE_OK": ok}):
+            unittest.defaultTestLoader.loadTestsFromTestCase(ReleaseComposeWebhookAddrTests).run(result)
+        return result
+
+    def test_missing_compose_fails_when_required(self):
+        for environ in ({"CI": "true"}, {"CI": "TRUE"}, {"CI": "1"}, {"RELEASE_TESTS_REQUIRE_COMPOSE": "1"},
+                        {"CI": "false", "RELEASE_TESTS_REQUIRE_COMPOSE": "1"}):
+            with self.subTest(environ=environ):
+                r = self._run_gated(environ)
+                self.assertEqual((len(r.skipped), len(r.errors)), (0, 0))
+                self.assertEqual(len(r.failures), r.testsRun)
+                self.assertGreater(r.testsRun, 0)
+                self.assertIn("不允许跳过", r.failures[0][1])
+
+    def test_missing_compose_skips_locally(self):
+        for environ in ({}, {"CI": "false"}, {"CI": ""}, {"RELEASE_TESTS_REQUIRE_COMPOSE": "0"}):
+            with self.subTest(environ=environ):
+                r = self._run_gated(environ)
+                self.assertEqual((len(r.failures), len(r.errors)), (0, 0))
+                self.assertEqual(len(r.skipped), r.testsRun)
+                self.assertGreater(r.testsRun, 0)
 
 
 if __name__ == "__main__":

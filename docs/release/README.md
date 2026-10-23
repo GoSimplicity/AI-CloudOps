@@ -67,7 +67,7 @@ AIOps 飞书自定义机器人可在服务端私有 `.env` 设置 `FEISHU_WEBHOO
 
 ## 发布门槛
 
-发布工具回归使用 `python3 -m unittest discover -s scripts/tests -v`，无需运行容器，覆盖仓库路径、启动预检与私有密钥的防覆盖行为。CI 与标签发布均执行该检查。
+发布工具回归使用 `python3 -m unittest discover -s scripts/tests -v`，无需运行容器，覆盖仓库路径、启动预检与私有密钥的防覆盖行为。CI 与标签发布均执行该检查。其中发布 compose 用例需要 `docker compose` 与 `jq`（只做 `compose config`，不连守护进程）：本地缺少时跳过；`CI=true`（或 `1`）或 `RELEASE_TESTS_REQUIRE_COMPOSE=1` 时缺少即判失败，不允许跳过。
 
 每次交付保存命令、退出码和日期，区分离线测试、隔离环境集成、真实外部依赖验收：
 
