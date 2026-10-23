@@ -91,7 +91,14 @@ type Config struct {
 	ExpirationMinutes int64
 }
 
-func NewJWTHandler(c redis.Cmdable, cfg Config) Handler {
+// ErrEmptyIssuer jwt.issuer 为空时拒绝创建 Handler：签发和校验都依赖 issuer，空值会让不同部署的令牌互通
+var ErrEmptyIssuer = errors.New("jwt.issuer 不能为空")
+
+// NewJWTHandler 创建 JWT Handler；issuer 为空（含仅空白）时返回 ErrEmptyIssuer
+func NewJWTHandler(c redis.Cmdable, cfg Config) (Handler, error) {
+	if strings.TrimSpace(cfg.Issuer) == "" {
+		return nil, ErrEmptyIssuer
+	}
 	expirationMinutes := cfg.ExpirationMinutes
 	if expirationMinutes <= 0 {
 		expirationMinutes = defaultJWTExpirationMinutes
@@ -105,7 +112,7 @@ func NewJWTHandler(c redis.Cmdable, cfg Config) Handler {
 		key1:          []byte(cfg.Key1),
 		key2:          []byte(cfg.Key2),
 		issuer:        cfg.Issuer,
-	}
+	}, nil
 }
 
 func (h *handler) ParseUserClaims(tokenStr string) (*UserClaims, error) {

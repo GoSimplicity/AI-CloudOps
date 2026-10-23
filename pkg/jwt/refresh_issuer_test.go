@@ -10,8 +10,8 @@ import (
 
 func TestRefreshTokenCarriesAndChecksIssuer(t *testing.T) {
 	key1, key2 := strings.Repeat("a", 32), strings.Repeat("b", 32)
-	current := NewJWTHandler(nil, Config{Key1: key1, Key2: key2, Issuer: "cloudops-new"})
-	old := NewJWTHandler(nil, Config{Key1: key1, Key2: key2, Issuer: "cloudops-old"})
+	current := mustNewJWTHandler(t, Config{Key1: key1, Key2: key2, Issuer: "cloudops-new"})
+	old := mustNewJWTHandler(t, Config{Key1: key1, Key2: key2, Issuer: "cloudops-old"})
 
 	t.Run("same-issuer-accepted", func(t *testing.T) {
 		token, err := current.setRefreshToken(nil, 7, "admin", "ssid", 1)

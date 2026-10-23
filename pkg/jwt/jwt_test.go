@@ -10,7 +10,7 @@ import (
 
 func TestRejectInvalidAccessClaims(t *testing.T) {
 	key := strings.Repeat("a", 32)
-	h := NewJWTHandler(nil, Config{Key1: key, Key2: strings.Repeat("b", 32), Issuer: "cloudops"})
+	h := mustNewJWTHandler(t, Config{Key1: key, Key2: strings.Repeat("b", 32), Issuer: "cloudops"})
 	for _, tt := range []struct {
 		name, issuer string
 		method       jwtlib.SigningMethod

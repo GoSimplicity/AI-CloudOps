@@ -84,7 +84,10 @@ func (s *issuerCheckingRecorder) SetJWTToken(*gin.Context, int, string, string, 
 func TestRefreshRejectsTokenFromOtherIssuer(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	key1, key2 := strings.Repeat("a", 32), strings.Repeat("b", 32)
-	oldIssuer := ijwt.NewJWTHandler(nil, ijwt.Config{Key1: key1, Key2: key2, Issuer: "cloudops-old"})
+	oldIssuer, err := ijwt.NewJWTHandler(nil, ijwt.Config{Key1: key1, Key2: key2, Issuer: "cloudops-old"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest("POST", "/login", nil)
 	_, refreshToken, err := oldIssuer.SetLoginToken(ctx, 7, "admin", 1)
@@ -97,7 +100,11 @@ func TestRefreshRejectsTokenFromOtherIssuer(t *testing.T) {
 		wantIssued bool
 	}{{"cloudops-new", false}, {"cloudops-old", true}} {
 		t.Run(tt.issuer, func(t *testing.T) {
-			tokens := &issuerCheckingRecorder{Handler: ijwt.NewJWTHandler(nil, ijwt.Config{Key1: key1, Key2: key2, Issuer: tt.issuer})}
+			issuerHandler, err := ijwt.NewJWTHandler(nil, ijwt.Config{Key1: key1, Key2: key2, Issuer: tt.issuer})
+			if err != nil {
+				t.Fatal(err)
+			}
+			tokens := &issuerCheckingRecorder{Handler: issuerHandler}
 			handler := NewUserHandler(refreshUserReader{user: &model.User{Username: "admin", Enable: 1}}, tokens)
 			engine := gin.New()
 			engine.POST("/refresh", handler.RefreshToken)

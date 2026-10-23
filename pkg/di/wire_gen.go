@@ -68,7 +68,10 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	}
 	cmdable := ProvideRedisCmdable(redisClient)
 	jwtConfig := InitJWTConfig(cfg)
-	jwtHandler := jwt.NewJWTHandler(cmdable, jwtConfig)
+	jwtHandler, err := jwt.NewJWTHandler(cmdable, jwtConfig)
+	if err != nil {
+		return nil, err
+	}
 	roleDAO := dao.NewRoleDAO(db)
 	roleService := service.NewRoleService(roleDAO, logger)
 	auditDAO := dao.NewAuditDAO(db)
