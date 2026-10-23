@@ -1,0 +1,17 @@
+# gitleaks 配置（SEC-01A）：在官方默认规则基础上扩展。
+# 规则：只对“确定的误报”（公开样例值/测试夹具/占位符）做窄范围 allowlist，每条都必须写明原因；
+#       绝不对真实密钥做 allowlist —— 真实密钥必须移除并轮换（见 SEC-01B runbook）。
+title = "AI-CloudOps backend gitleaks config"
+
+[extend]
+useDefault = true
+
+# 误报：RFC 6455 第 1.3 节公开的 WebSocket 握手样例 nonce（"the sample nonce" 的 base64），
+# 仅在 WebSocket 中间件单元测试里作为 Sec-WebSocket-Key 请求头使用，不是凭据。
+[[allowlists]]
+description = "RFC6455 sample Sec-WebSocket-Key in middleware tests"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^internal/middleware/login_test\.go$''']
+regexTarget = "match"
+regexes = ['''Sec-WebSocket-Key",\s*"dGhlIHNhbXBsZSBub25jZQ==''']

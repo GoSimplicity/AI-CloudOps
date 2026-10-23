@@ -40,6 +40,36 @@ if [ -n "$SKIP_GENERATE" ] || [ -n "$SKIP_VET" ] || [ -n "$SKIP_BUILD" ]; then
     [ "$SKIP_BUILD" = "1" ] && echo "  - SKIP_BUILD=1 (跳过编译检查)"
 fi
 
+# ---------------------------------------------------------------------------
+# gitleaks: block commits that stage secrets (SEC-01A)
+# ---------------------------------------------------------------------------
+run_gitleaks_staged() {
+    if ! command -v gitleaks >/dev/null 2>&1; then
+        echo "[PRE-COMMIT ERROR] 未找到 gitleaks，已阻止提交。" >&2
+        echo "  安装: https://github.com/gitleaks/gitleaks/releases (校验 sha256 后放入 PATH)" >&2
+        echo "  然后执行: scripts/setup-git-hooks.sh" >&2
+        exit 1
+    fi
+    local repo_root config_args=()
+    repo_root="$(git rev-parse --show-toplevel)"
+    [ -f "$repo_root/.gitleaks.toml" ] && config_args=(--config "$repo_root/.gitleaks.toml")
+    # gitleaks >= 8.19 uses `gitleaks git --staged`; older versions use `gitleaks protect --staged`.
+    if gitleaks git --help 2>/dev/null | grep -q -- '--staged'; then
+        gitleaks git --pre-commit --staged --redact --no-banner --verbose "${config_args[@]}" "$repo_root"
+    else
+        gitleaks protect --staged --redact --no-banner --verbose "${config_args[@]}" --source "$repo_root"
+    fi
+    local rc=$?
+    if [ $rc -ne 0 ]; then
+        echo "" >&2
+        echo "[PRE-COMMIT ERROR] gitleaks 在暂存内容中发现疑似密钥（以上输出已脱敏），提交已被阻止。" >&2
+        echo "  请移除密钥并改为环境变量/密钥管理；若确属误报，请在 .gitleaks.toml 中添加带注释的窄范围 allowlist。" >&2
+        exit 1
+    fi
+    echo "[PRE-COMMIT] gitleaks: 暂存内容未发现密钥"
+}
+run_gitleaks_staged
+
 # 检查是否有Go文件变更
 if git diff --cached --quiet -- '*.go'; then
     warning_msg "未检测到 Go 文件变更，跳过Go相关检查"
