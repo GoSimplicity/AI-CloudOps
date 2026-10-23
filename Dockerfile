@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM golang:1.26.10-alpine AS builder
-ENV GOPROXY=https://goproxy.cn,direct
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
 ENV TZ=Asia/Shanghai
 ARG TARGETOS
 ARG TARGETARCH

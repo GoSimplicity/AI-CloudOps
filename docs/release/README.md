@@ -96,3 +96,5 @@ docker compose -f deploy/release/compose.yaml exec -T aiops python - < scripts/i
 ```
 
 脚本使用容器内部配置的服务密钥，不将其输出或写入命令行。
+
+Go 构建默认使用官方 `https://proxy.golang.org,direct`，避免 GitHub Runner 被固定到区域镜像源。需要时可在私有 `.env` 中设置 `GO_MODULE_PROXY=https://goproxy.cn,direct`，保持 TLS 与 `go.sum` 校验。

@@ -58,6 +58,8 @@ services:
     image: cloudops-backend:${RELEASE_VERSION:-local}
     build:
       context: ../..
+      args:
+        GOPROXY: ${GO_MODULE_PROXY:-https://proxy.golang.org,direct}
     environment:
       ENV: production
       SERVER_PORT: "8889"
