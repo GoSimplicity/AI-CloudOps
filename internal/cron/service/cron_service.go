@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/scheduler"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/task"
@@ -63,6 +64,8 @@ type cronService struct {
 	userDAO       userDao.UserDAO
 	client        taskEnqueuer
 	cronScheduler *scheduler.CronScheduler
+	// localExecAllowed 读取 cron.allow_local_exec；为 nil 时读取全局配置（测试可替换）
+	localExecAllowed func() bool
 }
 
 func NewCronService(
@@ -81,8 +84,29 @@ func NewCronService(
 	}
 }
 
+// allowLocalExec 当前是否允许命令行/脚本任务
+func (s *cronService) allowLocalExec() bool {
+	if s.localExecAllowed != nil {
+		return s.localExecAllowed()
+	}
+	return config.CronLocalExecAllowed()
+}
+
+// checkLocalExecAllowed 开关关闭时拒绝命令行/脚本任务类型
+func (s *cronService) checkLocalExecAllowed(jobType model.CronJobType) error {
+	if task.IsLocalExecJobType(jobType) && !s.allowLocalExec() {
+		return task.ErrLocalExecDisabled
+	}
+	return nil
+}
+
 func (s *cronService) CreateCronJob(ctx context.Context, req *model.CreateCronJobReq) error {
 	s.logger.Info("创建任务", zap.String("name", req.Name))
+
+	if err := s.checkLocalExecAllowed(req.JobType); err != nil {
+		s.logger.Warn("拒绝创建本地执行任务", zap.String("name", req.Name), zap.Int8("jobType", int8(req.JobType)))
+		return err
+	}
 
 	if err := s.validateBasicJobConfig(req.JobType, req.Command, req.HTTPUrl, req.ScriptContent, req.SSHResourceID, req.SSHCommand); err != nil {
 		s.logger.Error("任务配置验证失败", zap.String("name", req.Name), zap.Error(err))
@@ -129,6 +153,12 @@ func (s *cronService) CreateCronJob(ctx context.Context, req *model.CreateCronJo
 
 func (s *cronService) UpdateCronJob(ctx context.Context, req *model.UpdateCronJobReq) error {
 	s.logger.Info("更新任务", zap.Int("id", req.ID), zap.String("name", req.Name))
+
+	// 开关关闭时，更新后的类型不能是命令行/脚本（包括从其他类型改成这两种，以及继续编辑已有的这两类任务）
+	if err := s.checkLocalExecAllowed(req.JobType); err != nil {
+		s.logger.Warn("拒绝更新为本地执行任务", zap.Int("id", req.ID), zap.Int8("jobType", int8(req.JobType)))
+		return err
+	}
 
 	if err := s.validateBasicJobConfig(req.JobType, req.Command, req.HTTPUrl, req.ScriptContent, req.SSHResourceID, req.SSHCommand); err != nil {
 		s.logger.Error("任务配置验证失败", zap.Int("id", req.ID), zap.Error(err))
@@ -270,6 +300,11 @@ func (s *cronService) TriggerCronJob(ctx context.Context, id int) error {
 
 	if job.Status != model.CronJobStatusEnabled {
 		return fmt.Errorf("任务未启用，无法手动触发")
+	}
+
+	if err := s.checkLocalExecAllowed(job.JobType); err != nil {
+		s.logger.Warn("拒绝手动触发本地执行任务", zap.Int("id", id), zap.Int8("jobType", int8(job.JobType)))
+		return err
 	}
 
 	// 记录系统内置任务的手动触发

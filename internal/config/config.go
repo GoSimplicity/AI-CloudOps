@@ -46,6 +46,7 @@ type Config struct {
 	Mock         MockConfig         `mapstructure:"mock"`
 	Notification NotificationConfig `mapstructure:"notification"`
 	Webhook      WebhookConfig      `mapstructure:"webhook"`
+	Cron         CronConfig         `mapstructure:"cron"`
 }
 
 func (c *Config) Validate() error {
@@ -180,6 +181,12 @@ type PrometheusConfig struct {
 	AlertWebhookAddr    string `mapstructure:"alert_webhook_addr" env:"PROMETHEUS_ALERT_WEBHOOK_ADDR" default:"http://localhost:8889/api/v1/alerts/receive"`
 	AlertWebhookFileDir string `mapstructure:"alert_webhook_file_dir" env:"PROMETHEUS_ALERT_WEBHOOK_FILE_DIR" default:"/tmp/webhook_files"`
 	HttpSdAPI           string `mapstructure:"httpSdAPI" env:"PROMETHEUS_HTTP_SD_API" default:"http://localhost:8889/api/not_auth/getTreeNodeBindIps"`
+}
+
+// CronConfig 定时任务配置
+type CronConfig struct {
+	// AllowLocalExec 是否允许在后端进程所在主机上执行命令行(2)/脚本(4)任务，默认关闭
+	AllowLocalExec bool `mapstructure:"allow_local_exec" env:"CRON_ALLOW_LOCAL_EXEC"`
 }
 
 // MockConfig Mock配置

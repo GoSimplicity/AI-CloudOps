@@ -83,13 +83,8 @@ func (h *CommandExecutor) Execute(ctx context.Context, task *CommandTask) (strin
 		cmd.Dir = task.WorkDir
 	}
 
-	if len(task.Environment) > 0 {
-		env := os.Environ()
-		for _, kv := range task.Environment {
-			env = append(env, fmt.Sprintf("%s=%s", kv.Key, kv.Value))
-		}
-		cmd.Env = env
-	}
+	// 不继承服务进程的完整环境（其中含 JWT/数据库/AIOps 等密钥），只传白名单变量与任务自身配置的变量
+	cmd.Env = buildTaskEnv(task.Environment)
 
 	// 执行命令并捕获输出
 	stdout, stderr := newOutputBuffer(), newOutputBuffer()
@@ -248,6 +243,8 @@ func (h *ScriptExecutor) Execute(ctx context.Context, task *ScriptTask) (string,
 
 	// 执行脚本
 	cmd := exec.CommandContext(ctx, interpreter, argument, task.Content)
+	// 不继承服务进程的完整环境（其中含 JWT/数据库/AIOps 等密钥），只传白名单变量
+	cmd.Env = buildTaskEnv(nil)
 
 	// 执行并捕获输出
 	stdout, stderr := newOutputBuffer(), newOutputBuffer()
@@ -279,6 +276,39 @@ func (h *ScriptExecutor) Execute(ctx context.Context, task *ScriptTask) (string,
 
 	h.logger.Info("脚本执行成功", zap.String("type", task.Type))
 	return output, nil
+}
+
+// taskEnvAllowlist 任务子进程允许从服务进程继承的环境变量（另外放行所有 LC_* 区域设置变量）
+var taskEnvAllowlist = map[string]struct{}{
+	"PATH":   {},
+	"HOME":   {},
+	"LANG":   {},
+	"TZ":     {},
+	"TMPDIR": {},
+}
+
+func isAllowedTaskEnv(name string) bool {
+	if strings.HasPrefix(name, "LC_") {
+		return true
+	}
+	_, ok := taskEnvAllowlist[name]
+	return ok
+}
+
+// buildTaskEnv 构造任务子进程环境：服务进程中的白名单变量 + 任务配置的变量（同名时任务配置优先）。
+// 返回值始终非nil，保证 exec 不会回退为继承完整父进程环境
+func buildTaskEnv(taskEnv model.KeyValueList) []string {
+	env := make([]string, 0, len(taskEnvAllowlist)+len(taskEnv))
+	for _, kv := range os.Environ() {
+		name, _, ok := strings.Cut(kv, "=")
+		if ok && isAllowedTaskEnv(name) {
+			env = append(env, kv)
+		}
+	}
+	for _, kv := range taskEnv {
+		env = append(env, fmt.Sprintf("%s=%s", kv.Key, kv.Value))
+	}
+	return env
 }
 
 // 为 MySQL TEXT 的 65535 字节预算预留双流标记空间，超限内容继续消费

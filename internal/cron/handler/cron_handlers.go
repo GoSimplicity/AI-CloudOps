@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/executor"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/task"
@@ -64,6 +65,17 @@ type CronHandlers struct {
 	httpExecutor    *HTTPExecutor
 	scriptExecutor  *ScriptExecutor
 	sshExecutor     *executor.SSHExecutor
+
+	// localExecAllowed 读取 cron.allow_local_exec；为 nil 时读取全局配置（测试可替换）
+	localExecAllowed func() bool
+}
+
+// allowLocalExec 当前是否允许执行命令行/脚本任务
+func (h *CronHandlers) allowLocalExec() bool {
+	if h.localExecAllowed != nil {
+		return h.localExecAllowed()
+	}
+	return config.CronLocalExecAllowed()
 }
 
 func NewCronHandlers(
@@ -144,8 +156,20 @@ func (h *CronHandlers) ProcessTask(ctx context.Context, t *asynq.Task) error {
 	defer stopLease()
 
 	var result *ExecutionResult
-	switch job.JobType {
-	case model.CronJobTypeCommand:
+	localExecBlocked := task.IsLocalExecJobType(job.JobType) && !h.allowLocalExec()
+	if localExecBlocked {
+		// 只记录任务ID与类型，不记录命令/脚本内容；按失败记录本次运行，不伪装成功
+		h.logger.Warn("本地命令/脚本执行已停用，跳过任务",
+			zap.Int("jobID", job.ID),
+			zap.Int8("jobType", int8(job.JobType)))
+		result = &ExecutionResult{
+			Success:  false,
+			ErrorMsg: task.ErrLocalExecDisabled.Error(),
+		}
+	}
+	switch {
+	case localExecBlocked:
+	case job.JobType == model.CronJobTypeCommand:
 		task := &CommandTask{
 			Command:     job.Command,
 			Args:        job.Args,
@@ -167,7 +191,7 @@ func (h *CronHandlers) ProcessTask(ctx context.Context, t *asynq.Task) error {
 				ErrorMsg: "",
 			}
 		}
-	case model.CronJobTypeHTTP:
+	case job.JobType == model.CronJobTypeHTTP:
 		task := &HTTPTask{
 			Method:  job.HTTPMethod,
 			URL:     job.HTTPUrl,
@@ -189,7 +213,7 @@ func (h *CronHandlers) ProcessTask(ctx context.Context, t *asynq.Task) error {
 				ErrorMsg: "",
 			}
 		}
-	case model.CronJobTypeScript:
+	case job.JobType == model.CronJobTypeScript:
 		task := &ScriptTask{
 			Type:    job.ScriptType,
 			Content: job.ScriptContent,
@@ -209,7 +233,7 @@ func (h *CronHandlers) ProcessTask(ctx context.Context, t *asynq.Task) error {
 				ErrorMsg: "",
 			}
 		}
-	case model.CronJobTypeSSH:
+	case job.JobType == model.CronJobTypeSSH:
 		output, err := h.sshExecutor.ExecuteSSHJob(ctx, job)
 		if err != nil {
 			result = &ExecutionResult{
@@ -224,7 +248,7 @@ func (h *CronHandlers) ProcessTask(ctx context.Context, t *asynq.Task) error {
 				ErrorMsg: "",
 			}
 		}
-	case model.CronJobTypeSystem:
+	case job.JobType == model.CronJobTypeSystem:
 		output, err := h.executeSystemTask(ctx, job)
 		if err != nil {
 			result = &ExecutionResult{
@@ -286,6 +310,10 @@ func (h *CronHandlers) ProcessTask(ctx context.Context, t *asynq.Task) error {
 			zap.String("jobName", payload.JobName),
 			zap.String("error", result.ErrorMsg),
 			zap.Int("duration", duration))
+		if localExecBlocked {
+			// 配置未开启前重试没有意义，不消耗重试次数
+			return fmt.Errorf("任务执行失败: %w: %w", task.ErrLocalExecDisabled, asynq.SkipRetry)
+		}
 		return fmt.Errorf("任务执行失败: %s", result.ErrorMsg)
 	}
 }

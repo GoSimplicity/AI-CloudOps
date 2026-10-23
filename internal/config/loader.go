@@ -172,6 +172,8 @@ func setDefaults() {
 
 	viper.SetDefault("mock.enabled", true)
 
+	viper.SetDefault(CronAllowLocalExecKey, false)
+
 	viper.SetDefault("notification.email.enabled", false)
 	viper.SetDefault("notification.email.smtp_host", "smtp.gmail.com")
 	viper.SetDefault("notification.email.smtp_port", 587)
@@ -263,4 +265,12 @@ func loadExternalConfig(ext *ExternalConfig) {
 	ext.Aliyun.AccessKeyID = os.Getenv("ALIYUN_ACCESS_KEY_ID")
 	ext.Aliyun.AccessKeySecret = os.Getenv("ALIYUN_ACCESS_KEY_SECRET")
 	ext.Tavily.APIKey = os.Getenv("TAVILY_API_KEY")
+}
+
+// CronAllowLocalExecKey 是否允许本地命令/脚本任务的配置键（环境变量 CRON_ALLOW_LOCAL_EXEC）
+const CronAllowLocalExecKey = "cron.allow_local_exec"
+
+// CronLocalExecAllowed 返回当前是否允许执行命令行(2)/脚本(4)任务；未配置时为 false
+func CronLocalExecAllowed() bool {
+	return viper.GetBool(CronAllowLocalExecKey)
 }
