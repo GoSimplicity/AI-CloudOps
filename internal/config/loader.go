@@ -145,15 +145,12 @@ func setDefaults() {
 	viper.SetDefault("log.dir", "./logs")
 	viper.SetDefault("log.level", "debug")
 
-	viper.SetDefault("jwt.key1", "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l")
-	viper.SetDefault("jwt.key2", "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0z")
-	viper.SetDefault("jwt.issuer", "K5mBPBYNQeNWEBvCTE5msog3KSGTdhmx")
+	// jwt.key1/key2/issuer、mysql.addr、tree.password_encryption_key 无内置默认值，
+	// 必须通过环境变量注入，缺失时 Config.Validate 直接失败（见 requiredSecretEnvVars）
 	viper.SetDefault("jwt.expiration", 3600)
 
 	viper.SetDefault("redis.addr", "localhost:6379")
 	viper.SetDefault("redis.password", "")
-
-	viper.SetDefault("mysql.addr", "root:root@tcp(localhost:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local")
 
 	viper.SetDefault("mysql.max_open_conns", 20)
 	viper.SetDefault("mysql.max_idle_conns", 5)
@@ -163,7 +160,6 @@ func setDefaults() {
 	viper.SetDefault("mysql.startup_timeout", "10s")
 
 	viper.SetDefault("tree.check_status_cron", "@every 300s")
-	viper.SetDefault("tree.password_encryption_key", "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l")
 
 	viper.SetDefault("k8s.refresh_cron", "@every 300s")
 

@@ -52,6 +52,10 @@ func (c *Config) Validate() error {
 	if c == nil {
 		return fmt.Errorf("配置不能为空")
 	}
+	if missing := c.missingSecretEnvVars(); len(missing) > 0 {
+		// 只列出变量名，不输出任何值
+		return fmt.Errorf("缺少必需的密钥环境变量: %s（不提供内置默认值，请通过环境变量注入）", strings.Join(missing, ", "))
+	}
 	if c.Server.Port == "" {
 		return fmt.Errorf("server.port 不能为空")
 	}
@@ -95,6 +99,29 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// requiredSecretEnvVars 必须由环境变量注入、没有内置默认值的敏感配置
+var requiredSecretEnvVars = []struct {
+	Env   string
+	Value func(*Config) string
+}{
+	{"JWT_KEY1", func(c *Config) string { return c.JWT.Key1 }},
+	{"JWT_KEY2", func(c *Config) string { return c.JWT.Key2 }},
+	{"JWT_ISSUER", func(c *Config) string { return c.JWT.Issuer }},
+	{"MYSQL_ADDR", func(c *Config) string { return c.MySQL.Addr }},
+	{"TREE_PASSWORD_ENCRYPTION_KEY", func(c *Config) string { return c.Tree.PasswordEncryptionKey }},
+}
+
+// missingSecretEnvVars 返回值为空的必需密钥对应的环境变量名
+func (c *Config) missingSecretEnvVars() []string {
+	var missing []string
+	for _, required := range requiredSecretEnvVars {
+		if strings.TrimSpace(required.Value(c)) == "" {
+			missing = append(missing, required.Env)
+		}
+	}
+	return missing
+}
+
 type AIOpsConfig struct {
 	BaseURL string `mapstructure:"base_url" env:"AIOPS_BASE_URL"`
 	APIKey  string `mapstructure:"api_key" env:"AIOPS_API_KEY"`
@@ -112,9 +139,9 @@ type LogConfig struct {
 
 // JWTConfig JWT配置
 type JWTConfig struct {
-	Key1       string `mapstructure:"key1" env:"JWT_KEY1" default:"ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l"`
-	Key2       string `mapstructure:"key2" env:"JWT_KEY2" default:"ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0z"`
-	Issuer     string `mapstructure:"issuer" env:"JWT_ISSUER" default:"K5mBPBYNQeNWEBvCTE5msog3KSGTdhmx"`
+	Key1       string `mapstructure:"key1" env:"JWT_KEY1"`
+	Key2       string `mapstructure:"key2" env:"JWT_KEY2"`
+	Issuer     string `mapstructure:"issuer" env:"JWT_ISSUER"`
 	Expiration int64  `mapstructure:"expiration" env:"JWT_EXPIRATION" default:"3600"`
 }
 
@@ -132,12 +159,12 @@ type MySQLConfig struct {
 	ConnMaxIdleTime time.Duration `mapstructure:"conn_max_idle_time" env:"MYSQL_CONN_MAX_IDLE_TIME"`
 	ConnectTimeout  time.Duration `mapstructure:"connect_timeout" env:"MYSQL_CONNECT_TIMEOUT"`
 	StartupTimeout  time.Duration `mapstructure:"startup_timeout" env:"MYSQL_STARTUP_TIMEOUT"`
-	Addr            string        `mapstructure:"addr" env:"MYSQL_ADDR" default:"root:root@tcp(localhost:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local"`
+	Addr            string        `mapstructure:"addr" env:"MYSQL_ADDR"`
 }
 
 type TreeConfig struct {
 	CheckStatusCron       string `mapstructure:"check_status_cron" env:"TREE_CHECK_STATUS_CRON" default:"@every 300s"`
-	PasswordEncryptionKey string `mapstructure:"password_encryption_key" env:"TREE_PASSWORD_ENCRYPTION_KEY" default:"ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l"`
+	PasswordEncryptionKey string `mapstructure:"password_encryption_key" env:"TREE_PASSWORD_ENCRYPTION_KEY"`
 }
 
 // K8sConfig Kubernetes配置
