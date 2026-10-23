@@ -8,3 +8,8 @@ bin
 .idea
 .DS_Store
 *.log
+# 部署私有配置与备份不得进入构建上下文或构建缓存
+**/.env
+**/.env.*
+**/backups.local
+**/manifest.local
