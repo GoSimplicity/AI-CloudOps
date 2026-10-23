@@ -47,8 +47,13 @@ jobs:
       - name: Security scan
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
+      - name: Pull release Prometheus validator
+        run: docker pull prom/prometheus:v3.2.1
+
       - name: Gateway smoke
-        run: go test -tags=smoke ./internal/app ./internal/middleware ./internal/cron/api ./internal/cron/handler ./internal/cron/scheduler ./internal/cron/executor ./internal/cron/dao ./internal/tree/api ./internal/tree/ssh ./pkg/ssh ./pkg/terminal ./pkg/di
+        env:
+          CLOUDOPS_PROMTOOL_IMAGE: prom/prometheus:v3.2.1
+        run: go test -tags=smoke ./internal/app ./internal/middleware ./internal/cron/api ./internal/cron/handler ./internal/cron/scheduler ./internal/cron/executor ./internal/cron/dao ./internal/tree/api ./internal/tree/ssh ./pkg/ssh ./pkg/terminal ./pkg/di ./pkg/logger ./internal/prometheus/webhook/di ./internal/prometheus/cache
 
       - name: Build
         run: go build -v main.go

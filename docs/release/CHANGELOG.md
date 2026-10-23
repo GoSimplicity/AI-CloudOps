@@ -165,3 +165,9 @@
 - 长消息按reader缓冲区完整分段交付，64KiB消息先验收后执行，旧逐消息换行格式保留
 - 两条实现共享串行输出及有界写期限，legacy补上下文取消与断开清理，输入关闭原因不入日志
 - 本地真实WS/SSH fixture、race/vet通过，见 [ssh-terminal-transport.md](ssh-terminal-transport.md)
+
+## 2026-10-23：发布验证器与日志隐私门槛
+
+- 分支和标签流程固定拉取实际发布使用的Prometheus v3.2.1，通过CLOUDOPS_PROMTOOL_IMAGE激活真实promtool配置校验，不再让镜像契约测试仅依赖本机手动开关
+- 把采集配置本地HTTPS、主后端安全数据库日志及webhook数据库日志smoke包加入发布门槛
+- 相同环境开关下三包race/smoke通过，工作流YAML解析通过；未创建标签或发布GitHub Release
