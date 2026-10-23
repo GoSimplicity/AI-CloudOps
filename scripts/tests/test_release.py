@@ -132,9 +132,29 @@ class ReleaseTests(unittest.TestCase):
                 self.assertIn(message, result.stdout + result.stderr)
 
 
+def _compose_env(home):
+    """compose 测试的隔离环境，探测（_compose_tools）和执行（ReleaseComposeWebhookAddrTests）共用。
+
+    只保留 PATH，HOME 指向临时目录，不继承调用者导出的其他变量（避免覆盖合成值）。
+    DOCKER_CONFIG 透传；未设置时指向隔离前的 ~/.docker：docker CLI 在 $DOCKER_CONFIG/cli-plugins
+    （默认 ~/.docker/cli-plugins）里找 compose 插件，Mac 上 OrbStack / Docker Desktop 就装在这里，
+    只换 HOME 会让执行时找不到插件（退出码 125）。
+    """
+    real_home = os.environ.get("HOME") or os.path.expanduser("~")
+    docker_config = os.environ.get("DOCKER_CONFIG") or os.path.join(real_home, ".docker")
+    return {"PATH": os.environ.get("PATH", ""), "HOME": str(home), "DOCKER_CONFIG": docker_config}
+
+
 def _compose_tools():
-    return shutil.which("docker") and shutil.which("jq") and subprocess.run(
-        ["docker", "compose", "version"], capture_output=True, timeout=30).returncode == 0
+    # 在导入阶段调用：任何探测失败（超时、无法执行）都只让相关用例 skip，不能让模块导入报错
+    if not (shutil.which("docker") and shutil.which("jq")):
+        return False
+    try:
+        with tempfile.TemporaryDirectory() as home:
+            return subprocess.run(["docker", "compose", "version"], env=_compose_env(home),
+                                  capture_output=True, timeout=30).returncode == 0
+    except (subprocess.TimeoutExpired, OSError):
+        return False
 
 
 @unittest.skipUnless(_compose_tools(), "需要 docker compose 和 jq（只做 compose config，不连 Docker 守护进程、不启动服务）")
@@ -151,8 +171,8 @@ class ReleaseComposeWebhookAddrTests(unittest.TestCase):
         names = sorted(set(re.findall(r"\$\{([A-Z0-9_]+):\?", self.COMPOSE.read_text())))
         self.env_file = Path(self.temp.name) / "synthetic.env"
         self.env_file.write_text("".join(f"{n}={'fixture'}-{n.lower()}-{os.getpid()}\n" for n in names))
-        # 干净环境：不继承调用者导出的变量，避免覆盖合成值
-        self.env = {"PATH": os.environ.get("PATH", ""), "HOME": self.temp.name}
+        # 干净环境：不继承调用者导出的变量，避免覆盖合成值；与探测用同一套隔离规则（见 _compose_env）
+        self.env = _compose_env(self.temp.name)
         self.base = ["docker", "compose", "--project-directory", str(self.COMPOSE.parent),
                      "-f", str(self.COMPOSE), "--env-file", str(self.env_file)]
 
@@ -197,6 +217,86 @@ class ReleaseComposeWebhookAddrTests(unittest.TestCase):
         self.assertIn(f"127.0.0.1:{url.port}/", health)
         self.assertIn(f"http://webhook:{url.port}/api/v1/alerts/receive",
                       (ROOT / "deploy/release/alertmanager.yml").read_text())
+
+
+class ComposeProbeEnvTests(unittest.TestCase):
+    """P2-1 回归：compose 探测与执行必须用同一个隔离环境。
+
+    模拟 Mac（OrbStack）布局：compose 插件只在 $HOME/.docker/cli-plugins，系统目录里没有。
+    假 docker 按真实 CLI 的规则只在 ${DOCKER_CONFIG:-$HOME/.docker}/cli-plugins 找插件，找不到时退出 125。
+    全部用运行时生成的 /bin/sh 替身，不需要真实 Docker，也不读取主机的 ~/.docker。
+    """
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.base = Path(temp.name)
+        self.bin = self.base / "bin"
+        self.bin.mkdir()
+        self.home = self.base / "real-home"  # 隔离前的 HOME（相当于 Mac 上的 /Users/<name>）
+        self.calls = self.base / "plugin-calls"
+        self.calls.touch()
+        self._script(self.bin / "docker", (
+            '#!/bin/sh\n'
+            'if [ "$1" = compose ]; then\n'
+            '  p="${DOCKER_CONFIG:-$HOME/.docker}/cli-plugins/docker-compose"\n'
+            '  if [ -x "$p" ]; then exec "$p" "$@"; fi\n'
+            '  echo "docker: \'compose\' is not a docker command." >&2\n'
+            '  exit 125\n'
+            'fi\n'
+            'exit 0\n'))
+        self._script(self.bin / "jq", '#!/bin/sh\ncat >/dev/null\necho "{}"\n')
+        self.environ = {"PATH": os.pathsep.join([str(self.bin), "/usr/bin", "/bin"]), "HOME": str(self.home)}
+
+    @staticmethod
+    def _script(path, body):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body)
+        path.chmod(0o700)
+
+    def _plugin(self, directory):
+        # 假插件：记录参数（不含任何值），version / config 一律成功
+        self._script(directory / "docker-compose", (
+            '#!/bin/sh\n'
+            f'printf "%s\\n" "$*" >> "{self.calls}"\n'
+            'case "$*" in *"--format json"*) echo "{}";; esac\n'
+            'exit 0\n'))
+
+    def _probe_then_run(self, extra=None):
+        from unittest import mock
+        with mock.patch.dict(os.environ, {**self.environ, **(extra or {})}, clear=True):
+            self.assertTrue(_compose_tools(), "探测应找到 compose 插件")
+            case = ReleaseComposeWebhookAddrTests("test_compose_config_quiet")
+            case.setUp()  # 直接调用，绕过类级 skip，保证在没有真实 Docker 的机器上也会执行
+            try:
+                case.test_compose_config_quiet()
+            finally:
+                case.doCleanups()
+        self.assertIn("config --quiet", self.calls.read_text())
+
+    def test_plugin_only_in_home_docker_cli_plugins(self):
+        self._plugin(self.home / ".docker/cli-plugins")
+        self._probe_then_run()
+
+    def test_docker_config_is_passed_through(self):
+        custom = self.base / "custom-docker-config"
+        self._plugin(custom / "cli-plugins")
+        self._probe_then_run({"DOCKER_CONFIG": str(custom)})
+
+    def test_probe_oserror_skips_instead_of_raising(self):
+        from unittest import mock
+        # 有执行位、shutil.which 能找到，但解释器不存在：exec 失败，subprocess 抛 OSError（FileNotFoundError）
+        self._script(self.bin / "docker", "#!/nonexistent-r3inc/interpreter\n")
+        # PATH 只留替身目录：否则 subprocess 遇到 ENOENT 会继续试 PATH 里后面的真实 docker
+        with mock.patch.dict(os.environ, {**self.environ, "PATH": str(self.bin)}, clear=True):
+            self.assertFalse(_compose_tools())
+
+    def test_probe_timeout_skips_instead_of_raising(self):
+        from unittest import mock
+        timeout = subprocess.TimeoutExpired(["docker", "compose", "version"], 30)
+        with mock.patch.dict(os.environ, self.environ, clear=True), \
+                mock.patch.object(subprocess, "run", side_effect=timeout):
+            self.assertFalse(_compose_tools())
 
 
 if __name__ == "__main__":
