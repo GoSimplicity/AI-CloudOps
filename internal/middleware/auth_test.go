@@ -34,3 +34,53 @@ func TestRegisteredReadPermissionDoesNotAllowWrites(t *testing.T) {
 		}
 	}
 }
+
+type aiProxyRoles struct {
+	service.RoleService
+	apis []*model.Api
+}
+
+func (r aiProxyRoles) GetUserRoles(context.Context, int) (*model.ListResp[*model.Role], error) {
+	return &model.ListResp[*model.Role]{Items: []*model.Role{{Status: 1, Apis: r.apis}}}, nil
+}
+func TestAssistantProxyPermissionsDoNotGrantInfrastructureActions(t *testing.T) {
+	grants := []*model.Api{{Path: "/api/v1/assistant/query", Method: 2}, {Path: "/api/v1/assistant/session/:session_id", Method: 1}}
+	for _, test := range []struct {
+		method, path string
+		want         int
+	}{
+		{"POST", "/api/v1/assistant/query", 204},
+		{"GET", "/api/v1/assistant/session/owned-sid", 204},
+		{"GET", "/api/v1/assistant/session/owned-sid/extra", 403},
+		{"GET", "/api/v1/assistant/session/", 403},
+		{"GET", "/api/v1/assistant/session/..", 403},
+		{"GET", "/api/v1/assistant/sessionx/owned-sid", 403},
+		{"GET", "/api/v1/assistant/query", 403},
+		{"POST", "/api/v1/autofix/workflow/confirm", 403},
+		{"POST", "/api/v1/autofix/notify", 403},
+	} {
+		t.Run(test.method+test.path, func(t *testing.T) {
+			engine := gin.New()
+			engine.Use(func(c *gin.Context) { c.Set("user", jwt.UserClaims{Uid: 7, Username: "assistant-reader"}); c.Next() })
+			engine.Use(NewAuthMiddleware(aiProxyRoles{apis: grants}).CheckAuth())
+			engine.Any("/api/v1/*path", func(c *gin.Context) { c.Status(204) })
+			recorder := httptest.NewRecorder()
+			engine.ServeHTTP(recorder, httptest.NewRequest(test.method, test.path, nil))
+			if recorder.Code != test.want {
+				t.Fatalf("status=%d want=%d", recorder.Code, test.want)
+			}
+		})
+	}
+}
+
+func TestLegacyModuleGrantRemainsExplicitlyBroad(t *testing.T) {
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) { c.Set("user", jwt.UserClaims{Uid: 7, Username: "operator"}); c.Next() })
+	engine.Use(NewAuthMiddleware(aiProxyRoles{apis: []*model.Api{{Path: "/api/v1/*path", Method: 2}}}).CheckAuth())
+	engine.Any("/api/v1/*path", func(c *gin.Context) { c.Status(204) })
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, httptest.NewRequest("POST", "/api/v1/autofix/workflow/confirm", nil))
+	if recorder.Code != 204 {
+		t.Fatalf("既有显式整模块授权不应被静默改写: status=%d", recorder.Code)
+	}
+}

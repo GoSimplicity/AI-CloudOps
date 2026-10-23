@@ -48,3 +48,39 @@ func TestPermissionCatalogIsIdempotent(t *testing.T) {
 		t.Fatal("bootstrap duplicated or overwrote existing permission")
 	}
 }
+
+func TestAIProxyCatalogSupportsSeparateAssistantAndWorkflowGrants(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, _ := db.DB()
+	pool.SetMaxOpenConns(1)
+	defer pool.Close()
+	if err := db.AutoMigrate(&model.Api{}); err != nil {
+		t.Fatal(err)
+	}
+	engine := gin.New()
+	engine.Any("/api/v1/*path", func(c *gin.Context) { c.Status(204) })
+	app := &App{db: db, server: engine}
+	for i := 0; i < 2; i++ {
+		if err := app.bootstrapPermissionCatalog(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, grant := range []struct {
+		path   string
+		method int8
+	}{
+		{"/api/v1/assistant/query", 2},
+		{"/api/v1/assistant/session/:session_id", 1},
+		{"/api/v1/autofix/workflow/confirm", 2},
+		{"/api/v1/assistant/stream", 1},
+	} {
+		var count int64
+		db.Model(&model.Api{}).Where("path = ? AND method = ?", grant.path, grant.method).Count(&count)
+		if count != 1 {
+			t.Errorf("缺少可单独授权的AI接口: %s (%d)", grant.path, grant.method)
+		}
+	}
+}

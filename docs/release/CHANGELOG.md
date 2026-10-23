@@ -202,3 +202,10 @@
 - 父账户行锁内统一更新基本信息/凭据/地域，保留原地域ID/状态/关联，安全恢复历史soft-delete行
 - 拒绝移除仍有未软删除云资源关联的地域，失败时整笔回滚；省略regions不覆盖较新集合
 - 旧源码overlay在隔离MySQL真实复现1062；修复后MySQL唯一约束/并发/失败回滚、SQLite、race/vet与全仓测试通过，integration增加门槛，见 [cloud-account-region-update.md](cloud-account-region-update.md)
+
+## 2026-10-23：AI 接口细分授权目录
+
+- 将实际 65 项 AI HTTP/WebSocket 路由补入权限目录，分别授权助手、会话和修复确认，不自动分配角色或覆盖既有元数据
+- 代理接口参数授权严格匹配单个非空路径段；保留既有显式整模块授权并说明升级时如何收窄
+- 三仓 CI 对账实际 AIOps 路由，覆盖隐藏别名和 WebSocket，避免新路由遗漏权限项
+- 验证：先红复现目录缺项与参数授权失败，修复后 app/middleware 全包 smoke race 通过，容器实际路由 65 项对账通过

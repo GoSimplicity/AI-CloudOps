@@ -76,6 +76,8 @@ jobs:
           PY
       - name: Internal MCP authentication and calculator
         run: docker compose -f deploy/release/compose.yaml exec -T aiops python - < scripts/integration/mcp_smoke.py
+      - name: AI proxy permission catalogue matches actual HTTP and WebSocket routes
+        run: docker compose -f deploy/release/compose.yaml exec -T aiops python - "$(cat internal/app/aiops_permissions.json)" < scripts/integration/aiops_route_catalog.py
       - name: Service status
         if: always()
         run: docker compose -f deploy/release/compose.yaml ps

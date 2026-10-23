@@ -80,7 +80,21 @@ func matchWildcardPath(apiPath, requestPath string, methodCode int8, apiMethod i
 	}
 
 	if !strings.Contains(apiPath, "*") {
-		return false
+		// 代理入口只有通配路由，目录中的参数必须严格占用一个非空路径段
+		granted, requested := strings.Split(apiPath, "/"), strings.Split(requestPath, "/")
+		if len(granted) != len(requested) {
+			return false
+		}
+		for index, part := range granted {
+			if strings.HasPrefix(part, ":") && len(part) > 1 {
+				if requested[index] == "" || requested[index] == "." || requested[index] == ".." {
+					return false
+				}
+			} else if part != requested[index] {
+				return false
+			}
+		}
+		return true
 	}
 
 	// 末尾通配符：/api/user/*

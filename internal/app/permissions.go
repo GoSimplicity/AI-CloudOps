@@ -3,15 +3,20 @@ package app
 import (
 	"context"
 	"crypto/sha256"
+	_ "embed"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm/clause"
 )
 
-// bootstrapPermissionCatalog adds discoverable route permissions without granting
-// them or changing administrator-managed metadata on existing entries.
+//go:embed aiops_permissions.json
+var aiopsPermissionCatalog []byte
+
+// bootstrapPermissionCatalog 补充可发现接口，不授予角色或覆盖管理员维护的元数据
 func (a *App) bootstrapPermissionCatalog(ctx context.Context) error {
 	methods := map[string]int8{"GET": 1, "POST": 2, "PUT": 3, "DELETE": 4}
 	public := map[string]bool{"/api/user/login": true, "/api/user/logout": true, "/api/user/refresh_token": true, "/api/not_auth/getBindIps": true, "/api/not_auth/getTreeNodeBindIps": true}
@@ -24,8 +29,24 @@ func (a *App) bootstrapPermissionCatalog(ctx context.Context) error {
 	for _, api := range existing {
 		seen[key(api.Method, api.Path)] = true
 	}
+	routes := a.server.Routes()
+	for _, route := range routes {
+		if route.Path == "/api/v1/*path" {
+			var aiRoutes []struct {
+				Method string `json:"method"`
+				Path   string `json:"path"`
+			}
+			if err := json.Unmarshal(aiopsPermissionCatalog, &aiRoutes); err != nil {
+				return fmt.Errorf("解析AI接口权限目录: %w", err)
+			}
+			for _, aiRoute := range aiRoutes {
+				routes = append(routes, gin.RouteInfo{Method: aiRoute.Method, Path: aiRoute.Path, Handler: "AIOpsProxy"})
+			}
+			break
+		}
+	}
 	pending := make([]model.Api, 0)
-	for _, route := range a.server.Routes() {
+	for _, route := range routes {
 		method, ok := methods[route.Method]
 		if !ok || !strings.HasPrefix(route.Path, "/api/") || public[route.Path] || seen[key(method, route.Path)] {
 			continue

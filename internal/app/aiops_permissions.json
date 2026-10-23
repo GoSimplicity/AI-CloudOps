@@ -1,0 +1,262 @@
+[
+  {
+    "method": "POST",
+    "path": "/api/v1/assistant/add-document"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/assistant/clear-cache"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/assistant/config"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/assistant/health"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/assistant/info"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/assistant/query"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/assistant/ready"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/assistant/refresh"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/assistant/session"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/assistant/session/:session_id"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/assistant/stream"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/assistant/upload-knowledge-file"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/autofix"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/autofix/"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/autofix/bootstrap"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/autofix/config"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/autofix/diagnose"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/autofix/info"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/autofix/notify"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/autofix/ready"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/autofix/repair"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/autofix/stats/reset"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/autofix/workflow"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/autofix/workflow/confirm"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/cache/clear"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/cache/config"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/cache/performance"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/cache/stats"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/inspection/config"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/inspection/history"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/inspection/profiles"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/inspection/report/:report_id"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/inspection/report/:report_id/markdown"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/inspection/rules"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/inspection/run"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/inspection/scheduler/start"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/inspection/scheduler/status"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/inspection/scheduler/stop"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/inspection/tasks/:task_id"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/predict/cpu"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/predict/disk"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/predict/health"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/predict/info"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/predict/memory"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/predict/models"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/predict/qps"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/predict/ready"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/rca"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/rca/analyze"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/rca/cache/clear"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/rca/cache/clear/namespace"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/rca/cache/clear/operation"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/rca/cache/stats"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/rca/config"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/rca/data/events"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/rca/data/logs"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/rca/data/metrics"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/rca/error-summary"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/rca/event-patterns"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/rca/health"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/rca/incident"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/rca/info"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/rca/metrics"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/rca/quick-diagnosis"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/rca/ready"
+  }
+]
