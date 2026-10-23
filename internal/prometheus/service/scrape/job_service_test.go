@@ -23,7 +23,7 @@ func (s *jobStore) CreateMonitorScrapeJob(_ context.Context, job *model.MonitorS
 	s.saved = job
 	return nil
 }
-func (s *jobStore) UpdateMonitorScrapeJob(_ context.Context, job *model.MonitorScrapeJob) error {
+func (s *jobStore) UpdateMonitorScrapeJob(_ context.Context, job *model.MonitorScrapeJob, _ *string) error {
 	s.saved = job
 	return nil
 }

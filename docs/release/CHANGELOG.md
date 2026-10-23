@@ -146,3 +146,10 @@
 - 参数和查询串长度有界，无效输入在数据库读取前返回 400；服务层同样校验边界
 - 修复 IPv6 目标地址编码，保留稳定目标顺序与请求取消
 - 真实 Gin/httptest 与服务回归、race/vet 通过，详见 [http-sd-input.md](http-sd-input.md)
+
+## 监控凭据读取脱敏与明确更新
+
+- list/detail 仅返回 has_bearer_token，旧明文列不迁移，操作配置生成保留真实值
+- 更新令牌支持省略保留、空串清除和非空替换，事务锁内合并当前凭据并校验来源互斥，配置字段可实际清空
+- 配套前端使用明确 keep/replace/clear 语义；更新省略令牌不会回写并发轮换前的快照
+- 先红后绿的真实 SQLite/race 验证清空和来源切换；HTTP回归验证双读取、请求绑定、审计/访问日志无正文；全仓 go test 与 vet 通过，详见 [prometheus-credentials.md](prometheus-credentials.md)

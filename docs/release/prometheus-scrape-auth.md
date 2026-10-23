@@ -33,3 +33,5 @@ GOTOOLCHAIN=auto go vet ./internal/prometheus/... ./internal/config
 - Compose 无环境展开解析确认注入地址，未输出环境值
 
 版本依据：项目实际依赖 Prometheus common v0.67.5 与 Prometheus Go 模块 v0.311.3，发布镜像为 v3.2.1；运行时校验直接使用该发布镜像。官方版本源码分别见 [common HTTP 客户端](https://github.com/prometheus/common/blob/v0.67.5/config/http_config.go)、[Secret 序列化](https://github.com/prometheus/common/blob/v0.67.5/config/config.go) 和 [发布镜像依赖](https://github.com/prometheus/prometheus/blob/v3.2.1/go.mod)。
+
+后续已实施凭据读取脱敏与明确的保留/清除/替换契约，见 [prometheus-credentials.md](prometheus-credentials.md)。

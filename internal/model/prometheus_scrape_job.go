@@ -25,6 +25,8 @@
 
 package model
 
+import "encoding/json"
+
 type ServiceDiscoveryType int8
 
 const (
@@ -51,12 +53,21 @@ type MonitorScrapeJob struct {
 	KubeConfigFilePath       string               `json:"kube_config_file_path" gorm:"size:255;comment:K8s配置文件路径"`
 	TlsCaFilePath            string               `json:"tls_ca_file_path" gorm:"size:255;comment:TLS CA证书文件路径"`
 	TlsCaContent             string               `json:"tls_ca_content" gorm:"type:text;comment:TLS CA证书内容"`
-	BearerToken              string               `json:"bearer_token" gorm:"type:text;comment:鉴权Token内容"`
+	BearerToken              string               `json:"-" gorm:"type:text;comment:鉴权Token内容"`
 	BearerTokenFile          string               `json:"bearer_token_file" gorm:"size:255;comment:鉴权Token文件路径"`
 	KubernetesSdRole         string               `json:"kubernetes_sd_role" gorm:"size:50;default:'pod';comment:K8s服务发现角色"`
 	CreateUserName           string               `json:"create_user_name" gorm:"type:varchar(50);comment:创建用户名称"`
 	TreeNodeIDs              StringList           `json:"tree_node_ids" gorm:"type:text;comment:树节点ID列表"`
 	Tags                     StringList           `json:"tags" gorm:"type:text;comment:标签"`
+}
+
+// MarshalJSON 读取接口仅暴露凭据存在标志，数据库与操作配置保留原值
+func (m MonitorScrapeJob) MarshalJSON() ([]byte, error) {
+	type publicJob MonitorScrapeJob
+	return json.Marshal(struct {
+		publicJob
+		HasBearerToken bool `json:"has_bearer_token"`
+	}{publicJob: publicJob(m), HasBearerToken: m.BearerToken != ""})
 }
 
 func (m *MonitorScrapeJob) TableName() string {
@@ -119,7 +130,7 @@ type UpdateMonitorScrapeJobReq struct {
 	KubeConfigFilePath       string               `json:"kube_config_file_path"`
 	TlsCaFilePath            string               `json:"tls_ca_file_path"`
 	TlsCaContent             string               `json:"tls_ca_content"`
-	BearerToken              string               `json:"bearer_token"`
+	BearerToken              *string              `json:"bearer_token"`
 	BearerTokenFile          string               `json:"bearer_token_file"`
 	KubernetesSdRole         string               `json:"kubernetes_sd_role"`
 	TreeNodeIDs              StringList           `json:"tree_node_ids"`

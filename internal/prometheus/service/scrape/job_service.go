@@ -160,14 +160,9 @@ func (s *scrapeJobService) UpdateMonitorScrapeJob(ctx context.Context, req *mode
 		KubeConfigFilePath:       req.KubeConfigFilePath,
 		TlsCaFilePath:            req.TlsCaFilePath,
 		TlsCaContent:             req.TlsCaContent,
-		BearerToken:              req.BearerToken,
 		BearerTokenFile:          req.BearerTokenFile,
 		KubernetesSdRole:         req.KubernetesSdRole,
 		Tags:                     req.Tags,
-	}
-
-	if _, err := utils.ScrapeHTTPClientConfig(monitorScrapeJob); err != nil {
-		return err
 	}
 
 	// 检查 ID 是否有效
@@ -178,6 +173,14 @@ func (s *scrapeJobService) UpdateMonitorScrapeJob(ctx context.Context, req *mode
 	oldJob, err := s.dao.GetMonitorScrapeJobById(ctx, monitorScrapeJob.ID)
 	if err != nil {
 		s.l.Error("更新抓取作业失败：获取原有抓取作业信息出错", zap.Error(err))
+		return err
+	}
+
+	monitorScrapeJob.BearerToken = oldJob.BearerToken
+	if req.BearerToken != nil {
+		monitorScrapeJob.BearerToken = *req.BearerToken
+	}
+	if _, err := utils.ScrapeHTTPClientConfig(monitorScrapeJob); err != nil {
 		return err
 	}
 
@@ -193,7 +196,7 @@ func (s *scrapeJobService) UpdateMonitorScrapeJob(ctx context.Context, req *mode
 		}
 	}
 
-	if err := s.dao.UpdateMonitorScrapeJob(ctx, monitorScrapeJob); err != nil {
+	if err := s.dao.UpdateMonitorScrapeJob(ctx, monitorScrapeJob, req.BearerToken); err != nil {
 		s.l.Error("更新抓取作业失败", zap.Error(err))
 		return err
 	}

@@ -30,15 +30,17 @@ import (
 	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type ScrapeJobDAO interface {
 	GetMonitorScrapeJobList(ctx context.Context, req *model.GetMonitorScrapeJobListReq) ([]*model.MonitorScrapeJob, int64, error)
 	CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
 	GetMonitorScrapeJobsByPoolId(ctx context.Context, poolId int) ([]*model.MonitorScrapeJob, error)
-	UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error
+	UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob, bearerToken *string) error
 	DeleteMonitorScrapeJob(ctx context.Context, jobId int) error
 	GetMonitorScrapeJobById(ctx context.Context, id int) (*model.MonitorScrapeJob, error)
 	CheckMonitorScrapeJobExists(ctx context.Context, name string) (bool, error)
@@ -118,21 +120,40 @@ func (d *scrapeJobDAO) GetMonitorScrapeJobsByPoolId(ctx context.Context, poolId 
 	return jobs, nil
 }
 
-func (d *scrapeJobDAO) UpdateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
-	if monitorScrapeJob.ID <= 0 {
-		d.l.Error("UpdateMonitorScrapeJob 失败: ID 无效", zap.Any("job", monitorScrapeJob))
+func (d *scrapeJobDAO) UpdateMonitorScrapeJob(ctx context.Context, job *model.MonitorScrapeJob, bearerToken *string) error {
+	if job == nil || job.ID <= 0 {
 		return fmt.Errorf("monitorScrapeJob 的 ID 必须大于 0")
 	}
-
-	if err := d.db.WithContext(ctx).
-		Model(&model.MonitorScrapeJob{}).
-		Where("id = ?", monitorScrapeJob.ID).
-		Updates(monitorScrapeJob).Error; err != nil {
-		d.l.Error("更新 MonitorScrapeJob 失败", zap.Error(err), zap.Int("id", monitorScrapeJob.ID))
-		return err
-	}
-
-	return nil
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var stored model.MonitorScrapeJob
+		// MySQL行锁内合并当前凭据，省略字段不会把并发轮换覆盖为旧快照
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&stored, job.ID).Error; err != nil {
+			return err
+		}
+		current := *job
+		current.BearerToken = stored.BearerToken
+		if bearerToken != nil {
+			current.BearerToken = *bearerToken
+		}
+		if _, err := utils.ScrapeHTTPClientConfig(&current); err != nil {
+			return err
+		}
+		// 完整表单配置字段显式写空，创建者与其他非配置字段不参与更新
+		updates := map[string]interface{}{
+			"name": current.Name, "enable": current.Enable, "service_discovery_type": current.ServiceDiscoveryType,
+			"metrics_path": current.MetricsPath, "scheme": current.Scheme, "scrape_interval": current.ScrapeInterval, "scrape_timeout": current.ScrapeTimeout,
+			"pool_id": current.PoolID, "relabel_configs_yaml_string": current.RelabelConfigsYamlString, "refresh_interval": current.RefreshInterval,
+			"port": current.Port, "ip_address": current.IpAddress, "kube_config_file_path": current.KubeConfigFilePath,
+			"tls_ca_file_path": current.TlsCaFilePath, "tls_ca_content": current.TlsCaContent,
+			"bearer_token": current.BearerToken, "bearer_token_file": current.BearerTokenFile, "kubernetes_sd_role": current.KubernetesSdRole,
+			"tree_node_ids": current.TreeNodeIDs, "tags": current.Tags,
+		}
+		if err := tx.Model(&model.MonitorScrapeJob{}).Where("id = ?", job.ID).Updates(updates).Error; err != nil {
+			d.l.Error("更新 MonitorScrapeJob 失败", zap.Int("id", job.ID), zap.Error(err))
+			return err
+		}
+		return nil
+	})
 }
 
 func (d *scrapeJobDAO) DeleteMonitorScrapeJob(ctx context.Context, jobId int) error {
