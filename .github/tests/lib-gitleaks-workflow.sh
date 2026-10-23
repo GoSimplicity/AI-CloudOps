@@ -67,6 +67,11 @@ gl_new_origin() {
     git init -q --bare "$GL_ORIGIN"
     git init -q "$GL_DEV"; git -C "$GL_DEV" remote add origin "$GL_ORIGIN"
     if gl_has .gitleaks.toml; then gl_src .gitleaks.toml >"$GL_DEV/.gitleaks.toml"; else : >"$GL_DEV/.gitleaks.toml"; fi
+    # review3h P3-a 起 pre-commit 用暂存区的 gitleaks-config-check.py 检查 .gitleaks.toml，缺失即拒绝；
+    # 夹具仓库与真实仓库一致，带上目标版本的检查器（目标版本没有时不放，旧版本钩子也不需要）
+    if gl_has .github/scripts/gitleaks-config-check.py; then
+        mkdir -p "$GL_DEV/.github/scripts"; gl_src .github/scripts/gitleaks-config-check.py >"$GL_DEV/.github/scripts/gitleaks-config-check.py"
+    fi
 }
 gl_commit() { # gl_commit <file> <content> <msg>
     mkdir -p "$(dirname "$GL_DEV/$1")"
