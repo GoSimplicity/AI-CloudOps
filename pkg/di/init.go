@@ -90,7 +90,12 @@ func InitTables(db *gorm.DB) error {
 	); err != nil {
 		return err
 	}
-	return scrubCloudCredentialAudit(db)
+	if err := scrubCloudCredentialAudit(db); err != nil {
+		return err
+	}
+	// 旧版本局部更新曾写入非法0，统一为非默认2，不猜测或恢复历史true意图
+	return db.Unscoped().Model(&model.WorkorderNotification{}).Where("is_default = ?", 0).
+		UpdateColumn("is_default", model.IsDefaultNo).Error
 }
 
 // scrubCloudCredentialAudit 清理旧版本审计副本，保留事件、操作者和原始时间

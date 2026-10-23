@@ -63,6 +63,10 @@ func NewNotificationDAO(db *gorm.DB, logger *zap.Logger) WorkorderNotificationDA
 }
 
 func (d *notificationDAO) CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error {
+	maxRetries := 3
+	if req.MaxRetries != nil {
+		maxRetries = *req.MaxRetries
+	}
 	notification := &model.WorkorderNotification{
 		Name:               req.Name,
 		Description:        req.Description,
@@ -82,7 +86,7 @@ func (d *notificationDAO) CreateNotification(ctx context.Context, req *model.Cre
 		SubjectTemplate:    req.SubjectTemplate,
 		ScheduledTime:      req.ScheduledTime,
 		RepeatInterval:     req.RepeatInterval,
-		MaxRetries:         req.MaxRetries,
+		MaxRetries:         maxRetries,
 		RetryInterval:      req.RetryInterval,
 		Status:             req.Status,
 		Priority:           req.Priority,
@@ -91,7 +95,16 @@ func (d *notificationDAO) CreateNotification(ctx context.Context, req *model.Cre
 		Settings:           req.Settings,
 	}
 
-	if err := d.db.WithContext(ctx).Create(notification).Error; err != nil {
+	if err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(notification).Error; err != nil {
+			return err
+		}
+		// GORM会以模型default:3替换零值，在同一事务中恢复客户端显式的0
+		if maxRetries == 0 {
+			return tx.Model(notification).UpdateColumn("max_retries", 0).Error
+		}
+		return nil
+	}); err != nil {
 		d.logger.Error("创建通知配置失败", zap.Error(err), zap.String("name", req.Name))
 		return fmt.Errorf("创建通知配置失败: %w", err)
 	}
@@ -105,8 +118,8 @@ func (d *notificationDAO) UpdateNotification(ctx context.Context, req *model.Upd
 	if req.Name != "" {
 		updateData["name"] = req.Name
 	}
-	if req.Description != "" {
-		updateData["description"] = req.Description
+	if req.Description != nil {
+		updateData["description"] = *req.Description
 	}
 	if req.ProcessID != nil {
 		updateData["process_id"] = req.ProcessID
@@ -144,11 +157,11 @@ func (d *notificationDAO) UpdateNotification(ctx context.Context, req *model.Upd
 	if req.RecipientDepts != nil {
 		updateData["recipient_depts"] = req.RecipientDepts
 	}
-	if req.MessageTemplate != "" {
-		updateData["message_template"] = req.MessageTemplate
+	if req.MessageTemplate != nil {
+		updateData["message_template"] = *req.MessageTemplate
 	}
-	if req.SubjectTemplate != "" {
-		updateData["subject_template"] = req.SubjectTemplate
+	if req.SubjectTemplate != nil {
+		updateData["subject_template"] = *req.SubjectTemplate
 	}
 	if req.ScheduledTime != nil {
 		updateData["scheduled_time"] = req.ScheduledTime
@@ -156,8 +169,8 @@ func (d *notificationDAO) UpdateNotification(ctx context.Context, req *model.Upd
 	if req.RepeatInterval != nil {
 		updateData["repeat_interval"] = req.RepeatInterval
 	}
-	if req.MaxRetries > 0 {
-		updateData["max_retries"] = req.MaxRetries
+	if req.MaxRetries != nil {
+		updateData["max_retries"] = *req.MaxRetries
 	}
 	if req.RetryInterval > 0 {
 		updateData["retry_interval"] = req.RetryInterval
@@ -168,7 +181,9 @@ func (d *notificationDAO) UpdateNotification(ctx context.Context, req *model.Upd
 	if req.Priority != 0 {
 		updateData["priority"] = req.Priority
 	}
-	updateData["is_default"] = req.IsDefault
+	if req.IsDefault != nil {
+		updateData["is_default"] = *req.IsDefault
+	}
 	if req.Settings != nil {
 		updateData["settings"] = req.Settings
 	}

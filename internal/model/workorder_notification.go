@@ -211,7 +211,7 @@ type CreateWorkorderNotificationReq struct {
 	SubjectTemplate    string                `json:"subject_template"`
 	ScheduledTime      *time.Time            `json:"scheduled_time"`
 	RepeatInterval     *int                  `json:"repeat_interval"`
-	MaxRetries         int                   `json:"max_retries"`
+	MaxRetries         *int                  `json:"max_retries" binding:"omitempty,min=0,max=100"`
 	RetryInterval      int                   `json:"retry_interval"`
 	Status             int8                  `json:"status"`
 	Priority           int8                  `json:"priority"`
@@ -223,7 +223,7 @@ type CreateWorkorderNotificationReq struct {
 type UpdateWorkorderNotificationReq struct {
 	ID                 int                   `json:"id" binding:"required"`
 	Name               string                `json:"name"`
-	Description        string                `json:"description"`
+	Description        *string               `json:"description"`
 	ProcessID          *int                  `json:"process_id"`
 	TemplateID         *int                  `json:"template_id"`
 	CategoryID         *int                  `json:"category_id"`
@@ -236,15 +236,15 @@ type UpdateWorkorderNotificationReq struct {
 	RecipientRoles     StringList            `json:"recipient_roles"`
 	RecipientAddresses NotificationAddresses `json:"recipient_addresses" gorm:"type:text"`
 	RecipientDepts     StringList            `json:"recipient_depts"`
-	MessageTemplate    string                `json:"message_template"`
-	SubjectTemplate    string                `json:"subject_template"`
+	MessageTemplate    *string               `json:"message_template" binding:"omitempty,min=1"`
+	SubjectTemplate    *string               `json:"subject_template"`
 	ScheduledTime      *time.Time            `json:"scheduled_time"`
 	RepeatInterval     *int                  `json:"repeat_interval"`
-	MaxRetries         int                   `json:"max_retries"`
+	MaxRetries         *int                  `json:"max_retries" binding:"omitempty,min=0,max=100"`
 	RetryInterval      int                   `json:"retry_interval"`
 	Status             int8                  `json:"status"`
 	Priority           int8                  `json:"priority"`
-	IsDefault          int8                  `json:"is_default" binding:"omitempty,oneof=1 2"`
+	IsDefault          *int8                 `json:"is_default" binding:"omitempty,oneof=1 2"`
 	Settings           JSONMap               `json:"settings"`
 }
 

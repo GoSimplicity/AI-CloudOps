@@ -35,4 +35,5 @@ func TestMySQLNotificationChannelPagination(t *testing.T) {
 	pool.SetMaxOpenConns(2)
 	defer pool.Close()
 	assertNotificationChannelPagination(t, db)
+	assertNotificationFieldPresence(t, db)
 }

@@ -78,6 +78,13 @@ func TestMySQLStartupMigrationAndYAMLCRUD(t *testing.T) {
 	if err := db.Omit("CloudResource").Create(ordinary).Error; err != nil {
 		t.Fatal("ordinary audit fixture failed")
 	}
+	legacyNotification := &model.WorkorderNotification{Name: "legacy-default-zero", Status: 2, IsDefault: model.IsDefaultNo}
+	if err := db.Create(legacyNotification).Error; err != nil {
+		t.Fatal("legacy notification fixture failed")
+	}
+	if err := db.Model(legacyNotification).UpdateColumn("is_default", 0).Error; err != nil {
+		t.Fatal("legacy default flag setup failed")
+	}
 	if err := InitTables(db); err != nil {
 		t.Fatal("idempotent migration failed")
 	}
@@ -87,6 +94,10 @@ func TestMySQLStartupMigrationAndYAMLCRUD(t *testing.T) {
 	}
 	if err := db.First(&retained, ordinary.ID).Error; err != nil || retained.NewValue != "local" {
 		t.Fatal("ordinary audit changed during migration")
+	}
+	var normalized model.WorkorderNotification
+	if err := db.First(&normalized, legacyNotification.ID).Error; err != nil || normalized.IsDefault != model.IsDefaultNo {
+		t.Fatal("legacy invalid default flag not normalized to false")
 	}
 	saved, err := tasks.GetYamlTaskByID(ctx, task.ID, 42)
 	if err != nil || saved.TemplateID != template.ID || len(saved.Variables) != 1 || saved.Variables[0] != "owner=fixture" {
