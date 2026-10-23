@@ -17,7 +17,7 @@ git -C "$GL_DEV" add app.conf; git -C "$GL_DEV" commit -qm "merge feat"
 git -C "$GL_DEV" push -q origin main feat
 HEAD_SHA="$(git -C "$GL_DEV" rev-parse HEAD)"
 gl_checkout "$HEAD_SHA"
-gl_expect_block "push 到 main，密钥只在冲突合并提交中" EVENT_NAME=push PUSH_BEFORE="$BEFORE" HEAD_SHA="$HEAD_SHA" DEFAULT_BRANCH=main REF_NAME=main
+gl_expect_block "push 到 main，密钥只在冲突合并提交中" leak:github-pat:app.conf EVENT_NAME=push PUSH_BEFORE="$BEFORE" HEAD_SHA="$HEAD_SHA" DEFAULT_BRANCH=main REF_NAME=main
 
 # 无冲突的 evil merge：合并时额外加入一个含 AWS key 的文件
 gl_new_origin evil
@@ -31,6 +31,6 @@ git -C "$GL_DEV" add creds.ini; git -C "$GL_DEV" commit -qm "merge feat (evil)"
 git -C "$GL_DEV" push -q origin main feat
 HEAD_SHA="$(git -C "$GL_DEV" rev-parse HEAD)"; FEAT_SHA="$(git -C "$GL_DEV" rev-parse feat)"
 gl_checkout "$HEAD_SHA"
-gl_expect_block "push 到 main，无冲突 evil merge 加入密钥文件" EVENT_NAME=push PUSH_BEFORE="$BEFORE" HEAD_SHA="$HEAD_SHA" DEFAULT_BRANCH=main REF_NAME=main
+gl_expect_block "push 到 main，无冲突 evil merge 加入密钥文件" leak:aws-access-token:creds.ini EVENT_NAME=push PUSH_BEFORE="$BEFORE" HEAD_SHA="$HEAD_SHA" DEFAULT_BRANCH=main REF_NAME=main
 gl_expect_pass "对照：PR 事件 base..feat，无密钥" EVENT_NAME=pull_request PR_BASE_SHA="$BEFORE" HEAD_SHA="$FEAT_SHA" DEFAULT_BRANCH=main REF_NAME=1/merge
 gl_finish

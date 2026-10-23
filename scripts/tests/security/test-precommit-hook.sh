@@ -3,6 +3,8 @@
 #
 #   G1  部分暂存的 .go 文件：暂存版本无密钥，工作区未暂存部分含密钥（暂存版本格式不规范 / 规范两种）
 #   G2  从未暂存过的 .go 文件（含密钥、格式不规范）不得被钩子自动加入提交
+#   对照  暂存密钥必须被拦；干净提交必须成功（正向对照：钩子坏掉、对所有提交都失败时上面各项也会“PASS”，
+#         所以必须有一个应当成功的提交来证明钩子本身可用）
 #
 # 用法: scripts/tests/security/test-precommit-hook.sh [--rev <git-rev>]
 #   --rev  测试指定版本的 .githooks/pre-commit（默认：当前工作区文件）。对修复前版本运行应报 FAIL。
@@ -48,9 +50,9 @@ check() {
     local name="$1" tok="$2" rc="$3" hits
     hits="$(git log --all -p | grep -cF "$tok" || true)"
     if [ "$hits" -gt 0 ]; then
-        echo "FAIL [$name] 密钥进入了提交（commit rc=$rc, 命中 $hits 处） -> 漏"; FAILS=$((FAILS+1))
+        echo "FAIL [$name] 密钥进入了提交（commit rc=${rc}, 命中 ${hits} 处） -> 漏"; FAILS=$((FAILS+1))
     else
-        echo "PASS [$name] 密钥未进入提交（commit rc=$rc）"
+        echo "PASS [$name] 密钥未进入提交（commit rc=${rc}）"
     fi
 }
 
@@ -81,6 +83,22 @@ new_repo ctl; TOK="$(fake_token)"
 printf 'package main\n\nvar token = "%s"\n\nfunc main() {}\n' "$TOK" >main.go; git add main.go
 set +e; git commit -qm ctl >"$TMP/ctl.out" 2>&1; rc=$?; set -e
 check 对照-暂存密钥被gitleaks拦截 "$TOK" "$rc"
+if [ "$rc" -eq 0 ] || ! grep -q 'gitleaks' "$TMP/ctl.out"; then
+    echo "FAIL [对照-暂存密钥被gitleaks拦截] 提交应因 gitleaks 检出而失败（rc=${rc}）"; FAILS=$((FAILS+1))
+fi
+
+# 正向对照：干净、格式规范的 .go 改动必须能正常提交，且提交内容就是暂存内容
+new_repo ok
+printf 'package main\n\nfunc main() { println("ok") }\n' >main.go; git add main.go
+before="$(git rev-parse HEAD)"
+set +e; git commit -qm ok >"$TMP/ok.out" 2>&1; rc=$?; set -e
+after="$(git rev-parse HEAD)"
+if [ "$rc" -eq 0 ] && [ "$after" != "$before" ] && git show HEAD:main.go | grep -qF 'println("ok")'; then
+    echo "PASS [对照-干净提交成功] commit rc=0，HEAD ${before:0:7} -> ${after:0:7}"
+else
+    echo "FAIL [对照-干净提交成功] 干净提交未成功（commit rc=${rc}，HEAD ${before:0:7} -> ${after:0:7}）"
+    sed 's/^/      /' "$TMP/ok.out" | tail -5; FAILS=$((FAILS+1))
+fi
 
 echo "目标版本: ${REV:-工作区}；失败 $FAILS 项"
 [ "$FAILS" -eq 0 ]
