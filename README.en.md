@@ -211,6 +211,7 @@ With `ENV=production` (or `prod`/`prd`) the backend refuses to start unless:
 - `TREE_PASSWORD_ENCRYPTION_KEY` is exactly 32 bytes and not the sample value.
 - Mock is disabled (the default when `ENV=production`; an explicit `MOCK_ENABLED=true` is rejected).
 - `AIOPS_API_KEY` is at least 32 characters whenever `AIOPS_BASE_URL` is set.
+- No `admin` account still uses the built-in mock password shipped before SEC-27 (outside production this is logged as a `[SECURITY]` warning instead). See [docs/security-baseline.md](docs/security-baseline.md) for remediation.
 
 Other security behaviour to be aware of:
 

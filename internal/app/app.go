@@ -138,6 +138,10 @@ func (a *App) Run(ctx context.Context) error {
 	if err := a.bootstrapAdmin(ctx); err != nil {
 		return err
 	}
+	// SEC-27：在对外提供服务前检查 admin 是否仍在使用旧内置弱口令（生产拒绝启动，非生产告警）。
+	if err := a.checkLegacyAdminPassword(ctx); err != nil {
+		return err
+	}
 
 	a.server.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{

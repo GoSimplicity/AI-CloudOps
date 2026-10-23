@@ -284,6 +284,7 @@ AI-CloudOps-aiops/
 `JWT_KEY1`、`JWT_KEY2`、`TREE_PASSWORD_ENCRYPTION_KEY`（至少32字符，不能使用仓库示例值）。
 首次空数据库启动使用 `BOOTSTRAP_ADMIN_PASSWORD`（至少12字符）创建管理员，成功后移除该变量；已有用户不会被重置。
 开发环境 mock 默认开启；mock 管理员口令只从 `MOCK_ADMIN_PASSWORD`（至少12字符）读取，未设置时不创建 mock 管理员，代码中不再内置口令。
+启动时若检测到 `admin` 仍在使用 SEC-27 之前的 mock 内置口令，生产环境拒绝启动、非生产环境打印 `[SECURITY]` 告警，处置方式见 [安全基线](docs/security-baseline.md)。
 `SERVER_ALLOWED_ORIGINS` 是逗号分隔的精确 Origin 白名单，留空仅支持同源浏览器访问。
 
 AI 请求通过 Go 的 `/api/v1/*` 网关接受 JWT 和角色权限检查，然后向
