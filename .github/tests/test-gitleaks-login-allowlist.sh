@@ -6,6 +6,7 @@
 #   正例  原 nonce 出现在 login_test.go 第 109/130 行：pre-commit 与 CI（范围扫描 + 工作树扫描）均放行
 #   反例  同文件同一行换成合成密钥：pre-commit、CI 范围扫描、CI 工作树扫描都必须拦下（generic-api-key @ 该文件）
 #   反例  同一个 nonce 值出现在其他文件：必须拦下（allowlist 只限该文件）
+#   反例中的合成密钥先用默认规则探测、确认会被 generic-api-key 检出后才使用（review3h P3-h，避免偶发失败）
 #
 # 用法: .github/tests/test-gitleaks-login-allowlist.sh [--rev <git-rev>]   （对修复前版本运行应报 FAIL）
 # 依赖: git、gofmt、gitleaks、python3。夹具为生成的最小 Go 文件（行号与原文件一致），不读取 internal/ 下的真实文件。
@@ -27,6 +28,24 @@ gen_fixture() { # gen_fixture <109 行的值> <130 行的值>
     i=112
     while [ "$i" -le 128 ]; do printf '// filler %s\n' "$i"; i=$((i+1)); done
     printf 'func b(h interface{ Set(string, string) }) {\n\th.Set("Sec-WebSocket-Key", "%s")\n}\n' "$2"
+}
+
+# review3h P3-h：随机 32 位样本偶尔会被 generic-api-key 的停用词/熵过滤掉（默认规则实测 300 个漏检 2 个，约 0.7%），
+# 反例因此偶发 FAIL。每个样本先用默认规则在中性路径、同样的行形状里探测，确认检出 generic-api-key 才使用；
+# 连续 20 个都检不出视为环境问题（exit 2，调用处 || exit 2）。样本只经由标准输出传给调用方，不打印。
+gl_detectable_generic() {
+    local i=0 v rc d="$GL_TMP/probe"
+    mkdir -p "$d/src"; printf '[extend]\nuseDefault = true\n' >"$d/default.toml"
+    while [ "$i" -lt 20 ]; do
+        i=$((i+1)); v="$(gl_fake_generic)"
+        printf 'package probe\n\nfunc a(h interface{ Set(string, string) }) {\n\th.Set("Sec-WebSocket-Key", "%s")\n}\n' "$v" >"$d/src/probe.go"
+        rm -f "$d/r.json"; rc=0
+        env -u GITLEAKS_CONFIG gitleaks dir --no-banner --config "$d/default.toml" --exit-code 3 \
+            --report-format json --report-path "$d/r.json" "$d/src" >/dev/null 2>&1 || rc=$?
+        if [ "$rc" -eq 3 ] && grep -q '"RuleID": "generic-api-key"' "$d/r.json"; then printf '%s' "$v"; return 0; fi
+        [ "$rc" -eq 0 ] || [ "$rc" -eq 3 ] || { echo "gitleaks 探测失败（rc=${rc}）" >&2; exit 2; }
+    done
+    echo "连续 20 个合成样本都未被默认规则检出，无法构造反例" >&2; exit 2
 }
 
 # 开发者仓库：目标版本的 .gitleaks.toml / .gitleaksignore / .githooks/pre-commit + 夹具（原 nonce）
@@ -72,11 +91,13 @@ printf '\n// touch\n' >>"$GL_DEV/$LT"; git -C "$GL_DEV" add "$LT"
 hook_commit "正例 pre-commit：原 nonce 在第 109/130 行" pass
 
 new_dev pc-neg109
-gen_fixture "$(gl_fake_generic)" "$NONCE" >"$GL_DEV/$LT"; git -C "$GL_DEV" add "$LT"
+fk="$(gl_detectable_generic)" || exit 2
+gen_fixture "$fk" "$NONCE" >"$GL_DEV/$LT"; git -C "$GL_DEV" add "$LT"
 hook_commit "反例 pre-commit：第 109 行换成合成密钥" block "$LT:109"
 
 new_dev pc-neg130
-gen_fixture "$NONCE" "$(gl_fake_generic)" >"$GL_DEV/$LT"; git -C "$GL_DEV" add "$LT"
+fk="$(gl_detectable_generic)" || exit 2
+gen_fixture "$NONCE" "$fk" >"$GL_DEV/$LT"; git -C "$GL_DEV" add "$LT"
 hook_commit "反例 pre-commit：第 130 行换成合成密钥" block "$LT:130"
 
 new_dev pc-other
@@ -103,5 +124,6 @@ ci_case() { # ci_case <名称前缀> <109 行的值> <期望 pass|block>
     gl_step scan
 }
 ci_case "正例：原 nonce 保持不变" "$NONCE" pass
-ci_case "反例：第 109 行换成合成密钥" "$(gl_fake_generic)" block
+fk="$(gl_detectable_generic)" || exit 2
+ci_case "反例：第 109 行换成合成密钥" "$fk" block
 gl_finish
