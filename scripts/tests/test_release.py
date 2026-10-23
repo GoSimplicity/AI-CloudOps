@@ -319,6 +319,23 @@ class ReleaseComposeWebhookAddrTests(unittest.TestCase):
         self.env["PROMETHEUS_ALERT_WEBHOOK_ADDR"] = custom
         self.assertEqual(self._jq(self.ALERT_ADDR_JQ), custom)
 
+    def test_shell_value_beats_env_file(self):
+        # shell 与 .env 同时设置：shell 优先（只经 jq 取这一个字段）
+        from_file = f"http://env-file-{os.getpid()}.example.test:18889/api/v1/alerts/receive"
+        from_shell = f"http://shell-{os.getpid()}.example.test:28889/api/v1/alerts/receive"
+        with self.env_file.open("a") as f:
+            f.write(f"PROMETHEUS_ALERT_WEBHOOK_ADDR={from_file}\n")
+        self.env["PROMETHEUS_ALERT_WEBHOOK_ADDR"] = from_shell
+        self.assertEqual(self._jq(self.ALERT_ADDR_JQ), from_shell)
+
+    def test_empty_shell_value_beats_env_file_then_default(self):
+        # shell 里导出空串、.env 里有值：空串照样压过 .env，再由 :- 回落到 compose 默认值（不是 .env 的值）
+        from_file = f"http://env-file-{os.getpid()}.example.test:18889/api/v1/alerts/receive"
+        with self.env_file.open("a") as f:
+            f.write(f"PROMETHEUS_ALERT_WEBHOOK_ADDR={from_file}\n")
+        self.env["PROMETHEUS_ALERT_WEBHOOK_ADDR"] = ""
+        self.assertEqual(self._jq(self.ALERT_ADDR_JQ), self.DEFAULT_ALERT_ADDR)
+
     def test_backend_alert_webhook_addr_targets_webhook_port(self):
         addr = self._jq('.services.backend.environment.PROMETHEUS_ALERT_WEBHOOK_ADDR // ""')
         self.assertTrue(addr, "backend 未设置 PROMETHEUS_ALERT_WEBHOOK_ADDR（代码默认 localhost:8889，Alertmanager 推送时指向它自己所在的容器或主机）")
