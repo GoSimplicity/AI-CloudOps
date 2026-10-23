@@ -36,12 +36,24 @@ def _netloc_port(netloc):
     return tail.rpartition(":")[2] if ":" in tail else None
 
 
-def _url_port(url):
-    parts = urlsplit(url if "://" in url else "http://" + url)
+def _split_alert_url(url):
+    """按 alert_cache.go buildWebhookURL 的规则拆地址：TrimSpace 后以小写 http:// 或 https:// 开头才算完整 URL
+    （区分大小写的前缀判断），不含 :// 时按 host:port 走 http；其他带 :// 的写法（含大写 HTTPS://）在代码里会拼出
+    http://HTTPS://... 的错误地址，这里直接报错，不做小写化。"""
+    base = url.strip()
+    if base.startswith(("http://", "https://")):
+        parts = urlsplit(base)
+    elif "://" in base:
+        raise ValueError(f"scheme 必须是小写 http/https（代码区分大小写）: {base.split('://', 1)[0]!r}")
+    else:
+        parts = urlsplit("http://" + base)
     _ascii_port(_netloc_port(parts.netloc))
-    scheme = parts.scheme.lower()
-    if scheme not in _DEFAULT_PORTS:
-        raise ValueError(f"不支持的 scheme: {scheme!r}")
+    return parts
+
+
+def _url_port(url):
+    parts = _split_alert_url(url)
+    scheme = parts.scheme
     port = parts.port if parts.port is not None else _DEFAULT_PORTS[scheme]
     if not 1 <= port <= 65535:
         raise ValueError(f"端口越界: {port}")
@@ -117,10 +129,12 @@ class WebhookPortConsistencyTests(unittest.TestCase):
 
     def test_url_port_boundaries(self):
         self.assertEqual(_url_port("http://h/x"), 80)
-        self.assertEqual(_url_port("HTTPS://h/x"), 443)
+        self.assertEqual(_url_port("https://h/x"), 443)
+        self.assertEqual(_url_port(" https://h:9443/x \n"), 9443)
         self.assertEqual(_url_port("h:8889"), 8889)
         for bad in ("ftp://h:21/x", "http://h:0/x", "http://h:8889suffix/x", "http://h:70000/x",
-                    "http://h:８８８９/x", "h:８８８９"):
+                    "http://h:８８８９/x", "h:８８８９",
+                    "HTTPS://h/x", "HTTP://h:8889/x", "Http://h:8889/x", "hTTps://h:9443/x"):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 _url_port(bad)
 
@@ -256,6 +270,23 @@ class GroupFormatParserTests(unittest.TestCase):
         ):
             with self.subTest(snippet=snippet), self.assertRaises(AssertionError):
                 _group_format(snippet)
+
+
+class AlertAddrSchemeDocTests(unittest.TestCase):
+    """env.example 须写明告警地址的 scheme 必须小写（代码按区分大小写的前缀判断）。"""
+
+    def test_env_example_documents_lowercase_scheme(self):
+        lines = (ROOT / "env.example").read_text(encoding="utf-8").splitlines()
+        idx = next(i for i, line in enumerate(lines) if line.startswith("PROMETHEUS_ALERT_WEBHOOK_ADDR="))
+        block = []
+        for line in reversed(lines[:idx]):
+            if not line.startswith("#"):
+                break
+            block.append(line)
+        text = "\n".join(block)
+        self.assertIn("scheme 必须是小写 http:// 或 https://", text)
+        value = lines[idx].split("=", 1)[1].strip()
+        self.assertTrue(value.startswith(("http://", "https://")) or "://" not in value, value)
 
 
 class WebhookYamlPortValueTests(unittest.TestCase):

@@ -153,15 +153,21 @@ def _netloc_port(netloc):
 def _alert_addr_target(addr):
     """解析 PROMETHEUS_ALERT_WEBHOOK_ADDR，返回 (主机名, 端口, 路径)。
 
-    代码接受完整 URL 和 host:port 两种写法，后者按 http 处理。scheme 不是 http/https、端口不是 1-65535 的纯数字
-    （如 8889suffix）时抛 ValueError（端口格式由 urllib 校验）。
+    对齐 alert_cache.go buildWebhookURL：先 TrimSpace；以小写 http:// 或 https:// 开头（区分大小写）才是完整 URL，
+    不含 :// 时按 host:port 走 http。其他带 :// 的写法（ftp://、大写 HTTPS:// 等）在代码里会拼成
+    http://HTTPS://... 的错误地址，这里抛 ValueError，不做小写化；端口不是 1-65535 的 ASCII 数字
+    （如 8889suffix、８８８９）同样抛 ValueError。
     """
     from urllib.parse import urlsplit
-    url = urlsplit(addr if "://" in addr else "http://" + addr)
+    base = addr.strip()
+    if base.startswith(("http://", "https://")):
+        url = urlsplit(base)
+    elif "://" in base:
+        raise ValueError(f"告警地址 scheme 必须是小写 http/https（代码区分大小写），实际 {base.split('://', 1)[0]!r}")
+    else:
+        url = urlsplit("http://" + base)
     _ascii_port(_netloc_port(url.netloc))
-    scheme = url.scheme.lower()
-    if scheme not in _DEFAULT_PORTS:
-        raise ValueError(f"告警地址只允许 http/https，实际 scheme={url.scheme!r}")
+    scheme = url.scheme
     port = url.port
     if port is None:
         port = _DEFAULT_PORTS[scheme]
@@ -317,12 +323,20 @@ class AlertAddrBoundaryTests(unittest.TestCase):
     def test_accepts_http_https_and_host_port(self):
         self.assertEqual(_alert_addr_target("http://webhook:8889/api/v1/alerts/receive"),
                          ("webhook", 8889, "/api/v1/alerts/receive"))
-        self.assertEqual(_alert_addr_target("HTTPS://webhook:9443/x")[1], 9443)
+        self.assertEqual(_alert_addr_target("https://webhook:9443/x")[1], 9443)
+        self.assertEqual(_alert_addr_target(" http://webhook:8889/x\n"), ("webhook", 8889, "/x"))
         self.assertEqual(_alert_addr_target("webhook:8889"), ("webhook", 8889, ""))
 
     def test_rejects_non_http_scheme(self):
         for addr in ("ftp://webhook:8889/api/v1/alerts/receive", "ws://webhook:8889/api/v1/alerts/receive",
                      "file://webhook:8889/api/v1/alerts/receive", "unix://webhook:8889/x"):
+            with self.subTest(addr=addr), self.assertRaises(ValueError):
+                _alert_addr_target(addr)
+
+    def test_rejects_uppercase_scheme(self):
+        # 代码 strings.HasPrefix 区分大小写：HTTPS:// 不会被识别成 URL，不能在测试里小写化后放过
+        for addr in ("HTTPS://webhook:9443/x", "HTTP://webhook:8889/api/v1/alerts/receive",
+                     "Http://webhook:8889/api/v1/alerts/receive", "hTTps://webhook/x"):
             with self.subTest(addr=addr), self.assertRaises(ValueError):
                 _alert_addr_target(addr)
 
