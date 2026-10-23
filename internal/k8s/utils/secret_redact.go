@@ -33,6 +33,7 @@ import (
 	"io"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -147,23 +148,111 @@ type secretYAMLDocument struct {
 	Type              corev1.SecretType          `json:"type,omitempty"`
 }
 
+// maxSecretYAMLBytes 是 Secret YAML 入口允许的最大字节数（1 MiB），在任何解析之前检查
+const maxSecretYAMLBytes = 1 << 20
+
 var (
-	errSecretYAMLMultiDoc = errors.New("解析YAML失败: 只支持单个 YAML 文档，请去掉 --- 分隔的其他文档")
-	// yaml 库的部分报错会用反引号或 %#v 带出标量值，统一抹掉
-	secretYAMLQuotedValue = regexp.MustCompile("`[^`]*`")
+	errSecretYAMLMultiDoc  = errors.New("解析YAML失败: 只支持单个 YAML 文档，请去掉 --- 分隔的其他文档")
+	errSecretYAMLTooLarge  = errors.New("解析YAML失败: YAML 超过 1 MiB 上限")
+	errSecretYAMLDupKeyStr = errors.New("解析YAML失败: 存在按字符串比较相同的重复键（例如 1 与 \"1\"），请只保留一个")
+	// 只从库报错里取行号，其余内容一律不保留
+	secretYAMLErrorLine = regexp.MustCompile(`line ([0-9]+)`)
 )
 
-// sanitizeSecretYAMLError 去掉解析错误中可能回显的值，只保留位置与原因
-func sanitizeSecretYAMLError(err error) error {
-	msg := err.Error()
-	if i := strings.Index(msg, "unsupported map key"); i >= 0 {
-		msg = msg[:i] + "unsupported map key（键必须是字符串）"
-	}
-	msg = secretYAMLQuotedValue.ReplaceAllString(msg, "`...`")
-	return fmt.Errorf("解析YAML失败: %s", msg)
+// secretYAMLErrorClasses 是库报错到固定文案的白名单映射，按顺序匹配第一项。
+// 报错中只保留类别与行号，不保留任何来自输入的键或值。
+var secretYAMLErrorClasses = []struct {
+	marker string
+	text   string
+}{
+	{"invalid map key", "映射键必须是字符串等标量"},
+	{"unsupported map key", "映射键必须是字符串等标量"},
+	{"already set in map", "存在重复键"},
+	{"unknown anchor", "引用了未定义的锚点"},
+	{"excessive aliasing", "别名展开过多"},
+	{"exceeded max depth", "嵌套层级过深"},
+	{"map merge requires map", "合并键 << 只能引用映射"},
+	{"cannot decode", "值的类型与标签不匹配"},
+	{"cannot unmarshal", "字段类型不匹配"},
+	{"parsing time", "时间字段格式不正确"},
+	{"illegal base64", "base64 格式不正确"},
+	{"yaml:", "YAML 语法错误"},
 }
 
-// checkSingleYAMLDocument 拒绝多文档 YAML（包括末尾多出的空文档 ---）
+// sanitizeSecretYAMLError 按白名单重写解析错误：只保留错误类别与行号，不回显任何键或值
+func sanitizeSecretYAMLError(err error) error {
+	msg := err.Error()
+	text := "YAML 格式或字段类型错误"
+	for _, c := range secretYAMLErrorClasses {
+		if strings.Contains(msg, c.marker) {
+			text = c.text
+			break
+		}
+	}
+	if m := secretYAMLErrorLine.FindStringSubmatch(msg); m != nil {
+		return fmt.Errorf("解析YAML失败: line %s: %s", m[1], text)
+	}
+	return fmt.Errorf("解析YAML失败: %s", text)
+}
+
+// secretYAMLKeyString 与 sigs.k8s.io/yaml 把 YAML 键转成 JSON 键的规则一致；不支持的键类型返回 false
+func secretYAMLKeyString(k interface{}) (string, bool) {
+	switch v := k.(type) {
+	case string:
+		return v, true
+	case int:
+		return strconv.Itoa(v), true
+	case int64:
+		return strconv.FormatInt(v, 10), true
+	case float64:
+		s := strconv.FormatFloat(v, 'g', -1, 32)
+		switch s {
+		case "+Inf":
+			s = ".inf"
+		case "-Inf":
+			s = "-.inf"
+		case "NaN":
+			s = ".nan"
+		}
+		return s, true
+	case bool:
+		if v {
+			return "true", true
+		}
+		return "false", true
+	}
+	return "", false
+}
+
+// checkStringifiedDuplicateKeys 拒绝同一映射中转成字符串后相同的键（如 1 与 "1"），
+// 否则 encoding/json 合并时以哪个为准取决于 map 遍历顺序，结果不确定。
+func checkStringifiedDuplicateKeys(node interface{}) error {
+	switch v := node.(type) {
+	case map[interface{}]interface{}:
+		seen := make(map[string]struct{}, len(v))
+		for k, child := range v {
+			if s, ok := secretYAMLKeyString(k); ok {
+				if _, dup := seen[s]; dup {
+					return errSecretYAMLDupKeyStr
+				}
+				seen[s] = struct{}{}
+			}
+			if err := checkStringifiedDuplicateKeys(child); err != nil {
+				return err
+			}
+		}
+	case []interface{}:
+		for _, child := range v {
+			if err := checkStringifiedDuplicateKeys(child); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// checkSingleYAMLDocument 拒绝多文档 YAML（包括末尾多出的空文档 ---），
+// 并拒绝转成字符串后相同的重复键
 func checkSingleYAMLDocument(raw []byte) error {
 	dec := yamlv2.NewDecoder(bytes.NewReader(raw))
 	var first interface{}
@@ -172,6 +261,9 @@ func checkSingleYAMLDocument(raw []byte) error {
 			return nil
 		}
 		return sanitizeSecretYAMLError(err)
+	}
+	if err := checkStringifiedDuplicateKeys(first); err != nil {
+		return err
 	}
 	var next interface{}
 	if err := dec.Decode(&next); !errors.Is(err, io.EOF) {
@@ -252,6 +344,9 @@ func checkSecretFieldCaseDuplicates(j []byte) error {
 // 返回值中 data 里值恰为占位符的键不放入 sec.Data，而是按升序单独返回，供调用方恢复或拒绝。
 // 所有错误都不包含 Secret 的值。
 func parseSecretYAMLTyped(y string) (*corev1.Secret, []string, error) {
+	if len(y) > maxSecretYAMLBytes {
+		return nil, nil, errSecretYAMLTooLarge
+	}
 	raw := []byte(y)
 	if err := checkSingleYAMLDocument(raw); err != nil {
 		return nil, nil, err
@@ -295,12 +390,21 @@ func parseSecretYAMLTyped(y string) (*corev1.Secret, []string, error) {
 	return sec, placeholders, nil
 }
 
-// isSecretPlaceholderValue 判断值去掉首尾空白后是否为占位符
-func isSecretPlaceholderValue(v string) bool {
-	return strings.TrimSpace(v) == SecretRedactedPlaceholder
+// isSecretPlaceholderPadding 是判断占位符前要去掉的首尾字符：空白、NUL 与零宽字符
+func isSecretPlaceholderPadding(r rune) bool {
+	switch r {
+	case 0, '\u200b', '\u200c', '\u200d', '\ufeff':
+		return true
+	}
+	return unicode.IsSpace(r)
 }
 
-// checkNoSecretPlaceholder 确认 data（解码后）与 stringData 中没有占位符或其带空白的变体
+// isSecretPlaceholderValue 判断值去掉首尾空白、NUL、零宽字符（U+200B/U+200C/U+200D/U+FEFF）后是否为占位符
+func isSecretPlaceholderValue(v string) bool {
+	return strings.TrimFunc(v, isSecretPlaceholderPadding) == SecretRedactedPlaceholder
+}
+
+// checkNoSecretPlaceholder 确认 data（解码后）与 stringData 中没有占位符或其首尾带空白/NUL/零宽字符的变体
 func checkNoSecretPlaceholder(sec *corev1.Secret) error {
 	dataKeys := make([]string, 0, len(sec.Data))
 	for k := range sec.Data {
@@ -319,15 +423,16 @@ func checkNoSecretPlaceholder(sec *corev1.Secret) error {
 	sort.Strings(stringKeys)
 	for _, k := range stringKeys {
 		if isSecretPlaceholderValue(sec.StringData[k]) {
-			return fmt.Errorf("stringData 中键 %s 仍为脱敏占位符 %s（或带空白的变体），请填写真实值", k, SecretRedactedPlaceholder)
+			return fmt.Errorf("stringData 中键 %s 仍为脱敏占位符 %s（或首尾带空白、NUL、零宽字符的变体），请填写真实值", k, SecretRedactedPlaceholder)
 		}
 	}
 	return nil
 }
 
 // SecretYAMLHasRedactedPlaceholder 判断 YAML 的 data/stringData 中是否仍含脱敏占位符。
-// 先解析为类型化的 Secret（字段名大小写变体按 Kubernetes 解码规则归并），
-// data 中的裸占位符、解码后为占位符的值、stringData 中带空白的占位符都算。
+// 先解析为类型化的 Secret（字段名大小写变体按 encoding/json 不区分大小写的规则归并；
+// apiserver/kubectl 是区分大小写的，见 docs/release/k8s-secret-redaction.md），
+// data 中的裸占位符、解码后为占位符的值、stringData 中首尾带空白/NUL/零宽字符的占位符都算。
 func SecretYAMLHasRedactedPlaceholder(y string) (bool, error) {
 	sec, placeholders, err := parseSecretYAMLTyped(y)
 	if err != nil {
