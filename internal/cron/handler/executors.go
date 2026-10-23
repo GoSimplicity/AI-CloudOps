@@ -314,7 +314,8 @@ func buildTaskEnv(taskEnv model.KeyValueList) []string {
 	}
 	// 历史数据中 key/value 都为空的行（前端新增时插入的空行）直接跳过，不生成 "=" 这样的无效条目
 	for _, kv := range crontask.NormalizeTaskEnv(taskEnv) {
-		env = append(env, fmt.Sprintf("%s=%s", kv.Key, kv.Value))
+		// 与 ValidateTaskEnv 一致：注入校验过的去首尾空白后的变量名
+		env = append(env, fmt.Sprintf("%s=%s", strings.TrimSpace(kv.Key), kv.Value))
 	}
 	return env
 }

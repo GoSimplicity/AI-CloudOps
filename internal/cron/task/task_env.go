@@ -3,6 +3,7 @@ package task
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -12,7 +13,9 @@ import (
 var ErrForbiddenTaskEnv = errors.New("任务环境变量不允许设置")
 
 // forbiddenTaskEnvNames 精确匹配（不区分大小写）的禁止变量名：
-// 可让 shell 在启动时执行任意文件、改变分词/选项/调试输出，或让 glibc 加载任意模块、调整分配器行为
+// 可让 shell 在启动时执行任意文件或命令（BASH_ENV、ENV、PROMPT_COMMAND）、改变分词/选项/调试输出
+// （IFS、SHELLOPTS=xtrace 配合 PS4=$(...) 可执行命令），或让 glibc 加载任意模块、调整分配器行为。
+// PYTHONPATH、NODE_OPTIONS、PERL5OPT 等解释器变量有正当用途，暂不禁止（风险见 README 与 docs/release/w1-cron-env-audit.md）
 var forbiddenTaskEnvNames = map[string]struct{}{
 	"BASH_ENV":       {},
 	"ENV":            {},
@@ -20,6 +23,7 @@ var forbiddenTaskEnvNames = map[string]struct{}{
 	"SHELLOPTS":      {},
 	"BASHOPTS":       {},
 	"PS4":            {},
+	"PROMPT_COMMAND": {},
 	"GCONV_PATH":     {},
 	"GLIBC_TUNABLES": {},
 	"LOCPATH":        {},
@@ -28,6 +32,10 @@ var forbiddenTaskEnvNames = map[string]struct{}{
 // forbiddenTaskEnvPrefixes 前缀匹配（不区分大小写）：动态链接器变量（LD_PRELOAD、DYLD_INSERT_LIBRARIES 等）、
 // bash 导出函数（BASH_FUNC_name%%）、glibc malloc 调参变量（MALLOC_*）
 var forbiddenTaskEnvPrefixes = []string{"LD_", "DYLD_", "BASH_FUNC_", "MALLOC_"}
+
+// taskEnvNamePattern 变量名白名单格式（POSIX 可移植变量名）：字母或下划线开头，其后只能是字母、数字、下划线。
+// 先按格式拒绝，再过拒绝名单；可拦掉 BASH_FUNC_x%%、夹带零宽字符（如 U+200B）或其他 Unicode 字符的变体
+var taskEnvNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // isBlankTaskEnvRow key（去首尾空白后）与 value 都为空的行：前端新增环境变量时会插入 {key:”,value:”} 空行
 func isBlankTaskEnvRow(kv model.KeyValue) bool {
@@ -51,16 +59,20 @@ func NormalizeTaskEnv(env model.KeyValueList) model.KeyValueList {
 }
 
 // ValidateTaskEnv 校验命令行任务（JobType==Command）的自定义环境变量。
-// key 与 value 都为空的行跳过；key 为空但 value 非空、key 含 '=' 或 NUL 时拒绝（避免拼接成 "LD_PRELOAD=..." 绕过检查）；
-// 变量名统一按大写与拒绝名单比较。错误信息只包含变量名，不包含变量值
+// 这是纵深防御：类型 2 任务本身就能执行任意命令，这里只防止通过环境变量改变动态链接器或 shell 的行为。
+// 规则：key 与 value 都为空的行跳过；变量名去首尾空白后必须匹配 ^[A-Za-z_][A-Za-z0-9_]*$（同时挡住空名、'='、NUL、
+// '%'、零宽字符等），再统一转大写与拒绝名单比较。错误信息只包含变量名（格式非法时用 %q 显示不可见字符），不包含变量值
 func ValidateTaskEnv(env model.KeyValueList) error {
 	for _, kv := range env {
 		if isBlankTaskEnvRow(kv) {
 			continue
 		}
 		name := strings.TrimSpace(kv.Key)
-		if name == "" || strings.ContainsAny(name, "=\x00") {
-			return fmt.Errorf("%w: 变量名为空或包含非法字符", ErrForbiddenTaskEnv)
+		if name == "" {
+			return fmt.Errorf("%w: 变量名为空", ErrForbiddenTaskEnv)
+		}
+		if !taskEnvNamePattern.MatchString(name) {
+			return fmt.Errorf("%w: 变量名 %q 包含非法字符（只允许字母、数字、下划线，且不能以数字开头）", ErrForbiddenTaskEnv, name)
 		}
 		upper := strings.ToUpper(name)
 		if _, ok := forbiddenTaskEnvNames[upper]; ok {

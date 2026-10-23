@@ -89,3 +89,38 @@ func TestNormalizeTaskEnvDropsBlankRows(t *testing.T) {
 		t.Fatal("nil 应保持 nil")
 	}
 }
+
+// 第二层审查：变量名先按白名单格式校验，再过拒绝名单（归一化：去首尾空白、统一大写）
+func TestValidateTaskEnvNameAllowlistFormat(t *testing.T) {
+	const value = "fake-env-value-canary"
+	rejected := []string{
+		// bash 导出函数（实测可注入）
+		"BASH_FUNC_echo%%", "BASH_FUNC_x%%", "bash_func_echo%%", " BASH_FUNC_echo%% ",
+		// 夹带零宽字符 / 格式字符的变体
+		"L\u200bD_PRELOAD", "LD_\u200bPRELOAD", "\ufeffLD_PRELOAD", "BASH\u202e_ENV", "PS\u200b4",
+		// SHELLOPTS=xtrace 配合 PS4=$(...) 可注入
+		"SHELLOPTS", "shellopts", " SHELLOPTS ", "PS4", "ps4", "\tPS4\n",
+		"PROMPT_COMMAND", "prompt_command", " Prompt_Command ",
+		"BASH_ENV", "bash_env", " BASH_ENV ", "ENV", "env", " Env ",
+		// 格式非法
+		"1ABC", "A-B", "A.B", "A B", "A=B", "A\x00B", "Ä_VAR", "$PATH",
+	}
+	for _, name := range rejected {
+		err := ValidateTaskEnv(model.KeyValueList{{Key: "SAFE_NAME", Value: "1"}, {Key: name, Value: value}})
+		if !errors.Is(err, ErrForbiddenTaskEnv) {
+			t.Fatalf("变量名 %q 应被拒绝, got %v", name, err)
+		}
+		if strings.Contains(err.Error(), value) {
+			t.Fatalf("错误信息不应包含变量值: %v", err)
+		}
+	}
+	allowed := model.KeyValueList{
+		{Key: "PATH", Value: "/usr/bin"}, {Key: "_PRIVATE", Value: "1"}, {Key: "app_mode", Value: "x"},
+		{Key: "Var2", Value: "1"}, {Key: " TRIMMED_OK ", Value: "1"}, {Key: "A", Value: "1"},
+		{Key: "PYTHONPATH", Value: "/opt/lib"}, {Key: "NODE_OPTIONS", Value: "--max-old-space-size=512"}, {Key: "PERL5OPT", Value: "-w"},
+		{Key: "PS1", Value: "1"}, {Key: "PROMPT", Value: "1"},
+	}
+	if err := ValidateTaskEnv(allowed); err != nil {
+		t.Fatalf("合法变量名不应被拒绝: %v", err)
+	}
+}

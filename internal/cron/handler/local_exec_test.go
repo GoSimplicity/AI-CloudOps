@@ -203,3 +203,19 @@ func TestCommandExecutorSkipsBlankEnvRows(t *testing.T) {
 		}
 	}
 }
+
+// 注入子进程的变量名与 ValidateTaskEnv 校验的一致：去掉首尾空白
+func TestBuildTaskEnvTrimsKeyWhitespace(t *testing.T) {
+	found := false
+	for _, kv := range buildTaskEnv(model.KeyValueList{{Key: " APP_MODE\t", Value: "x"}}) {
+		if kv == "APP_MODE=x" {
+			found = true
+		}
+		if strings.HasPrefix(kv, " ") || strings.Contains(kv, "\t") {
+			t.Fatalf("变量名应去首尾空白: %q", kv)
+		}
+	}
+	if !found {
+		t.Fatal("应注入 APP_MODE=x")
+	}
+}
