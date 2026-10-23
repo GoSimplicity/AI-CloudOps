@@ -87,14 +87,7 @@ AI-CloudOps 是一个现代化的云原生运维管理平台，旨在通过人�
 
 ## 在线演示
 
-**演示地址**: <http://68.64.177.180>
-
-**登录信息**:
-
-- 用户名: `demo`
-- 密码: `Demo@2025`
-
-*注意：演示环境仅供测试使用，请勿上传敏感信息*
+公开演示入口不作为本次发布验收依据。自建环境使用启动时生成的独立管理员密码，不共享演示账号或固定默认密码，详见[部署与验收](docs/release/README.md)。
 
 ## 核心贡献者
 
@@ -109,130 +102,52 @@ AI-CloudOps 是一个现代化的云原生运维管理平台，旨在通过人�
 
 ## 快速开始
 
-### 环境要求
+三个仓库必须同级放置，目录名区分大小写。以下为已实际验证的 Docker Compose 入口，详细配置、备份与验收见 [1.0 部署指南](docs/release/README.md)。
 
-- Go 1.21+
-- Node.js 21.x
-- pnpm latest
-- Docker & Docker Compose
-- Python 3.11+ (AI 模块)
+### 获取代码与启动
 
-### 环境检查
+需要 Git、Docker 和 Docker Compose v2，以及用于生成私有配置的 Python 3。镜像内使用项目固定的 Go 1.26.10、Node 22 与 Python 3.11，无需为容器部署在宿主机安装这些语言运行时。
 
-```bash
-go version          # >= 1.21
-node --version      # >= 21.0
-pnpm --version      # latest
-docker --version    # latest
-python3 --version   # >= 3.11
-```
-
-### 获取代码
-
-```bash
-# 克隆后端项目
+```sh
+mkdir -p ~/project
+cd ~/project
 git clone https://github.com/GoSimplicity/AI-CloudOps.git
-cd AI-CloudOps
-
-# 克隆前端项目
 git clone https://github.com/GoSimplicity/AI-CloudOps-web.git
-
-# 克隆 AI 模块项目
 git clone https://github.com/GoSimplicity/AI-CloudOps-aiops.git
-```
-
-### 开发环境启动
-
-#### 1. 启动基础服务
-
-```bash
 cd AI-CloudOps
-# 启动数据库和中间件
-docker-compose -f docker-compose-env.yaml up -d
-
-# 配置环境变量
-cp env.example .env
-
-# 检查服务状态
-docker-compose -f docker-compose-env.yaml ps
+bash scripts/release-start.sh
 ```
 
-#### 2. 启动前端服务
+入口为 <http://localhost:18080>。脚本检查同级仓库、生成私有配置、构建并等待服务健康。首次管理员为 `admin`，密码来自权限为 `0600`、已被 Git 忽略的 `deploy/release/.env` 中 `BOOTSTRAP_ADMIN_PASSWORD`。已有数据库不会重置管理员。
 
-```bash
-cd AI-CloudOps-web
-# 安装依赖
-pnpm install
-
-# 启动开发服务器
-pnpm run dev
+```sh
+python3 scripts/release-smoke.py --crud
+docker compose -f deploy/release/compose.yaml ps
 ```
 
-前端将在 [http://localhost:3000](http://localhost:3000) 启动
+`--crud` 会创建并清理唯一命名的测试分类，保留真实审计记录，只在隔离验收环境执行。模型、Kubernetes、SSH 和通知分别配置与验收；基础健康检查成功不代表这些能力全部可用。
 
-#### 3. 启动后端服务
+### 源码开发
 
-```bash
-cd AI-CloudOps
-# 安装依赖
-go mod tidy
+本机后端使用 `go.mod` 指定的工具链：
 
-# 启动后端服务
-go run main.go
+```sh
+GOTOOLCHAIN=auto go test ./...
+GOTOOLCHAIN=auto go build .
 ```
 
-后端服务地址：
-
-- API 服务: [http://localhost:8000](http://localhost:8000)
-
-#### 4. 启动 AI 服务 (可选)
-
-```bash
-cd AI-CloudOps-aiops
-# 配置环境变量
-cp env.example .env
-
-# 安装依赖
-pip install -r requirements.txt
-
-# 训练初始模型
-cd data/ && python machine-learning.py && cd ..
-
-# 启动 AI 服务
-python app/main.py
-```
-
-AI 服务地址: [http://localhost:8001](http://localhost:8001)
+前端安装、开发端口、类型检查与构建以 [前端 README](https://github.com/GoSimplicity/AI-CloudOps-web#readme) 为准；AIOps 的环境与验证方式见 [生产配置说明](https://github.com/GoSimplicity/AI-CloudOps-aiops/blob/main/docs/production.md)。开发进程连接容器依赖时，可使用部署指南中的只绑定回环地址的 `local-ports.yaml`，不要直接公开数据库端口。
 
 ## 生产部署
 
-### Docker Compose 部署 (推荐)
+默认编排只在回环地址发布 `18080`。对外部署应配置 TLS 反向代理与实际 `PUBLIC_ORIGIN`，并按部署指南设置备份、密钥、数据源与资源预算。不要使用未经验收的历史 Compose 示例替代 `deploy/release/compose.yaml`。
 
-```bash
-cd AI-CloudOps
-# 启动所有服务
-docker-compose up -d
+- [部署、可选 SSH 信任配置与回滚边界](docs/release/README.md)
+- [分阶段交付计划与测试矩阵](docs/release/plan-1.0.md)
+- [本轮及历史验证记录](docs/release/verification.md)
+- [逐阶段变更日志](docs/release/CHANGELOG.md)
 
-# 查看服务状态
-docker-compose ps
-
-# 查看日志
-docker-compose logs -f
-```
-
-### Kubernetes 部署
-
-```bash
-cd deploy/kubernetes/
-# 配置环境变量
-cp config.example config
-
-# 部署到集群
-kubectl apply -f .
-
-# 查看部署状态
-kubectl get pods,svc,ingress -l app=ai-cloudops
-```
+当前交付仍在持续验证，完成发布门槛前不把某次单测或镜像构建标记为最终 1.0 生产验收。
 
 ## 项目架构
 
