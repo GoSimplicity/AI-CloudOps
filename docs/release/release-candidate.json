@@ -1,0 +1,141 @@
+{
+  "version": "1.0.0",
+  "status": "validated-source-candidate",
+  "validated_at": "2026-10-23T10:27:53.946664+00:00",
+  "deployment": "local-isolated-acceptance-only",
+  "revisions": {
+    "backend": {
+      "repository": "https://github.com/GoSimplicity/AI-CloudOps",
+      "tested_product_revision": "1b6ef8c6bcc783637ef7f22285b4154bbdc713d9",
+      "built_image": "cloudops-backend:acceptance-1b6ef8c6bcc7",
+      "local_image_id": "sha256:db2031e27aed4098146a271d929a85b28252f71ca0295bd79bbd612da38c18e5",
+      "runtime_image_id": "sha256:db2031e27aed4098146a271d929a85b28252f71ca0295bd79bbd612da38c18e5",
+      "runtime_revision_label": "1b6ef8c6bcc783637ef7f22285b4154bbdc713d9"
+    },
+    "web": {
+      "repository": "https://github.com/GoSimplicity/AI-CloudOps-web",
+      "tested_product_revision": "a7cd8c1d49e94b5c4866d5faf1212fd5b89d3099",
+      "built_image": "cloudops-web:acceptance-a7cd8c1d49e9",
+      "local_image_id": "sha256:20844ca8425826346eeeee49a239f65144e3f4b7bc1256a7d1757663de49784d",
+      "runtime_image_id": "sha256:20844ca8425826346eeeee49a239f65144e3f4b7bc1256a7d1757663de49784d",
+      "runtime_revision_label": "a7cd8c1d49e94b5c4866d5faf1212fd5b89d3099",
+      "delivery_revision": "89c941aeae3410ef42ba163f537a75f869374e02"
+    },
+    "aiops": {
+      "repository": "https://github.com/GoSimplicity/AI-CloudOps-aiops",
+      "tested_product_revision": "379c14ad5bf3e0d1b203b22ffca8e522df2f21b3",
+      "built_image": "cloudops-aiops:acceptance-379c14ad5bf3",
+      "local_image_id": "sha256:84f9381919236cc0dcaccd17bfbadfcb3937b215e482be4362dfcf05e3371ab2",
+      "runtime_image_id": "sha256:84f9381919236cc0dcaccd17bfbadfcb3937b215e482be4362dfcf05e3371ab2",
+      "runtime_revision_label": "379c14ad5bf3e0d1b203b22ffca8e522df2f21b3",
+      "delivery_revision": "379c14ad5bf3e0d1b203b22ffca8e522df2f21b3"
+    }
+  },
+  "revision_policy": "测试SHA为产品源码及镜像来源；后续仅文档或E2E测试提交不改变已验收镜像。正式部署前按此SHA固定构建，不使用浮动main或local标签。",
+  "quality_gates": {
+    "web_unit_tests": 627,
+    "web_test_files": 80,
+    "web_shared_page_shells": 58,
+    "web_registered_component_routes": 58,
+    "python_unit_tests": 488,
+    "python_skipped": 0,
+    "python_known_warnings": 13,
+    "release_tool_tests": 17
+  },
+  "capabilities": {
+    "cloud_providers": [
+      "aliyun-ecs"
+    ],
+    "automatic_workorder_notification_triggers": [
+      "immediate"
+    ],
+    "workorder_notification_channels": [
+      "email",
+      "feishu-app"
+    ],
+    "aiops_notification_channels": [
+      "feishu-custom-robot"
+    ],
+    "workspace_isolation": "single-organization-with-api-rbac"
+  },
+  "production_prerequisites": [
+    "部署方TLS入口、私有凭据、最小权限和实际资源配置",
+    "企业SMTP/飞书应用凭据与可见范围按所需通道单独验收",
+    "暂停相关写入后同时保存MySQL、Redis、AIOps卷和部署密钥",
+    "历史已泄漏凭据由所属管理员撤销或轮换"
+  ],
+  "backup_scope": [
+    "mysql",
+    "deployment-secrets"
+  ],
+  "backup_excluded": [
+    "redis-task-state",
+    "aiops-uploaded-documents",
+    "external-infrastructure"
+  ],
+  "browser_acceptance": {
+    "rounds": [
+      {
+        "passed": 13,
+        "failed": 2,
+        "reason": "stale-e2e-assertion-and-hash-preference-precondition"
+      },
+      {
+        "passed": 2,
+        "failed": 0,
+        "scope": "focused-revalidation-of-the-two-failures"
+      }
+    ],
+    "total_distinct_scenarios_passed": 15,
+    "static_routes_walked": 56,
+    "dynamic_ssh_routes_independently_verified": 2,
+    "unexpected_side_effect_calls": 0,
+    "actual_503_count": 0,
+    "backend_revision": "1b6ef8c6bcc783637ef7f22285b4154bbdc713d9",
+    "web_revision": "a7cd8c1d49e94b5c4866d5faf1212fd5b89d3099",
+    "aiops_revision": "4dc31ac7b6ec7d3b43f0828b2ed55a58cbd07fd2"
+  },
+  "recovery_acceptance": {
+    "mysql_tables": 49,
+    "backup_local_name": "final-1.0-20261023T102658Z",
+    "limited_restore": "passed-and-owned-resources-removed",
+    "worker_hard_crash_observed_seconds": 97,
+    "worker_delivery_semantics": "at-least-once-not-exactly-once",
+    "application_rollback_revisions": [
+      "3ac15b53a0807ce5de1bf7b8e3577bce09ce0278",
+      "1b6ef8c6bcc783637ef7f22285b4154bbdc713d9"
+    ],
+    "rollback_scope": "application-image-only-with-additive-columns-retained",
+    "owned_ssh_kind_cleanup": "passed"
+  },
+  "ci": [
+    {
+      "repository": "AI-CloudOps",
+      "revision": "1b6ef8c6bcc783637ef7f22285b4154bbdc713d9",
+      "workflow": "Simple CI",
+      "conclusion": "success",
+      "url": "https://github.com/GoSimplicity/AI-CloudOps/actions/runs/39937914028"
+    },
+    {
+      "repository": "AI-CloudOps",
+      "revision": "1b6ef8c6bcc783637ef7f22285b4154bbdc713d9",
+      "workflow": "Three-repository integration",
+      "conclusion": "success",
+      "url": "https://github.com/GoSimplicity/AI-CloudOps/actions/runs/39937914043"
+    },
+    {
+      "repository": "AI-CloudOps-aiops",
+      "revision": "379c14ad5bf3e0d1b203b22ffca8e522df2f21b3",
+      "workflow": "Verify",
+      "conclusion": "success",
+      "url": "https://github.com/GoSimplicity/AI-CloudOps-aiops/actions/runs/39938814082"
+    },
+    {
+      "repository": "AI-CloudOps-web",
+      "revision": "89c941aeae3410ef42ba163f537a75f869374e02",
+      "workflow": "Verify web",
+      "conclusion": "success",
+      "url": "https://github.com/GoSimplicity/AI-CloudOps-web/actions/runs/39938976808"
+    }
+  ]
+}

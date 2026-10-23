@@ -4,13 +4,19 @@
 
 一个基于人工智能的云原生运维管理平台，集成 Kubernetes 管理、监控告警、智能分析等功能。
 
-[![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go&logoColor=white)](https://golang.org/)
+[![Go](https://img.shields.io/badge/Go-1.26.10-00ADD8?logo=go&logoColor=white)](https://golang.org/)
 [![Vue](https://img.shields.io/badge/Vue-3.0+-4FC08D?logo=vue.js&logoColor=white)](https://vuejs.org/)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-v1.25+-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/GoSimplicity/AI-CloudOps)](https://github.com/GoSimplicity/AI-CloudOps/stargazers)
 
 ![AI-CloudOps](https://socialify.git.ci/GoSimplicity/AI-CloudOps/image?description=1&font=Inter&forks=1&issues=1&name=1&pattern=Solid&pulls=1&stargazers=1&theme=Dark)
+
+## 1.0 交付入口
+
+[验收记录](docs/release/verification.md) · [固定源码与镜像清单](docs/release/release-candidate.json) · [部署与升级](docs/release/README.md) · [阶段变更](docs/release/CHANGELOG.md)
+
+三仓放在同级目录。1.0 的云资源支持阿里 ECS，工单自动通知支持即时触发；其它提供商和高级触发明确关闭。工作区使用 API 级 RBAC，模型、集群、SSH 和通知须配置各自依赖，具体实测与边界见验收记录。
 
 ## 项目介绍
 
