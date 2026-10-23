@@ -156,12 +156,26 @@ func (s *serviceAccountService) UpdateServiceAccount(ctx context.Context, req *m
 		AutomountServiceAccountToken: req.AutomountServiceAccountToken,
 		ImagePullSecrets:             req.ImagePullSecrets,
 	}
-	sa := k8sutils.ConvertToK8sServiceAccount(createReq)
-	// SEC-29：忽略请求中的 secrets，保留集群中现有的引用（Update 为整体替换，不保留会清空集群维护的引用）
-	if err := s.keepExistingSecretRefs(ctx, req.ClusterID, req.Namespace, req.Name, sa, req.Secrets, "update"); err != nil {
-		return err
+	desired := k8sutils.ConvertToK8sServiceAccount(createReq)
+	return s.updateWithRetry(ctx, req.ClusterID, req.Namespace, req.Name, desired, req.Secrets, "update")
+}
+
+// updateWithRetry 用 RetryOnConflict 更新 SA：每次重试先读取最新版本，只把允许修改的字段
+// （labels/annotations/automountServiceAccountToken/imagePullSecrets）应用上去，
+// SEC-29：请求中的 secrets 一律忽略，保留集群现有引用；name/namespace 以 URL 为准。
+func (s *serviceAccountService) updateWithRetry(ctx context.Context, clusterID int, namespace, name string, desired *corev1.ServiceAccount, requestedSecrets []string, op string) error {
+	err := s.serviceAccountManager.UpdateServiceAccountWithRetry(ctx, clusterID, namespace, name, func(latest *corev1.ServiceAccount) error {
+		s.warnIgnoredSecretRefs(latest, clusterID, requestedSecrets, op)
+		k8sutils.ApplyServiceAccountEditableFields(latest, desired)
+		return nil
+	})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return fmt.Errorf("ServiceAccount不存在: %s/%s", namespace, name)
+		}
+		return fmt.Errorf("更新ServiceAccount失败: %w", err)
 	}
-	return s.serviceAccountManager.UpdateServiceAccount(ctx, req.ClusterID, req.Namespace, sa)
+	return nil
 }
 
 // dropUserSecretRefs 创建时丢弃用户提交的 secrets 引用并记录告警日志（只记录名称）
@@ -178,27 +192,22 @@ func (s *serviceAccountService) dropUserSecretRefs(sa *corev1.ServiceAccount, cl
 	sa.Secrets = nil
 }
 
-// keepExistingSecretRefs 更新时用集群中现有的 secrets 引用覆盖请求值；请求值与现有值不同则记录告警日志
-func (s *serviceAccountService) keepExistingSecretRefs(ctx context.Context, clusterID int, namespace, name string, sa *corev1.ServiceAccount, requested []string, op string) error {
-	existing, err := s.serviceAccountManager.GetServiceAccount(ctx, clusterID, namespace, name)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return fmt.Errorf("ServiceAccount不存在: %s/%s", namespace, name)
-		}
-		return fmt.Errorf("获取现有ServiceAccount失败: %w", err)
+// warnIgnoredSecretRefs 请求中的 secrets 与集群现有引用不同时记录告警日志（只记录名称）；引用本身不会被修改
+func (s *serviceAccountService) warnIgnoredSecretRefs(latest *corev1.ServiceAccount, clusterID int, requested []string, op string) {
+	if requested == nil {
+		return
 	}
-	existingNames := k8sutils.ServiceAccountSecretRefNames(existing.Secrets)
-	if requested != nil && !slices.Equal(requested, existingNames) {
-		s.logger.Warn("忽略请求中的ServiceAccount secrets引用（SEC-29：该字段由集群维护），保留集群现有引用",
-			zap.String("operation", op),
-			zap.Int("cluster_id", clusterID),
-			zap.String("namespace", namespace),
-			zap.String("name", name),
-			zap.Strings("ignored_secrets", requested),
-			zap.Strings("kept_secrets", existingNames))
+	existingNames := k8sutils.ServiceAccountSecretRefNames(latest.Secrets)
+	if slices.Equal(requested, existingNames) {
+		return
 	}
-	sa.Secrets = existing.Secrets
-	return nil
+	s.logger.Warn("忽略请求中的ServiceAccount secrets引用（SEC-29：该字段由集群维护），保留集群现有引用",
+		zap.String("operation", op),
+		zap.Int("cluster_id", clusterID),
+		zap.String("namespace", latest.Namespace),
+		zap.String("name", latest.Name),
+		zap.Strings("ignored_secrets", requested),
+		zap.Strings("kept_secrets", existingNames))
 }
 
 func (s *serviceAccountService) DeleteServiceAccount(ctx context.Context, req *model.DeleteServiceAccountReq) error {
@@ -229,20 +238,13 @@ func (s *serviceAccountService) UpdateServiceAccountYaml(ctx context.Context, re
 		return err
 	}
 
-	// 以URL参数为准，避免 YAML 中的 name/namespace 指向另一个 SA
-	serviceAccount.Namespace = req.Namespace
-	serviceAccount.Name = req.Name
-
+	// name/namespace 以 URL 为准（重试时按 URL 读取最新版本，YAML 中的 name/namespace/resourceVersion 不生效）；
+	// SEC-29：YAML 中的 secrets 同样忽略，保留集群现有引用（从详情 YAML 原样回写时不产生变化）
 	var requested []string
 	if serviceAccount.Secrets != nil {
 		requested = k8sutils.ServiceAccountSecretRefNames(serviceAccount.Secrets)
 	}
-	// SEC-29：YAML 中的 secrets 同样忽略，保留集群现有引用（从详情 YAML 原样回写时不产生变化）
-	if err := s.keepExistingSecretRefs(ctx, req.ClusterID, req.Namespace, req.Name, serviceAccount, requested, "update_yaml"); err != nil {
-		return err
-	}
-
-	return s.serviceAccountManager.UpdateServiceAccount(ctx, req.ClusterID, req.Namespace, serviceAccount)
+	return s.updateWithRetry(ctx, req.ClusterID, req.Namespace, req.Name, serviceAccount, requested, "update_yaml")
 }
 
 func (s *serviceAccountService) CreateServiceAccountByYaml(ctx context.Context, req *model.CreateServiceAccountByYamlReq) error {

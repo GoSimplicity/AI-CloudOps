@@ -19,6 +19,9 @@ type ServiceAccountManager interface {
 	GetServiceAccount(ctx context.Context, clusterID int, namespace, name string) (*corev1.ServiceAccount, error)
 	GetServiceAccountList(ctx context.Context, clusterID int, namespace string, listOptions metav1.ListOptions) (*corev1.ServiceAccountList, error)
 	UpdateServiceAccount(ctx context.Context, clusterID int, namespace string, sa *corev1.ServiceAccount) error
+	// UpdateServiceAccountWithRetry 冲突时重试的更新：每次先 Get 最新版本，经 mutate 应用允许修改的字段后 Update；
+	// name/namespace 与 secrets 引用始终以集群最新版本为准
+	UpdateServiceAccountWithRetry(ctx context.Context, clusterID int, namespace, name string, mutate utils.ServiceAccountMutateFunc) error
 	DeleteServiceAccount(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error
 
 	// 高级功能
@@ -141,6 +144,32 @@ func (m *serviceAccountManager) UpdateServiceAccount(ctx context.Context, cluste
 		zap.Int("clusterID", clusterID),
 		zap.String("namespace", namespace),
 		zap.String("name", sa.Name))
+
+	return nil
+}
+
+func (m *serviceAccountManager) UpdateServiceAccountWithRetry(ctx context.Context, clusterID int, namespace, name string, mutate utils.ServiceAccountMutateFunc) error {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
+	if err != nil {
+		m.logger.Error("获取Kubernetes客户端失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return err
+	}
+
+	if _, err := utils.UpdateServiceAccountWithRetry(ctx, kubeClient.CoreV1().ServiceAccounts(namespace), name, mutate); err != nil {
+		m.logger.Error("更新ServiceAccount失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.Error(err))
+		return err
+	}
+
+	m.logger.Info("成功更新ServiceAccount",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", name))
 
 	return nil
 }

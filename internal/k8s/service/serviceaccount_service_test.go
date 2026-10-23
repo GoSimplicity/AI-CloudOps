@@ -9,6 +9,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
+	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"go.uber.org/zap"
@@ -16,8 +17,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/util/retry"
 )
 
 // 测试用的 token（非真实凭据），用于断言审计与错误中都不出现
@@ -37,6 +42,9 @@ type saManagerFixture struct {
 	tokenReq    *authv1.TokenRequest
 	tokenErr    error
 	tokenTarget string
+	// kube 为 UpdateServiceAccountWithRetry 使用的 fake clientset，首次使用时以 sa 为初始数据创建；
+	// 测试可预先设置并挂 reactor 模拟并发冲突
+	kube *fake.Clientset
 }
 
 func (m *saManagerFixture) GetServiceAccount(_ context.Context, _ int, _, _ string) (*corev1.ServiceAccount, error) {
@@ -61,6 +69,22 @@ func (m *saManagerFixture) CreateServiceAccount(_ context.Context, _ int, _ stri
 
 func (m *saManagerFixture) UpdateServiceAccount(_ context.Context, _ int, _ string, sa *corev1.ServiceAccount) error {
 	m.updated = sa.DeepCopy()
+	return nil
+}
+
+func (m *saManagerFixture) UpdateServiceAccountWithRetry(ctx context.Context, _ int, namespace, name string, mutate k8sutils.ServiceAccountMutateFunc) error {
+	if m.kube == nil {
+		var objs []runtime.Object
+		if m.sa != nil {
+			objs = append(objs, m.sa.DeepCopy())
+		}
+		m.kube = fake.NewSimpleClientset(objs...)
+	}
+	updated, err := k8sutils.UpdateServiceAccountWithRetry(ctx, m.kube.CoreV1().ServiceAccounts(namespace), name, mutate)
+	if err != nil {
+		return err
+	}
+	m.updated = updated.DeepCopy()
 	return nil
 }
 
@@ -373,6 +397,120 @@ func TestCreateServiceAccountTokenExpirationBounds(t *testing.T) {
 			}
 			if audit.logs[0].StatusCode != 200 || rec.ExpirationSeconds == nil || *rec.ExpirationSeconds != tt.want {
 				t.Fatalf("审计应记录生效有效期 %d: %s", tt.want, audit.logs[0].RequestBody)
+			}
+		})
+	}
+}
+
+func countSAUpdates(c *fake.Clientset) int {
+	n := 0
+	for _, a := range c.Actions() {
+		if a.GetVerb() == "update" && a.GetResource().Resource == "serviceaccounts" {
+			n++
+		}
+	}
+	return n
+}
+
+// 第一次 Update 前集群中的 SA 被并发修改并返回 Conflict，第二次成功：JSON 与 YAML 两条路径都应基于最新版本重试、保留最新 secrets
+func TestUpdateServiceAccountRetriesOnConflict(t *testing.T) {
+	yamlContent := "apiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: other\n  namespace: kube-system\n  resourceVersion: \"1\"\n  labels:\n    team: ops\nsecrets:\n- name: admin-token\n"
+	for _, tt := range []struct {
+		name   string
+		update func(svc ServiceAccountService) error
+	}{
+		{"json", func(svc ServiceAccountService) error {
+			return svc.UpdateServiceAccount(context.Background(), &model.UpdateServiceAccountReq{
+				ClusterID: 1, Namespace: "ops", Name: "app", Secrets: []string{"admin-token"}, Labels: map[string]string{"team": "ops"},
+			})
+		}},
+		{"yaml", func(svc ServiceAccountService) error {
+			return svc.UpdateServiceAccountYaml(context.Background(), &model.UpdateServiceAccountByYamlReq{ClusterID: 1, Namespace: "ops", Name: "app", YamlContent: yamlContent})
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			seed := newSAFixture()
+			seed.ResourceVersion = "1"
+			kube := fake.NewSimpleClientset(seed)
+			calls := 0
+			kube.PrependReactor("update", "serviceaccounts", func(k8stesting.Action) (bool, runtime.Object, error) {
+				calls++
+				if calls > 1 {
+					return false, nil, nil
+				}
+				concurrent := newSAFixture()
+				concurrent.ResourceVersion = "2"
+				concurrent.Secrets = append(concurrent.Secrets, corev1.ObjectReference{Name: "app-token-rotated"})
+				if err := kube.Tracker().Update(corev1.SchemeGroupVersion.WithResource("serviceaccounts"), concurrent, "ops"); err != nil {
+					t.Errorf("模拟并发修改失败: %v", err)
+				}
+				return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "serviceaccounts"}, "app", errors.New("object has been modified"))
+			})
+			fx := &saManagerFixture{sa: newSAFixture(), kube: kube}
+			if err := tt.update(NewServiceAccountService(fx, &auditFixture{}, zap.NewNop())); err != nil {
+				t.Fatal(err)
+			}
+			if calls != 2 {
+				t.Fatalf("应冲突一次后重试成功, update 调用 %d 次", calls)
+			}
+			var last *corev1.ServiceAccount
+			for _, a := range kube.Actions() {
+				if ua, ok := a.(k8stesting.UpdateAction); ok && a.GetResource().Resource == "serviceaccounts" {
+					last = ua.GetObject().(*corev1.ServiceAccount)
+				}
+			}
+			if last == nil || last.ResourceVersion != "2" {
+				t.Fatalf("最后一次 Update 应基于最新版本 resourceVersion=2: %+v", last)
+			}
+			if last.Name != "app" || last.Namespace != "ops" || last.Labels["team"] != "ops" {
+				t.Fatalf("name/namespace 应以 URL 为准、字段应被应用: %+v", last.ObjectMeta)
+			}
+			if got := k8sutils.ServiceAccountSecretRefNames(last.Secrets); len(got) != 2 || got[0] != "app-token" || got[1] != "app-token-rotated" {
+				t.Fatalf("应保留集群最新的 secrets 引用、忽略请求中的 admin-token: %v", got)
+			}
+		})
+	}
+}
+
+func TestUpdateServiceAccountConflictExhaustedReturnsError(t *testing.T) {
+	kube := fake.NewSimpleClientset(newSAFixture())
+	kube.PrependReactor("update", "serviceaccounts", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "serviceaccounts"}, "app", errors.New("object has been modified"))
+	})
+	fx := &saManagerFixture{sa: newSAFixture(), kube: kube}
+	svc := NewServiceAccountService(fx, &auditFixture{}, zap.NewNop())
+	err := svc.UpdateServiceAccount(context.Background(), &model.UpdateServiceAccountReq{ClusterID: 1, Namespace: "ops", Name: "app"})
+	if err == nil || !apierrors.IsConflict(err) || fx.updated != nil {
+		t.Fatalf("连续冲突超过重试次数应返回 Conflict 错误: %v", err)
+	}
+	if n := countSAUpdates(kube); n != retry.DefaultRetry.Steps {
+		t.Fatalf("应尝试 %d 次, got %d", retry.DefaultRetry.Steps, n)
+	}
+	if err := svc.UpdateServiceAccountYaml(context.Background(), &model.UpdateServiceAccountByYamlReq{
+		ClusterID: 1, Namespace: "ops", Name: "app", YamlContent: "apiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: app\n",
+	}); !apierrors.IsConflict(err) {
+		t.Fatalf("YAML 路径连续冲突同样应返回错误: %v", err)
+	}
+}
+
+func TestUpdateServiceAccountNotFoundSkipsUpdate(t *testing.T) {
+	for _, op := range []string{"json", "yaml"} {
+		t.Run(op, func(t *testing.T) {
+			fx := &saManagerFixture{}
+			svc := NewServiceAccountService(fx, &auditFixture{}, zap.NewNop())
+			var err error
+			if op == "json" {
+				err = svc.UpdateServiceAccount(context.Background(), &model.UpdateServiceAccountReq{ClusterID: 1, Namespace: "ops", Name: "app"})
+			} else {
+				err = svc.UpdateServiceAccountYaml(context.Background(), &model.UpdateServiceAccountByYamlReq{
+					ClusterID: 1, Namespace: "ops", Name: "app", YamlContent: "apiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: app\n",
+				})
+			}
+			if err == nil || !strings.Contains(err.Error(), "ServiceAccount不存在") {
+				t.Fatalf("SA 不存在应报错: %v", err)
+			}
+			if n := countSAUpdates(fx.kube); n != 0 || fx.updated != nil {
+				t.Fatalf("SA 不存在时不应调用 Update, got %d", n)
 			}
 		})
 	}

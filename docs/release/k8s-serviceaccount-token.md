@@ -50,6 +50,26 @@
 
 为什么是“忽略 + 日志”而不是“拒绝”：`secrets` 字段在现有 API 契约和前端类型（`k8s_serviceaccount.ts` 的 `secrets?: string[]`）中都存在，并且 detail YAML 里带有集群维护的 `secrets`，前端/用户把 YAML 原样回传时如果直接拒绝会把正常的编辑请求打失败。忽略后既堵住了“把别人的 token Secret 挂到自己 SA 上”的路径，又不破坏现有调用。日志关键字：`忽略请求中的ServiceAccount secrets引用`（仅含 Secret 名称）。
 
+### 1.4 更新 SA 改为冲突重试（`PUT .../update`、`PUT .../update/yaml`）
+
+两条更新路径都改用 `k8s.io/client-go/util/retry` 的 `retry.RetryOnConflict(retry.DefaultRetry, ...)`（`client-go` 原有依赖，`go.mod`/`go.sum` 未改动）：
+
+1. 每次尝试先按 URL 中的 `namespace` / `name` **Get 最新版本**（带最新 `resourceVersion`）；
+2. 只把请求中允许修改的字段**整体覆盖**到最新版本上：`labels`、`annotations`、`automount_service_account_token`、`image_pull_secrets`；
+3. `secrets` 引用保留集群最新版本中的值（请求/YAML 中的 `secrets` 忽略并记 Warn 日志），`name` / `namespace` 以 URL 为准；
+4. Update；返回 409 Conflict 时回到第 1 步。
+
+| 场景 | 改造前 | 改造后 |
+| --- | --- | --- |
+| 读取与写入之间 SA 被并发修改（如 token controller 追加了 `secrets` 引用） | 用旧快照整体替换，可能抹掉刚写入的引用 | 冲突后重新读取最新版本再应用字段，保留最新的 `secrets` 引用 |
+| 连续冲突超过 `retry.DefaultRetry`（共 5 次尝试，间隔约 10ms） | — | 返回 `code=1`，`msg` 形如 `更新ServiceAccount失败: Operation cannot be fulfilled ...` |
+| SA 不存在 | 报“ServiceAccount不存在” | 不变；不会调用 Update |
+| YAML 中的 `metadata.resourceVersion` | 透传给 K8s，旧版本 YAML 会直接 409 | **忽略**，以最新版本为基础（对允许修改的字段是“后写覆盖”） |
+| YAML 中上述 4 个字段以外的内容（`ownerReferences`、`finalizers`、`uid` 等） | 随整体替换写入 | **不生效**，保留集群现有值 |
+| JSON 中未传 `labels` / `annotations` / `image_pull_secrets` / `automount_service_account_token` | 整体替换为空 | 不变（仍是整体覆盖为空），与原契约一致 |
+
+日志关键字：失败时 `更新ServiceAccount失败`（manager），忽略 secrets 时同 1.3。
+
 ## 2. 权限码与授权
 
 | 方法 | 路由（`cl_system_apis.path`） | `method` | 权限码（`cl_system_apis.name`） |
@@ -105,6 +125,7 @@ POST 的 `action` 为 `k8s_serviceaccount_token_create`，不含 `secret_name`�
 - **只靠通配符授权（`/api/k8s/*`、`/*` 等）的非 admin 角色将失去 GET/POST `/token`**，返回 403。需要时按第 2 节为角色显式授权对应的 path + method。
 - 依赖“借挂 token Secret”拿 token 的用法失效（这正是要堵的越权路径）。
 - 创建/更新时传 `secrets` 不再生效，但请求不会失败。
+- 更新 SA 改为“读最新版本 + 只应用允许修改的字段 + 冲突重试”：YAML 更新中 `resourceVersion` 及 4 个可编辑字段以外的内容不再生效（见 1.4）。
 - `/token` 响应不可缓存（`no-store`）。
 - POST `/token` 的 `expiration_seconds` 超出 600~3600 时由原来的“透传给 K8s”改为 HTTP 400；不传时由“交给 K8s 默认”改为由平台显式传 3600（K8s API 默认值同为 3600，实际效果不变）。
 - 审计库不可用时 `/token` 返回 HTTP 500。
