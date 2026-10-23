@@ -32,6 +32,8 @@ python3 scripts/release-smoke.py
 
 本机运行 Go/Python 进程联调时，可叠加 `-f deploy/release/local-ports.yaml` 暴露回环地址上的 MySQL `13306` 与 Redis `16379`。对此环境后续所有 Compose 操作都应使用相同文件集合，否则 Compose 会重新创建服务并移除端口。测试直连 Go 使用 `release-smoke.py --api-only --url http://127.0.0.1:17889`。
 
+后端镜像（根目录 `Dockerfile`）运行阶段默认 `ENV=production`，会启用严格的 SSH 主机密钥校验：按 `pkg/ssh/hostkey.go`，生产模式下未设置 `SSH_KNOWN_HOSTS` 时拒绝建立 SSH 连接，不会退回到跳过主机密钥校验（设置了 `SSH_KNOWN_HOSTS` 时任何 `ENV` 下都按该文件校验，不匹配即拒绝）；同时启动时按生产要求校验 JWT 与资产密码密钥（`internal/config/config.go`）。本地手动 `docker run` 该镜像做开发调试时要加 `-e ENV=development`。注：当前代码对 `ENV` 做精确比较，只有字面值 `production` 触发上述严格校验；大小写/空白变体与 `prod`/`prd` 别名同样按生产处理、`ENV` 未设置或无法识别时拒绝启动，依赖 SEC-27 分支 `sec/sec27-mantou` 的 `pkg/envmode`，该分支合入前不成立。
+
 密钥生成器创建权限为 `0600` 的 `deploy/release/.env`，文件已被 Git 忽略；重复执行会拒绝覆盖。生成器同时用 `MYSQL_PASSWORD` 拼出告警 webhook 服务所需的完整 DSN `WEBHOOK_MYSQL_ADDR`（格式同 backend 的 `MYSQL_ADDR`，主机为 Compose 服务 `mysql:3306`），值不打印。升级已有部署时执行 `python3 scripts/release-env.py --add-missing`，只在缺少该项时追加，不覆盖任何已有值；`--env-file`、`--mysql-host` 仅供隔离验证改目标文件与 MySQL 地址。首次管理员为 `admin`，密码取该文件中的 `BOOTSTRAP_ADMIN_PASSWORD`。已有数据库的管理员不会被重置。检查日志时不要粘贴完整环境变量或展开后的 Compose 配置。
 
 默认访问地址为 `http://localhost:18080`，只绑定回环地址。对外服务应通过有 TLS 的反向代理，配置 `PUBLIC_ORIGIN` 为实际 HTTPS 源站。不要直接暴露 MySQL、Redis 或 AIOps。浏览器所有 `/api/v1/*` 请求经过 Go 的 JWT/RBAC 检查，再由 Go 注入内部密钥。
