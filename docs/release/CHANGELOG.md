@@ -159,3 +159,9 @@
 - 主后端及独立webhook统一使用轻量安全GORM logger，只记录固定事件、耗时、行数与错误类型，SQL/参数/驱动错误原文与框架变参不进入日志
 - 连接/ORM/迁移/管理员初始化与webhook panic 使用静态阶段和安全类型，同时保留Unwrap供errors.Is/As定位
 - 真实SQLite约束/慢查询及Bootstrap错误先红后绿，真实MySQL驱动拨号前错误覆盖webhook；专项race/vet、全仓test/build通过，Wire实际生成，见 [database-logging.md](database-logging.md)
+
+## SSH终端传输基础
+
+- 长消息按reader缓冲区完整分段交付，64KiB消息先验收后执行，旧逐消息换行格式保留
+- 两条实现共享串行输出及有界写期限，legacy补上下文取消与断开清理，输入关闭原因不入日志
+- 本地真实WS/SSH fixture、race/vet通过，见 [ssh-terminal-transport.md](ssh-terminal-transport.md)

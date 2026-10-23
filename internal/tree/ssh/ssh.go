@@ -23,6 +23,7 @@ type EcsSSH interface {
 	RunContext(context.Context, string) (string, error)
 	Close() error
 	Web2SSH(ws *websocket.Conn)
+	Web2SSHContext(context.Context, *websocket.Conn) error
 }
 
 type ecsSSH struct {
@@ -244,148 +245,78 @@ func (s *ecsSSH) Close() error {
  */
 
 // MyReader 实现从WebSocket读取数据的io.Reader接口
-type MyReader struct {
-	ws *websocket.Conn // WebSocket连接
-}
-
-// MyWriter 实现向WebSocket写入数据的io.Writer接口
-type MyWriter struct {
-	ws *websocket.Conn // WebSocket连接
-}
-
-// Read 从WebSocket读取用户输入的命令数据
-func (r MyReader) Read(p []byte) (n int, err error) {
-	// 从WebSocket客户端接收消息
-	_, message, err := r.ws.ReadMessage()
-	if err != nil {
-		// 读取失败时发送关闭消息
-		err := r.ws.WriteMessage(websocket.CloseMessage, []byte{})
-		if err != nil {
-			return 0, err
-		}
-		return 0, fmt.Errorf("从WebSocket读取消息失败: %w", err)
-	}
-
-	// 将接收到的消息转换为命令字符串
-	cmdStr := string(message)
-
-	// 确保命令以换行符结尾
-	if !strings.HasSuffix(cmdStr, "\n") {
-		cmdStr = cmdStr + "\n"
-	}
-
-	// 将命令复制到读取缓冲区
-	cmdBytes := []byte(cmdStr)
-	n = copy(p, cmdBytes)
-
-	return n, nil
-}
-
-// Write 向WebSocket发送终端输出数据
-func (w MyWriter) Write(p []byte) (n int, err error) {
-	if len(p) == 0 {
-		return 0, nil
-	}
-
-	// 向WebSocket客户端发送文本消息
-	err = w.ws.WriteMessage(websocket.TextMessage, p)
-	if err != nil {
-		return 0, fmt.Errorf("向WebSocket写入消息失败: %w", err)
-	}
-
-	return len(p), nil
-}
-
-// Web2SSH 实现基于WebSocket的Web终端SSH功能
+// Web2SSH 保留已发布的逐帧命令格式，新增上下文入口供会话所有者取消
 func (s *ecsSSH) Web2SSH(ws *websocket.Conn) {
-	// 确保在函数结束时清理所有资源
-	defer func() {
-		// 关闭WebSocket连接
-		if err := ws.Close(); err != nil {
-			s.logger.Error("关闭WebSocket连接失败", zap.Error(err))
-		}
-
-		// 关闭当前用户的SSH会话
-		s.sessionMu.RLock()
-		session := s.Sessions[s.UserID]
-		s.sessionMu.RUnlock()
-
-		if session != nil {
-			if err := session.Close(); err != nil {
-				s.logger.Error("关闭SSH会话失败", zap.Int("用户ID", s.UserID), zap.Error(err))
-			}
-			// 从映射中移除已关闭的会话
-			s.sessionMu.Lock()
-			delete(s.Sessions, s.UserID)
-			s.sessionMu.Unlock()
-		}
-
-		// 关闭SSH客户端连接
-		if s.Client != nil {
-			if err := s.Client.Close(); err != nil {
-				s.logger.Error("关闭SSH客户端失败", zap.Error(err))
-			}
-		}
-
-		s.logger.Info("Web终端SSH会话已清理", zap.Int("用户ID", s.UserID))
-	}()
-
-	// 检查SSH会话是否存在
+	if s.Web2SSHContext(context.Background(), ws) != nil {
+		s.logger.Info("SSH终端会话结束")
+	}
+}
+func (s *ecsSSH) Web2SSHContext(parent context.Context, ws *websocket.Conn) error {
+	if parent == nil || ws == nil {
+		return fmt.Errorf("终端上下文与WebSocket不能为空")
+	}
+	if err := parent.Err(); err != nil {
+		return err
+	}
 	s.sessionMu.RLock()
 	session := s.Sessions[s.UserID]
 	s.sessionMu.RUnlock()
-
 	if session == nil {
-		s.logger.Error("未找到SSH会话", zap.Int("用户ID", s.UserID))
-		// 向客户端发送错误消息
-		err := ws.WriteMessage(websocket.TextMessage, []byte("错误: SSH会话未建立\r\n"))
-		if err != nil {
-			s.logger.Error("向WebSocket发送错误消息失败", zap.Error(err))
-			return
+		return fmt.Errorf("SSH会话未建立")
+	}
+	transport := s.Client
+	userID := s.UserID
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
+	interrupted := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		defer close(interrupted)
+		_ = ws.Close()
+		if transport != nil {
+			_ = transport.Close()
 		}
-		return
-	}
-
-	modes := ssh.TerminalModes{
-		ssh.ECHO:          0, // 禁用回显
-		ssh.TTY_OP_ISPEED: 14400,
-		ssh.TTY_OP_OSPEED: 14400, // 输出波特率
-	}
-
-	// 25: 终端行数
-	// 80: 终端列数
+		_ = session.Close()
+	})
+	defer func() {
+		if !stop() {
+			<-interrupted
+		}
+	}()
+	defer func() {
+		_ = ws.Close()
+		_ = session.Close()
+		if transport != nil {
+			_ = transport.Close()
+		}
+		s.sessionMu.Lock()
+		if s.Sessions[userID] == session {
+			delete(s.Sessions, userID)
+		}
+		s.sessionMu.Unlock()
+	}()
+	timer := time.AfterFunc(10*time.Second, cancel)
+	defer timer.Stop()
+	modes := ssh.TerminalModes{ssh.ECHO: 0, ssh.TTY_OP_ISPEED: 14400, ssh.TTY_OP_OSPEED: 14400}
 	if err := session.RequestPty("xterm", 25, 80, modes); err != nil {
-		s.logger.Error("请求伪终端失败", zap.Error(err))
-		err := ws.WriteMessage(websocket.TextMessage, []byte("错误: 无法创建终端\r\n"))
-		if err != nil {
-			s.logger.Error("向WebSocket发送错误消息失败", zap.Error(err))
-			return
+		if parent.Err() != nil {
+			return parent.Err()
 		}
-		return
+		return fmt.Errorf("请求SSH伪终端失败")
 	}
-
-	// 将WebSocket连接设置为SSH会话的输入输出流
-	session.Stdin = &MyReader{ws}  // 标准输入：从WebSocket读取用户命令
-	session.Stdout = &MyWriter{ws} // 标准输出：向WebSocket发送命令结果
-	session.Stderr = &MyWriter{ws} // 错误输出：向WebSocket发送错误信息
-
-	// 启动交互式Shell
+	writer := sshclient.NewTerminalWriter(ws, s.logger)
+	session.Stdin = sshclient.NewTerminalReader(ws, s.logger, cancel)
+	session.Stdout = writer
+	session.Stderr = writer
 	if err := session.Shell(); err != nil {
-		s.logger.Error("启动Shell失败", zap.Error(err))
-		err := ws.WriteMessage(websocket.TextMessage, []byte("错误: 无法启动Shell\r\n"))
-		if err != nil {
-			s.logger.Error("向WebSocket发送错误消息失败", zap.Error(err))
-			return
+		if parent.Err() != nil {
+			return parent.Err()
 		}
-		return
+		return fmt.Errorf("启动SSH终端失败")
 	}
-
-	s.logger.Info("Web终端SSH会话已启动", zap.Int("用户ID", s.UserID))
-
-	// 等待SSH会话结束
-	if err := session.Wait(); err != nil {
-		s.logger.Info("SSH会话结束", zap.Int("用户ID", s.UserID), zap.Error(err))
-	} else {
-		s.logger.Info("SSH会话正常结束", zap.Int("用户ID", s.UserID))
+	timer.Stop()
+	_ = session.Wait()
+	if parent.Err() != nil {
+		return parent.Err()
 	}
+	return nil
 }

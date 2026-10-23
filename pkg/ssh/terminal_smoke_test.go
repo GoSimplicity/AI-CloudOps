@@ -142,3 +142,86 @@ func TestTerminalWriterSerializesStdoutAndStderr(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestLegacyReaderPreservesLongFrameAcrossSmallReads(t *testing.T) {
+	want := strings.Repeat("长input-", 4000) + "\n"
+	done := make(chan error, 1)
+	web := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
+		if err != nil {
+			done <- err
+			return
+		}
+		defer conn.Close()
+		reader := NewTerminalReader(conn, zap.NewNop(), nil)
+		var result strings.Builder
+		var small [17]byte
+		for result.Len() < len(want) {
+			n, err := reader.Read(small[:])
+			if err != nil {
+				done <- err
+				return
+			}
+			result.Write(small[:n])
+		}
+		if result.String() != want {
+			done <- errors.New("legacy input was truncated or newline changed")
+			return
+		}
+		done <- nil
+	}))
+	defer web.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(web.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(strings.TrimSuffix(want, "\n"))); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("long input stalled")
+	}
+}
+
+func TestLegacyReaderOversizedFrameCancelsWithoutReturningInput(t *testing.T) {
+	done := make(chan error, 1)
+	web := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
+		if err != nil {
+			done <- err
+			return
+		}
+		defer conn.Close()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		reader := NewTerminalReader(conn, zap.NewNop(), cancel)
+		var buf [8]byte
+		n, err := reader.Read(buf[:])
+		if err == nil || n != 0 || ctx.Err() == nil {
+			done <- errors.New("oversized frame crossed input boundary")
+			return
+		}
+		done <- nil
+	}))
+	defer web.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(web.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_ = conn.WriteMessage(websocket.TextMessage, []byte(strings.Repeat("x", MaxTerminalFrameBytes+1)))
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("oversized input stalled")
+	}
+}
