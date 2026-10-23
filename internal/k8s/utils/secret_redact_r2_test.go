@@ -254,11 +254,11 @@ func TestR2NonCanonicalMetadataFieldDuplicates(t *testing.T) {
 	})
 }
 
-// P3-6：入口大小上限 1 MiB（1048576 字节），超限在任何解析前报通用错误。
+// P3-6：入口大小上限 2 MiB（2097152 字节，按 YAML 文本字节数计），超限在任何解析前报通用错误。
 func TestR2SizeLimit(t *testing.T) {
-	const limit = 1048576
+	const limit = 2097152
 	build := func(total int) string {
-		head := p2Head + "stringData:\n  k: "
+		head := p2Head + "stringData:\n  k: " + r2Sentinel
 		pad := total - len(head) - 1
 		return head + strings.Repeat("a", pad) + "\n"
 	}
@@ -274,32 +274,43 @@ func TestR2SizeLimit(t *testing.T) {
 		if _, err := p2Update(at, p2Existing()); err != nil {
 			t.Fatalf("更新路径: %v", err)
 		}
+		if _, err := YAMLToSecret(at); err != nil {
+			t.Fatalf("YAMLToSecret: %v", err)
+		}
 	})
 	t.Run("limit_plus_one_rejected", func(t *testing.T) {
-		if _, err := p2Create(over); err == nil {
-			t.Fatal("新建路径应拒绝")
-		}
-		if _, err := p2Update(over, p2Existing()); err == nil {
-			t.Fatal("更新路径应拒绝")
-		}
-		if _, err := YAMLToSecret(over); err == nil {
-			t.Fatal("YAMLToSecret 应拒绝")
+		_, errCreate := p2Create(over)
+		_, errUpdate := p2Update(over, p2Existing())
+		_, errParse := YAMLToSecret(over)
+		for name, err := range map[string]error{"新建路径": errCreate, "更新路径": errUpdate, "YAMLToSecret": errParse} {
+			if !errors.Is(err, errSecretYAMLTooLarge) {
+				t.Fatalf("%s 应以大小错误拒绝，实际: %v", name, err)
+			}
+			r2AssertNoSentinel(t, err)
 		}
 	})
 	t.Run("checked_before_parse", func(t *testing.T) {
-		// 超限且语法错误、含哨兵：应报大小错误（与语法错误文案不同），不回显
-		broken := "stringData: {{k: " + r2Sentinel + strings.Repeat("b", limit) + "\n"
-		_, errSize := SecretYAMLHasRedactedPlaceholder(broken)
-		_, errSyntax := SecretYAMLHasRedactedPlaceholder("stringData: {{k: " + r2Sentinel + "\n")
+		// 语法错误且含哨兵：恰好 limit 字节时报语法错误（进入了解析），
+		// 多 1 字节时报大小错误（未进入解析），两者文案不同且都不回显
+		brokenOf := func(total int) string {
+			head := "stringData: {{k: " + r2Sentinel
+			return head + strings.Repeat("b", total-len(head))
+		}
+		_, errSyntax := SecretYAMLHasRedactedPlaceholder(brokenOf(limit))
+		_, errSize := SecretYAMLHasRedactedPlaceholder(brokenOf(limit + 1))
 		if errSize == nil || errSyntax == nil {
 			t.Fatal("两者都应报错")
 		}
 		r2AssertNoSentinel(t, errSize)
-		if errSize.Error() == errSyntax.Error() {
-			t.Fatal("超限输入应在解析前以大小错误拒绝")
+		r2AssertNoSentinel(t, errSyntax)
+		if errors.Is(errSyntax, errSecretYAMLTooLarge) {
+			t.Fatal("恰好 limit 字节的输入不应以大小错误拒绝")
 		}
-		if !strings.Contains(errSize.Error(), "1 MiB") {
-			t.Fatal("应提示 1 MiB 上限")
+		if errSize.Error() != errSecretYAMLTooLarge.Error() {
+			t.Fatalf("超限输入应在解析前以固定的大小错误拒绝，实际: %v", errSize)
+		}
+		if !strings.Contains(errSize.Error(), "2 MiB") {
+			t.Fatal("应提示 2 MiB 上限")
 		}
 	})
 }

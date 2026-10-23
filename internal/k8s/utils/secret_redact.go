@@ -148,12 +148,14 @@ type secretYAMLDocument struct {
 	Type              corev1.SecretType          `json:"type,omitempty"`
 }
 
-// maxSecretYAMLBytes 是 Secret YAML 入口允许的最大字节数（1 MiB），在任何解析之前检查
-const maxSecretYAMLBytes = 1 << 20
+// maxSecretYAMLBytes 是 Secret YAML 入口允许的最大字节数（2 MiB），按 YAML 文本字节数计，在任何解析之前检查。
+// data 的值是 base64（膨胀约 4/3），取 2 MiB 是为了让接近 Kubernetes 1 MiB 上限的 Secret 也能提交，
+// Secret 本身的大小限制交给 apiserver 判定；这里只防止超大输入进入解析。
+const maxSecretYAMLBytes = 2 << 20
 
 var (
 	errSecretYAMLMultiDoc  = errors.New("解析YAML失败: 只支持单个 YAML 文档，请去掉 --- 分隔的其他文档")
-	errSecretYAMLTooLarge  = errors.New("解析YAML失败: YAML 超过 1 MiB 上限")
+	errSecretYAMLTooLarge  = errors.New("解析YAML失败: YAML 超过 2 MiB 上限")
 	errSecretYAMLDupKeyStr = errors.New("解析YAML失败: 存在按字符串比较相同的重复键（例如 1 与 \"1\"），请只保留一个")
 	// 只从库报错里取行号，其余内容一律不保留
 	secretYAMLErrorLine = regexp.MustCompile(`line ([0-9]+)`)
