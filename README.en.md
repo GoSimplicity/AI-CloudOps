@@ -1,355 +1,276 @@
 # AI-CloudOps
 
-> **English | [中文](README.md)**
+**English** | [简体中文](README.md)
 
-An AI-powered cloud-native operations management platform that integrates Kubernetes management, monitoring & alerting, and intelligent analysis.
+AI-CloudOps is an open-source, AI-assisted cloud-native operations platform. It brings Kubernetes management, a service tree / CMDB, Prometheus monitoring and alerting, ticketing (work orders), scheduled jobs and RBAC into a single console, and adds an AIOps service for root cause analysis, load prediction, an operations assistant, and human-approved Kubernetes auto-remediation.
 
-[![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go&logoColor=white)](https://golang.org/)
-[![Vue](https://img.shields.io/badge/Vue-3.0+-4FC08D?logo=vue.js&logoColor=white)](https://vuejs.org/)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-v1.25+-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io/)
+This repository is the **Go backend** and the API gateway for the whole platform.
+
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vue.js&logoColor=white)](https://vuejs.org/)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/GoSimplicity/AI-CloudOps)](https://github.com/GoSimplicity/AI-CloudOps/stargazers)
 
-![AI-CloudOps](https://socialify.git.ci/GoSimplicity/AI-CloudOps/image?description=1&font=Inter&forks=1&issues=1&name=1&pattern=Solid&pulls=1&stargazers=1&theme=Dark)
+## Project Components
 
-## Introduction
+AI-CloudOps is made up of three repositories that are deployed together:
 
-AI-CloudOps is a modern cloud-native operations management platform designed to improve operational efficiency and system stability through artificial intelligence technology.
+| Repository | Role | Stack |
+| --- | --- | --- |
+| **[AI-CloudOps](https://github.com/GoSimplicity/AI-CloudOps)** (this repo) | Backend API, authentication/RBAC, and gateway to the AI service | Go, Gin, GORM, MySQL, Redis |
+| **[AI-CloudOps-web](https://github.com/GoSimplicity/AI-CloudOps-web)** | Web console | Vue 3, TypeScript, Vben Admin, Ant Design Vue |
+| **[AI-CloudOps-aiops](https://github.com/GoSimplicity/AI-CloudOps-aiops)** | AIOps service: RCA, prediction, assistant (RAG + MCP), auto-remediation | Python, FastAPI, LangGraph, scikit-learn |
 
-### Core Features
-
-- **Intelligent Operations**: Machine learning-based anomaly detection, fault prediction, and automated recovery
-- **Kubernetes Management**: Complete cluster management, application deployment, and monitoring capabilities
-- **Monitoring & Alerting**: Comprehensive monitoring and intelligent alerting based on Prometheus
-- **Permission Management**: Multi-tenant RBAC permission control system
-- **Ticketing System**: Complete operational ticketing workflow management
-- **Resource Management**: CMDB asset management and service topology visualization
-
-### Technology Stack
-
-- **Backend**: Go + Gin + GORM + Redis + MySQL
-- **Frontend**: Vue 3 + TypeScript + Ant Design Vue
-- **AI Module**: Python + FastAPI + scikit-learn
-- **Infrastructure**: Kubernetes + Prometheus + Grafana
-
-### Project Components
-
-This project consists of three main repositories:
-
-- **[AI-CloudOps](https://github.com/GoSimplicity/AI-CloudOps)** - Core backend service
-- **[AI-CloudOps-web](https://github.com/GoSimplicity/AI-CloudOps-web)** - Frontend interface
-- **[AI-CloudOps-aiops](https://github.com/GoSimplicity/AI-CloudOps-aiops)** - AI intelligent analysis module
-
-## Feature Modules
-
-### Intelligent Operations (AIOps)
-
-- Smart Monitoring: Machine learning-based monitoring data analysis
-- Anomaly Detection: Automatic identification of system anomalies and performance issues
-- Fault Prediction: Predictive maintenance and early warning
-- Auto-Recovery: Rule-based and AI-powered intelligent recovery
-- Root Cause Analysis: Rapid fault root cause identification
-
-### Permission Management (RBAC)
-
-- Multi-tenant Architecture: Support for multi-organizational isolation
-- Role Management: Flexible role permission configuration
-- Fine-grained Permissions: Operation-level permission control
-- Audit Logging: Complete operational audit records
-
-### Resource Management (CMDB)
-
-- Service Tree: Visual resource topology structure
-- Asset Discovery: Automated resource discovery and management
-- Dependency Mapping: Service dependency graph management
-- Tag Management: Flexible resource classification and tagging
-
-### Ticketing System
-
-- Ticket Templates: Customizable ticket types
-- Workflow Engine: Automated approval workflows
-- SLA Management: Service Level Agreement monitoring
-- Collaboration Tools: Built-in communication and collaboration features
-
-### Monitoring & Alerting
-
-- Multi-dimensional Monitoring: Comprehensive system performance monitoring
-- Real-time Alerting: Millisecond-level alert response
-- Smart Thresholds: AI-powered dynamic threshold adjustment
-- Alert Aggregation: Intelligent alert consolidation and noise reduction
-
-### Kubernetes Management
-
-- Cluster Management: Unified multi-cluster management
-- Application Deployment: Visual application deployment and updates
-- Resource Monitoring: Pod, Node, and Service monitoring
-- Auto-scaling: HPA/VPA automatic scaling
-- Configuration Management: ConfigMap and Secret management
-
-## Live Demo
-
-**Demo URL**: <http://68.64.177.180>
-
-**Login Credentials**:
-
-- Username: `demo`
-- Password: `Demo@2025`
-
-*Note: Demo environment is for testing only. Do not upload sensitive information*
-
-## Core Contributors
-
-Thanks to the following developers for their important contributions to the project:
-
-- **[GoSimplicity](https://github.com/GoSimplicity)** - Project founder and core maintainer
-- **[Penge666](https://github.com/Penge666)** - Senior developer
-- **[shixiaocaia](https://github.com/shixiaocaia)** - Core contributor
-- **[daihao4371](https://github.com/daihao4371)** - Feature developer
-
-[![Contributors](https://contrib.rocks/image?repo=GoSimplicity/AI-CloudOps)](https://github.com/GoSimplicity/AI-CloudOps/graphs/contributors)
-
-## Quick Start
-
-### Requirements
-
-- Go 1.21+
-- Node.js 21.x
-- pnpm latest
-- Docker & Docker Compose
-- Python 3.11+ (for AI module)
-
-### Environment Check
-
-```bash
-go version          # >= 1.21
-node --version      # >= 21.0
-pnpm --version      # latest
-docker --version    # latest
-python3 --version   # >= 3.11
+```text
+Browser ──> Web console (static files)
+   │
+   └── /api/*      ──> Go backend (JWT + per-request RBAC) ──> MySQL / Redis / Kubernetes / cloud APIs / SSH
+       /api/v1/*   ──> Go backend (JWT + RBAC) ──X-API-Key──> AIOps service ──> Prometheus / Kubernetes / LLM / MCP server
 ```
 
-### Get the Code
+The browser only ever holds a user session token. The internal `AIOPS_API_KEY` is injected by the Go gateway and is never sent to the frontend.
 
-```bash
-# Clone backend project
-git clone https://github.com/GoSimplicity/AI-CloudOps.git
-cd AI-CloudOps
+## Features
 
-# Clone frontend project
-git clone https://github.com/GoSimplicity/AI-CloudOps-web.git
+The list below reflects what is implemented in this repository today.
 
-# Clone AI module project
-git clone https://github.com/GoSimplicity/AI-CloudOps-aiops.git
-```
+### Kubernetes management
+- Register clusters by uploading a kubeconfig. Kubeconfigs are parsed under a strict security boundary: `exec`/`auth-provider` plugins, server-side file paths, `proxy-url`, plain HTTP and skipped TLS verification are rejected (see [docs/kubeconfig-security.md](docs/kubeconfig-security.md)).
+- View and manage Namespaces, Nodes, Pods, Deployments, StatefulSets, DaemonSets, Services, Ingresses, ConfigMaps, Secrets, PVs/PVCs, ServiceAccounts, Roles/ClusterRoles and their bindings, and Events.
+- YAML templates and YAML apply tasks.
+- Optional per-namespace `ResourceQuota` management from the cluster's CPU/memory settings ([docs/kubernetes-resource-policy.md](docs/kubernetes-resource-policy.md)).
 
-### Development Environment Setup
+### Service tree and CMDB
+- Hierarchical service tree with node membership and resource binding.
+- Local hosts with encrypted credentials and a browser-based SSH terminal over WebSocket. In production, host keys are verified against an operator-provided `known_hosts` file.
+- Cloud accounts and read-only instance sync. The backend has SDK implementations for **Alibaba Cloud ECS, AWS EC2 and Tencent Cloud CVM** (credential check, live region listing, instance sync). The sync only reads cloud APIs; it never creates, modifies or deletes cloud instances. See [docs/multicloud-compute.md](docs/multicloud-compute.md). *Note: the current web console only enables Alibaba Cloud in its account form.*
 
-#### 1. Start Infrastructure Services
+### Monitoring and alerting (Prometheus)
+- Manage scrape pools and scrape jobs, alert rules, recording rules and Alertmanager configuration.
+- On-duty groups, alert send groups, alert event history.
+- A separate alert webhook service (`cmd/webhook`) that receives Alertmanager notifications and delivers them to Feishu (Lark).
 
-```bash
-cd AI-CloudOps
-# Start database and middleware
-docker-compose -f docker-compose-env.yaml up -d
+### Ticketing (work orders)
+- Categories, form designer, process (workflow) designer, templates.
+- Ticket instances with flow actions, comments and timeline.
+- Notifications by email and Feishu to creators, assignees, specified users or role members (deduplicated). Delivery failures are reported as errors, never as false successes.
 
-# Configure environment variables
-cp env.example .env
+### Scheduled jobs
+- Cron jobs of type system, command, HTTP, script and SSH remote execution, queued through Redis (asynq).
 
-# Check service status
-docker-compose -f docker-compose-env.yaml ps
-```
+### Users, RBAC and audit
+- Users, roles, departments and an API permission catalog. The catalog is built from the registered Gin routes at every start-up; permissions are checked on every request.
+- Accounts are provisioned by the administrator (no anonymous self sign-up).
+- Audit log of operations (metadata only; credentials in request/response bodies are not stored).
 
-#### 2. Start Frontend Service
+### AI gateway
+- `/api/v1/*` is reverse-proxied to the AIOps service after JWT and role checks. This exposes RCA, prediction, the operations assistant (including streaming), inspection and auto-remediation to the web console. See [AI-CloudOps-aiops](https://github.com/GoSimplicity/AI-CloudOps-aiops) for details.
 
-```bash
-cd AI-CloudOps-web
-# Install dependencies
-pnpm install
+## Tech Stack
 
-# Start development server
-pnpm run dev
-```
+- **Language / runtime:** Go 1.26.10 (`GOTOOLCHAIN=auto` will download the toolchain declared in `go.mod`)
+- **Web framework:** Gin; dependency injection with Google Wire
+- **Storage:** MySQL 8 (GORM), Redis (cache, sessions, asynq task queue)
+- **Integrations:** Kubernetes client-go 0.35 and OpenKruise API, Prometheus / Alertmanager libraries, Alibaba Cloud / AWS / Tencent Cloud SDKs, SSH, WebSocket, SSE
+- **Auth:** JWT (golang-jwt v5) with refresh tokens; per-request account and role checks
 
-Frontend will be available at [http://localhost:3000](http://localhost:3000)
-
-#### 3. Start Backend Service
-
-```bash
-cd AI-CloudOps
-# Install dependencies
-go mod tidy
-
-# Start backend service
-go run main.go
-```
-
-Backend service endpoints:
-
-- API Service: [http://localhost:8000](http://localhost:8000)
-
-#### 4. Start AI Service (Optional)
-
-```bash
-cd AI-CloudOps-aiops
-# Configure environment variables
-cp env.example .env
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Train initial model
-cd data/ && python machine-learning.py && cd ..
-
-# Start AI service
-python app/main.py
-```
-
-AI service will be available at [http://localhost:8001](http://localhost:8001)
-
-## Production Deployment
-
-### Docker Compose Deployment (Recommended)
-
-```bash
-cd AI-CloudOps
-# Start all services
-docker-compose up -d
-
-# Check service status
-docker-compose ps
-
-# View logs
-docker-compose logs -f
-```
-
-### Kubernetes Deployment
-
-```bash
-cd deploy/kubernetes/
-# Configure environment variables
-cp config.example config
-
-# Deploy to cluster
-kubectl apply -f .
-
-# Check deployment status
-kubectl get pods,svc,ingress -l app=ai-cloudops
-```
-
-## Project Architecture
-
-### Backend Structure
+## Repository Layout
 
 ```text
 AI-CloudOps/
-├── cmd/                    # Command line tools
-├── config/                 # Configuration files
-├── internal/               # Core business logic
-│   ├── middleware/         # Middleware
-│   ├── model/              # Data models
+├── main.go                 # Main API server entry point
+├── cmd/webhook/            # Alertmanager -> Feishu webhook service
+├── config/                 # config.development.yaml / config.production.yaml / webhook.yaml
+├── internal/
+│   ├── app/                # App wiring, AI gateway, admin bootstrap, permission catalog
+│   ├── config/             # Config loading and production validation
+│   ├── middleware/         # Auth, login, audit, logging
 │   ├── k8s/                # Kubernetes management
-│   ├── user/               # User management
-│   ├── prometheus/         # Monitoring module
-│   ├── workorder/          # Ticketing system
-│   ├── tree/               # Service tree CMDB
-│   └── system/             # System management
-├── pkg/                    # Common packages
-├── docs/                   # API documentation
-└── deploy/                 # Deployment configurations
+│   ├── tree/               # Service tree, local hosts, cloud accounts/resources, SSH
+│   ├── prometheus/         # Monitoring config, alerting, webhook
+│   ├── workorder/          # Ticketing and notifications
+│   ├── cron/               # Scheduled jobs
+│   ├── system/             # Users, roles, departments, APIs, audit
+│   └── model/              # GORM models
+├── pkg/                    # Shared packages (jwt, ssh, terminal, websocket, sse, di, ...)
+├── deploy/                 # MySQL init, Prometheus, nginx, release Compose bundle
+├── scripts/                # Release helpers and integration scripts
+└── docs/                   # Design notes, security baseline, release docs
 ```
 
-### Frontend Structure
+## Quick Start (development)
+
+### Requirements
+
+- Go 1.26.10+ (or any recent Go with `GOTOOLCHAIN=auto`)
+- Docker with Docker Compose v2
+- Node.js 22 and pnpm 9 (for the [web console](https://github.com/GoSimplicity/AI-CloudOps-web))
+- Python 3.11 (optional, for the [AIOps service](https://github.com/GoSimplicity/AI-CloudOps-aiops))
+
+### 1. Start MySQL, Redis and Prometheus
+
+The root `docker-compose.yaml` starts the development dependencies (the application services in it are commented out):
+
+```bash
+git clone https://github.com/GoSimplicity/AI-CloudOps.git
+cd AI-CloudOps
+docker compose up -d
+```
+
+This exposes MySQL on `3306`, Redis on `36379` and Prometheus on `9090`. The credentials in this file are development defaults only.
+
+### 2. Configure and run the backend
+
+```bash
+cp env.example .env
+# Edit .env. With the dev Compose file, Redis listens on localhost:36379:
+#   REDIS_ADDR=localhost:36379
+# Set BOOTSTRAP_ADMIN_PASSWORD (>= 12 chars) to create the `admin` user on first start.
+go run main.go
+```
+
+The API listens on `http://localhost:8889` (`SERVER_PORT`). `GET /health` is a liveness probe only; it does not mean MySQL, Redis or external services are ready.
+
+Configuration precedence is **environment variables > config file > defaults**. `ENV=production` selects `config/config.production.yaml`; anything else uses `config/config.development.yaml`. You can also pass `--config <file>`.
+
+### 3. Run the web console
+
+```bash
+git clone https://github.com/GoSimplicity/AI-CloudOps-web.git
+cd AI-CloudOps-web
+pnpm install --frozen-lockfile
+pnpm dev            # http://localhost:5666, proxies /api to http://localhost:8889
+```
+
+### 4. Run the AIOps service (optional)
+
+Follow the [AI-CloudOps-aiops README](https://github.com/GoSimplicity/AI-CloudOps-aiops). Then set `AIOPS_BASE_URL` (for example `http://localhost:8080`) and the same `AIOPS_API_KEY` in the backend `.env`. If `AIOPS_BASE_URL` is empty, the `/api/v1/*` gateway is not registered.
+
+## Deployment (all three services)
+
+`deploy/release/` contains a Docker Compose bundle that builds and runs the complete platform behind an nginx gateway: MySQL 8.4, Redis 7.4, Prometheus, the Go backend, the AIOps API, the MCP server and the web console.
+
+Place the three repositories side by side. The directory names of the frontend and AIOps repos must match what the Compose file expects:
 
 ```text
-AI-CloudOps-web/
-├── apps/web-antd/          # Main application
-│   ├── src/
-│   │   ├── api/            # API interfaces
-│   │   ├── components/     # Components
-│   │   ├── views/          # Pages
-│   │   ├── router/         # Routing
-│   │   └── store/          # State management
-│   └── dist/               # Build artifacts
-└── packages/               # Shared packages
+<workspace>/
+├── AI-CloudOps/          # this repo (any name works)
+├── AI-CloudOps-web/
+└── Ai-CloudOps-aiops/    # note the "Ai-" spelling expected by deploy/release/compose.yaml
 ```
 
-### AI Module Structure
+From the backend repository:
 
-```text
-AI-CloudOps-aiops/
-├── app/                    # Application code
-│   ├── api/                # API routes
-│   ├── core/               # Core logic
-│   ├── models/             # Data models
-│   └── services/           # Business services
-├── data/                   # Data storage
-├── config/                 # Configuration files
-└── tests/                  # Test cases
+```bash
+bash scripts/release-start.sh
 ```
+
+The script checks the sibling repos and Docker, generates a private `deploy/release/.env` (mode `0600`, git-ignored, never overwritten) with random secrets, then builds and waits for all services to become healthy. The console is served at `http://localhost:18080`, bound to the loopback interface. The initial account is `admin`; its password is `BOOTSTRAP_ADMIN_PASSWORD` in `deploy/release/.env`.
+
+Step by step:
+
+```bash
+python3 scripts/release-env.py
+docker compose -f deploy/release/compose.yaml config --quiet
+docker compose -f deploy/release/compose.yaml up -d --build --wait --wait-timeout 300
+python3 scripts/release-smoke.py
+```
+
+For public access, put a TLS reverse proxy in front and set `PUBLIC_ORIGIN` to the real HTTPS origin. Do not expose MySQL, Redis or the AIOps service directly. Backups, upgrades, rollback and release gates are described in [docs/release/README.md](docs/release/README.md) (Chinese).
+
+Tagged releases (`v*`) are built by GitHub Actions after `go test`, a gateway smoke test, `go vet` and `govulncheck`. The source archive and a Linux amd64 binary are published with `SHA256SUMS`.
+
+## Configuration
+
+All settings can be provided as environment variables (see [`env.example`](env.example)). Key variables:
+
+| Variable | Description |
+| --- | --- |
+| `ENV` | `development` (default) or `production`. Production turns on the strict checks below. |
+| `SERVER_PORT` | HTTP port, default `8889`. |
+| `SERVER_ALLOWED_ORIGINS` | Comma-separated list of exact browser origins allowed for CORS and WebSocket. Empty means same-origin only. |
+| `MYSQL_ADDR`, `REDIS_ADDR`, `REDIS_PASSWORD` | Database and Redis connection. |
+| `JWT_KEY1`, `JWT_KEY2`, `JWT_ISSUER`, `JWT_EXPIRATION` | JWT signing keys and settings. `JWT_EXPIRATION` is in minutes. |
+| `TREE_PASSWORD_ENCRYPTION_KEY` | Key used to encrypt stored host passwords. Keep it safe: changing it breaks decryption of existing credentials. |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Creates the `admin` account on the first start with an empty database (min. 12 characters). Remove it after the first successful start. Existing users are never reset. |
+| `SSH_KNOWN_HOSTS` | Path to an operator-verified OpenSSH `known_hosts` file used for web terminal and SSH connections. |
+| `AIOPS_BASE_URL` | URL of the AIOps service, e.g. `http://aiops:8080`. Enables the `/api/v1/*` gateway. |
+| `AIOPS_API_KEY` | Shared service key sent to the AIOps service as `X-API-Key`. Must match the Python service. Never put it in frontend config. |
+| `MOCK_ENABLED` | Seed mock data for development. Must be `false` in production. |
+| `LLM_API_KEY`, `LLM_BASE_URL`, `ALIYUN_ACCESS_KEY_ID`, `ALIYUN_ACCESS_KEY_SECRET`, `TAVILY_API_KEY` | External service credentials (environment variables only). |
+| `NOTIFICATION_EMAIL_*`, `NOTIFICATION_FEISHU_*` | Email (SMTP) and Feishu notification channels. |
+| `WEBHOOK_*` | Settings for the alert webhook service in `cmd/webhook`. |
+
+### Production security requirements
+
+With `ENV=production` the backend refuses to start unless:
+
+- `JWT_KEY1` and `JWT_KEY2` are distinct, at least 32 characters, and not the repository sample values.
+- `TREE_PASSWORD_ENCRYPTION_KEY` is exactly 32 bytes and not the sample value.
+- `MOCK_ENABLED=false`.
+- `AIOPS_API_KEY` is at least 32 characters whenever `AIOPS_BASE_URL` is set.
+
+Other security behaviour to be aware of:
+
+- In production, SSH connections require `SSH_KNOWN_HOSTS`. Connections are refused if the file is missing or the host key does not match.
+- Browser origins are checked against `SERVER_ALLOWED_ORIGINS` (exact match) or same-origin, for both HTTP and WebSocket.
+- Every protected request and token refresh re-checks the current account. Frozen, deleted or renamed accounts are rejected immediately, and authentication fails closed if the database is unavailable.
+- `POST /api/user/signup` requires an `admin` session. New users are normal accounts by default.
+- Non-admin users need explicit role permissions for each `/api/v1/` path they call. Service accounts no longer bypass role checks.
+
+See [docs/security-baseline.md](docs/security-baseline.md) for the vulnerability scan baseline and the list of hardened boundaries.
+
+## Development
+
+```bash
+make fmt          # go fmt
+make lint         # go vet
+go test ./...
+go test -tags=smoke ./internal/app
+go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+```
+
+CI runs tests, `govulncheck`, the gateway smoke test and a build on every push to `main` and on pull requests. Real-HTTP acceptance scripts for account permissions, the full ticket workflow, Kubernetes and quotas live in `scripts/integration/`. They read credentials only from environment variables.
+
+## Online Demo
+
+The public online demo is **temporarily unavailable**. Please use the Docker Compose deployment above to try the platform locally.
+
+## Core Contributors
+
+- **[GoSimplicity](https://github.com/GoSimplicity)**: project founder and core maintainer
+- **[Penge666](https://github.com/Penge666)**: senior developer
+- **[shixiaocaia](https://github.com/shixiaocaia)**: core contributor
+- **[daihao4371](https://github.com/daihao4371)**: feature developer
+
+[![Contributors](https://contrib.rocks/image?repo=GoSimplicity/AI-CloudOps)](https://github.com/GoSimplicity/AI-CloudOps/graphs/contributors)
 
 ## Contributing
 
-### Contribution Process
+Contributions are welcome.
 
-1. Fork this project
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Create a Pull Request
-
-### Commit Convention
-
-Use [Conventional Commits](https://www.conventionalcommits.org/) format:
-
-```text
-<type>(<scope>): <description>
-
-[optional body]
-[optional footer]
-```
-
-**Commit Types**:
-
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation update
-- `style`: Code formatting
-- `refactor`: Code refactoring
-- `test`: Test related
-- `ci`: CI/CD related
-
-### Code Standards
-
-- Follow existing code style
-- Add necessary comments and documentation
-- Ensure test coverage
-- Follow best practices
+1. Fork the repository and create a feature branch.
+2. Follow the existing code style, run `make fmt`, `make lint` and `go test ./...`.
+3. Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ci:` ...).
+4. Open a pull request describing the change and how it was tested.
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This repository is licensed under the [MIT License](LICENSE).
 
-## Contact Us
+## Contact
 
-- **Email**: <bamboocloudops@gmail.com>
-- **WeChat**: GoSimplicity (please note "AI-CloudOps" when adding)
-- **GitHub**: [Submit Issue](https://github.com/GoSimplicity/AI-CloudOps/issues)
-
-### WeChat Discussion Group
-
-![WeChat Group QR Code](https://github.com/user-attachments/assets/6aa7bd2f-ee80-40d0-9301-0fd62292e82f)
+- **Email:** <bamboocloudops@gmail.com>
+- **WeChat:** GoSimplicity (please mention "AI-CloudOps")
+- **Issues:** <https://github.com/GoSimplicity/AI-CloudOps/issues>
 
 ## Acknowledgements
 
-Thanks to all developers and users who contributed to this project, as well as the following open source projects:
-
-- [Go](https://golang.org/) - High-performance backend language
-- [Vue.js](https://vuejs.org/) - Progressive frontend framework
-- [Kubernetes](https://kubernetes.io/) - Container orchestration platform
-- [Prometheus](https://prometheus.io/) - Monitoring system
-- [Ant Design Vue](https://antdv.com/) - Enterprise UI component library
+Thanks to everyone who has contributed to AI-CloudOps, and to the open-source projects it builds on, including [Go](https://go.dev/), [Gin](https://gin-gonic.com/), [Kubernetes](https://kubernetes.io/), [Prometheus](https://prometheus.io/), [Vue.js](https://vuejs.org/), [Vben Admin](https://github.com/vbenjs/vue-vben-admin), [Ant Design Vue](https://antdv.com/) and [FastAPI](https://fastapi.tiangolo.com/).
 
 ---
 
-**If you find this project helpful, please give us a Star ⭐**
+If you find this project useful, please give it a ⭐.
 
 [![Star History Chart](https://api.star-history.com/svg?repos=GoSimplicity/AI-CloudOps&type=Date)](https://star-history.com/#GoSimplicity/AI-CloudOps&Date)
