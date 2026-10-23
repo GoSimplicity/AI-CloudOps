@@ -108,8 +108,14 @@ func loadFromFile(configFile string) (*Config, *ExternalConfig, error) {
 	return cfg, ext, nil
 }
 
+// WebhookSecrets Webhook 进程的敏感配置，仅保存在返回值中，不写入全局 viper
+type WebhookSecrets struct {
+	// MySQLAddr 来自 WEBHOOK_MYSQL_ADDR 的 MySQL DSN（含账号密码）
+	MySQLAddr string
+}
+
 // LoadWebhook 加载 Webhook 子系统配置，支持优先级：环境变量 > 配置文件 > 默认值。
-func LoadWebhook() (*WebhookConfig, error) {
+func LoadWebhook() (*WebhookConfig, *WebhookSecrets, error) {
 	configFile := pflag.String("config", "config/webhook.yaml", "配置文件路径")
 	pflag.Parse()
 
@@ -119,44 +125,56 @@ func LoadWebhook() (*WebhookConfig, error) {
 // WebhookMySQLAddrEnv Webhook 进程的 MySQL DSN（含账号密码）环境变量，必需，无内置默认值
 const WebhookMySQLAddrEnv = "WEBHOOK_MYSQL_ADDR"
 
-// webhookMySQLAddrKey Webhook 进程读取 DSN 的 viper 键（internal/prometheus/webhook/di/gorm.go）
+// webhookMySQLAddrKey webhook.yaml 中仅保留为空占位的 DSN 键，其值从不被读取
 const webhookMySQLAddrKey = "mysql.addr"
 
-// loadWebhookFromFile 加载指定的 Webhook 配置文件（不解析命令行参数，便于测试）
-func loadWebhookFromFile(configFile string) (*WebhookConfig, error) {
-	viper.SetConfigFile(configFile)
-	setWebhookDefaults()
-	viper.AutomaticEnv()
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+// webhookGlobalPrefix 发布到全局 viper 的键前缀：webhook 子系统其余代码仍通过全局 viper 读取 webhook.*
+const webhookGlobalPrefix = "webhook."
 
-	readErr := viper.ReadInConfig()
+// loadWebhookFromFile 加载指定的 Webhook 配置文件（不解析命令行参数，便于测试）。
+// 使用独立的 viper 实例读取文件与环境变量：DSN 只经由返回的 WebhookSecrets 传给数据库初始化，
+// 不写入全局 viper（mysql.addr 不会出现在全局配置中），也不受主程序 MYSQL_ADDR 影响
+func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, error) {
+	v := viper.New()
+	v.SetConfigFile(configFile)
+	setWebhookDefaults(v)
+	v.AutomaticEnv()
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	readErr := v.ReadInConfig()
 	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
-		return nil, fmt.Errorf("读取Webhook配置文件失败: %w", readErr)
+		return nil, nil, fmt.Errorf("读取Webhook配置文件失败: %w", readErr)
 	}
 
-	bindWebhookEnvVars()
+	bindStructEnvVars(v, reflect.TypeOf(WebhookConfig{}), "webhook")
 
-	// SEC-02A/SEC-22：DSN 整体由 WEBHOOK_MYSQL_ADDR 注入，配置文件不写、无默认值，缺失即失败。
-	// 用 viper.Set 固定取值，避免 AutomaticEnv 让主程序的 MYSQL_ADDR 或配置文件中的值生效
+	// SEC-02A/SEC-22：DSN 整体由 WEBHOOK_MYSQL_ADDR 注入，配置文件不写、无默认值，缺失即失败
 	addr := strings.TrimSpace(os.Getenv(WebhookMySQLAddrEnv))
 	if addr == "" {
 		// 只列出变量名，不输出任何值
-		return nil, fmt.Errorf("缺少必需的密钥环境变量: %s（不提供内置默认值，请通过环境变量注入）", WebhookMySQLAddrEnv)
+		return nil, nil, fmt.Errorf("缺少必需的密钥环境变量: %s（不提供内置默认值，请通过环境变量注入）", WebhookMySQLAddrEnv)
 	}
-	viper.Set(webhookMySQLAddrKey, addr)
 
 	cfg := &WebhookConfig{}
-	if err := viper.UnmarshalKey("webhook", cfg); err != nil {
+	if err := v.UnmarshalKey("webhook", cfg); err != nil {
 		// 兼容旧配置：如果没有 webhook 根节点，则尝试直接 unmarshal
-		if err2 := viper.Unmarshal(cfg); err2 != nil {
-			return nil, fmt.Errorf("解析Webhook配置失败: %w", err)
+		if err2 := v.Unmarshal(cfg); err2 != nil {
+			return nil, nil, fmt.Errorf("解析Webhook配置失败: %w", err)
 		}
 	}
 
-	if readErr != nil {
-		return cfg, NonFatalError{err: fmt.Errorf("读取Webhook配置文件失败: %w", readErr)}
+	// 只把 webhook.* 发布到全局 viper，供 webhook 子系统现有读取方使用；mysql.* 等其他键不发布
+	for _, key := range v.AllKeys() {
+		if strings.HasPrefix(key, webhookGlobalPrefix) {
+			viper.Set(key, v.Get(key))
+		}
 	}
-	return cfg, nil
+
+	secrets := &WebhookSecrets{MySQLAddr: addr}
+	if readErr != nil {
+		return cfg, secrets, NonFatalError{err: fmt.Errorf("读取Webhook配置文件失败: %w", readErr)}
+	}
+	return cfg, secrets, nil
 }
 
 func setDefaults() {
@@ -217,30 +235,26 @@ func setDefaults() {
 	viper.SetDefault("notification.feishu.timeout", "10s")
 }
 
-func setWebhookDefaults() {
-	viper.SetDefault("webhook.port", "8888")
-	viper.SetDefault("webhook.fixed_workers", 10)
-	viper.SetDefault("webhook.front_domain", "http://localhost:3000")
-	viper.SetDefault("webhook.backend_domain", "http://localhost:8889")
-	viper.SetDefault("webhook.default_upgrade_minutes", 60)
-	viper.SetDefault("webhook.alert_manager_api", "http://localhost:9093")
-	viper.SetDefault("webhook.common_map_renew_interval_seconds", 300)
-	viper.SetDefault("webhook.im_feishu.group_message_api", "https://open.feishu.cn/open-apis/im/v1/messages")
-	viper.SetDefault("webhook.im_feishu.request_timeout_seconds", 10)
-	viper.SetDefault("webhook.im_feishu.private_robot_app_id", "")
-	viper.SetDefault("webhook.im_feishu.private_robot_app_secret", "")
-	viper.SetDefault("webhook.im_feishu.tenant_access_token_api", "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal")
+func setWebhookDefaults(v *viper.Viper) {
+	v.SetDefault("webhook.port", "8888")
+	v.SetDefault("webhook.fixed_workers", 10)
+	v.SetDefault("webhook.front_domain", "http://localhost:3000")
+	v.SetDefault("webhook.backend_domain", "http://localhost:8889")
+	v.SetDefault("webhook.default_upgrade_minutes", 60)
+	v.SetDefault("webhook.alert_manager_api", "http://localhost:9093")
+	v.SetDefault("webhook.common_map_renew_interval_seconds", 300)
+	v.SetDefault("webhook.im_feishu.group_message_api", "https://open.feishu.cn/open-apis/im/v1/messages")
+	v.SetDefault("webhook.im_feishu.request_timeout_seconds", 10)
+	v.SetDefault("webhook.im_feishu.private_robot_app_id", "")
+	v.SetDefault("webhook.im_feishu.private_robot_app_secret", "")
+	v.SetDefault("webhook.im_feishu.tenant_access_token_api", "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal")
 }
 
 func bindEnvVars() {
-	bindStructEnvVars(reflect.TypeOf(Config{}), "")
+	bindStructEnvVars(viper.GetViper(), reflect.TypeOf(Config{}), "")
 }
 
-func bindWebhookEnvVars() {
-	bindStructEnvVars(reflect.TypeOf(WebhookConfig{}), "webhook")
-}
-
-func bindStructEnvVars(t reflect.Type, prefix string) {
+func bindStructEnvVars(v *viper.Viper, t reflect.Type, prefix string) {
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 
@@ -262,18 +276,18 @@ func bindStructEnvVars(t reflect.Type, prefix string) {
 		}
 
 		if actualType.Kind() == reflect.Struct {
-			bindStructEnvVars(actualType, configKey)
+			bindStructEnvVars(v, actualType, configKey)
 			continue
 		}
 
 		envTag := field.Tag.Get("env")
 		if envTag != "" {
-			_ = viper.BindEnv(configKey, envTag)
+			_ = v.BindEnv(configKey, envTag)
 			continue
 		}
 
 		envName := strings.ToUpper(strings.ReplaceAll(configKey, ".", "_"))
-		_ = viper.BindEnv(configKey, envName)
+		_ = v.BindEnv(configKey, envName)
 	}
 }
 

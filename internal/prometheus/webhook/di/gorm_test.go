@@ -6,19 +6,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestWebhookDatabaseInitializationPanicAndLogsAreRedacted(t *testing.T) {
-	viper.Reset()
-	t.Cleanup(viper.Reset)
 	// 无效时区由真实MySQL驱动在拨号前拒绝，原始错误包含canary
-	viper.Set("mysql.addr", "fixture:private-password@tcp(localhost:3306)/fixture?loc=driver-private-canary")
+	dsn := MySQLDSN("fixture:private-password@tcp(localhost:3306)/fixture?loc=driver-private-canary")
 	core, logs := observer.New(zap.DebugLevel)
 	var failure any
-	func() { defer func() { failure = recover() }(); InitDB(zap.New(core)) }()
+	func() { defer func() { failure = recover() }(); InitDB(zap.New(core), dsn) }()
 	err, ok := failure.(error)
 	if !ok {
 		t.Fatal("fixture did not produce initialization error")
