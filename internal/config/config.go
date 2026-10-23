@@ -28,7 +28,6 @@ package config
 import (
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 )
@@ -73,7 +72,7 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("aiops.base_url 必须是有效的 HTTP(S) 地址")
 		}
 	}
-	if os.Getenv("ENV") == "production" {
+	if IsProduction() {
 		for name, key := range map[string]string{"JWT_KEY1": c.JWT.Key1, "JWT_KEY2": c.JWT.Key2, "TREE_PASSWORD_ENCRYPTION_KEY": c.Tree.PasswordEncryptionKey} {
 			if len(key) < 32 || strings.HasPrefix(key, "ebe3vx") {
 				return fmt.Errorf("生产环境 %s 必须配置独立的至少32字符密钥", name)
@@ -157,7 +156,8 @@ type PrometheusConfig struct {
 
 // MockConfig Mock配置
 type MockConfig struct {
-	Enabled bool `mapstructure:"enabled" env:"MOCK_ENABLED" default:"true"`
+	// 默认值由 setDefaults 决定：生产环境（ENV=production）为 false，其余环境为 true
+	Enabled bool `mapstructure:"enabled" env:"MOCK_ENABLED"`
 }
 
 type NotificationConfig struct {

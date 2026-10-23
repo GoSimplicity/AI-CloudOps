@@ -279,6 +279,10 @@ func (a *App) initMockData(ctx context.Context) error {
 	if a.db == nil {
 		return fmt.Errorf("数据库连接为空")
 	}
+	// 纵深防御：配置校验已拒绝生产环境开启 mock，这里再兜底一次，避免绕过 config.Load 的调用方写入 mock 数据。
+	if config.IsProduction() {
+		return fmt.Errorf("生产环境禁止初始化 Mock 数据")
+	}
 
 	startCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()

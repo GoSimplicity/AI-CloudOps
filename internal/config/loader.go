@@ -65,7 +65,7 @@ func Load() (*Config, *ExternalConfig, error) {
 			env = "development"
 		}
 		switch env {
-		case "production":
+		case productionEnv:
 			*configFile = "config/config.production.yaml"
 		default:
 			*configFile = "config/config.development.yaml"
@@ -169,7 +169,9 @@ func setDefaults() {
 	viper.SetDefault("prometheus.alert_webhook_file_dir", "/tmp/webhook_files")
 	viper.SetDefault("prometheus.httpSdAPI", "http://localhost:8889/api/not_auth/getTreeNodeBindIps")
 
-	viper.SetDefault("mock.enabled", true)
+	// mock 默认值随环境变化：生产环境（ENV=production）默认关闭，其余环境保持开启。
+	// 显式配置（配置文件 mock.enabled 或环境变量 MOCK_ENABLED）仍然优先；生产环境开启会被 Validate 拒绝。
+	viper.SetDefault("mock.enabled", defaultMockEnabled())
 
 	viper.SetDefault("notification.email.enabled", false)
 	viper.SetDefault("notification.email.smtp_host", "smtp.gmail.com")
@@ -206,6 +208,19 @@ func setWebhookDefaults() {
 	viper.SetDefault("webhook.im_feishu.private_robot_app_id", "")
 	viper.SetDefault("webhook.im_feishu.private_robot_app_secret", "")
 	viper.SetDefault("webhook.im_feishu.tenant_access_token_api", "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal")
+}
+
+// productionEnv 是 ENV 环境变量在生产环境下的取值，与 Load 选择配置文件、Validate 的生产校验使用同一判定。
+const productionEnv = "production"
+
+// IsProduction 判断当前进程是否运行在生产环境（ENV=production）。
+func IsProduction() bool {
+	return os.Getenv("ENV") == productionEnv
+}
+
+// defaultMockEnabled 返回 mock.enabled 的默认值：生产环境关闭，其余环境开启。
+func defaultMockEnabled() bool {
+	return !IsProduction()
 }
 
 func bindEnvVars() {

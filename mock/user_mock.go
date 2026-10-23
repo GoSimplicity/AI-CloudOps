@@ -26,7 +26,10 @@
 package mock
 
 import (
+	"errors"
+	"fmt"
 	"log"
+	"os"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"golang.org/x/crypto/bcrypt"
@@ -35,33 +38,56 @@ import (
 
 const (
 	AdminUsername    = "admin"
-	AdminPassword    = "admin"
 	AdminAccountType = 2
+
+	// MockAdminPasswordEnv 是 mock 管理员口令的环境变量名。未设置时不创建 mock 管理员。
+	MockAdminPasswordEnv = "MOCK_ADMIN_PASSWORD"
+	// MinMockAdminPasswordLen 与 BOOTSTRAP_ADMIN_PASSWORD 的最小长度保持一致。
+	MinMockAdminPasswordLen = 12
 )
 
+// ErrMockAdminPasswordTooShort 表示 MOCK_ADMIN_PASSWORD 长度不足。
+var ErrMockAdminPasswordTooShort = errors.New(MockAdminPasswordEnv + " 至少12字符")
+
 type UserMock struct {
-	db *gorm.DB
+	db     *gorm.DB
+	getenv func(string) string
 }
 
 func NewUserMock(db *gorm.DB) *UserMock {
 	return &UserMock{
-		db: db,
+		db:     db,
+		getenv: os.Getenv,
 	}
 }
 
+// CreateUserAdmin 在空用户表上创建 mock 管理员。
+// 口令只从环境变量 MOCK_ADMIN_PASSWORD 读取，代码中不再内置任何口令；
+// 未设置时跳过创建（不生成、不落盘、不打印口令），设置但不足 12 字符时返回错误。
 func (u *UserMock) CreateUserAdmin() error {
 	// 检查是否已经初始化过用户
 	var count int64
-	u.db.Model(&model.User{}).Count(&count)
+	if err := u.db.Model(&model.User{}).Count(&count).Error; err != nil {
+		return fmt.Errorf("查询用户数量失败: %w", err)
+	}
 	if count > 0 {
 		log.Println("[用户已经初始化过,跳过Mock]")
 		return nil
 	}
 
+	password := u.getenv(MockAdminPasswordEnv)
+	if password == "" {
+		log.Printf("[用户模块Mock] 未设置 %s，跳过创建 mock 管理员；如需本地管理员，请设置该变量（至少%d字符）或使用 BOOTSTRAP_ADMIN_PASSWORD\n", MockAdminPasswordEnv, MinMockAdminPasswordLen)
+		return nil
+	}
+	if len(password) < MinMockAdminPasswordLen {
+		return ErrMockAdminPasswordTooShort
+	}
+
 	log.Println("[用户模块Mock开始]")
 
 	// 生成加密密码
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(AdminPassword), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Printf("生成密码失败: %v\n", err)
 		log.Println("[用户模块Mock结束]")
