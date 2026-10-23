@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -55,6 +56,55 @@ func TestExistingTokenUsesCurrentAccountState(t *testing.T) {
 			engine.ServeHTTP(rec, httptest.NewRequest("GET", "/protected", nil))
 			if rec.Code != tt.status {
 				t.Fatalf("status=%d want=%d", rec.Code, tt.status)
+			}
+		})
+	}
+}
+
+type transportSession struct {
+	existingSession
+	token string
+}
+
+func (s *transportSession) ExtractToken(c *gin.Context) string {
+	return strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
+}
+func (s *transportSession) ParseUserClaims(token string) (*ijwt.UserClaims, error) {
+	s.token = token
+	if token != "test-token" {
+		return nil, errors.New("invalid")
+	}
+	return s.existingSession.ParseUserClaims(token)
+}
+
+func TestCredentialTransport(t *testing.T) {
+	for _, tt := range []struct {
+		name, path, authorization, protocol string
+		upgrade                             bool
+		status                              int
+	}{
+		{"normal execute bearer", "/api/cron/job/execute/1", "Bearer test-token", "", false, 204},
+		{"websocket protocol", "/api/k8s/pod/1/ns/pod/containers/web/exec", "", "cloudops-v1, cloudops-auth.test-token", true, 204},
+		{"legacy websocket query", "/api/k8s/pod/1/ns/pod/containers/web/exec?token=test-token", "", "", true, 204},
+		{"HTTP query forbidden", "/api/cron/job/execute/1?token=test-token", "", "", false, 401},
+		{"duplicate protocol rejected", "/api/k8s/pod/1/ns/pod/containers/web/exec?token=test-token", "", "cloudops-auth.first, cloudops-auth.second", true, 401},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			session := &transportSession{}
+			engine := gin.New()
+			engine.Use(NewJWTMiddleware(session, liveUserReader{user: &model.User{Username: "admin", Enable: 1, AccountType: 1}}).CheckLogin())
+			engine.NoRoute(func(c *gin.Context) { c.Status(204) })
+			req := httptest.NewRequest("GET", tt.path, nil)
+			req.Header.Set("Authorization", tt.authorization)
+			req.Header.Set("Sec-WebSocket-Protocol", tt.protocol)
+			if tt.upgrade {
+				req.Header.Set("Connection", "Upgrade")
+				req.Header.Set("Upgrade", "websocket")
+			}
+			rec := httptest.NewRecorder()
+			engine.ServeHTTP(rec, req)
+			if rec.Code != tt.status {
+				t.Fatalf("status %d expected %d", rec.Code, tt.status)
 			}
 		})
 	}

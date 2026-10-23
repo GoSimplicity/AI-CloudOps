@@ -30,7 +30,9 @@ import (
 	"strings"
 
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
+	ws "github.com/GoSimplicity/AI-CloudOps/pkg/websocket"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 )
 
 type JWTMiddleware struct {
@@ -64,13 +66,15 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 		var uc ijwt.UserClaims
 		var tokenStr string
 
-		// WebSocket路径从查询参数获取token
-		if strings.HasPrefix(path, "/api/tree/local/terminal") ||
-			strings.Contains(path, "/exec") {
-			tokenStr = ctx.Query("token")
-		} else {
-			// 从请求头提取token
-			tokenStr = m.ExtractToken(ctx)
+		tokenStr = m.ExtractToken(ctx)
+		// 仅升级请求使用 WebSocket 凭据，普通 execute API 继续使用请求头
+		if websocket.IsWebSocketUpgrade(ctx.Request) && tokenStr == "" {
+			protocols := ctx.GetHeader("Sec-WebSocket-Protocol")
+			tokenStr = ws.TokenFromProtocols(protocols)
+			if tokenStr == "" && !strings.Contains(protocols, ws.CredentialProtocolPrefix) {
+				// 保留已发布查询令牌格式，新的浏览器客户端使用子协议
+				tokenStr = ctx.Query("token")
+			}
 		}
 
 		parsed, err := m.ParseUserClaims(tokenStr)

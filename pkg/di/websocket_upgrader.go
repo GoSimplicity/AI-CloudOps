@@ -17,6 +17,7 @@ func InitWebSocketUpgrader() *websocket.Upgrader {
 		ReadBufferSize:    4096,
 		WriteBufferSize:   4096,
 		HandshakeTimeout:  10 * time.Second,
+		Subprotocols:      []string{ws.Protocol},
 		EnableCompression: true,
 		CheckOrigin:       ws.CheckOrigin,
 		Error: func(w http.ResponseWriter, r *http.Request, status int, reason error) {
