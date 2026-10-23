@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/pkg/runenv"
@@ -161,19 +162,16 @@ func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, er
 	}
 
 	// 逐键取合并后的值（环境变量 > 配置文件 > 默认值）。v.UnmarshalKey("webhook") 只拿到配置文件里的
-	// webhook 子树，环境变量和默认值进不了 cfg（WEBHOOK_PORT 因此从未生效），所以不能直接用
-	merged := make(map[string]any)
-	for _, key := range v.AllKeys() {
-		if strings.HasPrefix(key, webhookGlobalPrefix) {
-			merged[key] = v.Get(key)
-		}
-	}
-	port := strings.TrimSpace(fmt.Sprint(merged[webhookPortKey]))
-	if merged[webhookPortKey] == nil || !isValidPort(port) {
+	// webhook 子树，环境变量和默认值进不了 cfg（WEBHOOK_PORT 因此从未生效），所以不能直接用。
+	// 只构造这一次：解码 cfg 与发布到全局 viper 共用同一份、同一顺序
+	merged := collectWebhookLeafValues(v)
+	rawPort, hasPort := merged.vals[webhookPortKey]
+	port := strings.TrimSpace(fmt.Sprint(rawPort))
+	if !hasPort || rawPort == nil || !isValidPort(port) {
 		// 只列出键名和变量名，不输出值
 		return nil, nil, fmt.Errorf("Webhook 端口 %s（环境变量 WEBHOOK_PORT）必须是 1-65535 的纯数字", webhookPortKey)
 	}
-	merged[webhookPortKey] = port
+	merged.vals[webhookPortKey] = port
 
 	cfg, err := decodeWebhookConfig(merged)
 	if err != nil {
@@ -182,9 +180,7 @@ func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, er
 
 	// 只把 webhook.* 发布到全局 viper，供 webhook 子系统现有读取方使用；mysql.* 等其他键不发布。
 	// 与 cfg 使用同一份合并后的值
-	for key, val := range merged {
-		viper.Set(key, val)
-	}
+	merged.apply(viper.Set)
 
 	secrets := &WebhookSecrets{MySQLAddr: addr}
 	if readErr != nil {
@@ -210,14 +206,71 @@ func misplacedWebhookRootKeys(v *viper.Viper) []string {
 	return keys
 }
 
+// webhookValues 逐键合并后的 webhook.* 叶子键取值；keys 已排序，写入顺序确定
+type webhookValues struct {
+	keys []string
+	vals map[string]any
+}
+
+// apply 按 keys 的固定顺序逐个写入（tmp.Set / viper.Set 共用）
+func (m webhookValues) apply(set func(key string, val any)) {
+	for _, key := range m.keys {
+		set(key, m.vals[key])
+	}
+}
+
+// collectWebhookLeafValues 取 webhook.* 下每个叶子键合并后的值（环境变量 > 配置文件 > 默认值）。
+// 跳过父键：配置文件写成 `im_feishu:`（null）时 AllKeys 会同时包含 webhook.im_feishu 和它的子键，
+// 父键 Get 得到的是默认值组成的 map，若写入顺序在子键之后会把子键的环境变量值覆盖掉。
+// 判定父键用两条：还有以 "key." 开头的其他键，或取值本身是 map
+func collectWebhookLeafValues(v *viper.Viper) webhookValues {
+	var all []string
+	for _, key := range v.AllKeys() {
+		if strings.HasPrefix(key, webhookGlobalPrefix) {
+			all = append(all, key)
+		}
+	}
+	sort.Strings(all)
+
+	m := webhookValues{vals: make(map[string]any, len(all))}
+	for _, key := range all {
+		if hasDescendantKey(all, key) {
+			continue
+		}
+		val := v.Get(key)
+		if isMapValue(val) {
+			continue
+		}
+		m.keys = append(m.keys, key)
+		m.vals[key] = val
+	}
+	return m
+}
+
+// hasDescendantKey 判断 keys 中是否存在 key 的子键
+func hasDescendantKey(keys []string, key string) bool {
+	prefix := key + "."
+	for _, k := range keys {
+		if strings.HasPrefix(k, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func isMapValue(val any) bool {
+	if val == nil {
+		return false
+	}
+	return reflect.TypeOf(val).Kind() == reflect.Map
+}
+
 // decodeWebhookConfig 把逐键合并后的 webhook.* 值解码为 WebhookConfig。
 // 借一个空白 viper 实例承载这些键再 UnmarshalKey，沿用 viper 默认的解码设置
 // （WeaklyTypedInput 与 decode hook），字符串 "3" 可转为 int；不新增直接依赖
-func decodeWebhookConfig(merged map[string]any) (*WebhookConfig, error) {
+func decodeWebhookConfig(merged webhookValues) (*WebhookConfig, error) {
 	tmp := viper.New()
-	for key, val := range merged {
-		tmp.Set(key, val)
-	}
+	merged.apply(tmp.Set)
 	cfg := &WebhookConfig{}
 	if err := tmp.UnmarshalKey("webhook", cfg); err != nil {
 		return nil, fmt.Errorf("解析Webhook配置失败: %w", err)
