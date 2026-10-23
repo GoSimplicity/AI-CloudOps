@@ -14,6 +14,7 @@ import (
 type localExecStore struct {
 	dao.CronJobDAO
 	created, updated, job *model.CronJob
+	status                *model.CronJobStatus
 }
 
 func (s *localExecStore) CreateCronJob(_ context.Context, job *model.CronJob) error {
@@ -25,6 +26,10 @@ func (s *localExecStore) UpdateCronJob(_ context.Context, job *model.CronJob, _ 
 	return nil
 }
 func (s *localExecStore) GetCronJob(context.Context, int) (*model.CronJob, error) { return s.job, nil }
+func (s *localExecStore) UpdateCronJobStatus(_ context.Context, _ int, status model.CronJobStatus) error {
+	s.status = &status
+	return nil
+}
 
 func newLocalExecService(allowed bool, store *localExecStore, queue *retryQueue) *cronService {
 	return &cronService{logger: zap.NewNop(), cronDAO: store, client: queue, localExecAllowed: func() bool { return allowed }}
@@ -145,4 +150,22 @@ type listOnlyDAO struct{ dao.CronJobDAO }
 
 func (listOnlyDAO) GetCronJobList(context.Context, *model.GetCronJobListReq) ([]*model.CronJob, int64, error) {
 	return nil, 0, nil
+}
+
+func TestEnableCronJobLocalExecSwitch(t *testing.T) {
+	for _, allowed := range []bool{false, true} {
+		for _, jobType := range append(allJobTypes, model.CronJobTypeSystem) {
+			store := &localExecStore{job: &model.CronJob{Model: model.Model{ID: 1}, Status: model.CronJobStatusDisabled, JobType: jobType}}
+			err := newLocalExecService(allowed, store, nil).EnableCronJob(context.Background(), 1)
+			if !allowed && task.IsLocalExecJobType(jobType) {
+				if !errors.Is(err, task.ErrLocalExecDisabled) || store.status != nil {
+					t.Fatalf("allowed=%v type=%d: enable must be rejected without status change, err=%v", allowed, jobType, err)
+				}
+				continue
+			}
+			if err != nil || store.status == nil || *store.status != model.CronJobStatusEnabled {
+				t.Fatalf("allowed=%v type=%d: enable behaviour changed, err=%v", allowed, jobType, err)
+			}
+		}
+	}
 }

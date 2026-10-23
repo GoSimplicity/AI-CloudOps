@@ -271,6 +271,16 @@ func (s *cronService) GetCronJobList(ctx context.Context, req *model.GetCronJobL
 func (s *cronService) EnableCronJob(ctx context.Context, id int) error {
 	s.logger.Info("启用任务", zap.Int("id", id))
 
+	job, err := s.cronDAO.GetCronJob(ctx, id)
+	if err != nil {
+		s.logger.Error("获取任务详情失败", zap.Int("id", id), zap.Error(err))
+		return err
+	}
+	if err := s.checkLocalExecAllowed(job.JobType); err != nil {
+		s.logger.Warn("拒绝启用本地执行任务", zap.Int("id", id), zap.Int8("jobType", int8(job.JobType)))
+		return err
+	}
+
 	if err := s.cronDAO.UpdateCronJobStatus(ctx, id, model.CronJobStatusEnabled); err != nil {
 		s.logger.Error("启用任务失败", zap.Int("id", id), zap.Error(err))
 		return err
