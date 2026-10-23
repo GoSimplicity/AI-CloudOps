@@ -4,6 +4,8 @@
 #         WEBHOOK_PORT 若出现，必须等于 config/webhook.yaml 的 webhook.port，且注释分别说明合入前/合入后的行为与改端口方法；
 #         本人负责的范围（env.example、deploy/、docs/、scripts/、.github/、根目录 README* / compose / Makefile）
 #         不得再以“值”的形式出现旧端口 8888（注释里解释历史默认值可以；登记的例外见 ALLOW_8888）。
+#   JWT   JWT_EXPIRATION=30（单位分钟），注释写明单位与合入前/后默认值，并与 deploy/release/compose.yaml 一致；
+#         本人负责的范围内提到 JWT_EXPIRATION 的文档都写明单位为分钟，且不再出现 JWT_EXPIRATION=3600。
 #   Redis REDIS_PASSWORD 值为空且注释标明 compose 必填。
 #
 # 用法: scripts/tests/security/test-env-example.sh [--rev <git-rev>]   （不带 --rev 检查工作区；对修复前版本运行应报 FAIL）
@@ -97,6 +99,35 @@ while IFS= read -r h; do
 done <"$TMP/hits"
 if [ -s "$TMP/bad8888" ]; then bad "本人范围内仍有非注释的 8888：$(tr '\n' ' ' <"$TMP/bad8888")"
 else ok "本人范围内无非注释的 8888（internal/、config/ 不属本人，只登记）"; fi
+
+# ---------- JWT_EXPIRATION ----------
+je="$(val JWT_EXPIRATION)"
+[ "$je" = 30 ] && ok "JWT_EXPIRATION=30" || bad "JWT_EXPIRATION=${je}（应为 30 分钟；3600 实为 60 小时，合入后生产上限 1440）"
+block JWT_EXPIRATION >"$TMP/je.txt"
+for kw in '单位是分钟' '合入 sched/w1-mantou 前' '合入 sched/w1-mantou 后' '1440'; do
+    if grep -F -q -e "$kw" "$TMP/je.txt"; then ok "JWT_EXPIRATION 注释含「${kw}」"
+    else bad "JWT_EXPIRATION 注释缺「${kw}」"; fi
+done
+src deploy/release/compose.yaml >"$TMP/compose.yaml" 2>/dev/null || : >"$TMP/compose.yaml"
+cj="$(sed -n 's/^[[:space:]]*JWT_EXPIRATION:[[:space:]]*"\{0,1\}\([0-9]*\)"\{0,1\}.*/\1/p' "$TMP/compose.yaml" | head -n 1)"
+[ "$cj" = "$je" ] && ok "deploy/release/compose.yaml JWT_EXPIRATION=${cj} 与 env.example 一致" \
+    || bad "deploy/release/compose.yaml JWT_EXPIRATION=${cj}，env.example 为 ${je}"
+if [ -n "$REV" ]; then
+    git -C "$REPO" grep -n -I -F JWT_EXPIRATION "$REV" -- . ':!internal/' ':!config/' 2>/dev/null | sed "s|^$REV:||" >"$TMP/jhits" || true
+else
+    git -C "$REPO" grep -n -I -F JWT_EXPIRATION -- . ':!internal/' ':!config/' 2>/dev/null >"$TMP/jhits" || true
+fi
+: >"$TMP/badjwt"
+while IFS= read -r h; do
+    f="${h%%:*}"
+    case "$f" in "$SELF"|env.example|deploy/release/compose.yaml|*.go) continue ;; esac
+    case "$f" in
+        *.md) printf '%s' "$h" | grep -E -q '分钟|minute' || echo "${h}（未写单位）" >>"$TMP/badjwt" ;;
+    esac
+    if printf '%s' "$h" | grep -E -q 'JWT_EXPIRATION[=:][[:space:]]*"?3600'; then echo "${h}（3600）" >>"$TMP/badjwt"; fi
+done <"$TMP/jhits"
+if [ -s "$TMP/badjwt" ]; then bad "本人范围内 JWT_EXPIRATION 说明不符：$(tr '\n' ' ' <"$TMP/badjwt")"
+else ok "本人范围内提到 JWT_EXPIRATION 的文档均写明分钟、无 3600（internal/、config/ 只登记）"; fi
 
 # ---------- Redis ----------
 rp="$(val REDIS_PASSWORD)"
