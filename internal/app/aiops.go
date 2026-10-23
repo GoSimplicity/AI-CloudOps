@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/GoSimplicity/AI-CloudOps/internal/permission"
 	jwt "github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	ws "github.com/GoSimplicity/AI-CloudOps/pkg/websocket"
 	"net/http"
@@ -61,7 +62,11 @@ func (a *App) registerAIOps() error {
 			http.Error(w, `{"code":502,"message":"AI service unavailable"}`, http.StatusBadGateway)
 		},
 	}
-	a.server.Any("/api/v1/*path", func(c *gin.Context) {
+	catalog, err := parseAIOpsCatalog()
+	if err != nil {
+		return err
+	}
+	a.server.Any(permission.AIOpsProxyTemplate, func(c *gin.Context) {
 		value, exists := c.Get("user")
 		claims, valid := value.(jwt.UserClaims)
 		if !exists || !valid || claims.Uid <= 0 {
@@ -71,5 +76,7 @@ func (a *App) registerAIOps() error {
 		request := c.Request.WithContext(context.WithValue(c.Request.Context(), aiopsPrincipalKey{}, strconv.Itoa(claims.Uid)))
 		proxy.ServeHTTP(c.Writer, request)
 	})
+	// 代理只有一个通配模板，鉴权需要按目录还原出具体接口模板
+	permission.SetProxyCatalog(permission.AIOpsProxyTemplate, catalog)
 	return nil
 }

@@ -42,6 +42,7 @@ import (
 type UserHandler struct {
 	service service.UserService
 	jwt     jwt2.Handler
+	routes  func() gin.RoutesInfo
 }
 
 func NewUserHandler(service service.UserService, jwt jwt2.Handler) *UserHandler {
@@ -52,6 +53,8 @@ func NewUserHandler(service service.UserService, jwt jwt2.Handler) *UserHandler 
 }
 
 func (h *UserHandler) RegisterRoutes(server *gin.Engine) {
+	// 权限目录在请求时按当前已注册路由构建：AIOps 代理等路由在本方法之后才注册
+	h.routes = server.Routes
 	userGroup := server.Group("/api/user")
 	{
 		userGroup.POST("/signup", h.SignUp)
@@ -60,6 +63,7 @@ func (h *UserHandler) RegisterRoutes(server *gin.Engine) {
 		userGroup.POST("/logout", h.Logout)
 		userGroup.GET("/profile", h.Profile)
 		userGroup.GET("/codes", h.GetPermCode)
+		userGroup.GET("/permissions", h.GetPermissions)
 		userGroup.GET("/detail/:id", h.GetUserDetail)
 		userGroup.GET("/list", h.GetUserList)
 		userGroup.POST("/change_password", h.ChangePassword)
@@ -166,6 +170,26 @@ func (h *UserHandler) GetPermCode(ctx *gin.Context) {
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return h.service.GetPermCode(ctx.Request.Context(), req.ID)
+	})
+}
+
+// GetPermissions 返回调用者本人的 v2 权限码（"METHOD /模板"），契约见 docs/api/user-permissions-v2.md。
+func (h *UserHandler) GetPermissions(ctx *gin.Context) {
+	uc, err := userutils.ExtractClaims(ctx)
+	if err != nil {
+		base.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	if uc.Uid <= 0 {
+		base.ErrorWithMessage(ctx, "用户信息缺失")
+		return
+	}
+	var routes gin.RoutesInfo
+	if h.routes != nil {
+		routes = h.routes()
+	}
+	base.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.service.GetPermissions(ctx.Request.Context(), uc.Uid, permission.BuildCatalog(routes))
 	})
 }
 
