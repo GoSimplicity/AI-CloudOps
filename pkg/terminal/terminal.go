@@ -31,6 +31,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -76,7 +77,11 @@ type Session struct {
 	sizeChan chan remotecommand.TerminalSize // 终端大小变化通道
 	logger   *zap.Logger                     // 日志记录器
 	closed   int32                           // 连接是否已关闭
-	mu       sync.RWMutex                    // 读写锁保护连接操作
+	readMu   sync.Mutex                      // 单reader及剩余输入
+	writeMu  sync.Mutex                      // 所有数据帧与心跳写入
+	sizeMu   sync.Mutex                      // resize发送与关闭
+	pending  []byte                          // 尚未交付给调用者的stdin字节
+	cancel   context.CancelFunc              // 断开输入时取消所属exec上下文
 }
 
 /*
@@ -107,202 +112,165 @@ type ContainerInfo struct {
 	ShellFeatures  []string // 容器支持的shell特性
 }
 
-// Write 实现io.Writer接口，向WebSocket客户端发送数据
+// writeMessage 串行化数据帧、错误消息及其写期限
+func (t *Session) writeMessage(message []byte, timeout time.Duration) error {
+	t.writeMu.Lock()
+	defer t.writeMu.Unlock()
+	if atomic.LoadInt32(&t.closed) == 1 {
+		return io.ErrClosedPipe
+	}
+	if err := t.conn.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
+		return err
+	}
+	return t.conn.WriteMessage(websocket.TextMessage, message)
+}
+
+func (t *Session) writeControl(kind int, payload []byte) error {
+	t.writeMu.Lock()
+	defer t.writeMu.Unlock()
+	if atomic.LoadInt32(&t.closed) == 1 {
+		return io.ErrClosedPipe
+	}
+	return t.conn.WriteControl(kind, payload, time.Now().Add(writeWait))
+}
+
 func (t *Session) Write(p []byte) (int, error) {
 	if atomic.LoadInt32(&t.closed) == 1 {
-		return 0, fmt.Errorf("连接已关闭")
+		return 0, io.ErrClosedPipe
 	}
-
 	if len(p) == 0 {
 		return 0, nil
 	}
-
-	// 构造stdout消息
-	msg, err := json.Marshal(Message{
-		Op:   "stdout",
-		Data: string(p),
-	})
+	message, err := json.Marshal(Message{Op: "stdout", Data: string(p)})
 	if err != nil {
-		t.logger.Error("序列化WebSocket消息失败", zap.Error(err))
 		return 0, fmt.Errorf("序列化消息失败: %w", err)
 	}
-
-	// 使用读锁保护连接操作
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	if atomic.LoadInt32(&t.closed) == 1 {
-		return 0, fmt.Errorf("连接已关闭")
-	}
-
-	if err := t.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
-		t.logger.Error("设置WebSocket写入超时失败", zap.Error(err))
-		return 0, fmt.Errorf("设置写入超时失败: %w", err)
-	}
-
-	// 发送消息
-	if err = t.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-		t.logger.Error("向WebSocket发送消息失败", zap.Error(err))
+	if err := t.writeMessage(message, writeWait); err != nil {
 		return 0, fmt.Errorf("发送消息失败: %w", err)
 	}
-
 	return len(p), nil
 }
 
 func (t *Session) Close() error {
-	// 使用原子操作标记连接已关闭，避免重复关闭
 	if !atomic.CompareAndSwapInt32(&t.closed, 0, 1) {
-		// 已经关闭过了
-		t.logger.Debug("会话已经关闭，跳过重复关闭")
 		return nil
 	}
-
-	// 使用写锁保护关闭操作
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	// 安全关闭size通道
-	defer func() {
-		if r := recover(); r != nil {
-			t.logger.Error("关闭终端大小通道时发生panic", zap.Any("panic", r))
-		}
-	}()
-
-	// 关闭通道（可能已经关闭）
-	select {
-	case <-t.sizeChan:
-		// 通道已关闭
-	default:
+	if t.cancel != nil {
+		t.cancel()
+	}
+	// Gorilla允许Close与读写并发，先断开网络以唤醒阻塞I/O，不等待读写锁
+	var err error
+	if t.conn != nil {
+		err = t.conn.Close()
+	}
+	t.sizeMu.Lock()
+	if t.sizeChan != nil {
 		close(t.sizeChan)
 	}
-
-	// 发送关闭帧（graceful关闭）
-	closeMessage := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "会话结束")
-	if err := t.conn.WriteControl(websocket.CloseMessage, closeMessage, time.Now().Add(time.Second)); err != nil {
-		t.logger.Debug("发送关闭帧失败", zap.Error(err)) // 降级为Debug，因为这在某些情况下是正常的
+	t.sizeMu.Unlock()
+	if err != nil && !errors.Is(err, net.ErrClosed) {
+		return fmt.Errorf("关闭WebSocket连接失败: %w", err)
 	}
-
-	// 关闭WebSocket连接
-	if err := t.conn.Close(); err != nil {
-		// 某些情况下连接可能已经被对端关闭，这是正常的
-		if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway, websocket.CloseNoStatusReceived) {
-			t.logger.Debug("关闭WebSocket连接时出现预期外错误", zap.Error(err))
-			return fmt.Errorf("关闭WebSocket连接失败: %w", err)
-		}
-	}
-
-	t.logger.Debug("终端会话已正常关闭")
 	return nil
 }
 
-// Read 实现io.Reader接口，从WebSocket客户端读取数据
-func (t *Session) Read(p []byte) (int, error) {
-	if atomic.LoadInt32(&t.closed) == 1 {
-		return copy(p, endOfTransmission), io.EOF
-	}
-
-	// 使用读锁保护连接操作
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	if atomic.LoadInt32(&t.closed) == 1 {
-		return copy(p, endOfTransmission), io.EOF
-	}
-
-	// 尝试读取原始消息
-	_, rawMessage, err := t.conn.ReadMessage()
-	if err != nil {
-		if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway, websocket.CloseNoStatusReceived) {
-			t.logger.Debug("WebSocket连接正常关闭", zap.Error(err))
-			return copy(p, endOfTransmission), io.EOF
-		}
-		t.logger.Error("从WebSocket读取消息失败", zap.Error(err))
-		return copy(p, endOfTransmission), fmt.Errorf("读取WebSocket消息失败: %w", err)
-	}
-
-	if len(rawMessage) == 0 {
-		t.logger.Debug("接收到空消息，忽略")
-		return 0, nil
-	}
-
-	var msg Message
-	// 尝试解析JSON消息
-	if err := json.Unmarshal(rawMessage, &msg); err != nil {
-		// 如果不是JSON格式，可能是纯文本消息，直接作为stdin处理
-		t.logger.Debug("接收到非JSON消息，作为纯文本stdin处理",
-			zap.String("消息", string(rawMessage)))
-		n := copy(p, rawMessage)
-		return n, nil
-	}
-
-	switch msg.Op {
-	case "stdin":
-		n := copy(p, msg.Data)
-		t.logger.Debug("接收到标准输入数据", zap.Int("长度", n))
-		return n, nil
-
-	case "resize":
-		size := remotecommand.TerminalSize{Width: msg.ColSize, Height: msg.RowSize}
-		t.logger.Debug("接收到终端大小调整",
-			zap.Uint16("宽度", msg.ColSize),
-			zap.Uint16("高度", msg.RowSize))
-
-		// 非阻塞发送到大小通道
-		select {
-		case t.sizeChan <- size:
-		default:
-			// 通道已满或已关闭，忽略此次调整
-			t.logger.Warn("终端大小调整被忽略，通道已满或已关闭")
-		}
-		return 0, nil
-
-	case "":
-		// 空操作类型，可能是心跳或无效消息
-		t.logger.Debug("接收到空操作类型消息，忽略")
-		return 0, nil
-
-	default:
-		// 未知消息类型，但不返回错误，只记录警告
-		t.logger.Warn("接收到未知消息类型，忽略", zap.String("类型", msg.Op))
-		return 0, nil
+// closeOnCancel 让请求取消能够中断远端复制正在等待的stdin网络读
+func (t *Session) closeOnCancel(ctx context.Context) func() {
+	finished := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() { defer close(finished); _ = t.Close() })
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			if !stop() {
+				<-finished
+			}
+		})
 	}
 }
 
-// Next 实现remotecommand.TerminalSizeQueue接口
-// 返回下一个终端大小变化，如果通道关闭则返回nil
-func (t *Session) Next() *remotecommand.TerminalSize {
-	if atomic.LoadInt32(&t.closed) == 1 {
-		t.logger.Debug("连接已关闭，返回nil终端大小")
-		return nil
+func (t *Session) queueSize(size remotecommand.TerminalSize) {
+	t.sizeMu.Lock()
+	defer t.sizeMu.Unlock()
+	if atomic.LoadInt32(&t.closed) == 1 || t.sizeChan == nil {
+		return
 	}
-
 	select {
-	case size, ok := <-t.sizeChan:
-		if !ok {
-			// 通道已关闭
-			t.logger.Debug("终端大小通道已关闭")
+	case t.sizeChan <- size:
+	default:
+	}
+}
+
+func (t *Session) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	t.readMu.Lock()
+	defer t.readMu.Unlock()
+	for {
+		if atomic.LoadInt32(&t.closed) == 1 {
+			return copy(p, endOfTransmission), io.EOF
+		}
+		if len(t.pending) > 0 {
+			count := copy(p, t.pending)
+			t.pending = t.pending[count:]
+			if len(t.pending) == 0 {
+				t.pending = nil
+			}
+			return count, nil
+		}
+		_, raw, err := t.conn.ReadMessage()
+		if err != nil {
+			if t.cancel != nil {
+				t.cancel()
+			}
+			if atomic.LoadInt32(&t.closed) == 1 || websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway, websocket.CloseNoStatusReceived) || errors.Is(err, net.ErrClosed) {
+				return copy(p, endOfTransmission), io.EOF
+			}
+			// Close帧原因也由客户端提供，不把原始错误文本重新写入日志
+			t.logger.Debug("终端输入连接结束")
+			return copy(p, endOfTransmission), fmt.Errorf("读取WebSocket消息失败")
+		}
+		if len(raw) == 0 {
+			continue
+		}
+		var message Message
+		if json.Unmarshal(raw, &message) != nil {
+			t.logger.Debug("兼容原始stdin消息", zap.Int("长度", len(raw)))
+			t.pending = raw
+			continue
+		}
+		switch message.Op {
+		case "stdin":
+			t.pending = []byte(message.Data)
+		case "resize":
+			t.queueSize(remotecommand.TerminalSize{Width: message.ColSize, Height: message.RowSize})
+		case "":
+		default:
+			t.logger.Debug("忽略未知终端操作", zap.Int("操作类型长度", len(message.Op)))
+		}
+	}
+}
+
+// Next 仅在监控停止时返回nil，空队列应继续等待后续resize
+func (t *Session) Next() *remotecommand.TerminalSize {
+	for {
+		if atomic.LoadInt32(&t.closed) == 1 || t.sizeChan == nil {
 			return nil
 		}
-
+		size, ok := <-t.sizeChan
+		if !ok || atomic.LoadInt32(&t.closed) == 1 {
+			return nil
+		}
 		if size.Height == 0 && size.Width == 0 {
-			t.logger.Debug("接收到无效的终端大小（0x0）")
-			return nil
+			continue
 		}
-
-		if size.Height < 1 {
+		if size.Height == 0 {
 			size.Height = defaultTerminalRows
 		}
-		if size.Width < 1 {
+		if size.Width == 0 {
 			size.Width = defaultTerminalCols
 		}
-
-		t.logger.Debug("返回终端大小",
-			zap.Uint16("宽度", size.Width),
-			zap.Uint16("高度", size.Height))
 		return &size
-	default:
-		// 非阻塞读取，没有新的大小变化
-		return nil
 	}
 }
 
@@ -346,7 +314,11 @@ func (t *terminaler) HandleSession(ctx context.Context, shell, namespace, podNam
 		sizeChan: make(chan remotecommand.TerminalSize, 1), // 带缓冲的通道防止阻塞
 		logger:   t.logger.With(zap.String("组件", "TerminalSession")),
 		closed:   0,
+		cancel:   cancel,
 	}
+
+	stopClose := session.closeOnCancel(ctx)
+	defer stopClose()
 
 	// 启动Ping/Pong心跳机制
 	go t.startHeartbeat(ctx, session, cancel)
@@ -366,10 +338,6 @@ func (t *terminaler) startHeartbeat(ctx context.Context, session *Session, cance
 			return
 		}
 
-		// 使用读锁保护连接操作
-		session.mu.RLock()
-		defer session.mu.RUnlock()
-
 		if atomic.LoadInt32(&session.closed) == 1 {
 			t.logger.Debug("连接已关闭，停止心跳")
 			cancel() // 取消上下文
@@ -377,7 +345,7 @@ func (t *terminaler) startHeartbeat(ctx context.Context, session *Session, cance
 		}
 
 		// 发送Ping消息
-		if err := session.conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(writeWait)); err != nil {
+		if err := session.writeControl(websocket.PingMessage, nil); err != nil {
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway, websocket.CloseNoStatusReceived) {
 				t.logger.Debug("连接已正常关闭，停止心跳", zap.Error(err))
 			} else {
@@ -402,10 +370,6 @@ func (t *terminaler) setupPongHandler(session *Session) {
 		}
 
 		t.logger.Debug("接收到Pong消息")
-		// 使用读锁保护连接操作
-		session.mu.RLock()
-		defer session.mu.RUnlock()
-
 		if atomic.LoadInt32(&session.closed) == 1 {
 			return nil
 		}
@@ -1048,33 +1012,10 @@ func (t *terminaler) writeErrorMessage(session *Session, message string) error {
 		return fmt.Errorf("序列化错误消息失败: %w", err)
 	}
 
-	// 使用读锁保护连接操作
-	session.mu.RLock()
-	defer session.mu.RUnlock()
-
-	if atomic.LoadInt32(&session.closed) == 1 {
-		t.logger.Debug("连接已关闭，跳过错误消息发送")
-		return fmt.Errorf("连接已关闭")
-	}
-
-	// 设置较短的写入超时（错误消息优先级较低）
-	shortWriteTimeout := time.Second * 3
-	if err := session.conn.SetWriteDeadline(time.Now().Add(shortWriteTimeout)); err != nil {
-		t.logger.Debug("设置WebSocket写入超时失败", zap.Error(err)) // 降级为Debug
-		return fmt.Errorf("设置写入超时失败: %w", err)
-	}
-
-	// 发送错误消息到WebSocket（可能失败，但不应该阻塞整个流程）
-	if err := session.conn.WriteMessage(websocket.TextMessage, msgBytes); err != nil {
-		if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway, websocket.CloseNoStatusReceived) {
-			t.logger.Debug("连接已正常关闭，无法发送错误消息", zap.Error(err))
-		} else {
-			t.logger.Debug("发送错误消息到WebSocket失败", zap.Error(err)) // 降级为Debug，因为这在某些情况下是正常的
-		}
+	if err := session.writeMessage(msgBytes, 3*time.Second); err != nil {
 		return fmt.Errorf("发送错误消息失败: %w", err)
 	}
-
-	t.logger.Debug("已发送错误消息到客户端", zap.String("消息", message))
+	t.logger.Debug("已发送终端错误消息", zap.Int("长度", len(message)))
 	return nil
 }
 
