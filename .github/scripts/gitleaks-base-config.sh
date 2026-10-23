@@ -19,7 +19,8 @@
 #   - 策略提交上没有该文件时使用默认配置（[extend] useDefault = true）/ 空忽略列表，绝不回退到 HEAD 的文件；
 #   - gitleaks 总会额外读取“扫描源目录/.gitleaksignore”（即 HEAD 工作区中的文件，8.30.1 实测），
 #     因此这里把工作区中的 .gitleaksignore 移走（CI 检出目录是一次性的；该文件的内容仍会被提交扫描覆盖）；
-#   - 基准配置中的 [extend] path 会从当前工作区（HEAD）读取文件，视为不可信，直接失败。
+#   - 基准配置中的 [extend] path 会从当前工作区（HEAD）读取文件，视为不可信，直接失败；
+#     检查由 gitleaks-config-check.py（tomllib，Python 3.11+）完成，大小写/点号/内联表等写法都算，缺 tomllib 也失败。
 # 局限：本脚本与工作流本身仍来自 PR 的 HEAD，修改 .github/ 的 PR 可以绕过——需要 CODEOWNERS/分支保护（见 README-ops 待办）。
 set -euo pipefail
 
@@ -69,10 +70,10 @@ fi
 if [ -n "$base" ] && git cat-file -e "${base}:.gitleaks.toml" 2>/dev/null; then
     git show "${base}:.gitleaks.toml" >"$cfg"
     note "使用基准 ${base} 上的 .gitleaks.toml"
-    # [extend] 段中的 path = ... 会从工作区（HEAD）读取，不可信
-    if awk '/^[[:space:]]*\[/{ sec=$0; gsub(/[[:space:]]/, "", sec) } sec=="[extend]" && /^[[:space:]]*path[[:space:]]*=/{ f=1 } END{ exit !f }' "$cfg"; then
-        die "基准 .gitleaks.toml 的 [extend] 使用了 path（会读取 HEAD 工作区中的文件），拒绝使用"
-    fi
+    # [extend] path 会从工作区（HEAD）读取，不可信；用 TOML 解析器按 gitleaks（viper）的规则检查（review3g N1）
+    command -v python3 >/dev/null 2>&1 || die "缺少 python3（需要 3.11+ 的 tomllib）检查基准 .gitleaks.toml 的 [extend]，拒绝继续"
+    python3 "$(dirname "$0")/gitleaks-config-check.py" "$cfg" \
+        || die "基准 .gitleaks.toml 未通过 [extend] 检查（见上一行），拒绝使用"
 else
     printf '# 基准提交上没有 .gitleaks.toml：使用 gitleaks 默认规则（不使用 HEAD 的配置）\n[extend]\nuseDefault = true\n' >"$cfg"
     note "基准 ${base:-（无，全量扫描）} 上没有 .gitleaks.toml，使用 gitleaks 默认规则"
