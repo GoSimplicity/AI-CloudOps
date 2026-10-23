@@ -159,7 +159,7 @@ func (s *Server) serve(conn net.Conn) {
 				default:
 				}
 				switch command.Command {
-				case "block":
+				case "block", "(\nblock\n)":
 					<-ctx.Done()
 					return
 				case "large":

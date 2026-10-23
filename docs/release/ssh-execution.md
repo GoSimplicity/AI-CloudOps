@@ -14,3 +14,17 @@ GOTOOLCHAIN=auto go vet ./pkg/ssh/... ./internal/tree/ssh
 ```
 
 SSH 协议关闭连接不保证远端已脱离会话的后台进程被终止。对需要强制远端进程树清理或事务恢复的任务，应使用具备任务身份、租约及取消协议的远端执行代理。真实远端的认证、系统 shell 行为与业务命令尚未验收
+
+定时任务 SSH 执行使用同一请求期限覆盖资源读取、连接与执行，`Timeout <= 0` 使用 300 秒默认值。密码认证先按现有资源加密规范解密到当前连接的局部副本，不修改 DAO 返回对象；私钥认证不解密未使用的密码字段。错误认证模式与解密失败均阻止建立连接
+
+`SSHWorkDir` 和环境变量值按 POSIX shell 字面量引用，不展开目录中的 `~`、变量或命令替换。环境变量名只允许字母、数字、下划线且不得以数字开头，空字节被拒绝。`SSHCommand` 保留调用者显式提供的 shell 程序，可包含管道、分号和注释；整个命令程序只在目录切换与环境设置成功后运行。任务日志仅记录资源 ID 和输出长度，不记录命令、环境值、凭据或原始输出，失败保留受限的部分输出供任务结果展示
+
+已追加真实本机协议验收：Cron 使用加密存储密码完成认证且 DAO 原对象不变、连接等待时取消、命令已到达测试 SSH 服务后取消、1 秒任务期限到达后退出。另以本机 `/bin/sh` 验证含单引号、命令替换字符和换行的目录/环境保持字面量，以及目录失败不会执行后续分号命令
+
+```sh
+GOTOOLCHAIN=auto go test -race -tags=smoke ./pkg/ssh ./internal/tree/ssh ./internal/cron/executor
+GOTOOLCHAIN=auto go vet ./pkg/ssh/... ./internal/tree/ssh ./internal/cron/executor
+GOTOOLCHAIN=auto go test ./...
+```
+
+上述测试未使用生产凭据，未连接真实远端。认证方式、网络策略和服务器 shell 的真实环境验收仍需部署时执行

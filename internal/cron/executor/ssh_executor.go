@@ -28,158 +28,125 @@ package executor
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/ssh"
+	treeSSH "github.com/GoSimplicity/AI-CloudOps/internal/tree/ssh"
+	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
 	"go.uber.org/zap"
 )
 
-// SSHExecutor SSH远程执行器
+type sshConnection interface {
+	ConnectContext(context.Context, string, int, string, string, string, int8, int) error
+	RunContext(context.Context, string) (string, error)
+	Close() error
+}
+
 type SSHExecutor struct {
 	logger       *zap.Logger
 	treeLocalDAO dao.TreeLocalDAO
+	newSSH       func() sshConnection
 }
 
-// NewSSHExecutor 创建SSH执行器
 func NewSSHExecutor(logger *zap.Logger, treeLocalDAO dao.TreeLocalDAO) *SSHExecutor {
-	return &SSHExecutor{
-		logger:       logger,
-		treeLocalDAO: treeLocalDAO,
+	if logger == nil {
+		logger = zap.NewNop()
 	}
+	return &SSHExecutor{logger: logger, treeLocalDAO: treeLocalDAO, newSSH: func() sshConnection { return treeSSH.NewSSH(logger) }}
 }
 
-// ExecuteSSHJob 执行SSH任务
 func (s *SSHExecutor) ExecuteSSHJob(ctx context.Context, job *model.CronJob) (string, error) {
-	resourceID := 0
-	if job.SSHResourceID != nil {
-		resourceID = *job.SSHResourceID
+	if ctx == nil || job == nil {
+		return "", fmt.Errorf("SSH上下文和任务不能为空")
 	}
-
-	s.logger.Info("开始执行SSH任务",
-		zap.String("任务名称", job.Name),
-		zap.Int("资源ID", resourceID))
-
-	// 验证SSH任务配置
 	if job.JobType != model.CronJobTypeSSH {
 		return "", fmt.Errorf("任务类型不是SSH执行任务")
 	}
-
-	if job.SSHResourceID == nil || *job.SSHResourceID == 0 {
+	if job.SSHResourceID == nil || *job.SSHResourceID <= 0 {
 		return "", fmt.Errorf("SSH资源ID不能为空")
 	}
-
-	if job.SSHCommand == "" {
+	if strings.TrimSpace(job.SSHCommand) == "" {
 		return "", fmt.Errorf("SSH执行命令不能为空")
 	}
-
-	// 获取SSH资源信息
+	command, err := s.buildSSHCommand(job)
+	if err != nil {
+		return "", err
+	}
+	timeout := time.Duration(job.Timeout) * time.Second
+	if timeout <= 0 {
+		timeout = 5 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	resource, err := s.treeLocalDAO.GetByID(ctx, *job.SSHResourceID)
 	if err != nil {
-		s.logger.Error("获取SSH资源失败",
-			zap.Int("资源ID", *job.SSHResourceID),
-			zap.Error(err))
-		return "", fmt.Errorf("获取SSH资源失败: %w", err)
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", fmt.Errorf("获取SSH资源失败")
 	}
-
 	if resource == nil {
-		return "", fmt.Errorf("SSH资源不存在: ID=%d", *job.SSHResourceID)
+		return "", fmt.Errorf("SSH资源不存在")
 	}
-
 	if resource.Status != model.RUNNING {
-		return "", fmt.Errorf("SSH资源状态不可用: %v", resource.Status)
+		return "", fmt.Errorf("SSH资源状态不可用")
 	}
-
-	// 创建SSH连接
-	sshClient := ssh.NewSSH(s.logger)
+	// DAO对象可能被缓存或共享，解密仅用于当前连接的局部副本
+	credentials := *resource
+	switch credentials.AuthMode {
+	case model.AuthModePassword:
+		credentials.Password, err = treeUtils.DecryptPassword(credentials.Password)
+		if err != nil {
+			return "", fmt.Errorf("SSH密码解密失败")
+		}
+	case model.AuthModeKey:
+	default:
+		return "", fmt.Errorf("SSH认证方式无效")
+	}
+	connection := s.newSSH()
 	defer func() {
-		if closeErr := sshClient.Close(); closeErr != nil {
-			s.logger.Error("关闭SSH连接失败", zap.Error(closeErr))
+		if connection.Close() != nil {
+			s.logger.Warn("SSH连接清理失败")
 		}
 	}()
-
-	// 根据认证方式连接SSH
-	var authMode int8
-	if resource.AuthMode == model.AuthModePassword {
-		authMode = 1
-	} else {
-		authMode = 2
-	}
-
-	err = sshClient.Connect(
-		resource.IpAddr,
-		resource.Port,
-		resource.Username,
-		resource.Password,
-		resource.Key,
-		authMode,
-		0, // 系统任务使用用户ID 0
-	)
-	if err != nil {
-		s.logger.Error("SSH连接失败",
-			zap.String("地址", resource.IpAddr),
-			zap.Int("端口", resource.Port),
-			zap.String("用户名", resource.Username),
-			zap.Error(err))
+	if err := connection.ConnectContext(ctx, credentials.IpAddr, credentials.Port, credentials.Username, credentials.Password, credentials.Key, int8(credentials.AuthMode), 0); err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
 		return "", fmt.Errorf("SSH连接失败: %w", err)
 	}
-
-	s.logger.Info("SSH连接成功", zap.String("地址", resource.IpAddr))
-
-	command := s.buildSSHCommand(job)
-
-	cmdCtx, cancel := context.WithTimeout(ctx, time.Duration(job.Timeout)*time.Second)
-	defer cancel()
-
-	// 在goroutine中执行命令，支持超时控制
-	resultCh := make(chan string, 1)
-	errorCh := make(chan error, 1)
-
-	go func() {
-		output, err := sshClient.Run(command)
-		if err != nil {
-			errorCh <- err
-		} else {
-			resultCh <- output
-		}
-	}()
-
-	// 等待命令执行完成或超时
-	select {
-	case <-cmdCtx.Done():
-		return "", fmt.Errorf("SSH命令执行超时: %d秒", job.Timeout)
-	case err := <-errorCh:
-		s.logger.Error("SSH命令执行失败",
-			zap.String("命令", command),
-			zap.Error(err))
-		return "", fmt.Errorf("SSH命令执行失败: %w", err)
-	case output := <-resultCh:
-		s.logger.Info("SSH命令执行成功",
-			zap.String("命令", command),
-			zap.String("输出长度", fmt.Sprintf("%d字符", len(output))))
-		return output, nil
+	output, err := connection.RunContext(ctx, command)
+	if err != nil {
+		s.logger.Error("SSH任务执行失败", zap.Int("资源ID", *job.SSHResourceID), zap.Int("输出长度", len(output)))
+		return output, fmt.Errorf("SSH命令执行失败: %w", err)
 	}
+	s.logger.Info("SSH任务执行成功", zap.Int("资源ID", *job.SSHResourceID), zap.Int("输出长度", len(output)))
+	return output, nil
 }
 
-// buildSSHCommand 构建SSH执行命令
-func (s *SSHExecutor) buildSSHCommand(job *model.CronJob) string {
-	var commandParts []string
+var environmentName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
+func shellLiteral(value string) string { return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'" }
+
+// buildSSHCommand 目录与环境仅作为数据，用户显式提供的命令保留shell语义
+func (s *SSHExecutor) buildSSHCommand(job *model.CronJob) (string, error) {
+	if strings.ContainsRune(job.SSHWorkDir, 0) || strings.ContainsRune(job.SSHCommand, 0) {
+		return "", fmt.Errorf("SSH目录或命令包含空字节")
+	}
+	parts := []string{}
 	if job.SSHWorkDir != "" {
-		commandParts = append(commandParts, fmt.Sprintf("cd %s", job.SSHWorkDir))
+		parts = append(parts, "cd -- "+shellLiteral(job.SSHWorkDir))
 	}
-
-	if len(job.SSHEnvironment) > 0 {
-		for _, kv := range job.SSHEnvironment {
-			commandParts = append(commandParts, fmt.Sprintf("export %s=%s", kv.Key, kv.Value))
+	for _, kv := range job.SSHEnvironment {
+		if !environmentName.MatchString(kv.Key) || strings.ContainsRune(kv.Value, 0) {
+			return "", fmt.Errorf("SSH环境变量名或值无效")
 		}
+		parts = append(parts, "export "+kv.Key+"="+shellLiteral(kv.Value))
 	}
-
-	// 添加要执行的命令
-	commandParts = append(commandParts, job.SSHCommand)
-
-	// 使用 && 连接所有命令，确保按顺序执行
-	return strings.Join(commandParts, " && ")
+	// 分组使cd/export失败阻止整个命令块，换行保留末尾注释的合法语义
+	parts = append(parts, "(\n"+job.SSHCommand+"\n)")
+	return strings.Join(parts, " && "), nil
 }
