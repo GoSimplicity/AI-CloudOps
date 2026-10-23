@@ -5,7 +5,7 @@
 #   <扫描范围> 为 gitleaks-range.sh 的输出（"A..B" 或 "B"）。
 #   输出: <输出目录>/gitleaks.toml、<输出目录>/gitleaksignore（总是生成，供 --config / --gitleaks-ignore-path 使用）
 #   环境变量（与 gitleaks-range.sh 相同，来自 GitHub 事件上下文，必填 EVENT_NAME / DEFAULT_BRANCH）：
-#     EVENT_NAME、DEFAULT_BRANCH、REF_NAME、REF_TYPE、PR_BASE_REF（github.base_ref）、REMOTE（默认 origin）
+#     EVENT_NAME、DEFAULT_BRANCH、REF_NAME、REF_TYPE（push 必填，只接受 branch / tag）、PR_BASE_REF（github.base_ref）、REMOTE（默认 origin）
 #
 # 策略来源（取哪个提交上的 .gitleaks.toml / .gitleaksignore；review3g N2：扫描起点 ≠ 策略来源）：
 #   push 到默认分支                    → 范围起点 A（默认分支上一次的状态）；"B"（全量）→ 默认规则、空忽略列表
@@ -49,7 +49,12 @@ fi
 use_default_tip=0
 case "$EVENT_NAME" in
     push)
-        if [ "${REF_TYPE:-branch}" != "tag" ] && [ "${REF_NAME:-}" = "$DEFAULT_BRANCH" ]; then
+        # review3h P3-i：REF_TYPE 只接受 branch / tag（区分大小写），空值或其他写法失败，不再默认当作 branch
+        case "${REF_TYPE:-}" in
+            branch|tag) ;;
+            *) die "REF_TYPE=${REF_TYPE:-<空>} 无效（只接受 branch / tag），无法确定策略来源" ;;
+        esac
+        if [ "$REF_TYPE" = "branch" ] && [ "${REF_NAME:-}" = "$DEFAULT_BRANCH" ]; then
             base="$start"
         else
             use_default_tip=1
@@ -62,7 +67,7 @@ if [ "$use_default_tip" -eq 1 ]; then
     default_ref="refs/remotes/${REMOTE}/${DEFAULT_BRANCH}"
     base="$(git rev-parse --verify -q "${default_ref}^{commit}")" \
         || die "推送/PR 目标不是默认分支，策略须取自 ${REMOTE}/${DEFAULT_BRANCH}，但本地没有该引用（actions/checkout 需 fetch-depth: 0）"
-    note "目标不是默认分支（${REF_TYPE:-branch} ${REF_NAME:-?}${PR_BASE_REF:+，PR 目标 $PR_BASE_REF}）：策略取自 ${REMOTE}/${DEFAULT_BRANCH}（${base}），不用扫描起点 ${start:-<无>}"
+    note "目标不是默认分支（${REF_TYPE:-?} ${REF_NAME:-?}${PR_BASE_REF:+，PR 目标 $PR_BASE_REF}）：策略取自 ${REMOTE}/${DEFAULT_BRANCH}（${base}），不用扫描起点 ${start:-<无>}"
 else
     note "策略取自默认分支上的范围起点 ${base:-（无，全量扫描）}"
 fi

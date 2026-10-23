@@ -3,6 +3,7 @@
 # 无法确定完整范围时必须失败。执行目标版本工作流中 "Scan new commits" 步骤本身（含其调用的 .github/scripts/）。
 # 用法: .github/tests/test-gitleaks-range.sh [--rev <git-rev>]   （对修复前版本运行应报 FAIL）
 # 每个拦截用例都声明期望的失败原因：leak:<RuleID>:<File>（检出）或 error:<ERE>（无法确定范围而出错）。
+# R6/R7（review3h P3-i）：REF_TYPE 只接受 branch / tag（gitleaks-range.sh 与 gitleaks-base-config.sh）。
 source "$(dirname "${BASH_SOURCE[0]}")/lib-gitleaks-workflow.sh"
 gl_parse_args "$@"
 ZERO=0000000000000000000000000000000000000000
@@ -69,4 +70,39 @@ gl_expect_pass "对照 干净 feature 首推" \
     EVENT_NAME=push PUSH_BEFORE=$ZERO HEAD_SHA="$HEAD_SHA" DEFAULT_BRANCH=main REF_NAME=clean REF_TYPE=branch
 gl_expect_pass "对照 HEAD 已在 main 上的新分支（空范围）" \
     EVENT_NAME=push PUSH_BEFORE=$ZERO HEAD_SHA="$(git -C "$GL_DEV" rev-parse main)" DEFAULT_BRANCH=main REF_NAME=copy REF_TYPE=branch
+
+# R6（review3h P3-i）：REF_TYPE 只接受 branch / tag，空值（GitHub 未提供）和大小写/拼写变体都必须失败，
+# 不能再默认当作 branch（否则 REF_TYPE=Tag 的默认分支同名 tag 会被当成“推送默认分支本身”）
+setup_feature r6; BEFORE="$(git -C "$GL_DEV" rev-parse main)"; gl_checkout "$HEAD_SHA"
+gl_expect_block "R6a push 缺少 REF_TYPE（空值）" 'error:REF_TYPE=<空> 无效' \
+    EVENT_NAME=push PUSH_BEFORE="$BEFORE" HEAD_SHA="$HEAD_SHA" DEFAULT_BRANCH=main REF_NAME=feature
+for rt in Tag BRANCH tags 'branch '; do
+    gl_expect_block "R6 push REF_TYPE='${rt}'" "error:REF_TYPE=${rt%% } *无效" \
+        EVENT_NAME=push PUSH_BEFORE="$BEFORE" HEAD_SHA="$HEAD_SHA" DEFAULT_BRANCH=main REF_NAME=feature "REF_TYPE=$rt"
+done
+gl_expect_block "R6 首推 REF_TYPE=Tag 且 REF_NAME 与默认分支同名" 'error:REF_TYPE=Tag 无效' \
+    EVENT_NAME=push PUSH_BEFORE=$ZERO HEAD_SHA="$HEAD_SHA" DEFAULT_BRANCH=main REF_NAME=main REF_TYPE=Tag
+# R7（review3h P3-i）：gitleaks-base-config.sh 单独调用时同样只接受 branch / tag
+if gl_has .github/scripts/gitleaks-base-config.sh; then
+    gl_src .github/scripts/gitleaks-base-config.sh >"$GL_TMP/bc.sh"
+    rm -f "$GL_TMP/gitleaks-config-check.py"
+    if gl_has .github/scripts/gitleaks-config-check.py; then gl_src .github/scripts/gitleaks-config-check.py >"$GL_TMP/gitleaks-config-check.py"; fi
+    for rt in '' Tag BRANCH tag branch; do
+        rc=0; ( cd "$GL_WS" && env -u REF_TYPE EVENT_NAME=push DEFAULT_BRANCH=main REF_NAME=feature ${rt:+REF_TYPE=$rt} \
+            bash "$GL_TMP/bc.sh" "$BEFORE..$HEAD_SHA" "$GL_TMP/r7-out-$rt" ) >"$GL_TMP/r7.log" 2>&1 || rc=$?
+        case "$rt" in
+            tag|branch)
+                if [ "$rc" -eq 0 ] && [ -s "$GL_TMP/r7-out-$rt/gitleaks.toml" ]; then echo "PASS [对照 R7 base-config REF_TYPE=${rt} 正常生成配置]"
+                else echo "FAIL [对照 R7 base-config REF_TYPE=${rt} 应正常生成配置] rc=${rc}: $(tail -1 "$GL_TMP/r7.log")"; GL_FAILS=$((GL_FAILS+1)); fi ;;
+            *)
+                if [ "$rc" -ne 0 ] && grep -F -q "REF_TYPE=${rt:-<空>} 无效" "$GL_TMP/r7.log"; then echo "PASS [R7 base-config REF_TYPE='${rt}' 拒绝]"
+                else echo "FAIL [R7 base-config REF_TYPE='${rt}' 应以 REF_TYPE 无效失败] rc=${rc}: $(tail -1 "$GL_TMP/r7.log")"; GL_FAILS=$((GL_FAILS+1)); fi ;;
+        esac
+    done
+else
+    echo "FAIL [R7] 目标版本没有 .github/scripts/gitleaks-base-config.sh"; GL_FAILS=$((GL_FAILS+1))
+fi
+# 对照：REF_TYPE=tag 的首推（非默认分支）按 merge-base 确定范围，照常检出
+gl_expect_block "对照 tag 首推（REF_TYPE=tag）" leak:github-pat:deploy.env \
+    EVENT_NAME=push PUSH_BEFORE=$ZERO HEAD_SHA="$HEAD_SHA" DEFAULT_BRANCH=main REF_NAME=v1.0.0 REF_TYPE=tag
 gl_finish

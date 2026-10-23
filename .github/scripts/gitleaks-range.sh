@@ -9,7 +9,7 @@
 #   HEAD_SHA        github.sha
 #   DEFAULT_BRANCH  github.event.repository.default_branch
 #   REF_NAME        github.ref_name
-#   REF_TYPE        github.ref_type（branch / tag，可选）
+#   REF_TYPE        github.ref_type（非 PR 事件必填，只接受 branch / tag；空值、Tag 等其他写法一律失败，review3h P3-i）
 #   REMOTE          远端名，默认 origin（actions/checkout 使用 origin，且需 fetch-depth: 0）
 #
 # 规则：
@@ -40,6 +40,13 @@ case "${EVENT_NAME:-}" in
         exit 0 ;;
 esac
 
+# review3h P3-i：非 PR 事件按 push 处理，REF_TYPE 只接受 branch / tag（区分大小写）；
+# 以前的 ${REF_TYPE:-branch} 会把空值当 branch，把 "Tag" 之类的写法当成分支，现在一律失败
+case "${REF_TYPE:-}" in
+    branch|tag) ;;
+    *) die "REF_TYPE=${REF_TYPE:-<空>} 无效（只接受 branch / tag），无法确定扫描范围" ;;
+esac
+
 if is_commit "${PUSH_BEFORE:-}"; then
     echo "${PUSH_BEFORE}..${HEAD_SHA}"
     exit 0
@@ -48,7 +55,7 @@ note "before=${PUSH_BEFORE:-<空>} 为全零或不在历史中（首推或 force
 
 [ -n "${DEFAULT_BRANCH:-}" ] || die "缺少默认分支信息（DEFAULT_BRANCH 为空），无法确定扫描范围"
 
-if [ "${REF_TYPE:-branch}" != "tag" ] && [ "${REF_NAME:-}" = "$DEFAULT_BRANCH" ]; then
+if [ "$REF_TYPE" = "branch" ] && [ "${REF_NAME:-}" = "$DEFAULT_BRANCH" ]; then
     note "推送的是默认分支 ${DEFAULT_BRANCH} 本身且无可用 before：全量扫描 HEAD 可达的全部历史"
     echo "${HEAD_SHA}"
     exit 0
