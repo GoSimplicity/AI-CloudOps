@@ -60,6 +60,57 @@ def _url_port(url):
     return port
 
 
+_RECEIVE_PATH_GO = "internal/prometheus/webhook/api/handler.go"
+_HTTP_SD_GO = "internal/not_auth/api/handler.go"
+
+
+def _gin_routes(rel, method):
+    """只读解析 Gin 路由：<g> := <engine>.Group("<前缀>") 与 <g>.<METHOD>("<子路径>", ...)，返回完整路径列表。"""
+    text = (ROOT / rel).read_text(encoding="utf-8")
+    groups = dict(re.findall(r'\b([A-Za-z_][A-Za-z0-9_]*)\s*:?=\s*[A-Za-z_][A-Za-z0-9_.]*\.Group\(\s*"([^"]*)"', text))
+    routes = [groups[g] + sub for g, sub in re.findall(r'\b([A-Za-z_][A-Za-z0-9_]*)\.' + method + r'\(\s*"([^"]*)"', text)
+              if g in groups]
+    if not routes:
+        raise AssertionError(f"{rel} 里没解析到 {method} 路由")
+    return routes
+
+
+def _alert_receive_route():
+    routes = [r for r in _gin_routes(_RECEIVE_PATH_GO, "POST") if r.endswith("/receive")]
+    if len(routes) != 1:
+        raise AssertionError(f"webhook 告警接收路由应恰好 1 个，实际 {routes}")
+    return routes[0]
+
+
+def _alert_target(addr):
+    """按 alert_cache.go buildWebhookURL 算出 Alertmanager 实际推送的 (scheme, host, port, path)。
+
+    完整 URL：TrimRight "/"，已含 /api/v1/alerts/receive 就原样使用，否则在末尾追加；host:port：http://<base>/api/v1/alerts/receive。
+    """
+    receive = "/api/v1/alerts/receive"
+    base = addr.strip()
+    parts = _split_alert_url(base)  # 校验 scheme 大小写与端口
+    if "://" in base:
+        u = base.rstrip("/")
+        full = u if receive in u else u + receive
+    else:
+        full = "http://" + base + receive
+    parts = urlsplit(full)
+    return parts.scheme, parts.hostname, _url_port(full), parts.path
+
+
+def _release_default_alert_addr():
+    """发布栈里的告警地址期望值：compose 的 ${PROMETHEUS_ALERT_WEBHOOK_ADDR:-默认}；本分支 compose 没有时用 alertmanager.yml。"""
+    compose = (ROOT / "deploy/release/compose.yaml").read_text(encoding="utf-8")
+    m = re.search(r"PROMETHEUS_ALERT_WEBHOOK_ADDR:\s*\$\{PROMETHEUS_ALERT_WEBHOOK_ADDR:-([^}]+)\}", compose)
+    if m:
+        return m.group(1).strip()
+    found = re.findall(r"^\s*-?\s*url:\s*(\S+)\s*$", (ROOT / "deploy/release/alertmanager.yml").read_text(encoding="utf-8"), re.M)
+    if len(found) != 1:
+        raise AssertionError(f"alertmanager.yml 的 webhook url 应恰好 1 个，实际 {len(found)}")
+    return found[0]
+
+
 def _go_default(key):
     # internal/config/loader.go 里 <recv>.SetDefault("<key>", "<value>") 的值（只读解析）；
     # 接收者不限于 viper：sched/w1-mantou 的 webhook 默认值写成 v.SetDefault("webhook.port", "8889")
@@ -301,6 +352,55 @@ class WebhookYamlPortValueTests(unittest.TestCase):
         for value in ("８８８９", '"８８８９"', "8889#oops", '"8889"#oops', "'8889'#oops"):
             with self.subTest(value=value), self.assertRaises(AssertionError):
                 _webhook_yaml_port(f"webhook:\n  port: {value}\n")
+
+
+class AlertAddrFullUrlTests(unittest.TestCase):
+    """r4 A-4：env.example 的告警地址整体比较（scheme、host、path、port），HTTP SD 端口与 SERVER_PORT 一致。
+
+    期望值来源：scheme 与 path 取发布 compose 默认值（本分支没有时取 deploy/release/alertmanager.yml），path 还须等于
+    webhook 路由 internal/prometheus/webhook/api/handler.go 的 POST 接收路由；host 取代码默认
+    prometheus.alert_webhook_addr（本机开发，localhost）；port 取 WEBHOOK_PORT（留空为代码默认）并与 config/webhook.yaml 一致。
+    """
+
+    def _expected(self):
+        env = _env_example()
+        route = _alert_receive_route()
+        rel_scheme, _, _, rel_path = _alert_target(_release_default_alert_addr())
+        code_scheme, code_host, _, code_path = _alert_target(_go_default("prometheus.alert_webhook_addr"))
+        self.assertEqual(rel_path, route, "发布默认告警地址的路径与 webhook 接收路由不一致")
+        self.assertEqual(code_path, route, "代码默认告警地址的路径与 webhook 接收路由不一致")
+        self.assertEqual(rel_scheme, code_scheme)
+        port = int(env.get("WEBHOOK_PORT", "") or _go_default("webhook.port"))
+        self.assertEqual(port, _webhook_yaml_port(), "WEBHOOK_PORT 与 config/webhook.yaml 的 webhook.port 不一致")
+        return rel_scheme, code_host, port, route
+
+    def test_alert_addr_full_url(self):
+        addr = _env_example()["PROMETHEUS_ALERT_WEBHOOK_ADDR"]
+        scheme, host, port, path = _alert_target(addr)
+        e_scheme, e_host, e_port, e_path = self._expected()
+        self.assertEqual(scheme, e_scheme, "告警地址 scheme 不对")
+        self.assertEqual(host, e_host, "告警地址 host 不对（本机开发模板应为代码默认的 localhost）")
+        self.assertEqual(path, e_path, "告警地址实际推送路径与 webhook 接收路由不一致")
+        self.assertEqual(port, e_port, "告警地址端口与 webhook 监听端口不一致")
+        self.assertEqual(f"{scheme}://{host}:{port}{path}", f"{e_scheme}://{e_host}:{e_port}{e_path}")
+
+    def test_http_sd_api_port_matches_server_port(self):
+        env = _env_example()
+        sd = env["PROMETHEUS_HTTP_SD_API"]
+        server_port = env.get("SERVER_PORT", "") or _go_default("server.port")
+        self.assertRegex(server_port, r"^[1-9][0-9]{0,4}$")
+        self.assertEqual(_url_port(sd), int(server_port), "PROMETHEUS_HTTP_SD_API 端口与 SERVER_PORT 不一致")
+        parts = _split_alert_url(sd)
+        self.assertEqual(parts.scheme, "http")
+        self.assertIn(parts.path, _gin_routes(_HTTP_SD_GO, "GET"), "PROMETHEUS_HTTP_SD_API 路径不是主后端的 HTTP SD 路由")
+
+    def test_alert_target_follows_go_builder(self):
+        self.assertEqual(_alert_target("http://h:1/api/v1/alerts/receive/"), ("http", "h", 1, "/api/v1/alerts/receive"))
+        self.assertEqual(_alert_target("http://h:1"), ("http", "h", 1, "/api/v1/alerts/receive"))
+        self.assertEqual(_alert_target("h:2"), ("http", "h", 2, "/api/v1/alerts/receive"))
+        self.assertEqual(_alert_target("https://h/x"), ("https", "h", 443, "/x/api/v1/alerts/receive"))
+        with self.assertRaises(ValueError):
+            _alert_target("HTTP://h:1/api/v1/alerts/receive")
 
 
 class FeishuGroupMessageUrlTests(unittest.TestCase):
