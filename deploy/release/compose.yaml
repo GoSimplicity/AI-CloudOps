@@ -68,7 +68,9 @@ services:
       # 与 alertmanager.yml 的 http://webhook:8889/api/v1/alerts/receive 一致。本模板用 Compose 默认网络，服务名 webhook 可解析；
       # 端口 8889 来自 webhook 镜像内 config/webhook.yaml（compose 不给 webhook 传 WEBHOOK_PORT），两边改端口要同步。
       # 不设时代码默认 http://localhost:8889/...，在 backend 容器里指向 backend 自己。完整 URL 和 host:port 两种写法代码都接受。
-      PROMETHEUS_ALERT_WEBHOOK_ADDR: http://webhook:8889/api/v1/alerts/receive
+      # Alertmanager 在 Compose 网络外（解析不了服务名 webhook）时，在 .env 或 shell 环境里设 PROMETHEUS_ALERT_WEBHOOK_ADDR
+      # 覆盖为它能访问到的 webhook 地址（webhook 默认不发布端口，需自行暴露）；未设或为空时用下面的默认值。
+      PROMETHEUS_ALERT_WEBHOOK_ADDR: ${PROMETHEUS_ALERT_WEBHOOK_ADDR:-http://webhook:8889/api/v1/alerts/receive}
       MYSQL_ADDR: cloudops:${MYSQL_PASSWORD:?Generate .env first}@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local
       MYSQL_MAX_OPEN_CONNS: ${MYSQL_MAX_OPEN_CONNS:-20}
       MYSQL_MAX_IDLE_CONNS: ${MYSQL_MAX_IDLE_CONNS:-5}

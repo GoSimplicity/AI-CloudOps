@@ -251,6 +251,30 @@ class ReleaseComposeWebhookAddrTests(unittest.TestCase):
         result = subprocess.run(self.base + ["config", "--quiet"], env=self.env, capture_output=True, timeout=60)
         self.assertEqual(result.returncode, 0, "compose config --quiet 失败（输出已省略）")
 
+    DEFAULT_ALERT_ADDR = "http://webhook:8889/api/v1/alerts/receive"
+    ALERT_ADDR_JQ = '.services.backend.environment.PROMETHEUS_ALERT_WEBHOOK_ADDR // ""'
+
+    def test_alert_webhook_addr_default_when_unset_or_empty(self):
+        # r3inc P3-4：compose 写成 ${PROMETHEUS_ALERT_WEBHOOK_ADDR:-默认}；未设置和设为空串都取默认
+        self.assertEqual(self._jq(self.ALERT_ADDR_JQ), self.DEFAULT_ALERT_ADDR)
+        with self.env_file.open("a") as f:
+            f.write("PROMETHEUS_ALERT_WEBHOOK_ADDR=\n")
+        self.assertEqual(self._jq(self.ALERT_ADDR_JQ), self.DEFAULT_ALERT_ADDR)
+
+    def test_alert_webhook_addr_override_from_env_file(self):
+        # Compose 网络外的 Alertmanager：在 .env 里覆盖（合成地址，.test 保留域名）
+        custom = f"https://alerts-{os.getpid()}.example.test:9443/api/v1/alerts/receive"
+        with self.env_file.open("a") as f:
+            f.write(f"PROMETHEUS_ALERT_WEBHOOK_ADDR={custom}\n")
+        self.assertEqual(self._jq(self.ALERT_ADDR_JQ), custom)
+        self.assertEqual(_alert_addr_target(custom)[1:], (9443, "/api/v1/alerts/receive"))
+
+    def test_alert_webhook_addr_override_from_shell_env(self):
+        # shell 里导出的同名变量同样生效（优先于 .env）：发布前要确认没有误带本机开发用的 localhost 值
+        custom = f"http://198.51.100.{os.getpid() % 250 + 1}:18889/api/v1/alerts/receive"
+        self.env["PROMETHEUS_ALERT_WEBHOOK_ADDR"] = custom
+        self.assertEqual(self._jq(self.ALERT_ADDR_JQ), custom)
+
     def test_backend_alert_webhook_addr_targets_webhook_port(self):
         addr = self._jq('.services.backend.environment.PROMETHEUS_ALERT_WEBHOOK_ADDR // ""')
         self.assertTrue(addr, "backend 未设置 PROMETHEUS_ALERT_WEBHOOK_ADDR（代码默认 localhost:8889 在容器里指向 backend 自己）")
