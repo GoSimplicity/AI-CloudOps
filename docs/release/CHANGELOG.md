@@ -245,3 +245,9 @@
 - 私有FEISHU_WEBHOOK_URL映射到AIOps服务端，默认模板只包含空占位，不向MCP或前端注入
 - 保留显式通知开关，区分机器人Webhook与工单应用消息通道，记录官方HTTP/业务成功合同
 - 验证：17项发布工具回归、Compose config与diff检查通过；真实单发验收在最新AIOps镜像重建后单独记录
+
+## 2026-10-23：MCP真实传输UTC时间回归
+
+- 三仓集成smoke增加实际MCP时间工具响应ISO解析与UTC offset检查，防止重复时区标识回归
+- 最新AIOps/MCP4dc31ac实际内网鉴权、计算器14、UTC ISO与匿名401全部通过，无模型或基础设施调用
+- 专用飞书机器人另经JWT网关唯一实发通过，上游HTTP200/业务code0，详细安全记录在AIOps docs/release/feishu-delivery.md；未重发

@@ -2,6 +2,7 @@
 """在隔离 AIOps 容器内验证 MCP 鉴权与确定性工具，不调用模型或基础设施变更"""
 
 import asyncio
+from datetime import datetime, timedelta
 import os
 
 import aiohttp
@@ -20,11 +21,14 @@ async def main():
     result = await client.execute_tool("calculate", {"expression": "2 + 3 * 4"})
     if result.get("result") != 14:
         raise RuntimeError("MCP calculator result mismatch")
+    current = await client.execute_tool("get_current_time", {"format": "iso", "timezone": "UTC"})
+    if datetime.fromisoformat(current["time"]).utcoffset() != timedelta(0):
+        raise RuntimeError("MCP time is not valid aware UTC ISO-8601")
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
         async with session.get(endpoint + "/tools") as response:
             if response.status != 401:
                 raise RuntimeError("MCP anonymous tool access was not rejected")
-    print("PASS internal MCP health, authenticated tool listing, calculator and anonymous 401")
+    print("PASS internal MCP health, authenticated tools, calculator, UTC ISO time and anonymous 401")
 
 
 if __name__ == "__main__":
