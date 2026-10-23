@@ -112,6 +112,25 @@ class ReleaseTests(unittest.TestCase):
             self.assertIn("AI-CloudOps-aiops", content, name)
             self.assertNotIn("Ai-CloudOps-aiops", content, name)
 
+    def test_crash_smoke_guards_do_not_call_docker(self):
+        import sys
+
+        script = ROOT / "scripts/integration/cron_crash_smoke.py"
+        # 空 PATH 下 Docker 不可执行，帮助及拒绝路径仍应正常退出
+        env = {**os.environ, "PATH": self.temp.name}
+        for arguments, code, message in (
+            ([], 2, "需要 --execute"),
+            (["--execute", "--recovery-timeout", "0"], 2, "30至600秒"),
+            (["--help"], 0, "--execute"),
+        ):
+            with self.subTest(arguments=arguments):
+                result = subprocess.run(
+                    [sys.executable, "-O", str(script), *arguments], env=env,
+                    capture_output=True, text=True, timeout=10,
+                )
+                self.assertEqual(result.returncode, code, result.stderr)
+                self.assertIn(message, result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Exercise CloudOps against an explicitly created, disposable kind cluster.
 
-Preparation (perform only after the operator authorizes starting kind):
+Preparation in an isolated acceptance environment:
   kind create cluster --name cloudops-release --image \
-    kindest/node:v1.33.1@sha256:050072256b9a903bd914c0b2866828150cb229cea0efe5892e2b644d5dd3b34f \
+    kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0 \
     --kubeconfig "$KUBECONFIG" --wait 120s
   chmod 600 "$KUBECONFIG"
   # Export BOOTSTRAP_ADMIN_PASSWORD privately, then:
@@ -20,14 +20,14 @@ verification still uses the original loopback KUBECONFIG. TLS cannot be disabled
 Credentials remain in memory; neither subprocess output nor API bodies are logged.
 
 Official sources:
-https://github.com/kubernetes-sigs/kind/releases/tag/v0.29.0
+https://github.com/kubernetes-sigs/kind/releases/tag/v0.33.0
 https://kind.sigs.k8s.io/docs/user/quick-start/
 https://github.com/kubernetes/client-go/blob/v0.35.3/README.md
 
-kind v0.29.0's published default is Kubernetes v1.33.1 (arm64 and amd64).
-client-go v0.35.3 matches Kubernetes 1.35 APIs, not exactly 1.33. This smoke uses
-only shared stable core/v1 and apps/v1 APIs; passing does not certify 1.35-only
-features or every version combination. kubectl v1.33.1 matches this server.
+kind v0.33.0 publishes the pinned Kubernetes v1.35.8 image above.
+client-go v0.35.3 and the isolated kubectl v1.35.8 use the same Kubernetes minor.
+This smoke covers core/v1 and apps/v1 operations; passing does not certify
+every resource type, extension or version combination.
 """
 
 import argparse
