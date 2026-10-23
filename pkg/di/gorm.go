@@ -34,11 +34,11 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/config"
+	databaseLogger "github.com/GoSimplicity/AI-CloudOps/pkg/logger"
 	mysqlDriver "github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	glogger "gorm.io/gorm/logger"
 )
 
 func InitDB(cfg *config.Config, logger *zap.Logger) (*gorm.DB, error) {
@@ -63,17 +63,18 @@ func InitDB(cfg *config.Config, logger *zap.Logger) (*gorm.DB, error) {
 	defer cancel()
 	db, err := initializeSQLPool(ctx, sqlDB, func(ctx context.Context, pool *sql.DB) (*gorm.DB, error) {
 		// 保留驱动版本探测，覆盖其内部Background上下文
-		db, err := gorm.Open(mysql.New(mysql.Config{Conn: &startupPool{DB: pool, ctx: ctx}}), &gorm.Config{DisableAutomaticPing: true, Logger: glogger.Default.LogMode(glogger.Silent)})
+		db, err := gorm.Open(mysql.New(mysql.Config{Conn: &startupPool{DB: pool, ctx: ctx}}), &gorm.Config{DisableAutomaticPing: true, Logger: databaseLogger.NewGORMLogger(logger)})
 		if err != nil {
-			return nil, fmt.Errorf("数据库ORM初始化失败")
+			logger.Error("数据库ORM初始化失败", zap.String("error_type", databaseLogger.DatabaseErrorType(err)))
+			return nil, databaseLogger.WrapDatabaseError("数据库ORM初始化失败", err)
 		}
 		db.ConnPool = pool
 		db.Statement.ConnPool = pool
 		// 保持迁移逻辑，使用同一启动期限限制查询
 		if err := InitTables(db.WithContext(ctx)); err != nil {
-			return nil, fmt.Errorf("数据库表初始化失败")
+			logger.Error("数据库表初始化失败", zap.String("error_type", databaseLogger.DatabaseErrorType(err)))
+			return nil, databaseLogger.WrapDatabaseError("数据库表初始化失败", err)
 		}
-		db.Logger = glogger.Default
 		return db, nil
 	})
 	if err != nil {
@@ -144,7 +145,7 @@ func initializeSQLPool(ctx context.Context, pool *sql.DB, initialize func(contex
 		}
 	}()
 	if err = pool.PingContext(ctx); err != nil {
-		return nil, fmt.Errorf("数据库启动连接检查失败")
+		return nil, databaseLogger.WrapDatabaseError("数据库启动连接检查失败", err)
 	}
 	return initialize(ctx, pool)
 }

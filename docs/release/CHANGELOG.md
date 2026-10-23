@@ -153,3 +153,9 @@
 - 更新令牌支持省略保留、空串清除和非空替换，事务锁内合并当前凭据并校验来源互斥，配置字段可实际清空
 - 配套前端使用明确 keep/replace/clear 语义；更新省略令牌不会回写并发轮换前的快照
 - 先红后绿的真实 SQLite/race 验证清空和来源切换；HTTP回归验证双读取、请求绑定、审计/访问日志无正文；全仓 go test 与 vet 通过，详见 [prometheus-credentials.md](prometheus-credentials.md)
+
+## 数据库日志与启动错误边界
+
+- 主后端及独立webhook统一使用轻量安全GORM logger，只记录固定事件、耗时、行数与错误类型，SQL/参数/驱动错误原文与框架变参不进入日志
+- 连接/ORM/迁移/管理员初始化与webhook panic 使用静态阶段和安全类型，同时保留Unwrap供errors.Is/As定位
+- 真实SQLite约束/慢查询及Bootstrap错误先红后绿，真实MySQL驱动拨号前错误覆盖webhook；专项race/vet、全仓test/build通过，Wire实际生成，见 [database-logging.md](database-logging.md)

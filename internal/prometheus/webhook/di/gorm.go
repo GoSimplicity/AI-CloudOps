@@ -26,20 +26,22 @@
 package di
 
 import (
+	databaseLogger "github.com/GoSimplicity/AI-CloudOps/pkg/logger"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-func InitDB() *gorm.DB {
+func InitDB(log *zap.Logger) *gorm.DB {
 	addr := viper.GetString("mysql.addr")
 	db, err := gorm.Open(mysql.Open(addr), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: databaseLogger.NewGORMLogger(log).LogMode(logger.Info),
 	})
 
 	if err != nil {
-		panic(err)
+		panic(databaseLogger.WrapDatabaseError("Webhook数据库初始化失败", err))
 	}
 
 	return db

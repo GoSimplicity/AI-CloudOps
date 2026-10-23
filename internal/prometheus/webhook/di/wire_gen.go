@@ -20,7 +20,7 @@ import (
 func InitWebServer() *Cmd {
 	logger := InitLogger()
 	v := InitMiddlewares(logger)
-	db := InitDB()
+	db := InitDB(logger)
 	webhookDao := dao.NewWebhookDao(logger, db)
 	v2 := CreateAlertChan()
 	webHookHandler := api.NewWebHookHandler(logger, webhookDao, v2)
