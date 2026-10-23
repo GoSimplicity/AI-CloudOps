@@ -38,7 +38,7 @@ python3 scripts/release-smoke.py
 
 ## 告警 webhook 与可选 Alertmanager
 
-`webhook` 服务（`cmd/webhook`，镜像 `cloudops-webhook:${RELEASE_VERSION}`，由 `deploy/release/webhook.Dockerfile` 构建）默认随栈启动，只在 Compose 内网监听 `8889`（取自镜像内 `config/webhook.yaml` 的 `webhook.port`；当前代码中 `WEBHOOK_PORT` 环境变量对监听端口不生效），不发布端口；依赖 `mysql` 健康，且只读取 `WEBHOOK_MYSQL_ADDR`（缺失时 `compose config` 即报错）。代码没有专用健康端点，健康检查请求 `GET /api/v1/alerts/silence`：缺少 fingerprint 时不访问数据库和 Alertmanager，直接返回 HTTP 200；进程启动时会 Ping MySQL，连不上即退出，因此 HTTP 可响应即表示已连上 MySQL。
+`webhook` 服务（`cmd/webhook`，镜像 `cloudops-webhook:${RELEASE_VERSION}`，由 `deploy/release/webhook.Dockerfile` 构建）默认随栈启动，只在 Compose 内网监听 `8889`（取自镜像内 `config/webhook.yaml` 的 `webhook.port`。`WEBHOOK_PORT` 环境变量：合入 w1 前不起作用，w1 之后由配置生效，优先级 `WEBHOOK_PORT > 配置文件 > 默认 8889`；compose 没有传这个变量，所以发布栈合入前后都监听 `8889`），不发布端口；依赖 `mysql` 健康，且只读取 `WEBHOOK_MYSQL_ADDR`（缺失时 `compose config` 即报错）。代码没有专用健康端点，健康检查请求 `GET /api/v1/alerts/silence`：缺少 fingerprint 时不访问数据库和 Alertmanager，直接返回 HTTP 200；进程启动时会 Ping MySQL，连不上即退出，因此 HTTP 可响应即表示已连上 MySQL。
 
 Alertmanager 是可选 profile：默认 `docker compose up` 不启动；`docker compose -f deploy/release/compose.yaml --profile alerting up -d` 才启动，告警转发到 `http://webhook:8889/api/v1/alerts/receive`（配置 `deploy/release/alertmanager.yml`）。未启用时 webhook 的静默/取消静默接口会返回失败，告警接收不受影响。Prometheus 默认不推送告警，需要时在 `prometheus.yml` 自行增加 `alerting.alertmanagers`。
 

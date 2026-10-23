@@ -279,7 +279,8 @@ class WebhookPortConsistencyTests(unittest.TestCase):
                          "env.example 的 webhook 端口（WEBHOOK_PORT，留空时为代码默认）与告警推送地址端口不一致")
 
     def test_repo_webhook_yaml_port_matches_alert_addr_port(self):
-        # 本分支 WEBHOOK_PORT 不生效，从仓库根目录启动时实际端口来自默认 --config config/webhook.yaml
+        # 合入 w1 前 WEBHOOK_PORT 不起作用，从仓库根目录启动时实际端口来自默认 --config config/webhook.yaml；
+        # w1 之后 WEBHOOK_PORT 优先，env.example 里两者都是 8889，与告警推送地址端口一致
         self.assertEqual(_webhook_yaml_port(), _url_port(_env_example()["PROMETHEUS_ALERT_WEBHOOK_ADDR"]))
 
     def test_release_compose_default_alert_addr_port_matches(self):
@@ -469,6 +470,25 @@ class AlertAddrSchemeDocTests(unittest.TestCase):
         self.assertNotIn("必须是小写", text)
         value = lines[idx].split("=", 1)[1].strip()
         self.assertTrue(value.startswith(("http://", "https://")) or "://" not in value, value)
+
+
+class WebhookPortDocTests(unittest.TestCase):
+    """发布文档里 WEBHOOK_PORT 的说法要与 w1 119c332 一致：config.go 给 Port 绑定 env:"WEBHOOK_PORT"，
+    优先级 WEBHOOK_PORT > 配置文件 > 默认 8889；发布 compose 不给 webhook 传这个变量，所以发布栈仍监听 8889。
+    不再写“WEBHOOK_PORT 对监听端口不生效”。prometheus-scrape-auth.md:15 合并时取 w1 一侧，env.example
+    112–127 已分合入前/后两段写，这两处不在这里检查。"""
+
+    PORT_DOCS = ("docs/release/README.md", "deploy/release/compose.yaml")
+
+    def test_release_docs_say_webhook_port_effective_after_w1(self):
+        for rel in self.PORT_DOCS:
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            with self.subTest(file=rel):
+                self.assertFalse("对监听端口不生效" in text, f"{rel} 仍写 WEBHOOK_PORT 对监听端口不生效")
+                self.assertFalse("不合并环境变量覆盖" in text, f"{rel} 仍写 loader 不合并环境变量")
+                self.assertTrue("w1 之后由配置生效" in text, f"{rel} 没写 WEBHOOK_PORT 在 w1 之后由配置生效")
+                self.assertTrue("compose 没有传这个变量" in text, f"{rel} 没写 compose 没有传 WEBHOOK_PORT")
+                self.assertTrue("WEBHOOK_PORT > 配置文件 > 默认 8889" in text, f"{rel} 没写 WEBHOOK_PORT 优先级")
 
 
 class WebhookYamlPortValueTests(unittest.TestCase):

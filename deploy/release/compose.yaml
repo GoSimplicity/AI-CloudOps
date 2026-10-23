@@ -155,8 +155,9 @@ services:
   webhook:
     <<: *runtime
     # Prometheus Alertmanager 告警接收服务（cmd/webhook）；只在 Compose 内网监听 8889，不发布端口。
-    # 监听端口来自镜像内 config/webhook.yaml 的 webhook.port（8889）：WEBHOOK_PORT 环境变量对监听端口不生效
-    # （loader 用 viper.UnmarshalKey("webhook") 取 cfg.Port，不合并环境变量覆盖），改端口需挂载配置并加 --config
+    # 监听端口来自镜像内 config/webhook.yaml 的 webhook.port（8889）。WEBHOOK_PORT：合入 w1 前不起作用，w1 之后由配置生效
+    # （优先级 WEBHOOK_PORT > 配置文件 > 默认 8889）；compose 没有传这个变量，所以这里合入前后都是 8889。
+    # 改端口：w1 前挂载配置并加 --config，w1 后也可在 environment 里传 WEBHOOK_PORT；都要同步 alertmanager.yml 与 backend 的告警推送地址
     image: cloudops-webhook:${RELEASE_VERSION:-local}
     build:
       context: ../..
