@@ -25,9 +25,11 @@ jobs:
   gitleaks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # 固定到完整 commit SHA（v4.4.0，git ls-remote https://github.com/actions/checkout refs/tags/v4.4.0 核对）
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # 范围计算需要完整历史与 origin/<默认分支>
+          persist-credentials: false # 不把 GITHUB_TOKEN 写入 .git/config（本 job 不需要推送）
 
       - name: Install gitleaks (pinned + sha256)
         run: |
