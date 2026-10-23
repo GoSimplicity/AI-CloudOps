@@ -72,7 +72,12 @@ func Load() (*Config, *ExternalConfig, error) {
 		}
 	}
 
-	viper.SetConfigFile(*configFile)
+	return loadFromFile(*configFile)
+}
+
+// loadFromFile 按“环境变量 > 配置文件 > 默认值”加载指定配置文件（不解析命令行参数，便于测试）
+func loadFromFile(configFile string) (*Config, *ExternalConfig, error) {
+	viper.SetConfigFile(configFile)
 	setDefaults()
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
