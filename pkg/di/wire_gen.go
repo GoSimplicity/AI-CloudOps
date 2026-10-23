@@ -39,6 +39,7 @@ import (
 	service5 "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	api5 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
 	dao4 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
 	service4 "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/sse"
@@ -252,9 +253,10 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	applicationBootstrap := startup.NewApplicationBootstrap(clusterManager, logger)
 	builtinTaskManager := cron.NewBuiltinTaskManager(logger, cronJobDAO)
 	cronManager := cron.NewUnifiedCronManager(logger, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache, cronScheduler, builtinTaskManager)
-	server := InitAsynqServer(cfg)
+	server := InitAsynqServer(cfg, notificationManager)
 	cronHandlers := handler.NewCronHandlers(logger, cronJobDAO, treeLocalDAO, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache)
-	appApp, err := app.NewApp(cfg, logger, db, redisClient, engine, applicationBootstrap, cronManager, server, asynqScheduler, cronHandlers)
+	processor := notification.NewProcessor(notificationManager, logger)
+	appApp, err := app.NewApp(cfg, logger, db, redisClient, engine, applicationBootstrap, cronManager, server, asynqScheduler, cronHandlers, processor)
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +306,6 @@ var AsynqSet = wire.NewSet(
 	InitScheduler,
 )
 
-var NotificationSet = wire.NewSet(
-	InitNotificationConfig,
+var NotificationSet = wire.NewSet(notification.NewProcessor, InitNotificationConfig,
 	InitNotificationManager,
 )

@@ -60,6 +60,7 @@ import (
 	treeService "github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	workorderHandler "github.com/GoSimplicity/AI-CloudOps/internal/workorder/api"
 	workorderDao "github.com/GoSimplicity/AI-CloudOps/internal/workorder/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
 	workorderService "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/sse"
@@ -293,6 +294,7 @@ var AsynqSet = wire.NewSet(
 )
 
 var NotificationSet = wire.NewSet(
+	notification.NewProcessor,
 	InitNotificationConfig,
 	InitNotificationManager,
 )

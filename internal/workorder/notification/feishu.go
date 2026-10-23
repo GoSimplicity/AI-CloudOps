@@ -80,6 +80,14 @@ func NewFeishuChannel(config FeishuConfig, logger *zap.Logger) *FeishuChannel {
 	}
 }
 
+// feishuSafeError 保留取消语义，不把URI或上游正文写入日志及持久化错误字段
+func feishuSafeError(ctx context.Context, stage string, cause error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return fmt.Errorf("%s (%T)", stage, cause)
+}
+
 func (f *FeishuChannel) GetName() string {
 	return model.NotificationChannelFeishu
 }
@@ -101,7 +109,6 @@ func (f *FeishuChannel) Send(ctx context.Context, request *SendRequest) (*SendRe
 // determineRecipientType 识别接收人ID类型
 func (f *FeishuChannel) determineRecipientType(recipientAddr string) (string, error) {
 	f.logger.Debug("确定收件人ID类型",
-		zap.String("recipient_addr", recipientAddr),
 		zap.String("recipient_length", fmt.Sprintf("%d", len(recipientAddr))))
 
 	switch {
@@ -140,7 +147,7 @@ func (f *FeishuChannel) sendPrivateMessage(ctx context.Context, request *SendReq
 	if recipientType == "" {
 		err := fmt.Errorf("recipient type is empty")
 		f.logger.Error("收件人类型为空",
-			zap.String("recipient_addr", request.RecipientAddr))
+			zap.String("message_id", request.MessageID))
 		return f.createErrorResponse(request.MessageID, "recipient type is empty", err, startTime), err
 	}
 
@@ -149,23 +156,11 @@ func (f *FeishuChannel) sendPrivateMessage(ctx context.Context, request *SendReq
 	// 构建带查询参数的URL
 	apiURL := fmt.Sprintf("%s?receive_id_type=%s", f.config.GetPrivateMessageAPI(), recipientType)
 
-	// 添加详细调试日志
-	jsonData, marshalErr := json.Marshal(message)
-	if marshalErr != nil {
-		f.logger.Error("序列化消息失败", zap.Error(marshalErr))
-		return f.createErrorResponse(request.MessageID, "marshal message failed", marshalErr, startTime), marshalErr
-	}
-
-	f.logger.Debug("飞书私聊消息请求详情",
-		zap.String("recipient", request.RecipientAddr),
-		zap.String("recipient_type", recipientType),
-		zap.String("api_url", apiURL),
-		zap.String("message_json", string(jsonData)),
-		zap.Any("message_struct", message))
+	f.logger.Debug("准备飞书消息", zap.String("recipient_type", recipientType), zap.String("message_id", request.MessageID))
 
 	if receive_id, ok := message["receive_id"].(string); !ok || receive_id == "" {
 		err := fmt.Errorf("receive_id is missing or empty")
-		f.logger.Error("receive_id字段缺失", zap.Any("message", message))
+		f.logger.Error("receive_id字段缺失", zap.String("message_id", request.MessageID))
 		return f.createErrorResponse(request.MessageID, "receive_id is missing", err, startTime), err
 	}
 
@@ -183,7 +178,8 @@ func (f *FeishuChannel) sendHTTPRequest(ctx context.Context, url string, message
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return f.createErrorResponse(messageID, "create request failed", err, startTime), err
+		safe := feishuSafeError(ctx, "create request failed", err)
+		return f.createErrorResponse(messageID, "create request failed", safe, startTime), safe
 	}
 
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
@@ -195,43 +191,35 @@ func (f *FeishuChannel) sendHTTPRequest(ctx context.Context, url string, message
 
 	resp, err := f.httpClient.Do(req)
 	if err != nil {
-		f.logger.Error("发送飞书消息失败",
-			zap.String("url", url),
-			zap.Bool("need_auth", needAuth),
-			zap.Error(err))
-		return f.createErrorResponse(messageID, "send request failed", err, startTime), err
+		safe := feishuSafeError(ctx, "send request failed", err)
+		f.logger.Error("发送飞书消息失败", zap.String("error_type", fmt.Sprintf("%T", err)), zap.Bool("need_auth", needAuth))
+		return f.createErrorResponse(messageID, "send request failed", safe, startTime), safe
 	}
+
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return f.createErrorResponse(messageID, "read response failed", err, startTime), err
+	if resp.StatusCode != http.StatusOK {
+		safe := fmt.Errorf("Feishu HTTP %d", resp.StatusCode)
+		f.logger.Error("飞书API返回错误状态码", zap.Int("status_code", resp.StatusCode))
+		return f.createErrorResponse(messageID, "HTTP request rejected", safe, startTime), safe
 	}
-
+	body, err := io.ReadAll(io.LimitReader(resp.Body, (1<<20)+1))
+	if err != nil || len(body) > 1<<20 {
+		safe := feishuSafeError(ctx, "read response failed or exceeded limit", err)
+		return f.createErrorResponse(messageID, "read response failed", safe, startTime), safe
+	}
 	var response map[string]interface{}
 	if err := json.Unmarshal(body, &response); err != nil {
-		return f.createErrorResponse(messageID, "parse response failed", err, startTime), err
+		safe := feishuSafeError(ctx, "parse response failed", err)
+		return f.createErrorResponse(messageID, "parse response failed", safe, startTime), safe
 	}
-
-	// 检查HTTP状态码
-	if resp.StatusCode != 200 {
-		errorMsg := fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(body))
-		f.logger.Error("飞书API返回错误状态码",
-			zap.Int("status_code", resp.StatusCode),
-			zap.String("response_body", string(body)),
-			zap.String("url", url))
-		return f.createErrorResponse(messageID, errorMsg, errors.New(errorMsg), startTime), errors.New(errorMsg)
-	}
-
 	if code, ok := response["code"].(float64); !ok || code != 0 {
-		errorMsg := fmt.Sprintf("Feishu API error (code: %.0f): %v", code, response["msg"])
-		f.logger.Error("飞书API返回业务错误",
-			zap.Float64("error_code", code),
-			zap.Any("error_msg", response["msg"]),
-			zap.Any("error_detail", response["error"]),
-			zap.String("url", url))
-
-		return f.createErrorResponse(messageID, errorMsg, errors.New(errorMsg), startTime), errors.New(errorMsg)
+		safe := errors.New("Feishu API business code missing or invalid")
+		if ok {
+			safe = fmt.Errorf("Feishu API error code %g", code)
+		}
+		f.logger.Error("飞书API返回业务错误", zap.Float64("error_code", code), zap.Bool("code_present", ok))
+		return f.createErrorResponse(messageID, "API request rejected", safe, startTime), safe
 	}
 
 	msgType := "群消息"
@@ -269,7 +257,7 @@ func (f *FeishuChannel) ensureAccessToken(ctx context.Context) error {
 		return nil
 	}
 
-	f.logger.Debug("获取飞书访问令牌", zap.String("api_url", f.config.GetTenantAccessTokenAPI()))
+	f.logger.Debug("获取飞书访问令牌")
 
 	tokenReq := map[string]string{
 		"app_id":     f.config.GetAppID(),
@@ -283,29 +271,29 @@ func (f *FeishuChannel) ensureAccessToken(ctx context.Context) error {
 
 	req, err := http.NewRequestWithContext(ctx, "POST", f.config.GetTenantAccessTokenAPI(), bytes.NewBuffer(jsonData))
 	if err != nil {
-		return fmt.Errorf("create token request failed: %w", err)
+		return feishuSafeError(ctx, "create token request failed", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 
 	resp, err := f.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("get access token failed: %w", err)
+		return feishuSafeError(ctx, "get access token failed", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("read token response failed: %w", err)
+		return feishuSafeError(ctx, "read token response failed", err)
 	}
 
 	var tokenResp map[string]interface{}
 	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		return fmt.Errorf("parse token response failed: %w", err)
+		return feishuSafeError(ctx, "parse token response failed", err)
 	}
 
 	if code, ok := tokenResp["code"].(float64); !ok || code != 0 || resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("get access token error (code: %.0f): %v", code, tokenResp["msg"])
+		return fmt.Errorf("get access token error (HTTP %d, code: %g)", resp.StatusCode, code)
 	}
 
 	if token, ok := tokenResp["tenant_access_token"].(string); ok && token != "" {
@@ -447,7 +435,6 @@ func (f *FeishuChannel) buildGroupMessage(request *SendRequest) map[string]inter
 
 func (f *FeishuChannel) buildPrivateMessageContent(request *SendRequest, recipientType string) map[string]interface{} {
 	f.logger.Debug("构建商务化私聊消息内容",
-		zap.String("recipient_addr", request.RecipientAddr),
 		zap.String("recipient_type", recipientType))
 
 	priorityIcon, priorityText, _, templateColor := f.getPriorityConfig(int(request.Priority))
@@ -569,7 +556,6 @@ func (f *FeishuChannel) buildPrivateMessageContent(request *SendRequest, recipie
 	}
 
 	f.logger.Debug("私聊消息构建完成",
-		zap.String("receive_id", request.RecipientAddr),
 		zap.String("msg_type", "interactive"),
 		zap.Int("content_length", len(string(contentBytes))))
 

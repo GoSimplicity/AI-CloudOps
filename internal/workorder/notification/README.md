@@ -41,3 +41,11 @@ GOTOOLCHAIN=auto go test -race ./internal/system/... ./internal/workorder/...
 这证明协议和本地持久化链路，不代表真实企业 SMTP 或飞书租户已配置、授权或成功投递。
 
 依据：[飞书官方消息接口](https://open.feishu.cn/document/server-docs/im-v1/message/create)、[官方 Go SDK 的接收人类型与响应](https://github.com/larksuite/oapi-sdk-go/blob/v3_main/service/im/v1/model.go)。
+
+## 来源范围与重试
+
+通知同时匹配流程、分类和模板范围；来源在创建工单时从已验证对象保存不可修改的快照，历史未知来源不会命中具体分类或模板。详见[来源匹配](../../../docs/release/notification-scope.md)。
+
+`max_retries=0` 表示仅首次发送，N 表示额外重试 N 次，省略继承默认；`retry_interval` 单位为分钟。同步通知由 Manager 执行，异步通知由实际 Asynq worker 执行单层重试，避免重试次数相乘。批量部分失败不重放整个批次。见[执行与真实 Redis 验证](../../../docs/release/notification-retry-policy.md)。
+
+飞书诊断日志不记录收件地址、消息正文、完整请求 URL 或供应商原始错误正文，仅保留 MessageID、状态及业务错误码等诊断信息。

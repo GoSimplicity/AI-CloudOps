@@ -57,19 +57,29 @@ type WorkorderNotificationService interface {
 	GetAvailableChannels() *model.ListResp[*model.WorkorderNotificationChannel]
 }
 
+// notificationSender 保持公开构造函数不变，便于在业务层验证请求参数而不触发外发
+type notificationSender interface {
+	SendNotification(context.Context, *notification.SendRequest) (*notification.SendResponse, error)
+	GetAvailableChannels() []string
+}
+
 type workorderNotificationService struct {
 	dao             workorderDao.WorkorderNotificationDAO
 	logger          *zap.Logger
-	notificationMgr *notification.Manager
+	notificationMgr notificationSender
 	instanceDAO     workorderDao.WorkorderInstanceDAO
 	userDAO         userDao.UserDAO
 }
 
 func NewWorkorderNotificationService(dao workorderDao.WorkorderNotificationDAO, notificationMgr *notification.Manager, logger *zap.Logger, instanceDAO workorderDao.WorkorderInstanceDAO, userDAO userDao.UserDAO) WorkorderNotificationService {
+	var sender notificationSender
+	if notificationMgr != nil {
+		sender = notificationMgr
+	}
 	return &workorderNotificationService{
 		logger:          logger,
 		dao:             dao,
-		notificationMgr: notificationMgr,
+		notificationMgr: sender,
 		instanceDAO:     instanceDAO,
 		userDAO:         userDAO,
 	}
@@ -97,12 +107,8 @@ func (s *workorderNotificationService) UpdateNotification(ctx context.Context, r
 		return fmt.Errorf("查询通知配置失败: %w", err)
 	}
 
-	trigger := existing.TriggerType
-	if req.TriggerType != "" {
-		trigger = req.TriggerType
-	}
-	if req.Status == 1 && trigger != model.TriggerTypeImmediate {
-		return errors.New("不能启用尚未实现的非即时触发配置，请先明确改为immediate")
+	if err := validateNotificationActivation(existing, req); err != nil {
+		return err
 	}
 	channels, types, users, roles, depts, addresses := existing.Channels, existing.RecipientTypes, existing.RecipientUsers, existing.RecipientRoles, existing.RecipientDepts, existing.RecipientAddresses
 	if req.Channels != nil {
@@ -212,17 +218,19 @@ func (s *workorderNotificationService) TestSendNotification(ctx context.Context,
 		testInstanceID := 999999
 
 		sendRequest := &notification.SendRequest{
-			Subject:       notificationConfig.SubjectTemplate,
-			Content:       notificationConfig.MessageTemplate,
-			Priority:      notificationConfig.Priority,
-			Channel:       channel,
-			RecipientType: channel,
-			RecipientID:   "test_user",
-			RecipientAddr: recipientAddr,
-			RecipientName: "测试用户",
-			EventType:     "test",
-			InstanceID:    &testInstanceID,
-			Templates:     make(map[string]string),
+			MaxRetries:           &notificationConfig.MaxRetries,
+			RetryIntervalMinutes: &notificationConfig.RetryInterval,
+			Subject:              notificationConfig.SubjectTemplate,
+			Content:              notificationConfig.MessageTemplate,
+			Priority:             notificationConfig.Priority,
+			Channel:              channel,
+			RecipientType:        channel,
+			RecipientID:          "test_user",
+			RecipientAddr:        recipientAddr,
+			RecipientName:        "测试用户",
+			EventType:            "test",
+			InstanceID:           &testInstanceID,
+			Templates:            make(map[string]string),
 			Metadata: map[string]interface{}{
 				"notification_id": notificationConfig.ID,
 				"sender_id":       senderID,
@@ -347,8 +355,11 @@ func (s *workorderNotificationService) SendWorkorderNotification(ctx context.Con
 
 func (s *workorderNotificationService) processNotification(ctx context.Context, notification *model.WorkorderNotification,
 	instance *model.WorkorderInstance, eventType string, senderID int, customContent ...string) error {
-	if notification == nil || notification.TriggerType != model.TriggerTypeImmediate {
-		return errors.New("非即时触发通知尚未实现，已阻止自动发送")
+	if !notificationMatchesInstanceScope(notification, instance) {
+		return nil
+	}
+	if err := validateAutomaticNotification(notification); err != nil {
+		return err
 	}
 
 	recipients, err := s.getRecipients(ctx, notification, instance)
@@ -527,16 +538,18 @@ func (s *workorderNotificationService) sendChannelNotification(ctx context.Conte
 			recipientType := s.getRecipientTypeForChannel(channel)
 
 			sendRequest := &notification.SendRequest{
-				Subject:       subject,
-				Content:       content,
-				Priority:      notificationConfig.Priority,
-				Channel:       channel,
-				RecipientType: recipientType,
-				RecipientID:   rec.ID,
-				RecipientAddr: recipientAddr,
-				RecipientName: rec.Name,
-				InstanceID:    &instance.ID,
-				EventType:     eventType,
+				MaxRetries:           &notificationConfig.MaxRetries,
+				RetryIntervalMinutes: &notificationConfig.RetryInterval,
+				Subject:              subject,
+				Content:              content,
+				Priority:             notificationConfig.Priority,
+				Channel:              channel,
+				RecipientType:        recipientType,
+				RecipientID:          rec.ID,
+				RecipientAddr:        recipientAddr,
+				RecipientName:        rec.Name,
+				InstanceID:           &instance.ID,
+				EventType:            eventType,
 				Metadata: map[string]interface{}{
 					"notification_id": notificationConfig.ID,
 					"instance_id":     instance.ID,

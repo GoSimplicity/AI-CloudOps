@@ -128,7 +128,8 @@ func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateW
 		return fmt.Errorf("只能使用已发布的流程创建工单")
 	}
 
-	if err := s.validateFormData(ctx, process.FormDesignID, req.FormData); err != nil {
+	validatedForm, err := s.validateFormData(ctx, process.FormDesignID, req.FormData)
+	if err != nil {
 		s.logger.Error("表单数据验证失败", zap.Error(err), zap.Int("formDesignID", process.FormDesignID))
 		return fmt.Errorf("表单数据验证失败: %w", err)
 	}
@@ -170,6 +171,7 @@ func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateW
 		Title:         req.Title,
 		SerialNumber:  serialNumber,
 		ProcessID:     req.ProcessID,
+		CategoryID:    notificationScopeID(validatedForm.CategoryID),
 		CurrentStepID: initialStepID,
 		FormData:      req.FormData,
 		Status:        req.Status,
@@ -247,7 +249,7 @@ func (s *instanceService) CreateInstanceFromTemplate(ctx context.Context, templa
 		return fmt.Errorf("只能使用已发布的流程创建工单")
 	}
 
-	if err := s.validateFormData(ctx, process.FormDesignID, formData); err != nil {
+	if _, err := s.validateFormData(ctx, process.FormDesignID, formData); err != nil {
 		s.logger.Error("表单数据验证失败", zap.Error(err), zap.Int("formDesignID", process.FormDesignID))
 		return fmt.Errorf("表单数据验证失败: %w", err)
 	}
@@ -273,6 +275,8 @@ func (s *instanceService) CreateInstanceFromTemplate(ctx context.Context, templa
 		Title:        req.Title,
 		SerialNumber: serialNumber,
 		ProcessID:    template.ProcessID,
+		TemplateID:   notificationScopeID(&template.ID),
+		CategoryID:   notificationScopeID(template.CategoryID),
 		FormData:     formData,
 		Status:       model.InstanceStatusDraft, // 从模板创建的工单默认为草稿状态
 		Priority:     req.Priority,
@@ -821,38 +825,38 @@ func (s *instanceService) createTimelineRecord(ctx context.Context, instanceID i
 	}
 }
 
-func (s *instanceService) validateFormData(ctx context.Context, formDesignID int, formData model.JSONMap) error {
+func (s *instanceService) validateFormData(ctx context.Context, formDesignID int, formData model.JSONMap) (*model.WorkorderFormDesign, error) {
 	if formDesignID <= 0 {
-		return fmt.Errorf("表单设计ID无效")
+		return nil, fmt.Errorf("表单设计ID无效")
 	}
 
 	formDesign, err := s.formDesignDao.GetFormDesign(ctx, formDesignID)
 	if err != nil {
-		return fmt.Errorf("获取表单设计失败: %w", err)
+		return nil, fmt.Errorf("获取表单设计失败: %w", err)
 	}
 
 	if formDesign.Status != model.FormDesignStatusPublished {
-		return fmt.Errorf("只能使用已发布的表单设计")
+		return nil, fmt.Errorf("只能使用已发布的表单设计")
 	}
 
 	// 解析表单Schema
 	var schema model.FormSchema
 	schemaBytes, err := json.Marshal(formDesign.Schema)
 	if err != nil {
-		return fmt.Errorf("表单Schema序列化失败: %w", err)
+		return nil, fmt.Errorf("表单Schema序列化失败: %w", err)
 	}
 
 	if err := json.Unmarshal(schemaBytes, &schema); err != nil {
-		return fmt.Errorf("表单Schema解析失败: %w", err)
+		return nil, fmt.Errorf("表单Schema解析失败: %w", err)
 	}
 
 	for _, field := range schema.Fields {
 		if err := s.validateFormField(field, formData); err != nil {
-			return fmt.Errorf("字段 %s 验证失败: %w", field.Label, err)
+			return nil, fmt.Errorf("字段 %s 验证失败: %w", field.Label, err)
 		}
 	}
 
-	return nil
+	return formDesign, nil
 }
 
 func (s *instanceService) validateFormField(field model.FormField, formData model.JSONMap) error {

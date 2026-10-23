@@ -124,6 +124,8 @@ def main():
     database.add_argument("--mysql-migration", action="store_true")
     database.add_argument("--mysql-notification", action="store_true")
     database.add_argument("--mysql-cloud-account", action="store_true")
+    database.add_argument("--mysql-instance-source", action="store_true")
+    database.add_argument("--mysql-notification-idempotent", action="store_true")
     parser.add_argument("--container")
     args = parser.parse_args()
     try:
@@ -133,6 +135,10 @@ def main():
             isolated_mysql(args.container, "./internal/workorder/dao", "TestMySQLNotificationChannelPagination")
         elif args.mysql_cloud_account:
             isolated_mysql(args.container, "./internal/tree/service", "TestMySQLCloudAccountRegionDelta")
+        elif args.mysql_instance_source:
+            isolated_mysql(args.container, "./internal/workorder/service", "TestMySQLInstanceNotificationSource")
+        elif args.mysql_notification_idempotent:
+            isolated_mysql(args.container, "./internal/workorder/dao", "TestMySQLNotificationIdempotentUpdate")
         else:
             api_check(args.url)
     except (SchemaError, KeyError, ValueError):

@@ -56,26 +56,22 @@ func (p *Processor) RegisterTasks(mux *asynq.ServeMux) {
 }
 
 func (p *Processor) HandleSendNotification(ctx context.Context, task *asynq.Task) error {
-	var payload SendNotificationPayload
-	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
-		p.logger.Error("反序列化通知任务失败",
-			zap.String("task_type", task.Type()),
-			zap.Error(err))
-		return fmt.Errorf("反序列化任务失败: %w", err)
+	request, err := decodeSendNotificationTask(task)
+	if err != nil {
+		return fmt.Errorf("通知任务无效: %w", err)
 	}
+	payload := SendNotificationPayload{Request: request}
 
 	p.logger.Info("开始处理通知发送任务",
 		zap.String("task_type", task.Type()),
-		zap.String("message_id", payload.Request.MessageID),
-		zap.String("recipient", payload.Request.RecipientAddr))
+		zap.String("message_id", payload.Request.MessageID))
 
 	// 发送通知
-	response, err := p.manager.SendNotification(ctx, payload.Request)
+	response, err := p.manager.sendNotification(ctx, payload.Request, true)
 	if err != nil {
 		p.logger.Error("通知发送失败",
 			zap.String("task_type", task.Type()),
-			zap.String("message_id", payload.Request.MessageID),
-			zap.Error(err))
+			zap.String("message_id", payload.Request.MessageID))
 		return err
 	}
 
@@ -91,8 +87,7 @@ func (p *Processor) HandleBatchSendNotification(ctx context.Context, task *asynq
 	var payload BatchSendNotificationPayload
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		p.logger.Error("反序列化批量通知任务失败",
-			zap.String("task_id", task.Type()),
-			zap.Error(err))
+			zap.String("task_id", task.Type()))
 		return fmt.Errorf("反序列化任务失败: %w", err)
 	}
 
@@ -101,16 +96,21 @@ func (p *Processor) HandleBatchSendNotification(ctx context.Context, task *asynq
 		zap.Int("batch_size", len(payload.Requests)))
 
 	// 批量发送通知
-	responses, err := p.manager.BatchSendNotification(ctx, payload.Requests)
-	if err != nil {
-		p.logger.Error("批量通知发送失败",
-			zap.String("task_id", task.Type()),
-			zap.Error(err))
-		return err
+	responses := make([]*SendResponse, 0, len(payload.Requests))
+	var firstErr error
+	for _, request := range payload.Requests {
+		response, err := p.manager.sendNotification(ctx, request, true)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		responses = append(responses, response)
 	}
 
 	successCount := 0
-	failedCount := 0
+	failedCount := len(payload.Requests) - len(responses)
 	for _, response := range responses {
 		if response.Success {
 			successCount++
@@ -124,6 +124,11 @@ func (p *Processor) HandleBatchSendNotification(ctx context.Context, task *asynq
 		zap.Int("success_count", successCount),
 		zap.Int("failed_count", failedCount))
 
+	if firstErr != nil {
+		// 整批重放会重复发送已成功的收件人，明确失败并禁止任务级重放
+		return fmt.Errorf("批量通知部分发送失败: %w: %w", firstErr, asynq.SkipRetry)
+	}
+
 	return nil
 }
 
@@ -131,9 +136,12 @@ func (p *Processor) HandleScheduledNotification(ctx context.Context, task *asynq
 	var payload ScheduledNotificationPayload
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		p.logger.Error("反序列化定时通知任务失败",
-			zap.String("task_id", task.Type()),
-			zap.Error(err))
+			zap.String("task_id", task.Type()))
 		return fmt.Errorf("反序列化任务失败: %w", err)
+	}
+
+	if payload.Request == nil {
+		return fmt.Errorf("通知任务缺少request")
 	}
 
 	p.logger.Info("开始处理定时通知任务",
@@ -149,11 +157,10 @@ func (p *Processor) HandleScheduledNotification(ctx context.Context, task *asynq
 	}
 
 	// 发送通知
-	response, err := p.manager.SendNotification(ctx, payload.Request)
+	response, err := p.manager.sendNotification(ctx, payload.Request, true)
 	if err != nil {
 		p.logger.Error("定时通知发送失败",
-			zap.String("task_id", task.Type()),
-			zap.Error(err))
+			zap.String("task_id", task.Type()))
 		return err
 	}
 
@@ -168,9 +175,12 @@ func (p *Processor) HandleRetryFailedNotification(ctx context.Context, task *asy
 	var payload RetryFailedNotificationPayload
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		p.logger.Error("反序列化重试通知任务失败",
-			zap.String("task_id", task.Type()),
-			zap.Error(err))
+			zap.String("task_id", task.Type()))
 		return fmt.Errorf("反序列化任务失败: %w", err)
+	}
+
+	if payload.Request == nil {
+		return fmt.Errorf("通知任务缺少request")
 	}
 
 	p.logger.Info("开始处理重试通知任务",
@@ -179,13 +189,12 @@ func (p *Processor) HandleRetryFailedNotification(ctx context.Context, task *asy
 		zap.Int("retry_count", payload.RetryCount))
 
 	// 发送通知
-	response, err := p.manager.SendNotification(ctx, payload.Request)
+	response, err := p.manager.sendNotification(ctx, payload.Request, true)
 	if err != nil {
 		p.logger.Error("重试通知发送失败",
 			zap.String("task_id", task.Type()),
 			zap.String("original_message_id", payload.OriginalMessageID),
-			zap.Int("retry_count", payload.RetryCount),
-			zap.Error(err))
+			zap.Int("retry_count", payload.RetryCount))
 		return err
 	}
 
@@ -289,4 +298,27 @@ func CreateRetryFailedNotificationTask(request *SendRequest, originalMessageID s
 	}
 
 	return asynq.NewTask(model.TaskTypeRetryFailedNotification, data), nil
+}
+
+// decodeSendNotificationTask 兼容两个已存在的任务生产格式，拒绝空 request
+func decodeSendNotificationTask(task *asynq.Task) (*SendRequest, error) {
+	if task == nil {
+		return nil, fmt.Errorf("通知任务不能为空")
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(task.Payload(), &fields); err != nil {
+		return nil, fmt.Errorf("通知任务JSON无效: %w", err)
+	}
+	data := task.Payload()
+	if raw, ok := fields["request"]; ok {
+		data = raw
+	}
+	var request *SendRequest
+	if err := json.Unmarshal(data, &request); err != nil {
+		return nil, fmt.Errorf("通知请求JSON无效: %w", err)
+	}
+	if request == nil {
+		return nil, fmt.Errorf("通知任务缺少request")
+	}
+	return request, nil
 }

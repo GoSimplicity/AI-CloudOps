@@ -67,8 +67,10 @@ def main():
         call(f'/api/workorder/instance/create-from-template/{template}', {'title': prefix, 'priority': 2, 'form_data': {'reason': 'isolated integration'}, 'assignee_id': uid})
         instance = find('instance', prefix, 'title')['id']
         owned.append(('instance', instance))
-        assert call(f'/api/workorder/instance/detail/{instance}')['status'] == 1
-        print('PASS template instance created as draft')
+        draft = call(f'/api/workorder/instance/detail/{instance}')
+        if draft.get('status') != 1 or draft.get('template_id') != template or draft.get('category_id') != category:
+            raise RuntimeError('template instance lost draft state or verified notification source')
+        print('PASS template instance created as draft with verified notification source')
         for forbidden in ({'status': 4}, {'assignee_id': uid + 100000}, {'completed_at': '2026-10-22T00:00:00Z'}):
             try:
                 call(f'/api/workorder/instance/update/{instance}', forbidden, 'PUT')

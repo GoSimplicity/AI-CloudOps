@@ -60,6 +60,12 @@ jobs:
         run: python scripts/integration/schema_smoke.py --mysql-notification
       - name: Isolated MySQL cloud account region transaction
         run: python scripts/integration/schema_smoke.py --mysql-cloud-account
+      - name: Isolated MySQL immutable instance notification scope
+        run: python scripts/integration/schema_smoke.py --mysql-instance-source
+      - name: Isolated MySQL idempotent notification update
+        run: python scripts/integration/schema_smoke.py --mysql-notification-idempotent
+      - name: Real notification worker with an isolated Redis and local inbox
+        run: CLOUDOPS_TEST_NOTIFICATION_ASYNC=true go test -race -tags=integration ./pkg/di -run '^TestNotificationAsyncIsolatedRedis$' -count=1
       - name: Gateway and session acceptance
         run: python scripts/release-smoke.py --crud
       - name: Real RBAC and workorder lifecycle

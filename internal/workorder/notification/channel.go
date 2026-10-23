@@ -48,6 +48,11 @@ type NotificationChannel interface {
 }
 
 type SendRequest struct {
+	// nil 使用通道默认，显式 0 表示不重试；次数为首次发送之外的额外重试
+	MaxRetries *int `json:"max_retries,omitempty"`
+	// 重试间隔单位与通知配置一致，为分钟
+	RetryIntervalMinutes *int `json:"retry_interval_minutes,omitempty"`
+
 	Channel   string `json:"channel,omitempty"` // Explicit transport; RecipientType remains for persisted legacy tasks.
 	MessageID string `json:"message_id"`        // 消息ID
 	Subject   string `json:"subject"`           // 主题

@@ -36,6 +36,7 @@ import (
 	cron "github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	cronHandler "github.com/GoSimplicity/AI-CloudOps/internal/cron/handler"
 	"github.com/GoSimplicity/AI-CloudOps/internal/startup"
+	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
 	"github.com/GoSimplicity/AI-CloudOps/mock"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-contrib/gzip"
@@ -48,16 +49,17 @@ import (
 )
 
 type App struct {
-	cfg          *config.Config
-	logger       *zap.Logger
-	db           *gorm.DB
-	redis        redis.Cmdable
-	server       *gin.Engine
-	bootstrap    startup.ApplicationBootstrap
-	cronManager  cron.CronManager
-	asynqServer  *asynq.Server
-	scheduler    *asynq.Scheduler
-	cronHandlers *cronHandler.CronHandlers
+	cfg                   *config.Config
+	logger                *zap.Logger
+	db                    *gorm.DB
+	redis                 redis.Cmdable
+	server                *gin.Engine
+	bootstrap             startup.ApplicationBootstrap
+	cronManager           cron.CronManager
+	asynqServer           *asynq.Server
+	scheduler             *asynq.Scheduler
+	cronHandlers          *cronHandler.CronHandlers
+	notificationProcessor *notification.Processor
 }
 
 func NewApp(
@@ -71,6 +73,7 @@ func NewApp(
 	asynqServer *asynq.Server,
 	scheduler *asynq.Scheduler,
 	cronHandlers *cronHandler.CronHandlers,
+	notificationProcessor *notification.Processor,
 ) (*App, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("配置不能为空")
@@ -102,18 +105,22 @@ func NewApp(
 	if cronHandlers == nil {
 		return nil, fmt.Errorf("Cron处理器不能为空")
 	}
+	if notificationProcessor == nil {
+		return nil, fmt.Errorf("通知处理器不能为空")
+	}
 
 	return &App{
-		cfg:          cfg,
-		logger:       logger,
-		db:           db,
-		redis:        redisClient,
-		server:       server,
-		bootstrap:    bootstrap,
-		cronManager:  cronManager,
-		asynqServer:  asynqServer,
-		scheduler:    scheduler,
-		cronHandlers: cronHandlers,
+		cfg:                   cfg,
+		logger:                logger,
+		db:                    db,
+		redis:                 redisClient,
+		server:                server,
+		bootstrap:             bootstrap,
+		cronManager:           cronManager,
+		asynqServer:           asynqServer,
+		scheduler:             scheduler,
+		cronHandlers:          cronHandlers,
+		notificationProcessor: notificationProcessor,
 	}, nil
 }
 
@@ -173,8 +180,7 @@ func (a *App) Run(ctx context.Context) error {
 	})
 
 	g.Go(func() error {
-		mux := asynq.NewServeMux()
-		mux.Handle("cron:task", a.cronHandlers)
+		mux := NewTaskMux(a.cronHandlers, a.notificationProcessor)
 		a.logger.Info("Asynq服务开始运行")
 
 		go func() {

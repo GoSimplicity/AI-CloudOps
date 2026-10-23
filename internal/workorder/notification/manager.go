@@ -71,9 +71,14 @@ type FeishuConfig interface {
 	GetTenantAccessTokenAPI() string
 }
 
+type notificationQueue interface {
+	EnqueueContext(context.Context, *asynq.Task, ...asynq.Option) (*asynq.TaskInfo, error)
+	Close() error
+}
+
 type Manager struct {
 	channels    map[string]NotificationChannel
-	queueClient *asynq.Client
+	queueClient notificationQueue
 	logger      *zap.Logger
 	config      NotificationConfig
 	mu          sync.RWMutex
@@ -81,10 +86,13 @@ type Manager struct {
 
 func NewManager(config NotificationConfig, queueClient *asynq.Client, logger *zap.Logger) (*Manager, error) {
 	manager := &Manager{
-		channels:    make(map[string]NotificationChannel),
-		queueClient: queueClient,
-		logger:      logger,
-		config:      config,
+		channels: make(map[string]NotificationChannel),
+		logger:   logger,
+		config:   config,
+	}
+
+	if queueClient != nil {
+		manager.queueClient = queueClient
 	}
 
 	// 邮箱渠道
@@ -120,155 +128,168 @@ func NewManager(config NotificationConfig, queueClient *asynq.Client, logger *za
 
 // SendNotification 同步发送通知消息
 func (m *Manager) SendNotification(ctx context.Context, request *SendRequest) (*SendResponse, error) {
-	// 生成ID
+	return m.sendNotification(ctx, request, false)
+}
+
+// 队列负责重试时每次执行只交付一次，避免两层重试相乘
+func (m *Manager) sendNotification(ctx context.Context, request *SendRequest, singleAttempt bool) (*SendResponse, error) {
+	if request == nil {
+		return nil, fmt.Errorf("通知请求不能为空")
+	}
 	if request.MessageID == "" {
 		request.MessageID = uuid.New().String()
 	}
-
-	route := request.Channel
-	if route == "" {
-		route = request.RecipientType
+	failure := func(status string, err error) (*SendResponse, error) {
+		return &SendResponse{MessageID: request.MessageID, Status: status, ErrorMessage: err.Error(), SendTime: time.Now()}, err
 	}
-	channel, err := m.getChannel(route)
+	if err := ctx.Err(); err != nil {
+		return failure("cancelled", err)
+	}
+	channel, err := m.requestChannel(request)
 	if err != nil {
-		return &SendResponse{
-			Success:      false,
-			MessageID:    request.MessageID,
-			Status:       "failed",
-			ErrorMessage: fmt.Sprintf("获取通知渠道失败: %v", err),
-			SendTime:     time.Now(),
-		}, err
+		return failure("failed", err)
 	}
-
-	normalized, validateErr := NormalizeAddress(channel.GetName(), request.RecipientAddr)
-	if validateErr != nil {
-		return nil, validateErr
+	maxRetries, interval, err := requestRetryPolicy(request, channel)
+	if err != nil {
+		return failure("failed", err)
+	}
+	if singleAttempt {
+		maxRetries = 0
+	}
+	normalized, err := NormalizeAddress(channel.GetName(), request.RecipientAddr)
+	if err != nil {
+		return failure("failed", err)
 	}
 	request.RecipientAddr = normalized
 	if !channel.IsEnabled() {
-		err := fmt.Errorf("通知渠道 %s 未启用", channel.GetName())
-		return &SendResponse{
-			Success:      false,
-			MessageID:    request.MessageID,
-			Status:       "failed",
-			ErrorMessage: err.Error(),
-			SendTime:     time.Now(),
-		}, err
+		return failure("failed", fmt.Errorf("通知渠道 %s 未启用", channel.GetName()))
 	}
-
-	// 添加重试机制
-	maxRetries := channel.GetMaxRetries()
-	retryInterval := channel.GetRetryInterval()
-
 	var lastErr error
-	var response *SendResponse
-
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
-			m.logger.Info("重试发送通知",
-				zap.String("channel", channel.GetName()),
-				zap.String("message_id", request.MessageID),
-				zap.Int("attempt", attempt),
-				zap.Duration("retry_interval", retryInterval))
-
-			// 等待重试间隔
+			timer := time.NewTimer(interval)
 			select {
 			case <-ctx.Done():
-				return &SendResponse{
-					Success:      false,
-					MessageID:    request.MessageID,
-					Status:       "cancelled",
-					ErrorMessage: "context cancelled",
-					SendTime:     time.Now(),
-				}, ctx.Err()
-			case <-time.After(retryInterval):
-				// 继续重试
+				timer.Stop()
+				return failure("cancelled", ctx.Err())
+			case <-timer.C:
 			}
 		}
-
-		// 发送
-		response, lastErr = channel.Send(ctx, request)
+		if err := ctx.Err(); err != nil {
+			return failure("cancelled", err)
+		}
+		response, sendErr := channel.Send(ctx, request)
+		lastErr = sendErr
 		if lastErr == nil && (response == nil || !response.Success) {
 			lastErr = fmt.Errorf("通知渠道未确认发送成功")
 		}
 		if lastErr == nil {
-			// 发送成功
-			m.logger.Info("通知发送成功",
-				zap.String("channel", channel.GetName()),
-				zap.String("message_id", request.MessageID),
-				zap.String("recipient", request.RecipientAddr),
-				zap.Int("attempts", attempt+1))
+			response.MessageID = request.MessageID
+			m.logger.Info("通知发送成功", zap.String("channel", channel.GetName()), zap.String("message_id", request.MessageID), zap.Int("attempts", attempt+1))
 			return response, nil
 		}
-
-		m.logger.Error("发送通知失败",
-			zap.String("channel", channel.GetName()),
-			zap.String("message_id", request.MessageID),
-			zap.String("recipient", request.RecipientAddr),
-			zap.Int("attempt", attempt+1),
-			zap.Error(lastErr))
-
-		// 如果是最后一次尝试，返回错误
-		if attempt == maxRetries {
-			break
+		if err := ctx.Err(); err != nil {
+			return failure("cancelled", err)
 		}
+		m.logger.Warn("发送通知失败", zap.String("channel", channel.GetName()), zap.String("message_id", request.MessageID), zap.Int("attempt", attempt+1))
 	}
-
-	// 所有重试都失败了
-	return &SendResponse{
-		Success:      false,
-		MessageID:    request.MessageID,
-		Status:       "failed",
-		ErrorMessage: fmt.Sprintf("发送失败，已重试 %d 次: %v", maxRetries+1, lastErr),
-		SendTime:     time.Now(),
-	}, lastErr
+	response, _ := failure("failed", fmt.Errorf("发送失败，已尝试 %d 次: %w", maxRetries+1, lastErr))
+	return response, lastErr
 }
 
-// SendNotificationAsync 异步发送通知消息
-func (m *Manager) SendNotificationAsync(ctx context.Context, request *SendRequest, delay time.Duration) error {
-	// 生成ID
-	if request.MessageID == "" {
-		request.MessageID = uuid.New().String()
-	}
-
-	task := asynq.NewTask("notification:send", serializeRequest(request))
-
-	opts := []asynq.Option{
-		asynq.ProcessIn(delay),
-		asynq.TaskID(request.MessageID),
-	}
-
+func (m *Manager) requestChannel(request *SendRequest) (NotificationChannel, error) {
 	route := request.Channel
 	if route == "" {
 		route = request.RecipientType
 	}
-	channel, err := m.getChannel(route)
+	return m.getChannel(route)
+}
+
+func requestRetryPolicy(request *SendRequest, channel NotificationChannel) (int, time.Duration, error) {
+	retries, interval := channel.GetMaxRetries(), channel.GetRetryInterval()
+	if request.MaxRetries != nil {
+		retries = *request.MaxRetries
+	}
+	if retries < 0 || retries > 100 {
+		return 0, 0, fmt.Errorf("通知额外重试次数必须在0至100之间")
+	}
+	if request.RetryIntervalMinutes != nil {
+		minutes := *request.RetryIntervalMinutes
+		// 先验证再转换，避免持久化配置的乘法溢出变成负间隔或短间隔
+		if minutes < 0 || uint64(minutes) > uint64((1<<63-1)/time.Minute) {
+			return 0, 0, fmt.Errorf("通知重试间隔超出有效分钟范围")
+		}
+		interval = time.Duration(minutes) * time.Minute
+	}
+	if interval < 0 {
+		return 0, 0, fmt.Errorf("通知重试间隔不能为负数")
+	}
+	return retries, interval, nil
+}
+
+// SendNotificationAsync 异步发送通知消息
+func (m *Manager) SendNotificationAsync(ctx context.Context, request *SendRequest, delay time.Duration) error {
+	if request == nil {
+		return fmt.Errorf("通知请求不能为空")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if delay < 0 {
+		return fmt.Errorf("通知排队延迟不能为负数")
+	}
+	if request.MessageID == "" {
+		request.MessageID = uuid.New().String()
+	}
+	channel, err := m.requestChannel(request)
 	if err != nil {
 		return err
 	}
-	if _, err = NormalizeAddress(channel.GetName(), request.RecipientAddr); err != nil {
+	maxRetries, _, err := requestRetryPolicy(request, channel)
+	if err != nil {
 		return err
 	}
-	opts = append(opts, asynq.MaxRetry(channel.GetMaxRetries()))
+	if !channel.IsEnabled() {
+		return fmt.Errorf("通知渠道 %s 未启用", channel.GetName())
+	}
+	normalized, err := NormalizeAddress(channel.GetName(), request.RecipientAddr)
+	if err != nil {
+		return err
+	}
+	request.RecipientAddr = normalized
+	// 使用已发布的 request envelope；worker 同时接受早期直接序列化请求的格式
+	task, err := CreateSendNotificationTask(request, nil)
+	if err != nil {
+		return err
+	}
 	if m.queueClient == nil {
 		return fmt.Errorf("通知队列未配置")
 	}
-
-	// 入队
-	info, err := m.queueClient.Enqueue(task, opts...)
+	info, err := m.queueClient.EnqueueContext(ctx, task,
+		asynq.ProcessIn(delay), asynq.TaskID(request.MessageID), asynq.MaxRetry(maxRetries))
 	if err != nil {
-		m.logger.Error("通知任务入队失败",
-			zap.String("message_id", request.MessageID),
-			zap.Error(err))
+		m.logger.Warn("通知任务入队失败", zap.String("message_id", request.MessageID))
 		return err
 	}
-
-	m.logger.Info("通知任务已入队",
-		zap.String("message_id", request.MessageID),
-		zap.String("queue", info.Queue),
-		zap.Time("next_process_at", info.NextProcessAt))
-
+	m.logger.Info("通知任务已入队", zap.String("message_id", request.MessageID), zap.String("queue", info.Queue))
 	return nil
+}
+
+// RetryDelay 供通知任务的 Asynq Server 使用；其他任务保持 Asynq 默认退避
+func (m *Manager) RetryDelay(n int, err error, task *asynq.Task) time.Duration {
+	if task != nil && task.Type() == model.TaskTypeSendNotification {
+		request, decodeErr := decodeSendNotificationTask(task)
+		if decodeErr == nil {
+			channel, channelErr := m.requestChannel(request)
+			if channelErr == nil {
+				_, interval, policyErr := requestRetryPolicy(request, channel)
+				if policyErr == nil {
+					return interval
+				}
+			}
+		}
+	}
+	return asynq.DefaultRetryDelayFunc(n, err, task)
 }
 
 func (m *Manager) GetAvailableChannels() []string {
@@ -297,10 +318,14 @@ func (m *Manager) BatchSendNotification(ctx context.Context, requests []*SendReq
 			defer wg.Done()
 
 			resp, err := m.SendNotification(ctx, req)
-			if err != nil {
+			if err != nil && resp == nil {
+				messageID := ""
+				if req != nil {
+					messageID = req.MessageID
+				}
 				resp = &SendResponse{
 					Success:      false,
-					MessageID:    req.MessageID,
+					MessageID:    messageID,
 					Status:       "failed",
 					ErrorMessage: err.Error(),
 					SendTime:     time.Now(),
@@ -380,13 +405,13 @@ func (m *Manager) getChannel(recipientType string) (NotificationChannel, error) 
 }
 
 func (m *Manager) ProcessNotificationTask(ctx context.Context, task *asynq.Task) error {
-	request, err := deserializeRequest(task.Payload())
+	request, err := decodeSendNotificationTask(task)
 	if err != nil {
 		m.logger.Error("反序列化通知任务失败", zap.Error(err))
 		return err
 	}
 
-	_, err = m.SendNotification(ctx, request)
+	_, err = m.sendNotification(ctx, request, true)
 	return err
 }
 

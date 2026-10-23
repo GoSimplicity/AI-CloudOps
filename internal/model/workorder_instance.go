@@ -59,6 +59,8 @@ type WorkorderInstance struct {
 	Model
 	Title         string     `json:"title" gorm:"column:title;type:varchar(200);not null;index;comment:工单标题"`
 	SerialNumber  string     `json:"serial_number" gorm:"column:serial_number;type:varchar(50);not null;uniqueIndex;comment:工单编号"`
+	TemplateID    *int       `json:"template_id,omitempty" gorm:"column:template_id;index;<-:create;comment:创建时模板来源快照"`
+	CategoryID    *int       `json:"category_id,omitempty" gorm:"column:category_id;index;<-:create;comment:创建时分类来源快照"`
 	ProcessID     int        `json:"process_id" gorm:"column:process_id;not null;index;comment:流程ID"`
 	CurrentStepID *string    `json:"current_step_id" gorm:"column:current_step_id;type:varchar(50);index;comment:当前步骤ID"`
 	FormData      JSONMap    `json:"form_data" gorm:"column:form_data;type:json;comment:表单数据"`

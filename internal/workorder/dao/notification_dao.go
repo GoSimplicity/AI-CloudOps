@@ -198,7 +198,14 @@ func (d *notificationDAO) UpdateNotification(ctx context.Context, req *model.Upd
 	}
 
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("通知配置不存在")
+		// MySQL同值写可返回零变更行，必须单独区分幂等更新和不存在
+		var count int64
+		if err := d.db.WithContext(ctx).Model(&model.WorkorderNotification{}).Where("id = ?", req.ID).Count(&count).Error; err != nil {
+			return fmt.Errorf("确认通知配置是否存在失败: %w", err)
+		}
+		if count == 0 {
+			return fmt.Errorf("通知配置不存在")
+		}
 	}
 
 	return nil
