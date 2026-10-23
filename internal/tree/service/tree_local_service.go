@@ -33,7 +33,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
-	"github.com/imdario/mergo"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -181,50 +180,46 @@ func (s *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.Updat
 	}
 
 	// 检查 IP 冲突
-	if req.IpAddr != "" && req.IpAddr != host.IpAddr {
-		if h, _ := s.dao.GetByIP(ctx, req.IpAddr); h != nil && h.ID != req.ID {
-			s.logger.Error("IP 已被占用", zap.String("ip", req.IpAddr), zap.Int("existing_id", h.ID))
-			return fmt.Errorf("IP %s 已被其他主机使用", req.IpAddr)
+	if req.IpAddr != nil && *req.IpAddr != "" && *req.IpAddr != host.IpAddr {
+		if h, _ := s.dao.GetByIP(ctx, *req.IpAddr); h != nil && h.ID != req.ID {
+			s.logger.Error("IP 已被占用", zap.String("ip", *req.IpAddr), zap.Int("existing_id", h.ID))
+			return fmt.Errorf("IP %s 已被其他主机使用", *req.IpAddr)
 		}
 	}
 
-	local := model.TreeLocalResource{
-		Model: model.Model{
-			ID: req.ID,
-		},
-		Name:        req.Name,
-		Environment: req.Environment,
-		Description: req.Description,
-		Tags:        req.Tags,
-		Status:      model.STARTING,
-		IpAddr:      req.IpAddr,
-		Port:        req.Port,
-		OSType:      req.OSType,
-		OSName:      req.OSName,
-		ImageName:   req.ImageName,
-		AuthMode:    req.AuthMode,
+	updates := make(map[string]any)
+	for column, value := range map[string]*string{
+		"name": req.Name, "environment": req.Environment, "description": req.Description,
+		"ip_addr": req.IpAddr, "os_type": req.OSType, "os_name": req.OSName,
+		"image_name": req.ImageName, "username": req.Username,
+	} {
+		if value != nil {
+			updates[column] = *value
+		}
 	}
-
-	// 加密密码
-	if req.AuthMode == model.AuthModePassword && req.Password != "" {
-		pwd, err := treeUtils.EncryptPassword(req.Password)
+	if req.Tags != nil {
+		updates["tags"] = *req.Tags
+	}
+	if req.Port != nil {
+		updates["port"] = *req.Port
+	}
+	authMode := host.AuthMode
+	if req.AuthMode != nil {
+		authMode = *req.AuthMode
+		updates["auth_mode"] = authMode
+	}
+	// 空凭据代表保留；仅写本次主动轮换的值，避免回写旧快照覆盖并发更新
+	if authMode == model.AuthModePassword && req.Password != "" {
+		encrypted, err := treeUtils.EncryptPassword(req.Password)
 		if err != nil {
-			s.logger.Error("密码加密失败", zap.Error(err))
 			return fmt.Errorf("密码加密失败: %w", err)
 		}
-		local.Password = pwd
+		updates["password"] = encrypted
 	}
-
-	// 如果是密钥认证，直接使用提供的密钥
-	if req.AuthMode == model.AuthModeKey && req.Key != "" {
-		local.Key = req.Key
+	if authMode == model.AuthModeKey && req.Key != "" {
+		updates["key"] = req.Key
 	}
-
-	if err := mergo.Merge(host, &local, mergo.WithOverride); err != nil {
-		return fmt.Errorf("合并字段失败: %w", err)
-	}
-
-	if err := s.dao.Update(ctx, host); err != nil {
+	if err := s.dao.Update(ctx, req.ID, updates); err != nil {
 		s.logger.Error("更新本地主机失败", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}

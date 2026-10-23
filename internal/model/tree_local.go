@@ -60,7 +60,7 @@ type TreeLocalResource struct {
 	Password       string         `json:"-" gorm:"type:varchar(500);comment:密码,加密存储"`
 	CreateUserID   int            `json:"create_user_id" gorm:"comment:创建者ID;default:0"`
 	CreateUserName string         `json:"create_user_name" gorm:"type:varchar(100);comment:创建者姓名"`
-	Key            string         `json:"key" gorm:"type:text;comment:密钥"`
+	Key            string         `json:"-" gorm:"type:text;comment:密钥"`
 	AuthMode       AuthMode       `json:"auth_mode" gorm:"type:tinyint(1);comment:认证方式,1:密码,2:密钥;default:1"`
 	OSType         string         `json:"os_type" gorm:"type:varchar(50);comment:操作系统类型,如win,linux"`
 	OSName         string         `json:"os_name" gorm:"type:varchar(100);comment:操作系统名称"`
@@ -100,20 +100,20 @@ type CreateTreeLocalResourceReq struct {
 }
 
 type UpdateTreeLocalResourceReq struct {
-	ID          int          `json:"id" form:"id"`
-	Name        string       `json:"name"`
-	Environment string       `json:"environment"`
-	Description string       `json:"description"`
-	Tags        KeyValueList `json:"tags"`
-	IpAddr      string       `json:"ip_addr"`
-	Port        int          `json:"port"`
-	OSType      string       `json:"os_type"`
-	OSName      string       `json:"os_name"`
-	ImageName   string       `json:"image_name"`
-	Username    string       `json:"username"`
-	Password    string       `json:"password"`
-	Key         string       `json:"key"`
-	AuthMode    AuthMode     `json:"auth_mode"`
+	ID          int           `json:"id" form:"id"`
+	Name        *string       `json:"name" binding:"omitempty,min=1,max=100"`
+	Environment *string       `json:"environment"`
+	Description *string       `json:"description"`
+	Tags        *KeyValueList `json:"tags"`
+	IpAddr      *string       `json:"ip_addr" binding:"omitempty,ip"`
+	Port        *int          `json:"port" binding:"omitempty,min=1,max=65535"`
+	OSType      *string       `json:"os_type"`
+	OSName      *string       `json:"os_name"`
+	ImageName   *string       `json:"image_name"`
+	Username    *string       `json:"username" binding:"omitempty,min=1,max=100"`
+	Password    string        `json:"password"`
+	Key         string        `json:"key"`
+	AuthMode    *AuthMode     `json:"auth_mode" binding:"omitempty,oneof=1 2"`
 }
 
 type DeleteTreeLocalResourceReq struct {

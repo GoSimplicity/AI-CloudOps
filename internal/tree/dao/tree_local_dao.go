@@ -37,7 +37,7 @@ import (
 
 type TreeLocalDAO interface {
 	Create(ctx context.Context, local *model.TreeLocalResource) error
-	Update(ctx context.Context, local *model.TreeLocalResource) error
+	Update(ctx context.Context, id int, updates map[string]any) error
 	Delete(ctx context.Context, id int) error
 	GetByID(ctx context.Context, id int) (*model.TreeLocalResource, error)
 	GetList(ctx context.Context, req *model.GetTreeLocalResourceListReq) ([]*model.TreeLocalResource, int64, error)
@@ -68,8 +68,11 @@ func (d *treeLocalDAO) Create(ctx context.Context, local *model.TreeLocalResourc
 	return nil
 }
 
-func (d *treeLocalDAO) Update(ctx context.Context, local *model.TreeLocalResource) error {
-	if err := d.db.WithContext(ctx).Model(local).Updates(local).Error; err != nil {
+func (d *treeLocalDAO) Update(ctx context.Context, id int, updates map[string]any) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	if err := d.db.WithContext(ctx).Model(&model.TreeLocalResource{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 		d.logger.Error("更新本地主机失败", zap.Error(err))
 		return err
 	}
