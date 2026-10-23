@@ -152,6 +152,17 @@ func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, er
 			strings.Join(misplaced, ", "))
 	}
 
+	// 配置文件存在却没有 webhook 根节点（含写成 `webhook:` 而值为 null）：webhook.* 全部回落到环境变量/默认值，容易是写错了文件，记告警继续启动。
+	// 只列出文件根节点下的键名，不输出值
+	if readErr == nil && !v.InConfig("webhook") {
+		roots := configFileRootKeys(v)
+		listed := "无"
+		if len(roots) > 0 {
+			listed = strings.Join(roots, ", ")
+		}
+		configWarnf("[配置告警] Webhook 配置文件 %s 中没有 webhook 根节点（或其值为空），webhook.* 将全部取环境变量/默认值；文件根节点下的键：%s", configFile, listed)
+	}
+
 	bindStructEnvVars(v, reflect.TypeOf(WebhookConfig{}), "webhook")
 
 	// SEC-02A/SEC-22：DSN 整体由 WEBHOOK_MYSQL_ADDR 注入，配置文件不写、无默认值，缺失即失败
@@ -264,6 +275,21 @@ func isMapValue(val any) bool {
 		return false
 	}
 	return reflect.TypeOf(val).Kind() == reflect.Map
+}
+
+// configFileRootKeys 返回配置文件本身根节点下的键名（排序去重），不含默认值和环境变量带来的键
+func configFileRootKeys(v *viper.Viper) []string {
+	seen := map[string]bool{}
+	var roots []string
+	for _, key := range v.AllKeys() {
+		root, _, _ := strings.Cut(key, ".")
+		if !seen[root] && v.InConfig(root) {
+			seen[root] = true
+			roots = append(roots, root)
+		}
+	}
+	sort.Strings(roots)
+	return roots
 }
 
 // decodeWebhookConfig 把逐键合并后的 webhook.* 值解码为 WebhookConfig。
