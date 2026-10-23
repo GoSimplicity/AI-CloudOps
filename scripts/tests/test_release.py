@@ -136,6 +136,20 @@ class ReleaseTests(unittest.TestCase):
 _DEFAULT_PORTS = {"http": 80, "https": 443}
 
 
+def _ascii_port(url_or_netloc_port):
+    """URL 里显式写出的端口必须是 ASCII 数字：Python 3.9/3.10 的 urllib 会把全角数字 ８８８９ 当成 8889。"""
+    import re
+    if url_or_netloc_port is not None and not re.fullmatch(r"[0-9]+", url_or_netloc_port):
+        raise ValueError(f"端口只能是 ASCII 数字: {url_or_netloc_port!r}")
+
+
+def _netloc_port(netloc):
+    # netloc 里冒号后的端口原文（IPv6 字面量跳过方括号）；没写端口返回 None
+    hostport = netloc.rpartition("@")[2]
+    tail = hostport.rpartition("]")[2] if hostport.startswith("[") else hostport
+    return tail.rpartition(":")[2] if ":" in tail else None
+
+
 def _alert_addr_target(addr):
     """解析 PROMETHEUS_ALERT_WEBHOOK_ADDR，返回 (主机名, 端口, 路径)。
 
@@ -144,6 +158,7 @@ def _alert_addr_target(addr):
     """
     from urllib.parse import urlsplit
     url = urlsplit(addr if "://" in addr else "http://" + addr)
+    _ascii_port(_netloc_port(url.netloc))
     scheme = url.scheme.lower()
     if scheme not in _DEFAULT_PORTS:
         raise ValueError(f"告警地址只允许 http/https，实际 scheme={url.scheme!r}")
@@ -159,7 +174,8 @@ def _webhook_root_port(text):
     """从 webhook.yaml 文本取 webhook 根节点下的 port，没有时返回 None。
 
     不依赖固定缩进：以 webhook: 下第一个子键的缩进为准，只认这一层的 port（更深层的嵌套键不算）。
-    值只能是纯数字（可加单/双引号，后面只能跟空白或 # 注释），8889suffix 这类写法、重复的 port、
+    值只能是 ASCII 纯数字（可加单/双引号，后面只能跟空白或“空白 + # 注释”；8889#oops、全角 ８８８９ 不算），
+    8889suffix 这类写法、重复的 port、
     超出 1-65535 都抛 ValueError。不依赖 PyYAML，macOS 自带 python3 也能跑。
     """
     import re
@@ -181,7 +197,7 @@ def _webhook_root_port(text):
             child = indent
         if indent != child or not re.match(r"port[ \t]*:", body):
             continue
-        m = re.fullmatch(r"port[ \t]*:[ \t]*(?:\"(\d+)\"|'(\d+)'|(\d+))[ \t]*(?:#.*)?", body)
+        m = re.fullmatch(r"""port[ \t]*:[ \t]*(?:"([0-9]+)"|'([0-9]+)'|([0-9]+))(?:[ \t]+#.*)?[ \t]*""", body)
         if not m:
             raise ValueError(f"webhook.port 不是纯数字: {body!r}")
         ports.append(int(next(g for g in m.groups() if g)))
@@ -319,7 +335,8 @@ class AlertAddrBoundaryTests(unittest.TestCase):
         self.assertNotEqual(_alert_addr_target("https://webhook/api/v1/alerts/receive")[1], 80)
 
     def test_rejects_bad_port(self):
-        for addr in ("http://webhook:8889suffix/x", "http://webhook:0/x", "http://webhook:65536/x"):
+        for addr in ("http://webhook:8889suffix/x", "http://webhook:0/x", "http://webhook:65536/x",
+                     "http://webhook:８８８９/x", "webhook:８８８９"):
             with self.subTest(addr=addr), self.assertRaises(ValueError):
                 _alert_addr_target(addr)
 
@@ -351,7 +368,8 @@ class WebhookYamlPortBoundaryTests(unittest.TestCase):
 
     def test_rejects_suffix_after_digits(self):
         # 负向：8889suffix 不能被截成 8889
-        for value in ("8889suffix", '"8889"suffix', "8889 suffix", '"8889suffix"', "88 89"):
+        for value in ("8889suffix", '"8889"suffix', "8889 suffix", '"8889suffix"', "88 89",
+                      "８８８９", '"８８８９"', "8889#oops", '"8889"#oops', "'8889'#oops"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 _webhook_root_port(f"webhook:\n  port: {value}\n")
 
