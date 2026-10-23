@@ -43,11 +43,40 @@ fi
 # ---------------------------------------------------------------------------
 # gitleaks: block commits that stage secrets (SEC-01A)
 # ---------------------------------------------------------------------------
+# gitleaks 最低版本 8.25.0（review3g N6）：.gitleaks.toml 使用多个 [[allowlists]]（含 targetRules/condition），
+# 该写法自 8.25.0 起才支持；更低版本的策略语义不同，且 8.19 之前没有 `gitleaks git --staged`。
+# 只接受 gitleaks version 输出的严格形式 X.Y.Z（可带前缀 v），无法解析一律视为不满足。
+GITLEAKS_MIN_MAJOR=8
+GITLEAKS_MIN_MINOR=25
+gitleaks_version_check() {
+    gl_ver_raw="$(gitleaks version 2>/dev/null | head -n 1)"
+    gl_ver="${gl_ver_raw#v}"
+    case "$gl_ver" in
+        ''|*[!0-9.]*|.*|*.|*..*) return 2 ;;
+    esac
+    gl_major="${gl_ver%%.*}"; gl_rest="${gl_ver#*.}"
+    gl_minor="${gl_rest%%.*}"; gl_patch="${gl_rest#*.}"
+    case "$gl_rest" in *.*) ;; *) return 2 ;; esac
+    case "$gl_patch" in ''|*.*) return 2 ;; esac
+    if [ "$gl_major" -gt "$GITLEAKS_MIN_MAJOR" ]; then return 0; fi
+    if [ "$gl_major" -eq "$GITLEAKS_MIN_MAJOR" ] && [ "$gl_minor" -ge "$GITLEAKS_MIN_MINOR" ]; then return 0; fi
+    return 1
+}
 run_gitleaks_staged() {
     if ! command -v gitleaks >/dev/null 2>&1; then
         echo "[PRE-COMMIT ERROR] 未找到 gitleaks，已阻止提交。" >&2
         echo "  安装: https://github.com/gitleaks/gitleaks/releases (校验 sha256 后放入 PATH)" >&2
         echo "  然后执行: scripts/setup-git-hooks.sh" >&2
+        exit 1
+    fi
+    gl_vrc=0; gitleaks_version_check || gl_vrc=$?
+    if [ "$gl_vrc" -ne 0 ]; then
+        if [ "$gl_vrc" -eq 2 ]; then
+            echo "[PRE-COMMIT ERROR] 无法解析 gitleaks 版本（gitleaks version 输出: ${gl_ver_raw:-<空>}），需要 >= ${GITLEAKS_MIN_MAJOR}.${GITLEAKS_MIN_MINOR}.0，已阻止提交。" >&2
+        else
+            echo "[PRE-COMMIT ERROR] gitleaks 版本 ${gl_ver_raw} 低于 ${GITLEAKS_MIN_MAJOR}.${GITLEAKS_MIN_MINOR}.0，已阻止提交。" >&2
+        fi
+        echo "  请升级: https://github.com/gitleaks/gitleaks/releases (校验 sha256 后放入 PATH)" >&2
         exit 1
     fi
     local repo_root tmpd f
@@ -84,14 +113,9 @@ run_gitleaks_staged() {
     # 残余风险：暂存区配置中的 [extend] path 仍按当前目录读取工作区文件（CI 侧由 gitleaks-config-check.py 拒绝）。
     # --ignore-gitleaks-allow：源码里的 "gitleaks:allow" 行内注释不再豁免任何发现（任何人都能在密钥行后加这条注释）；
     #   误报只能在 .gitleaks.toml 中按值精确放行（SEC-01A 第三轮 P3-1）。
-    # gitleaks >= 8.19 uses `gitleaks git --staged`; older versions use `gitleaks protect --staged`.
-    if gitleaks git --help 2>/dev/null | grep -q -- '--staged'; then
-        gitleaks git --pre-commit --staged --redact --no-banner --verbose --ignore-gitleaks-allow \
-            --config "$tmpd/gitleaks.toml" --gitleaks-ignore-path "$tmpd/gitleaksignore" "$repo_root"
-    else
-        gitleaks protect --staged --redact --no-banner --verbose --ignore-gitleaks-allow \
-            --config "$tmpd/gitleaks.toml" --gitleaks-ignore-path "$tmpd/gitleaksignore" --source "$repo_root"
-    fi
+    # 已保证 >= 8.25.0，直接使用 `gitleaks git --staged`（不再回退到旧的 `gitleaks protect --staged`，review3g N6）。
+    gitleaks git --pre-commit --staged --redact --no-banner --verbose --ignore-gitleaks-allow \
+        --config "$tmpd/gitleaks.toml" --gitleaks-ignore-path "$tmpd/gitleaksignore" "$repo_root"
     local rc=$?
     rm -rf "$tmpd"
     if [ $rc -ne 0 ]; then

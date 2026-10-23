@@ -36,8 +36,35 @@ else
     log_info "已设置 core.hooksPath=.githooks"
 fi
 
+# gitleaks 最低版本 8.25.0（review3g N6）：.gitleaks.toml 使用多个 [[allowlists]]（含 targetRules/condition），
+# 该写法自 8.25.0 起才支持；更低版本的策略语义不同，且 8.19 之前没有 `gitleaks git --staged`。
+# 只接受 gitleaks version 输出的严格形式 X.Y.Z（可带前缀 v），无法解析一律视为不满足。
+GITLEAKS_MIN_MAJOR=8
+GITLEAKS_MIN_MINOR=25
+gitleaks_version_check() {
+    gl_ver_raw="$(gitleaks version 2>/dev/null | head -n 1)"
+    gl_ver="${gl_ver_raw#v}"
+    case "$gl_ver" in
+        ''|*[!0-9.]*|.*|*.|*..*) return 2 ;;
+    esac
+    gl_major="${gl_ver%%.*}"; gl_rest="${gl_ver#*.}"
+    gl_minor="${gl_rest%%.*}"; gl_patch="${gl_rest#*.}"
+    case "$gl_rest" in *.*) ;; *) return 2 ;; esac
+    case "$gl_patch" in ''|*.*) return 2 ;; esac
+    if [ "$gl_major" -gt "$GITLEAKS_MIN_MAJOR" ]; then return 0; fi
+    if [ "$gl_major" -eq "$GITLEAKS_MIN_MAJOR" ] && [ "$gl_minor" -ge "$GITLEAKS_MIN_MINOR" ]; then return 0; fi
+    return 1
+}
 if command -v gitleaks >/dev/null 2>&1; then
-    log_success "gitleaks 已安装: $(gitleaks version)"
+    gl_vrc=0; gitleaks_version_check || gl_vrc=$?
+    if [ "$gl_vrc" -eq 2 ]; then
+        log_error "无法解析 gitleaks 版本（gitleaks version 输出: ${gl_ver_raw:-<空>}），需要 >= ${GITLEAKS_MIN_MAJOR}.${GITLEAKS_MIN_MINOR}.0；pre-commit 钩子会因此阻止提交。"
+        exit 1
+    elif [ "$gl_vrc" -ne 0 ]; then
+        log_error "gitleaks 版本 ${gl_ver_raw} 低于 ${GITLEAKS_MIN_MAJOR}.${GITLEAKS_MIN_MINOR}.0；pre-commit 钩子会因此阻止提交。请从 https://github.com/gitleaks/gitleaks/releases 升级。"
+        exit 1
+    fi
+    log_success "gitleaks 已安装: ${gl_ver_raw}（>= ${GITLEAKS_MIN_MAJOR}.${GITLEAKS_MIN_MINOR}.0）"
 else
     log_error "未找到 gitleaks。pre-commit 钩子会因此阻止提交。"
     log_error "请从 https://github.com/gitleaks/gitleaks/releases 下载官方二进制，校验 sha256 后放入 PATH（如 ~/.local/bin）。"
