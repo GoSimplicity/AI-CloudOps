@@ -7,9 +7,11 @@ on:
 permissions:
   contents: read
 
+# PR 的新推送可以取消旧的扫描（PR 最终以最新 head 为准）；push 不取消，否则被取消的 push 中的提交永远不会被补扫。
+# push 的 group 带 run_id 使每次运行独立：GitHub 会取消同组中“排队中”的旧运行（与 cancel-in-progress 无关）。
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # 官方发行版二进制（免费，不需要 gitleaks-action 的组织 license）
