@@ -47,7 +47,7 @@ type CronService interface {
 	UpdateCronJob(ctx context.Context, req *model.UpdateCronJobReq) error
 	DeleteCronJob(ctx context.Context, id int) error
 	GetCronJob(ctx context.Context, id int) (*model.CronJob, error)
-	GetCronJobList(ctx context.Context, req *model.GetCronJobListReq) (model.ListResp[*model.CronJob], error)
+	GetCronJobList(ctx context.Context, req *model.GetCronJobListReq) (model.CronJobListResp, error)
 	EnableCronJob(ctx context.Context, id int) error
 	DisableCronJob(ctx context.Context, id int) error
 	TriggerCronJob(ctx context.Context, id int) error
@@ -244,11 +244,11 @@ func (s *cronService) GetCronJob(ctx context.Context, id int) (*model.CronJob, e
 	return job, nil
 }
 
-func (s *cronService) GetCronJobList(ctx context.Context, req *model.GetCronJobListReq) (model.ListResp[*model.CronJob], error) {
+func (s *cronService) GetCronJobList(ctx context.Context, req *model.GetCronJobListReq) (model.CronJobListResp, error) {
 	jobs, total, err := s.cronDAO.GetCronJobList(ctx, req)
 	if err != nil {
 		s.logger.Error("获取任务列表失败", zap.Error(err))
-		return model.ListResp[*model.CronJob]{}, err
+		return model.CronJobListResp{}, err
 	}
 
 	for _, job := range jobs {
@@ -259,9 +259,12 @@ func (s *cronService) GetCronJobList(ctx context.Context, req *model.GetCronJobL
 		s.fillCreatedByName(ctx, job)
 	}
 
-	return model.ListResp[*model.CronJob]{
-		Items: jobs,
-		Total: total,
+	return model.CronJobListResp{
+		ListResp: model.ListResp[*model.CronJob]{
+			Items: jobs,
+			Total: total,
+		},
+		AllowLocalExec: s.allowLocalExec(),
 	}, nil
 }
 

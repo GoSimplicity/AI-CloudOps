@@ -122,3 +122,27 @@ func TestTriggerCronJobLocalExecSwitch(t *testing.T) {
 		}
 	}
 }
+
+func TestGetCronJobListReportsAllowLocalExec(t *testing.T) {
+	for _, allowed := range []bool{false, true} {
+		allowed := allowed
+		svc := &cronService{
+			logger:           zap.NewNop(),
+			cronDAO:          &listOnlyDAO{},
+			localExecAllowed: func() bool { return allowed },
+		}
+		resp, err := svc.GetCronJobList(context.Background(), &model.GetCronJobListReq{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.AllowLocalExec != allowed || resp.Total != 0 {
+			t.Fatalf("allowed=%v got %+v", allowed, resp)
+		}
+	}
+}
+
+type listOnlyDAO struct{ dao.CronJobDAO }
+
+func (listOnlyDAO) GetCronJobList(context.Context, *model.GetCronJobListReq) ([]*model.CronJob, int64, error) {
+	return nil, 0, nil
+}
