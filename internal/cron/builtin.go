@@ -117,7 +117,7 @@ func (btm *BuiltinTaskManager) InitializeBuiltinTasks(ctx context.Context) error
 			}
 
 			if needsUpdate {
-				if err := btm.cronDAO.UpdateCronJob(ctx, existingJob); err != nil {
+				if err := btm.cronDAO.UpdateCronJob(ctx, existingJob, &existingJob.MaxRetry); err != nil {
 					btm.logger.Error("更新内置任务失败",
 						zap.String("taskName", taskDef.Name),
 						zap.Error(err))

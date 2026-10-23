@@ -27,6 +27,7 @@ package di
 
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/config"
+	cronHandler "github.com/GoSimplicity/AI-CloudOps/internal/cron/handler"
 	"github.com/hibiken/asynq"
 )
 
@@ -44,6 +45,7 @@ func InitAsynqServer(cfg *config.Config) *asynq.Server {
 			Password: cfg.Redis.Password,
 		},
 		asynq.Config{
+			IsFailure:   cronHandler.IsTaskFailure,
 			Concurrency: 10, // 设置并发数
 		},
 	)

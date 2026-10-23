@@ -53,11 +53,15 @@ type CronService interface {
 	ValidateSchedule(ctx context.Context, req *model.ValidateScheduleReq) (*model.ValidateScheduleResp, error)
 }
 
+type taskEnqueuer interface {
+	EnqueueContext(context.Context, *asynq.Task, ...asynq.Option) (*asynq.TaskInfo, error)
+}
+
 type cronService struct {
 	logger        *zap.Logger
 	cronDAO       dao.CronJobDAO
 	userDAO       userDao.UserDAO
-	client        *asynq.Client
+	client        taskEnqueuer
 	cronScheduler *scheduler.CronScheduler
 }
 
@@ -85,6 +89,10 @@ func (s *cronService) CreateCronJob(ctx context.Context, req *model.CreateCronJo
 		return err
 	}
 
+	maxRetry := 3
+	if req.MaxRetry != nil {
+		maxRetry = *req.MaxRetry
+	}
 	job := &model.CronJob{
 		Name:           req.Name,
 		Description:    req.Description,
@@ -105,7 +113,7 @@ func (s *cronService) CreateCronJob(ctx context.Context, req *model.CreateCronJo
 		SSHWorkDir:     req.SSHWorkDir,
 		SSHEnvironment: req.SSHEnvironment,
 		Timeout:        req.Timeout,
-		MaxRetry:       req.MaxRetry,
+		MaxRetry:       maxRetry,
 		CreatedBy:      req.CreatedBy,
 		CreatedByName:  req.CreatedByName,
 	}
@@ -148,10 +156,9 @@ func (s *cronService) UpdateCronJob(ctx context.Context, req *model.UpdateCronJo
 		SSHWorkDir:     req.SSHWorkDir,
 		SSHEnvironment: req.SSHEnvironment,
 		Timeout:        req.Timeout,
-		MaxRetry:       req.MaxRetry,
 	}
 
-	if err := s.cronDAO.UpdateCronJob(ctx, job); err != nil {
+	if err := s.cronDAO.UpdateCronJob(ctx, job, req.MaxRetry); err != nil {
 		s.logger.Error("更新任务失败", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}
@@ -293,7 +300,7 @@ func (s *cronService) TriggerCronJob(ctx context.Context, id int) error {
 	// 创建Asynq任务
 	task := asynq.NewTask("cron:task", payloadBytes)
 
-	taskInfo, err := s.client.Enqueue(task, asynq.ProcessIn(0))
+	taskInfo, err := s.client.EnqueueContext(ctx, task, asynq.ProcessIn(0), asynq.MaxRetry(job.MaxRetry))
 	if err != nil {
 		s.logger.Error("入队任务失败", zap.Int("id", id), zap.Error(err))
 		return fmt.Errorf("入队任务失败: %w", err)

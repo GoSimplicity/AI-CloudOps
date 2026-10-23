@@ -120,7 +120,7 @@ type CreateCronJobReq struct {
 	SSHWorkDir     string       `json:"ssh_work_dir"`
 	SSHEnvironment KeyValueList `json:"ssh_environment"`
 	Timeout        int          `json:"timeout" binding:"omitempty,min=1,max=3600"`
-	MaxRetry       int          `json:"max_retry" binding:"omitempty,min=0,max=10"`
+	MaxRetry       *int         `json:"max_retry" binding:"omitempty,min=0,max=10"`
 	CreatedBy      int          `json:"created_by"`
 	CreatedByName  string       `json:"created_by_name"`
 }
@@ -146,7 +146,7 @@ type UpdateCronJobReq struct {
 	SSHWorkDir     string       `json:"ssh_work_dir"`
 	SSHEnvironment KeyValueList `json:"ssh_environment"`
 	Timeout        int          `json:"timeout" binding:"omitempty,min=1,max=3600"`
-	MaxRetry       int          `json:"max_retry" binding:"omitempty,min=0,max=10"`
+	MaxRetry       *int         `json:"max_retry" binding:"omitempty,min=0,max=10"`
 }
 
 type ValidateScheduleReq struct {

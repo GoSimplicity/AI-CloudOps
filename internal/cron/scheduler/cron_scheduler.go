@@ -44,12 +44,17 @@ type scheduledEntry struct {
 	signature string
 }
 
+type taskScheduler interface {
+	Register(string, *asynq.Task, ...asynq.Option) (string, error)
+	Unregister(string) error
+}
+
 type CronScheduler struct {
 	mu        sync.Mutex
 	entries   map[int]scheduledEntry
 	logger    *zap.Logger
 	cronDAO   dao.CronJobDAO
-	scheduler *asynq.Scheduler
+	scheduler taskScheduler
 	client    *asynq.Client
 }
 
@@ -179,7 +184,7 @@ func (cs *CronScheduler) scheduleJob(job *model.CronJob) error {
 	// 创建Asynq任务
 	task := asynq.NewTask("cron:task", payloadBytes)
 
-	signature := job.Schedule + string(payloadBytes)
+	signature := fmt.Sprintf("%d:%s:%s", job.MaxRetry, job.Schedule, string(payloadBytes))
 	if entry, exists := cs.entries[job.ID]; exists {
 		if entry.signature == signature {
 			return nil
@@ -190,7 +195,7 @@ func (cs *CronScheduler) scheduleJob(job *model.CronJob) error {
 		delete(cs.entries, job.ID)
 	}
 	// TaskID 是入队任务标识，注销必须使用 Register 返回的独立条目 ID
-	entryID, err := cs.scheduler.Register(job.Schedule, task, asynq.TaskID(generateEntryID(job.ID)))
+	entryID, err := cs.scheduler.Register(job.Schedule, task, asynq.TaskID(generateEntryID(job.ID)), asynq.MaxRetry(job.MaxRetry))
 	if err != nil {
 		return err
 	}

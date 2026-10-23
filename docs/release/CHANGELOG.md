@@ -125,3 +125,10 @@
 - ConfigMap列表新增data_key，对data及binary_data键名不区分大小写包含匹配，不检索内容，与原名称/namespace/labels条件并用
 - 两类列表复用通用分页，先除后乘避免超大页码/页大小溢出导致负切片索引
 - service/utils实际专项race通过，包含HTTP查询绑定、无效状态拒绝、跨页总数、二进制键名、标签缺失及MaxInt边界；真实kind联调将在镜像更新后记录
+
+## Cron 重试预算与配置编辑隔离
+
+- 手动与周期任务精确传递 max_retry，创建省略默认 3、显式 0 保留，更新省略保留旧值
+- 租约协调等待不消耗失败预算；硬崩溃恢复遵守 SDK 同一有限预算，详见 [cron-retry.md](cron-retry.md)
+- 配置编辑限定字段，防止覆盖正在执行的状态、租约与历史输出
+- 验证：Cron 与 DI 的 smoke/race、go vet 通过，真实 SQLite 验证显式 0 与运行中编辑

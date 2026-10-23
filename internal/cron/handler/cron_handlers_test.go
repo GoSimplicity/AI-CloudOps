@@ -125,3 +125,16 @@ func TestProcessTaskPreservesAdministrativeState(t *testing.T) {
 		})
 	}
 }
+
+func TestLeaseCoordinationDoesNotConsumeRetryBudget(t *testing.T) {
+	for _, tt := range []struct {
+		err     error
+		failure bool
+	}{
+		{nil, false}, {errCronLeaseBusy, false}, {errCronLeaseLost, false}, {errors.New("business failure"), true}, {asynq.ErrLeaseExpired, true},
+	} {
+		if IsTaskFailure(tt.err) != tt.failure {
+			t.Fatalf("wrong failure classification for %v", tt.err)
+		}
+	}
+}

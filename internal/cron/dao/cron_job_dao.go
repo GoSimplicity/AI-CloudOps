@@ -44,7 +44,7 @@ type CronJobDAO interface {
 	GetCronJob(ctx context.Context, id int) (*model.CronJob, error)
 	GetCronJobByName(ctx context.Context, name string) (*model.CronJob, error)
 	GetCronJobList(ctx context.Context, req *model.GetCronJobListReq) ([]*model.CronJob, int64, error)
-	UpdateCronJob(ctx context.Context, job *model.CronJob) error
+	UpdateCronJob(ctx context.Context, job *model.CronJob, maxRetry *int) error
 	DeleteCronJob(ctx context.Context, id int) error
 	UpdateCronJobStatus(ctx context.Context, id int, status model.CronJobStatus) error
 	CompareAndSwapCronJobStatus(ctx context.Context, id int, from, to model.CronJobStatus) (bool, error)
@@ -91,14 +91,20 @@ func (d *cronJobDAO) CreateCronJob(ctx context.Context, job *model.CronJob) erro
 	if job.Timeout == 0 {
 		job.Timeout = 300 // 默认5分钟超时
 	}
-	if job.MaxRetry == 0 {
-		job.MaxRetry = 3 // 默认重试3次
-	}
-
-	if err := d.db.WithContext(ctx).Create(job).Error; err != nil {
-		d.logger.Error("创建任务失败", zap.String("name", job.Name), zap.Error(err))
+	desiredRetry := job.MaxRetry
+	// GORM对default:3的int零值补默认，事务内覆盖以保留显式零及原SQL默认
+	if err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(job).Error; err != nil {
+			return err
+		}
+		if desiredRetry == 0 {
+			return tx.Model(job).Update("max_retry", 0).Error
+		}
+		return nil
+	}); err != nil {
 		return err
 	}
+	job.MaxRetry = desiredRetry
 
 	d.logger.Info("成功创建任务",
 		zap.String("name", job.Name),
@@ -166,7 +172,7 @@ func (d *cronJobDAO) GetCronJobList(ctx context.Context, req *model.GetCronJobLi
 	return jobs, count, nil
 }
 
-func (d *cronJobDAO) UpdateCronJob(ctx context.Context, job *model.CronJob) error {
+func (d *cronJobDAO) UpdateCronJob(ctx context.Context, job *model.CronJob, maxRetry *int) error {
 	if job == nil {
 		return errors.New("任务信息不能为空")
 	}
@@ -177,7 +183,7 @@ func (d *cronJobDAO) UpdateCronJob(ctx context.Context, job *model.CronJob) erro
 		return errors.New("调度表达式不能为空")
 	}
 
-	existingJob, err := d.GetCronJob(ctx, job.ID)
+	_, err := d.GetCronJob(ctx, job.ID)
 	if err != nil {
 		return err
 	}
@@ -193,17 +199,19 @@ func (d *cronJobDAO) UpdateCronJob(ctx context.Context, job *model.CronJob) erro
 		return errors.New("任务名称已存在")
 	}
 
-	job.NextRunTime = existingJob.NextRunTime
-	job.LastRunTime = existingJob.LastRunTime
-	job.LastRunStatus = existingJob.LastRunStatus
-	job.LastRunDuration = existingJob.LastRunDuration
-	job.LastRunError = existingJob.LastRunError
-	job.RunCount = existingJob.RunCount
-	job.SuccessCount = existingJob.SuccessCount
-	job.FailureCount = existingJob.FailureCount
-
-	if err := d.db.WithContext(ctx).Save(job).Error; err != nil {
-		d.logger.Error("更新任务失败", zap.Int("id", job.ID), zap.Error(err))
+	// 配置更新不写运行状态、租约、统计、结果或创建者
+	updates := map[string]interface{}{
+		"name": job.Name, "description": job.Description, "job_type": job.JobType, "schedule": job.Schedule,
+		"command": job.Command, "args": job.Args, "work_dir": job.WorkDir, "environment": job.Environment,
+		"http_method": job.HTTPMethod, "http_url": job.HTTPUrl, "http_headers": job.HTTPHeaders, "http_body": job.HTTPBody,
+		"script_type": job.ScriptType, "script_content": job.ScriptContent,
+		"ssh_resource_id": job.SSHResourceID, "ssh_command": job.SSHCommand, "ssh_work_dir": job.SSHWorkDir, "ssh_environment": job.SSHEnvironment,
+		"timeout": job.Timeout,
+	}
+	if maxRetry != nil {
+		updates["max_retry"] = *maxRetry
+	}
+	if err := d.db.WithContext(ctx).Model(&model.CronJob{}).Where("id = ?", job.ID).Updates(updates).Error; err != nil {
 		return err
 	}
 

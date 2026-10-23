@@ -48,3 +48,8 @@ func (h *CronHandlers) maintainLease(ctx context.Context, cancelExecution contex
 	}()
 	return func() error { once.Do(func() { close(stopped) }); <-finished; return leaseError }
 }
+
+// IsTaskFailure 租约协调等待不消耗业务失败预算，其他失败遵循SDK原生上限
+func IsTaskFailure(err error) bool {
+	return err != nil && !errors.Is(err, errCronLeaseBusy) && !errors.Is(err, errCronLeaseLost)
+}
