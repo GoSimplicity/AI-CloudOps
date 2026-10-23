@@ -56,7 +56,7 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 			path == "/api/not_auth/getBindIps" || path == "/api/not_auth/getTreeNodeBindIps" ||
 			strings.HasPrefix(path, "/api/monitor/prometheus_configs/") ||
 			path == "/favicon.ico" ||
-			path == "/" || path == "/health" {
+			path == "/" || path == "/health" || path == "/ready" {
 			ctx.Next()
 			return
 		}

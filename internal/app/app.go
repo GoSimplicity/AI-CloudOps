@@ -41,6 +41,7 @@ import (
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/hibiken/asynq"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
@@ -50,6 +51,7 @@ type App struct {
 	cfg          *config.Config
 	logger       *zap.Logger
 	db           *gorm.DB
+	redis        redis.Cmdable
 	server       *gin.Engine
 	bootstrap    startup.ApplicationBootstrap
 	cronManager  cron.CronManager
@@ -62,6 +64,7 @@ func NewApp(
 	cfg *config.Config,
 	logger *zap.Logger,
 	db *gorm.DB,
+	redisClient *redis.Client,
 	server *gin.Engine,
 	bootstrap startup.ApplicationBootstrap,
 	cronManager cron.CronManager,
@@ -77,6 +80,9 @@ func NewApp(
 	}
 	if db == nil {
 		return nil, fmt.Errorf("数据库实例不能为空")
+	}
+	if redisClient == nil {
+		return nil, fmt.Errorf("Redis实例不能为空")
 	}
 	if server == nil {
 		return nil, fmt.Errorf("HTTP服务实例不能为空")
@@ -101,6 +107,7 @@ func NewApp(
 		cfg:          cfg,
 		logger:       logger,
 		db:           db,
+		redis:        redisClient,
 		server:       server,
 		bootstrap:    bootstrap,
 		cronManager:  cronManager,
@@ -120,7 +127,7 @@ func (a *App) Run(ctx context.Context) error {
 	if err := a.registerAIOps(); err != nil {
 		return err
 	}
-	a.server.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
+	a.registerHealthRoutes()
 	if err := a.bootstrapAdmin(ctx); err != nil {
 		return err
 	}

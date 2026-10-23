@@ -255,7 +255,7 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	cronManager := cron.NewUnifiedCronManager(logger, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache, cronScheduler, builtinTaskManager)
 	server := InitAsynqServer(cfg)
 	cronHandlers := handler.NewCronHandlers(logger, cronJobDAO, treeLocalDAO, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache)
-	appApp, err := app.NewApp(cfg, logger, db, engine, applicationBootstrap, cronManager, server, asynqScheduler, cronHandlers)
+	appApp, err := app.NewApp(cfg, logger, db, redisClient, engine, applicationBootstrap, cronManager, server, asynqScheduler, cronHandlers)
 	if err != nil {
 		return nil, err
 	}

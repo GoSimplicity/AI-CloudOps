@@ -45,8 +45,9 @@ func InitRedis(cfg *config.Config, logger *zap.Logger) (*redis.Client, error) {
 
 	// 初始化 Redis 客户端
 	client := redis.NewClient(&redis.Options{
-		Addr:     cfg.Redis.Addr,
-		Password: cfg.Redis.Password,
+		ContextTimeoutEnabled: true,
+		Addr:                  cfg.Redis.Addr,
+		Password:              cfg.Redis.Password,
 	})
 
 	// 测试连接

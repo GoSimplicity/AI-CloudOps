@@ -114,7 +114,7 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 		}
 
 		// 跳过静态资源和WebSocket路径
-		if path == "/" || path == "/health" {
+		if path == "/" || path == "/health" || path == "/ready" {
 			c.Next()
 			return
 		}
