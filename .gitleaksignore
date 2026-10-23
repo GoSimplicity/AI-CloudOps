@@ -10,6 +10,6 @@
 # 工作树扫描（gitleaks dir / 预提交）：path:rule:line
 internal/middleware/login_test.go:generic-api-key:109
 internal/middleware/login_test.go:generic-api-key:130
-# 历史扫描（gitleaks git，CI 全量扫描）：commit:path:rule:line。这两行在 24b8315 中引入，当时行号为 106/127。
+# 历史扫描（gitleaks git，含该提交的区间或全量）：commit:path:rule:line。这两行在 24b8315 中引入，当时行号为 106/127。
 24b8315ac139a68eceef744508ac3d873ae96bda:internal/middleware/login_test.go:generic-api-key:106
 24b8315ac139a68eceef744508ac3d873ae96bda:internal/middleware/login_test.go:generic-api-key:127
