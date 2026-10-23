@@ -59,8 +59,10 @@ jobs:
             if [ -n "$base" ] && [ "$base" != "$HEAD_SHA" ]; then range="${base}..${HEAD_SHA}"; else range="-1 ${HEAD_SHA}"; fi
           fi
           echo "gitleaks scan range: ${range}"
+          # --diff-merges=first-parent：merge 提交按相对第一父提交的差异输出，
+          # 冲突解决 / evil merge 中引入的内容也会被扫描（默认 git log -p 不输出 merge 提交的差异）。
           gitleaks git --redact --no-banner --verbose --exit-code 1 \
-            --config .gitleaks.toml --log-opts="${range}" .
+            --config .gitleaks.toml --log-opts="--diff-merges=first-parent ${range}" .
 
       - name: Scan working tree (HEAD)
         if: env.GITLEAKS_SCAN_TREE == 'true'
