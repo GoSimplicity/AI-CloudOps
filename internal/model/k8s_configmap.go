@@ -56,6 +56,7 @@ type GetConfigMapListReq struct {
 	ListReq
 	ClusterID int               `json:"cluster_id" form:"cluster_id" comment:"集群ID"` // 集群ID
 	Namespace string            `json:"namespace" form:"namespace" comment:"命名空间"`   // 命名空间
+	DataKey   string            `json:"data_key" form:"data_key"`                    // 字符串及二进制数据键名，不区分大小写包含匹配
 	Labels    map[string]string `json:"labels" form:"labels" comment:"标签"`           // 标签
 }
 

@@ -121,10 +121,11 @@ type K8sYaml struct {
 // GetServiceListReq Service列表请求
 type GetServiceListReq struct {
 	ListReq
-	ClusterID int               `json:"cluster_id" form:"cluster_id"` // 集群ID
-	Namespace string            `json:"namespace" form:"namespace"`   // 命名空间
-	Type      string            `json:"type" form:"type"`             // Service类型
-	Labels    map[string]string `json:"labels" form:"labels"`         // 标签
+	ClusterID int               `json:"cluster_id" form:"cluster_id"`                         // 集群ID
+	Namespace string            `json:"namespace" form:"namespace"`                           // 命名空间
+	Type      string            `json:"type" form:"type"`                                     // Service类型
+	Status    K8sSvcStatus      `json:"status" form:"status" binding:"omitempty,oneof=1 2 3"` // 按现有派生状态筛选，0表示全部
+	Labels    map[string]string `json:"labels" form:"labels"`                                 // 标签
 }
 
 // GetServiceDetailsReq 获取Service详情请求

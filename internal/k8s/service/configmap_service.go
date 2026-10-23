@@ -99,6 +99,9 @@ func (s *configMapService) GetConfigMapList(ctx context.Context, req *model.GetC
 	// 应用过滤条件
 	entities := make([]*model.K8sConfigMap, 0, len(list.Items))
 	for _, cm := range list.Items {
+		if req.DataKey != "" && !configMapHasDataKey(&cm, req.DataKey) {
+			continue
+		}
 		entity := s.convertToK8sConfigMap(&cm, req.ClusterID)
 		// 名称过滤（使用通用的Search字段，支持不区分大小写）
 		if !utils.FilterByName(entity.Name, req.Search) {
@@ -112,25 +115,24 @@ func (s *configMapService) GetConfigMapList(ctx context.Context, req *model.GetC
 		return cm.CreatedAt
 	})
 
-	page := req.Page
-	size := req.Size
-	if page <= 0 {
-		page = 1
-	}
-	if size <= 0 {
-		size = 10
-	}
-	start := (page - 1) * size
-	end := start + size
-	total := int64(len(entities))
-	if start > len(entities) {
-		start = len(entities)
-	}
-	if end > len(entities) {
-		end = len(entities)
-	}
+	items, total := utils.Paginate(entities, req.Page, req.Size)
+	return model.ListResp[*model.K8sConfigMap]{Items: items, Total: total}, nil
+}
 
-	return model.ListResp[*model.K8sConfigMap]{Items: entities[start:end], Total: total}, nil
+// configMapHasDataKey 仅检索键名，不检索或记录数据内容
+func configMapHasDataKey(cm *corev1.ConfigMap, search string) bool {
+	search = strings.ToLower(search)
+	for key := range cm.Data {
+		if strings.Contains(strings.ToLower(key), search) {
+			return true
+		}
+	}
+	for key := range cm.BinaryData {
+		if strings.Contains(strings.ToLower(key), search) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *configMapService) GetConfigMap(ctx context.Context, req *model.GetConfigMapDetailsReq) (*model.K8sConfigMap, error) {

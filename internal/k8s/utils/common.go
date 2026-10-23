@@ -126,14 +126,14 @@ func Paginate[T any](items []T, page, size int) ([]T, int64) {
 		size = 10
 	}
 
-	start := int64((page - 1) * size)
-	end := start + int64(size)
-
-	if start >= total {
+	// 先除后乘，避免超大页码或页大小溢出后形成负切片索引
+	if page-1 > (len(items)-1)/size {
 		return []T{}, total
 	}
-	if end > total {
-		end = total
+	start := (page - 1) * size
+	end := len(items)
+	if size < len(items)-start {
+		end = start + size
 	}
 
 	return items[start:end], total

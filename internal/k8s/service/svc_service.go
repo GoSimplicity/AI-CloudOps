@@ -269,6 +269,9 @@ func (s *svcService) GetServiceList(ctx context.Context, req *model.GetServiceLi
 	if req.ClusterID <= 0 {
 		return model.ListResp[*model.K8sService]{}, fmt.Errorf("集群ID不能为空")
 	}
+	if req.Status < 0 || req.Status > model.K8sSvcStatusError {
+		return model.ListResp[*model.K8sService]{}, fmt.Errorf("Service状态必须为1、2或3")
+	}
 
 	serviceList, err := s.serviceManager.ListServices(ctx, req.ClusterID, req.Namespace)
 	if err != nil {
@@ -284,6 +287,19 @@ func (s *svcService) GetServiceList(ctx context.Context, req *model.GetServiceLi
 	// 应用过滤条件
 	var filteredServices []corev1.Service
 	for _, service := range services {
+		if req.Status != 0 && utils.GetServiceStatus(service) != req.Status {
+			continue
+		}
+		matchedLabels := true
+		for key, value := range req.Labels {
+			if actual, exists := service.Labels[key]; !exists || actual != value {
+				matchedLabels = false
+				break
+			}
+		}
+		if !matchedLabels {
+			continue
+		}
 		// 类型过滤
 		if req.Type != "" && string(service.Spec.Type) != req.Type {
 			continue

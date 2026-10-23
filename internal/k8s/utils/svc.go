@@ -40,7 +40,7 @@ import (
 )
 
 func BuildK8sServiceFromCore(clusterID int, service corev1.Service) *model.K8sService {
-	status := getServiceStatus(service)
+	status := GetServiceStatus(service)
 	age := getServiceAge(service)
 	ports := buildServicePorts(service.Spec.Ports)
 
@@ -226,34 +226,11 @@ func FilterServicesByType(services []corev1.Service, serviceType string) []corev
 }
 
 func BuildServiceListPagination(services []corev1.Service, page int, size int) ([]corev1.Service, int64) {
-	total := int64(len(services))
-	if total == 0 {
-		return []corev1.Service{}, 0
-	}
-
-	if page <= 0 {
-		page = 1
-	}
-	if size <= 0 {
-		size = 10
-	}
-
-	start := int64(page-1) * int64(size)
-	end := start + int64(size)
-
-	if start >= total {
-		return []corev1.Service{}, total
-	}
-
-	if end > total {
-		end = total
-	}
-
-	return services[start:end], total
+	return Paginate(services, page, size)
 }
 
-// getServiceStatus 获取Service状态
-func getServiceStatus(service corev1.Service) model.K8sSvcStatus {
+// GetServiceStatus 按 Service 类型与声明配置计算既有展示状态，不代表后端 Pod 健康检查
+func GetServiceStatus(service corev1.Service) model.K8sSvcStatus {
 	// 根据Service类型和状态判断
 	switch service.Spec.Type {
 	case corev1.ServiceTypeLoadBalancer:
