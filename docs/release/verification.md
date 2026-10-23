@@ -70,3 +70,7 @@ OrbStack 已恢复原 2048 MiB 内存额度；临时 MySQL/Redis 调试端口已
 ### 本轮监控采集回归
 
 `GOTOOLCHAIN=auto go test ./internal/prometheus/cache` 通过。测试包含本机临时 TLS 服务的证书拒绝行为和上游 Kubernetes SD YAML 解析；没有连接真实集群或 Prometheus。当前固定 Go 1.26.6 的本机环境需使用 `GOTOOLCHAIN=auto` 执行项目指定 1.26.10。
+
+### 本轮定时调度回归
+
+`GOTOOLCHAIN=auto go test -race ./internal/cron/scheduler` 通过。覆盖重复重载保持单条目、变更替换、查询失败保留、删除精确注销及幂等移除。底层使用真实 Asynq 内存条目，不启动 Redis 连接或实际定时执行。

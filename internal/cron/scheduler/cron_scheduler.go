@@ -29,6 +29,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/dao"
@@ -38,7 +39,14 @@ import (
 	"go.uber.org/zap"
 )
 
+type scheduledEntry struct {
+	id        string
+	signature string
+}
+
 type CronScheduler struct {
+	mu        sync.Mutex
+	entries   map[int]scheduledEntry
 	logger    *zap.Logger
 	cronDAO   dao.CronJobDAO
 	scheduler *asynq.Scheduler
@@ -89,18 +97,29 @@ func (cs *CronScheduler) StartScheduler(ctx context.Context) error {
 }
 
 func (cs *CronScheduler) loadAndScheduleJobs(ctx context.Context) error {
-	enabledStatus := model.CronJobStatusEnabled
-	jobs, _, err := cs.cronDAO.GetCronJobList(ctx, &model.GetCronJobListReq{
-		ListReq: model.ListReq{Page: 1, Size: 1000}, // 获取所有任务
-		Status:  &enabledStatus,                     // 只获取启用的任务
-	})
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	jobs, err := cs.cronDAO.GetEnabledCronJobs(ctx)
 	if err != nil {
 		cs.logger.Error("获取启用任务列表失败", zap.Error(err))
 		return err
 	}
 
-	cs.scheduler.Unregister("*")
-	cs.logger.Debug("已清除所有现有调度任务")
+	// 仅移除本管理器登记且已停用/删除的任务，不影响共享调度器其他条目
+	desired := make(map[int]bool, len(jobs))
+	for _, job := range jobs {
+		if job.JobType != model.CronJobTypeSystem {
+			desired[job.ID] = true
+		}
+	}
+	for jobID, entry := range cs.entries {
+		if !desired[jobID] {
+			if err := cs.scheduler.Unregister(entry.id); err != nil {
+				return fmt.Errorf("移除失效调度任务 %d: %w", jobID, err)
+			}
+			delete(cs.entries, jobID)
+		}
+	}
 
 	scheduledCount := 0
 	skippedCount := 0
@@ -160,18 +179,37 @@ func (cs *CronScheduler) scheduleJob(job *model.CronJob) error {
 	// 创建Asynq任务
 	task := asynq.NewTask("cron:task", payloadBytes)
 
-	// 使用任务ID作为调度ID
-	entryID := generateEntryID(job.ID)
-
-	// 注册到调度器
-	_, err = cs.scheduler.Register(job.Schedule, task, asynq.TaskID(entryID))
-	return err
+	signature := job.Schedule + string(payloadBytes)
+	if entry, exists := cs.entries[job.ID]; exists {
+		if entry.signature == signature {
+			return nil
+		}
+		if err := cs.scheduler.Unregister(entry.id); err != nil {
+			return err
+		}
+		delete(cs.entries, job.ID)
+	}
+	// TaskID 是入队任务标识，注销必须使用 Register 返回的独立条目 ID
+	entryID, err := cs.scheduler.Register(job.Schedule, task, asynq.TaskID(generateEntryID(job.ID)))
+	if err != nil {
+		return err
+	}
+	if cs.entries == nil {
+		cs.entries = make(map[int]scheduledEntry)
+	}
+	cs.entries[job.ID] = scheduledEntry{id: entryID, signature: signature}
+	return nil
 }
 
 // RemoveScheduledJob 立即从调度器中移除指定任务
 func (cs *CronScheduler) RemoveScheduledJob(jobID int) error {
-	entryID := generateEntryID(jobID)
-
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	entry, exists := cs.entries[jobID]
+	if !exists {
+		return nil
+	}
+	entryID := entry.id
 	err := cs.scheduler.Unregister(entryID)
 	if err != nil {
 		cs.logger.Warn("从调度器移除任务失败，可能任务不存在",
@@ -181,6 +219,7 @@ func (cs *CronScheduler) RemoveScheduledJob(jobID int) error {
 		return err
 	}
 
+	delete(cs.entries, jobID)
 	cs.logger.Info("成功从调度器移除任务",
 		zap.Int("jobID", jobID),
 		zap.String("entryID", entryID))
