@@ -76,9 +76,14 @@ func (c *Config) Validate() error {
 	}
 	// 失败即关闭：ENV 未设置/无法识别时同样执行生产校验（启动入口 Load 已先行拒绝这两种情况）
 	if envmode.IsProduction() {
-		for name, key := range map[string]string{"JWT_KEY1": c.JWT.Key1, "JWT_KEY2": c.JWT.Key2, "TREE_PASSWORD_ENCRYPTION_KEY": c.Tree.PasswordEncryptionKey} {
-			if len(key) < 32 || strings.HasPrefix(key, "ebe3vx") {
-				return fmt.Errorf("生产环境 %s 必须配置独立的至少32字符密钥", name)
+		// 按固定顺序检查（不用 map：map 遍历顺序随机，同样的输入每次会报不同的变量名）；错误信息只含变量名
+		for _, k := range []struct{ name, value string }{
+			{"JWT_KEY1", c.JWT.Key1},
+			{"JWT_KEY2", c.JWT.Key2},
+			{"TREE_PASSWORD_ENCRYPTION_KEY", c.Tree.PasswordEncryptionKey},
+		} {
+			if len(k.value) < 32 || strings.HasPrefix(k.value, "ebe3vx") {
+				return fmt.Errorf("生产环境 %s 必须配置独立的至少32字符密钥", k.name)
 			}
 		}
 		if len(c.Tree.PasswordEncryptionKey) != 32 {
