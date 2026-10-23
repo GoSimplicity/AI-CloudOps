@@ -2,8 +2,8 @@ package api
 
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/permission"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
-	userutils "github.com/GoSimplicity/AI-CloudOps/internal/system/utils"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
 )
@@ -17,8 +17,8 @@ func (h *DepartmentHandler) RegisterRouters(server *gin.Engine) {
 	group := server.Group("/api/department")
 	// Organization assignments are administrative state, never self-service profile data.
 	group.Use(func(c *gin.Context) {
-		claims, err := userutils.ExtractClaims(c)
-		if err != nil || claims.Username != "admin" {
+		// 超管身份由鉴权中间件根据内置超管角色写入上下文，未写入时视为非超管
+		if !permission.IsSuperAdmin(c) {
 			base.ForbiddenError(c, "仅管理员可管理部门及用户归属")
 			c.Abort()
 			return

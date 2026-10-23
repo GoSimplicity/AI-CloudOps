@@ -28,6 +28,8 @@ package middleware
 import (
 	"strings"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/permission"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
@@ -152,14 +154,27 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 			return
 		}
 
-		if path == "/api/user/signup" && user.Username != "admin" {
+		// 特权只来自内置超管角色（code=super_admin 且 is_system=1 且启用），不再按用户名判断
+		roles, err := am.roleService.GetUserRoles(c, user.Uid)
+		if err != nil {
+			base.ErrorWithMessage(c, "获取用户角色失败")
+			c.Abort()
+			return
+		}
+		if roles == nil {
+			roles = &model.ListResp[*model.Role]{}
+		}
+		super := permission.HasSuperAdminRole(roles.Items)
+		permission.MarkSuperAdmin(c, super)
+
+		if path == "/api/user/signup" && !super {
 			base.ForbiddenError(c, "仅管理员可创建用户")
 			c.Abort()
 			return
 		}
 
-		// 管理员放行
-		if user.Username == "admin" {
+		// 超级管理员放行
+		if super {
 			c.Next()
 			return
 		}
@@ -169,13 +184,6 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 		methodCode, exists := methodMapping[method]
 		if !exists {
 			base.ErrorWithMessage(c, "不支持的HTTP方法")
-			c.Abort()
-			return
-		}
-
-		roles, err := am.roleService.GetUserRoles(c, user.Uid)
-		if err != nil {
-			base.ErrorWithMessage(c, "获取用户角色失败")
 			c.Abort()
 			return
 		}

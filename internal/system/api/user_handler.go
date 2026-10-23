@@ -31,6 +31,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/permission"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	userutils "github.com/GoSimplicity/AI-CloudOps/internal/system/utils"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
@@ -223,13 +224,14 @@ func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
 	}
 	req.ID = id
 
-	if uc.Username != "admin" && uc.Uid != req.ID {
+	super := permission.IsSuperAdmin(ctx)
+	if !super && uc.Uid != req.ID {
 		base.ForbiddenError(ctx, "无权限修改该用户信息")
 		return
 	}
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.UpdateProfile(ctx.Request.Context(), &req, uc.Username == "admin")
+		return nil, h.service.UpdateProfile(ctx.Request.Context(), &req, super)
 	})
 }
 
