@@ -139,3 +139,10 @@
 - 修复 HTTP-SD 节点 ID 保存、地址默认端口和 release 容器地址，保留原有查询参数
 - 完整生成配置参与缓存摘要，令牌等作业字段变化能刷新
 - 验证：本地真实 HTTPS 认证/CA、配置解析、缓存轮换与日志检查、race/vet、全仓 go test 通过；实际发布 v3.2.1 promtool 无网络临时容器验收通过，见 [prometheus-scrape-auth.md](prometheus-scrape-auth.md)
+
+## 公共 HTTP-SD 输入限量
+
+- 双路由保留 Prometheus raw target-group 成功协议，节点 ID 保序去重后读取，每次最多 100 个不同节点
+- 参数和查询串长度有界，无效输入在数据库读取前返回 400；服务层同样校验边界
+- 修复 IPv6 目标地址编码，保留稳定目标顺序与请求取消
+- 真实 Gin/httptest 与服务回归、race/vet 通过，详见 [http-sd-input.md](http-sd-input.md)

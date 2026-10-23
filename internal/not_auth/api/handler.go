@@ -54,28 +54,49 @@ func (n *NotAuthHandler) RegisterRouters(server *gin.Engine) {
 
 // GetBindIps 获取绑定IP地址
 func (n *NotAuthHandler) GetBindIps(ctx *gin.Context) {
+	if len(ctx.Request.URL.RawQuery) > service.MaxDiscoveryQueryLength {
+		base.BadRequest(ctx, base.StatusError, nil, "查询参数过长")
+		return
+	}
 	port, err := base.GetQueryParam[int](ctx, "port")
 	if err != nil {
-		base.ErrorWithMessage(ctx, "参数错误: "+err.Error())
+		base.BadRequest(ctx, base.StatusError, nil, "port 必须是整数")
 		return
 	}
 
 	idsStr, err := base.GetQueryParam[string](ctx, "tree_node_ids")
 	if err != nil || idsStr == "" {
-		base.ErrorWithMessage(ctx, "参数错误: 缺少tree_node_ids")
+		base.BadRequest(ctx, base.StatusError, nil, "参数错误: 缺少tree_node_ids")
 		return
 	}
 
-	// 解析逗号分隔的ID
+	if len(idsStr) > service.MaxDiscoveryIDsLength {
+		base.BadRequest(ctx, base.StatusError, nil, "tree_node_ids 过长")
+		return
+	}
+	// 解析后统一去重与限量，拒绝无效片段，避免悄悄进行部分查询
 	var ids []int
 	for _, seg := range strings.Split(idsStr, ",") {
 		seg = strings.TrimSpace(seg)
 		if seg == "" {
 			continue
 		}
-		if num, convErr := strconv.Atoi(seg); convErr == nil {
-			ids = append(ids, num)
+		num, convErr := strconv.Atoi(seg)
+		if convErr != nil {
+			base.BadRequest(ctx, base.StatusError, nil, "tree_node_ids 必须是正整数")
+			return
 		}
+		ids = append(ids, num)
+	}
+
+	ids, err = service.NormalizeDiscoveryNodeIDs(ids)
+	if err != nil {
+		base.BadRequest(ctx, base.StatusError, nil, err.Error())
+		return
+	}
+	if port < 1 || port > 65535 {
+		base.BadRequest(ctx, base.StatusError, nil, "端口无效")
+		return
 	}
 
 	res, err := n.svc.BuildPrometheusServiceDiscovery(ctx.Request.Context(), port, ids)

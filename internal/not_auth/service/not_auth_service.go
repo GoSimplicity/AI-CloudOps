@@ -28,6 +28,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 
 	treeDao "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
@@ -35,6 +37,40 @@ import (
 	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"go.uber.org/zap"
 )
+
+const (
+	// MaxDiscoveryNodeIDs 限制一次公共服务发现的数据库扇出
+	MaxDiscoveryNodeIDs     = 100
+	MaxDiscoveryIDValues    = 1000
+	MaxDiscoveryIDsLength   = 4096
+	MaxDiscoveryQueryLength = 8192
+)
+
+// NormalizeDiscoveryNodeIDs 保序去重，直接调用服务也必须遵守同一边界
+func NormalizeDiscoveryNodeIDs(ids []int) ([]int, error) {
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("tree_node_ids 不能为空")
+	}
+	if len(ids) > MaxDiscoveryIDValues {
+		return nil, fmt.Errorf("tree_node_ids 条目过多")
+	}
+	unique := make([]int, 0, min(len(ids), MaxDiscoveryNodeIDs))
+	seen := make(map[int]struct{}, cap(unique))
+	for _, id := range ids {
+		if id <= 0 {
+			return nil, fmt.Errorf("tree_node_ids 必须是正整数")
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		if len(unique) >= MaxDiscoveryNodeIDs {
+			return nil, fmt.Errorf("tree_node_ids 最多包含 %d 个不同节点", MaxDiscoveryNodeIDs)
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	return unique, nil
+}
 
 type NotAuthService interface {
 	BuildPrometheusServiceDiscovery(ctx context.Context, port int, treeNodeIDs []int) ([]*targetgroup.Group, error)
@@ -57,9 +93,11 @@ func (n *notAuthService) BuildPrometheusServiceDiscovery(ctx context.Context, po
 	if port <= 0 || port > 65535 {
 		return nil, fmt.Errorf("端口无效")
 	}
-	if len(treeNodeIDs) == 0 {
-		return nil, fmt.Errorf("tree_node_ids 不能为空")
+	ids, err := NormalizeDiscoveryNodeIDs(treeNodeIDs)
+	if err != nil {
+		return nil, err
 	}
+	treeNodeIDs = ids
 	if n.treeDao == nil {
 		return nil, fmt.Errorf("内部配置缺失: TreeNodeDAO 未初始化")
 	}
@@ -68,6 +106,9 @@ func (n *notAuthService) BuildPrometheusServiceDiscovery(ctx context.Context, po
 	var orderedAddrs []string
 
 	for _, nodeID := range treeNodeIDs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		node, err := n.treeDao.GetNode(ctx, nodeID)
 		if err != nil {
 			return nil, err
@@ -76,7 +117,7 @@ func (n *notAuthService) BuildPrometheusServiceDiscovery(ctx context.Context, po
 			if res.IpAddr == "" {
 				continue
 			}
-			addr := fmt.Sprintf("%s:%d", res.IpAddr, port)
+			addr := net.JoinHostPort(res.IpAddr, strconv.Itoa(port))
 			if _, ok := targetsSet[addr]; ok {
 				continue
 			}
