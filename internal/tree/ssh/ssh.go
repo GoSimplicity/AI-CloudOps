@@ -1,6 +1,7 @@
 package ssh
 
 import (
+	"context"
 	"fmt"
 	sshclient "github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
 	"net"
@@ -16,8 +17,10 @@ import (
 
 type EcsSSH interface {
 	Connect(ip string, port int, username string, password string, key string, mode int8, userID int) error
+	ConnectContext(context.Context, string, int, string, string, string, int8, int) error
 	AddPublicKeyToRemoteHost(publicKey string) error
 	Run(command string) (string, error)
+	RunContext(context.Context, string) (string, error)
 	Close() error
 	Web2SSH(ws *websocket.Conn)
 }
@@ -39,6 +42,9 @@ type ecsSSH struct {
 
 // NewSSH 创建新的SSH连接管理器
 func NewSSH(logger *zap.Logger) EcsSSH {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	return &ecsSSH{
 		logger:   logger,
 		Sessions: make(map[int]*ssh.Session), // 初始化会话映射表
@@ -47,6 +53,9 @@ func NewSSH(logger *zap.Logger) EcsSSH {
 
 // Connect 建立SSH连接
 func (s *ecsSSH) Connect(ip string, port int, username string, password string, key string, mode int8, userID int) error {
+	return s.ConnectContext(context.Background(), ip, port, username, password, key, mode, userID)
+}
+func (s *ecsSSH) ConnectContext(ctx context.Context, ip string, port int, username string, password string, key string, mode int8, userID int) error {
 	if ip == "" {
 		return fmt.Errorf("IP地址不能为空")
 	}
@@ -118,7 +127,7 @@ func (s *ecsSSH) Connect(ip string, port int, username string, password string, 
 
 	// 建立SSH连接
 	addr := net.JoinHostPort(ip, strconv.Itoa(port))
-	sshClient, err := sshclient.DialWithTimeout("tcp", addr, config)
+	sshClient, err := sshclient.DialContext(ctx, "tcp", addr, config)
 	if err != nil {
 		s.logger.Error("SSH连接失败",
 			zap.String("地址", addr),
@@ -129,8 +138,15 @@ func (s *ecsSSH) Connect(ip string, port int, username string, password string, 
 	s.Client = sshClient
 	s.logger.Info("SSH连接成功", zap.String("地址", addr))
 
-	// 创建新的SSH会话
+	// 创建新的SSH会话也受请求取消约束
+	stop := context.AfterFunc(ctx, func() { _ = sshClient.Close() })
+	defer stop()
 	session, err := s.Client.NewSession()
+	if ctx.Err() != nil {
+		_ = sshClient.Close()
+		s.Client = nil
+		return ctx.Err()
+	}
 	if err != nil {
 		s.logger.Error("创建SSH会话失败", zap.Error(err))
 		err := s.Client.Close()
@@ -158,11 +174,10 @@ func (s *ecsSSH) AddPublicKeyToRemoteHost(publicKey string) error {
 		return err
 	}
 
-	result, err := s.Run(command)
+	_, err = s.Run(command)
 	if err != nil {
 		s.logger.Error("添加公钥到远程主机失败",
-			zap.Error(err),
-			zap.String("命令结果", result))
+			zap.Error(err))
 		return fmt.Errorf("添加公钥失败: %w", err)
 	}
 
@@ -172,47 +187,21 @@ func (s *ecsSSH) AddPublicKeyToRemoteHost(publicKey string) error {
 
 // Run 执行单个Shell命令
 func (s *ecsSSH) Run(command string) (string, error) {
-	if command == "" {
-		return "", fmt.Errorf("命令不能为空")
-	}
-
-	// 如果客户端未连接，尝试重新连接
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	return s.RunContext(ctx, command)
+}
+func (s *ecsSSH) RunContext(ctx context.Context, command string) (string, error) {
 	if s.Client == nil {
-		s.logger.Warn("SSH客户端未连接，尝试重新连接")
-		if err := s.Connect(s.IP, s.Port, s.Username, s.Password, s.Key, s.Mode, s.UserID); err != nil {
-			return "", fmt.Errorf("重新连接失败: %w", err)
+		if err := s.ConnectContext(ctx, s.IP, s.Port, s.Username, s.Password, s.Key, s.Mode, s.UserID); err != nil {
+			return "", err
 		}
 	}
-
-	session, err := s.Client.NewSession()
-	if err != nil {
-		s.logger.Error("创建命令执行会话失败", zap.Error(err))
-		return "", fmt.Errorf("创建会话失败: %w", err)
-	}
-
-	// 确保会话在函数结束时关闭
-	defer func() {
-		if closeErr := session.Close(); closeErr != nil {
-			s.logger.Error("关闭会话失败", zap.Error(closeErr))
-		}
-	}()
-
-	s.logger.Debug("执行命令", zap.Int("命令长度", len(command)))
-	buf, err := session.CombinedOutput(command)
-	s.LastResult = string(buf)
-
-	if err != nil {
-		s.logger.Error("命令执行失败",
-			zap.Int("命令长度", len(command)),
-			zap.Int("输出长度", len(s.LastResult)),
-			zap.Error(err))
-		return s.LastResult, fmt.Errorf("执行命令失败: %w", err)
-	}
-
-	s.logger.Debug("命令执行成功",
-		zap.Int("命令长度", len(command)),
-		zap.String("输出长度", fmt.Sprintf("%d字符", len(s.LastResult))))
-	return s.LastResult, nil
+	output, err := sshclient.RunContext(ctx, s.Client, command)
+	s.sessionMu.Lock()
+	s.LastResult = output
+	s.sessionMu.Unlock()
+	return output, err
 }
 
 // Close 关闭SSH连接和所有会话

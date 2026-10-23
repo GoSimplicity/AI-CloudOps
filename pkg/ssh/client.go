@@ -26,6 +26,7 @@
 package ssh
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strconv"
@@ -61,8 +62,10 @@ type Config struct {
 type Client interface {
 	// Connect 建立SSH连接
 	Connect(config *Config) error
+	ConnectContext(context.Context, *Config) error
 	// Run 执行单个命令
 	Run(command string) (string, error)
+	RunContext(context.Context, string) (string, error)
 	// CreateSession 创建新的SSH会话
 	CreateSession(userID int) error
 	GetSession(userID int) *ssh.Session
@@ -98,7 +101,8 @@ func NewClient(logger *zap.Logger) Client {
 }
 
 // Connect 建立SSH连接
-func (c *client) Connect(config *Config) error {
+func (c *client) Connect(config *Config) error { return c.ConnectContext(context.Background(), config) }
+func (c *client) ConnectContext(ctx context.Context, config *Config) error {
 	if err := c.validateConfig(config); err != nil {
 		return fmt.Errorf("配置验证失败: %w", err)
 	}
@@ -134,7 +138,7 @@ func (c *client) Connect(config *Config) error {
 
 	// 建立连接
 	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
-	sshClient, err := DialWithTimeout("tcp", addr, sshConfig)
+	sshClient, err := DialContext(ctx, "tcp", addr, sshConfig)
 	if err != nil {
 		c.logger.Error("SSH连接失败",
 			zap.String("地址", addr),
@@ -151,42 +155,12 @@ func (c *client) Connect(config *Config) error {
 
 // Run 执行单个命令
 func (c *client) Run(command string) (string, error) {
-	if command == "" {
-		return "", fmt.Errorf("命令不能为空")
-	}
-
-	if c.sshClient == nil {
-		return "", fmt.Errorf("SSH客户端未连接")
-	}
-
-	session, err := c.sshClient.NewSession()
-	if err != nil {
-		c.logger.Error("创建命令执行会话失败", zap.Error(err))
-		return "", fmt.Errorf("创建会话失败: %w", err)
-	}
-	defer func() {
-		if closeErr := session.Close(); closeErr != nil {
-			c.logger.Error("关闭会话失败", zap.Error(closeErr))
-		}
-	}()
-
-	c.logger.Debug("执行命令", zap.Int("命令长度", len(command)))
-	output, err := session.CombinedOutput(command)
-	result := string(output)
-
-	if err != nil {
-		c.logger.Error("命令执行失败",
-			zap.Int("命令长度", len(command)),
-			zap.Int("输出长度", len(result)),
-			zap.Error(err))
-		return result, fmt.Errorf("执行命令失败: %w", err)
-	}
-
-	c.logger.Debug("命令执行成功",
-		zap.Int("命令长度", len(command)),
-		zap.Int("输出长度", len(result)))
-
-	return result, nil
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	return c.RunContext(ctx, command)
+}
+func (c *client) RunContext(ctx context.Context, command string) (string, error) {
+	return RunContext(ctx, c.sshClient, command)
 }
 
 // CreateSession 创建SSH会话
@@ -249,11 +223,10 @@ func (c *client) AddPublicKey(publicKey string) error {
 		return err
 	}
 
-	result, err := c.Run(command)
+	_, err = c.Run(command)
 	if err != nil {
 		c.logger.Error("添加公钥到远程主机失败",
-			zap.Error(err),
-			zap.String("命令结果", result))
+			zap.Error(err))
 		return fmt.Errorf("添加公钥失败: %w", err)
 	}
 

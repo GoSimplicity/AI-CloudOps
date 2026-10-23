@@ -1,6 +1,7 @@
 package ssh
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -8,31 +9,46 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// DialWithTimeout 将连接期限覆盖 TCP 拨号与 SSH 握手，成功后清除会话期限
+// DialWithTimeout 保留既有入口，期限覆盖TCP拨号与完整SSH握手
 func DialWithTimeout(network, address string, config *ssh.ClientConfig) (*ssh.Client, error) {
-	if config == nil {
-		return nil, fmt.Errorf("SSH 配置不能为空")
+	return DialContext(context.Background(), network, address, config)
+}
+
+func DialContext(ctx context.Context, network, address string, config *ssh.ClientConfig) (*ssh.Client, error) {
+	if ctx == nil || config == nil {
+		return nil, fmt.Errorf("SSH上下文和配置不能为空")
 	}
 	timeout := config.Timeout
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
-	deadline := time.Now().Add(timeout)
-	conn, err := net.DialTimeout(network, address, timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	conn, err := (&net.Dialer{}).DialContext(ctx, network, address)
 	if err != nil {
 		return nil, err
 	}
+	deadline, _ := ctx.Deadline()
 	if err := conn.SetDeadline(deadline); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, err
 	}
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
 	connection, channels, requests, err := ssh.NewClientConn(conn, address, config)
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return nil, err
 	}
+	if !stop() || ctx.Err() != nil {
+		_ = connection.Close()
+		return nil, ctx.Err()
+	}
 	if err := conn.SetDeadline(time.Time{}); err != nil {
-		connection.Close()
+		_ = connection.Close()
 		return nil, err
 	}
 	return ssh.NewClient(connection, channels, requests), nil
