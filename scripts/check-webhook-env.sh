@@ -13,7 +13,8 @@
 #   webhook.port  不带符号、不带前导零的十进制整数，1-65535（loader 会把 0080 当 80，这里算不合规）
 #   fixed_workers / default_upgrade_minutes / common_map_renew_interval_seconds  十进制整数 >= 1
 #   im_feishu.request_timeout_seconds  十进制整数 >= 0（0 = 不设超时，合规但生产不推荐，输出“告警”）
-#   同一层重复的键（如 port 和 PORT 同写，键名不区分大小写）→ 不合规
+#   同一层重复的键（port 和 PORT 同写，或任意仅大小写不同 / 完全相同的同名键，如 front_domain 与 FRONT_DOMAIN、
+#                 im_feishu 下的 app_id 与 APP_ID；loader 键名不区分大小写，结果未定义）→ 不合规（review3g）
 # 退出码: 0 = 无不合规（可能有告警），1 = 有不合规，2 = 用法错误或文件不可读。
 # 兼容 POSIX sh / bash --posix / macOS（bash 3.2、BSD awk）。
 set -u
@@ -22,7 +23,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --config) [ $# -ge 2 ] || { echo "--config 需要参数" >&2; exit 2; }; CFG="$2"; shift 2 ;;
         --env-file) [ $# -ge 2 ] || { echo "--env-file 需要参数" >&2; exit 2; }; ENVF="$2"; shift 2 ;;
-        -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
         *) echo "未知参数: $1" >&2; exit 2 ;;
     esac
 done
@@ -54,6 +55,7 @@ envval() {
 # 只有 5 个检查字段输出值，其余键（含 mysql.addr、app_secret）只输出键名。
 parse_cfg() {
     awk '
+    BEGIN { li = -1; sd = 0 }
     function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
     function val(s,   q, i) {          # 去注释、去外层引号；带引号时保留引号内原样（含空格）
         s = trim(s)
@@ -71,6 +73,15 @@ parse_cfg() {
         c = index(line, ":"); if (c == 0) next
         k = tolower(trim(substr(line, 1, c - 1))); gsub(/^["\047]|["\047]$/, "", k)
         rest = substr(line, c + 1)
+        # 重复键（review3g）：按缩进维护键路径，同一父节点下小写后相同的键算重复；列表（- 开头）里的键不参与
+        if (li >= 0 && ind <= li && line !~ /^-/) li = -1
+        if (line ~ /^-/) { if (li < 0 || ind < li) li = ind }
+        else if (li < 0) {
+            while (sd > 0 && sind[sd] >= ind) sd--
+            full = (sd > 0 ? skey[sd] "." k : k)
+            if (++seen[full] == 2) print "DUP\t" full
+            sd++; sind[sd] = ind; skey[sd] = full
+        }
         if (ind == 0) {
             print "TOP\t" k
             inwh = 0; inim = 0
@@ -117,6 +128,11 @@ if [ -n "$CFG" ]; then
     else say "配置文件根节点" "告警（没有 webhook 根节点或其值为空：loader 只告警，webhook.* 全部取环境变量/默认值）"; WARN=$((WARN+1)); fi
 else
     say "配置文件根节点" "未检查（没有 --config）"
+fi
+if [ -n "$CFG" ]; then
+    dups="$(grep "^DUP${TAB}" "$P" | cut -f2 | tr '\n' ' ' | sed 's/ $//; s/ /, /g')"
+    if [ -n "$dups" ]; then say "配置文件重复键" "不合规（同一层有仅大小写不同或完全相同的键：${dups}；loader 键名不区分大小写，结果未定义）"; NG=$((NG+1))
+    else say "配置文件重复键" "合规"; fi
 fi
 
 # ---------- 字段 ----------

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# review3f：scripts/check-webhook-env.sh 的回归测试（规则对应 sched/w1-mantou 0146077 的 loader 校验）。
+# review3f/review3g：scripts/check-webhook-env.sh 的回归测试（规则对应 sched/w1-mantou 0146077 的 loader 校验）。
 # 每个用例分别用 sh、bash、bash --posix 运行被测脚本（机器上没有的解释器跳过），断言退出码与指定字段的结论；
 # 另断言输出里不出现任何取值（合成的哨兵数字 / 合成密钥）。只读：样本写在 mktemp 目录；config/ 只读取。
 # 用法: scripts/tests/security/test-check-webhook-env.sh      兼容 macOS（bash 3.2 / BSD grep、sed、awk）。
@@ -57,6 +57,46 @@ y pboth "webhook:
 y tmo0 "webhook:
   im_feishu:
     request_timeout_seconds: 0"
+# review3g：任意仅大小写不同 / 完全相同的同名键
+y dupfront "webhook:
+  front_domain: a
+  port: \"8889\"
+  FRONT_DOMAIN: b"
+y dupim "webhook:
+  im_feishu:
+    private_robot_app_id: \"$SEC\"
+    request_timeout_seconds: 10
+    PRIVATE_ROBOT_APP_ID: \"$SEC\""
+y dupimblock "webhook:
+  im_feishu:
+    request_timeout_seconds: 10
+  IM_FEISHU:
+    group_message_api: x"
+y dupsame "webhook:
+  min_workers: 1
+  min_workers: 2"
+y duproot "webhook:
+  port: \"8889\"
+Webhook:
+  port: \"8890\""
+y dupmysql "webhook:
+  port: \"8889\"
+mysql:
+  addr: \"u:$SEC@tcp(h:1)/d\"
+  ADDR: \"u:$SEC@tcp(h:1)/d\""
+y nodup "webhook:
+  port: \"8889\"
+  im_feishu:
+    port: 1
+    request_timeout_seconds: 10
+mysql:
+  port: 3306
+extra:
+  - name: a
+    port: 1
+  - name: b
+    port: 2
+  NAME: c"
 y emptyval "webhook:
   port: \"\""
 y sentinel "webhook:
@@ -89,8 +129,8 @@ case_() {
     done
 }
 C="--config"
-case_ "仓库形态 yaml、无环境变量" 0 "配置文件根节点: 合规|webhook.port: 合规（配置文件）|webhook.fixed_workers: 合规（内置默认值）|webhook.im_feishu.request_timeout_seconds: 合规（配置文件）" -- -- $C "$TMP/repo.yaml"
-case_ "仓库 config/webhook.yaml + env.example" 0 "配置文件根节点: 合规|结果: 合规（告警 0 项）" -- -- $C "$REPO/config/webhook.yaml" --env-file "$REPO/env.example"
+case_ "仓库形态 yaml、无环境变量" 0 "配置文件根节点: 合规|配置文件重复键: 合规|webhook.port: 合规（配置文件）|webhook.fixed_workers: 合规（内置默认值）|webhook.im_feishu.request_timeout_seconds: 合规（配置文件）" -- -- $C "$TMP/repo.yaml"
+case_ "仓库 config/webhook.yaml + env.example" 0 "配置文件根节点: 合规|配置文件重复键: 合规|结果: 合规（告警 0 项）" -- -- $C "$REPO/config/webhook.yaml" --env-file "$REPO/env.example"
 case_ "平铺 webhook 字段" 1 "配置文件根节点: 不合规（根节点下有 webhook 字段 port, fixed_workers" -- -- $C "$TMP/flat.yaml"
 case_ "平铺大写 PORT" 1 "配置文件根节点: 不合规（根节点下有 webhook 字段 port" -- -- $C "$TMP/flatPORT.yaml"
 case_ "无根节点只有 mysql" 0 "配置文件根节点: 告警|结果: 合规（告警 1 项）" -- -- $C "$TMP/noroot.yaml"
@@ -116,7 +156,15 @@ for v in 0080 0 65536 abc " 9998 "; do
     case_ "WEBHOOK_PORT='$v'" 1 "webhook.port: 不合规（环境变量 WEBHOOK_PORT" -- "WEBHOOK_PORT=$v" --
 done
 case_ "WEBHOOK_PORT=65535" 0 "webhook.port: 合规（环境变量 WEBHOOK_PORT）" -- WEBHOOK_PORT=65535 --
-case_ "port 与 PORT 同写" 1 "webhook.port: 不合规（配置文件同一层重复写了 port" -- -- $C "$TMP/pboth.yaml"
+case_ "port 与 PORT 同写" 1 "webhook.port: 不合规（配置文件同一层重复写了 port|配置文件重复键: 不合规（同一层有仅大小写不同或完全相同的键：webhook.port；" -- -- $C "$TMP/pboth.yaml"
+case_ "port 与 PORT 同写 + WEBHOOK_PORT 已设" 1 "webhook.port: 不合规（配置文件同一层重复写了 port|配置文件重复键: 不合规" -- WEBHOOK_PORT=9001 -- $C "$TMP/pboth.yaml"
+case_ "front_domain 与 FRONT_DOMAIN 同写" 1 "配置文件重复键: 不合规（同一层有仅大小写不同或完全相同的键：webhook.front_domain；|webhook.port: 合规（配置文件）" -- -- $C "$TMP/dupfront.yaml"
+case_ "im_feishu 下 app_id 大小写重复（值不回显）" 1 "配置文件重复键: 不合规（同一层有仅大小写不同或完全相同的键：webhook.im_feishu.private_robot_app_id；" -- -- $C "$TMP/dupim.yaml"
+case_ "im_feishu 与 IM_FEISHU 两个块" 1 "配置文件重复键: 不合规（同一层有仅大小写不同或完全相同的键：webhook.im_feishu；" -- -- $C "$TMP/dupimblock.yaml"
+case_ "完全相同的键写两次" 1 "配置文件重复键: 不合规（同一层有仅大小写不同或完全相同的键：webhook.min_workers；" -- -- $C "$TMP/dupsame.yaml"
+case_ "webhook 与 Webhook 两个根" 1 "配置文件根节点: 不合规（webhook 根节点重复）|配置文件重复键: 不合规（同一层有仅大小写不同或完全相同的键：webhook, webhook.port；" -- -- $C "$TMP/duproot.yaml"
+case_ "mysql 下 addr 与 ADDR（值不回显）" 1 "配置文件重复键: 不合规（同一层有仅大小写不同或完全相同的键：mysql.addr；" -- -- $C "$TMP/dupmysql.yaml"
+case_ "不同父节点同名、列表项同名不算重复" 0 "配置文件重复键: 合规|结果: 合规" -- -- $C "$TMP/nodup.yaml"
 case_ "yaml 空值" 1 "webhook.port: 不合规（配置文件里是空值" -- -- $C "$TMP/emptyval.yaml"
 case_ "环境变量覆盖文件" 0 "webhook.common_map_renew_interval_seconds: 合规（环境变量" -- WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS=5 -- $C "$TMP/zero.yaml"
 case_ "空环境变量视为未设置" 1 "webhook.common_map_renew_interval_seconds: 不合规（配置文件：小于 1" -- WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS= -- $C "$TMP/zero.yaml"
