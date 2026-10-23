@@ -17,7 +17,9 @@ expect_tracked() { if ign "$1"; then echo "FAIL [模板应被跟踪] $1 被忽�
 expect_ignored() { if ign "$1"; then echo "PASS [应被忽略] $1"; else echo "FAIL [应被忽略] $1 未被忽略（可被 git add 提交）"; FAILS=$((FAILS+1)); fi; }
 
 # 1) 仓库中当前被跟踪的所有 *.example 模板都不能被忽略
-while IFS= read -r f; do expect_tracked "$f"; done < <(git -C "$REPO" ls-files -- '*.example' | sort)
+# 不用进程替换 "< <(...)"：macOS bash 3.2 的 --posix 模式下是语法错误（review3h 遗留项）
+git -C "$REPO" ls-files -- '*.example' | sort >"$TMP/examples.txt"
+while IFS= read -r f; do expect_tracked "$f"; done <"$TMP/examples.txt"
 # 2) 被 .env.* 覆盖的"伪模板"必须仍被忽略
 expect_ignored ".env.example"
 expect_ignored ".env.prod.example"

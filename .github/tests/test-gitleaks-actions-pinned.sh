@@ -10,6 +10,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib-gitleaks-workflow.sh"
 gl_parse_args "${ARGS[@]+"${ARGS[@]}"}"
 
 gl_src "$GL_WORKFLOW" >"$GL_TMP/wf.yml"
+# 不用进程替换 "< <(...)"：macOS bash 3.2 的 --posix 模式下是语法错误（且脚本以 rc=0、0 个 PASS 结束，review3h 遗留项）
+grep -E '^[[:space:]]*-?[[:space:]]*uses:' "$GL_TMP/wf.yml" >"$GL_TMP/uses.txt" || true
+[ -s "$GL_TMP/uses.txt" ] || { echo "FAIL [uses] 工作流中没有找到任何 uses: 行"; GL_FAILS=$((GL_FAILS+1)); }
 while IFS= read -r line; do
     spec="$(sed -E 's/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*([^ #]+).*/\1/' <<<"$line")"
     action="${spec%@*}"; ref="${spec#*@}"; tag="$(grep -oE '#[[:space:]]*v[0-9][^ ]*' <<<"$line" | tr -d '# ' || true)"
@@ -24,7 +27,7 @@ while IFS= read -r line; do
     else
         echo "FAIL [uses] ${action}@${ref} 未固定到完整 commit SHA"; GL_FAILS=$((GL_FAILS+1))
     fi
-done < <(grep -E '^[[:space:]]*-?[[:space:]]*uses:' "$GL_TMP/wf.yml")
+done <"$GL_TMP/uses.txt"
 
 # actions/checkout 步骤的 with: 中需要 persist-credentials: false
 if python3 - "$GL_TMP/wf.yml" <<'PY'; then echo "PASS [checkout] persist-credentials: false"; else echo "FAIL [checkout] 未设置 persist-credentials: false"; GL_FAILS=$((GL_FAILS+1)); fi
