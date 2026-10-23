@@ -9,3 +9,10 @@
 本阶段不代表 1.0 生产就绪；其余验收项见 `verification.md`。
 
 - 远端验证发现新增工具测试排在 Checkout 之前，已修正顺序；本地工具测试保持通过
+
+## 2026-10-23：监控采集证书与服务发现
+
+- Kubernetes 指标采集恢复 TLS 证书校验，保留配置的目标 CA 和 token
+- Kubernetes 服务发现由 kubeconfig 或集群内身份提供连接配置，移除与 Prometheus 上游契约互斥的自定义 HTTP 设置
+- 回归通过：生成的 kubeconfig/集群内两种服务发现配置均可被 Prometheus 解析，实际 TLS 请求拒绝未信任证书
+- 自签证书采集目标须配置可信 CA，不再静默跳过校验

@@ -66,3 +66,7 @@ OrbStack 已恢复原 2048 MiB 内存额度；临时 MySQL/Redis 调试端口已
 - Docker 启动编排使用命令替身；本项未启动全栈，不能据此宣称运行时验收通过
 - `bash -n scripts/release-start.sh`、`docker compose ... config --quiet` 及三个实际构建目录存在检查均通过
 - 发布工具测试纳入分支 CI 和标签发布门槛
+
+### 本轮监控采集回归
+
+`GOTOOLCHAIN=auto go test ./internal/prometheus/cache` 通过。测试包含本机临时 TLS 服务的证书拒绝行为和上游 Kubernetes SD YAML 解析；没有连接真实集群或 Prometheus。当前固定 Go 1.26.6 的本机环境需使用 `GOTOOLCHAIN=auto` 执行项目指定 1.26.10。

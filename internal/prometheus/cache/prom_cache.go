@@ -405,19 +405,11 @@ func (p *prometheusConfigCache) GenerateScrapeConfigs(ctx context.Context, pool 
 			sc.HTTPClientConfig = pcc.HTTPClientConfig{
 				BearerTokenFile: job.BearerTokenFile,
 				TLSConfig: pcc.TLSConfig{
-					CAFile:             job.TlsCaFilePath,
-					InsecureSkipVerify: true,
+					CAFile: job.TlsCaFilePath,
 				},
 			}
-			// Kubernetes 服务发现到 APIServer 的 HTTPClient 配置（用于发现）
+			// 服务发现使用 kubeconfig 或集群内身份，避免与自定义 HTTP 配置互斥
 			sdHTTPClient := pcc.DefaultHTTPClientConfig
-			if job.BearerTokenFile != "" {
-				sdHTTPClient.BearerTokenFile = job.BearerTokenFile
-			}
-			if job.TlsCaFilePath != "" {
-				sdHTTPClient.TLSConfig.CAFile = job.TlsCaFilePath
-			}
-			sdHTTPClient.TLSConfig.InsecureSkipVerify = true
 
 			sc.ServiceDiscoveryConfigs = discovery.Configs{
 				&kubernetes.SDConfig{
