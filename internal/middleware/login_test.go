@@ -106,7 +106,7 @@ func TestCredentialTransport(t *testing.T) {
 				req.Header.Set("Connection", "Upgrade")
 				req.Header.Set("Upgrade", "websocket")
 				req.Header.Set("Sec-WebSocket-Version", "13")
-				req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+				req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==") // gitleaks:allow RFC 6455 示例 nonce，非密钥
 			}
 			rec := httptest.NewRecorder()
 			engine.ServeHTTP(rec, req)
@@ -127,7 +127,7 @@ func TestFakeUpgradePOSTCannotUseBrowserCredential(t *testing.T) {
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "websocket")
 	req.Header.Set("Sec-WebSocket-Version", "13")
-	req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==") // gitleaks:allow RFC 6455 示例 nonce，非密钥
 	req.Header.Set("Sec-WebSocket-Protocol", "cloudops-v1, cloudops-auth.test-token")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
