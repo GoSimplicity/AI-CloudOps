@@ -53,11 +53,16 @@ run_gitleaks_staged() {
     local repo_root config_args=()
     repo_root="$(git rev-parse --show-toplevel)"
     [ -f "$repo_root/.gitleaks.toml" ] && config_args=(--config "$repo_root/.gitleaks.toml")
+    # --ignore-gitleaks-allow：源码里的 "gitleaks:allow" 行内注释不再豁免任何发现（任何人都能在密钥行后加这条注释）；
+    #   误报只能在 .gitleaks.toml 中按值精确放行（SEC-01A 第三轮 P3-1）。
+    # ${config_args[@]+...}：macOS 自带 bash 3.2 在 set -u 下展开空数组会报 unbound variable。
     # gitleaks >= 8.19 uses `gitleaks git --staged`; older versions use `gitleaks protect --staged`.
     if gitleaks git --help 2>/dev/null | grep -q -- '--staged'; then
-        gitleaks git --pre-commit --staged --redact --no-banner --verbose "${config_args[@]}" "$repo_root"
+        gitleaks git --pre-commit --staged --redact --no-banner --verbose --ignore-gitleaks-allow \
+            ${config_args[@]+"${config_args[@]}"} "$repo_root"
     else
-        gitleaks protect --staged --redact --no-banner --verbose "${config_args[@]}" --source "$repo_root"
+        gitleaks protect --staged --redact --no-banner --verbose --ignore-gitleaks-allow \
+            ${config_args[@]+"${config_args[@]}"} --source "$repo_root"
     fi
     local rc=$?
     if [ $rc -ne 0 ]; then

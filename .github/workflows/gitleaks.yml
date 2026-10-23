@@ -63,9 +63,29 @@ jobs:
           echo "gitleaks scan range: ${range}"
           # --diff-merges=first-parent：merge 提交按相对第一父提交的差异输出，
           # 冲突解决 / evil merge 中引入的内容也会被扫描（默认 git log -p 不输出 merge 提交的差异）。
-          gitleaks git --redact --no-banner --verbose --exit-code 1 \
-            --config .gitleaks.toml --log-opts="--diff-merges=first-parent ${range}" .
+          # 配置与指纹忽略列表取自“基准提交”（PR base / push before / merge-base），不信任本次提交中的版本：
+          # 否则 PR 可以在提交密钥的同时修改 .gitleaks.toml / .gitleaksignore 放行它。基准上没有则用默认规则 / 空列表。
+          # 因此 PR 中对这两个文件的修改要等合入后才对后续扫描生效（见 .github/scripts/gitleaks-base-config.sh）。
+          bash .github/scripts/gitleaks-base-config.sh "${range}" "${RUNNER_TEMP}/gitleaks-base"
+          # --ignore-gitleaks-allow：源码中的 "gitleaks:allow" 行内注释不豁免任何发现。
+          gitleaks git --redact --no-banner --verbose --exit-code 1 --ignore-gitleaks-allow \
+            --config "${RUNNER_TEMP}/gitleaks-base/gitleaks.toml" \
+            --gitleaks-ignore-path "${RUNNER_TEMP}/gitleaks-base/gitleaksignore" \
+            --report-format json --report-path "${RUNNER_TEMP}/gitleaks-commits.json" \
+            --log-opts="--diff-merges=first-parent ${range}" .
 
       - name: Scan working tree (HEAD)
         if: env.GITLEAKS_SCAN_TREE == 'true'
-        run: gitleaks dir --redact --no-banner --verbose --exit-code 1 --config .gitleaks.toml .
+        # 与上一步使用同一份基准配置（上一步失败时本步骤不会运行）
+        run: |
+          set -euo pipefail
+          cfg="${RUNNER_TEMP}/gitleaks-base/gitleaks.toml"
+          ign="${RUNNER_TEMP}/gitleaks-base/gitleaksignore"
+          if [ ! -f "$cfg" ] || [ ! -f "$ign" ]; then
+            echo "ERROR: 缺少基准 gitleaks 配置（应由 Scan new commits 步骤生成）" >&2
+            exit 1
+          fi
+          if [ -e .gitleaksignore ]; then mv .gitleaksignore "${RUNNER_TEMP}/gitleaks-base/head.gitleaksignore"; fi
+          gitleaks dir --redact --no-banner --verbose --exit-code 1 --ignore-gitleaks-allow \
+            --config "$cfg" --gitleaks-ignore-path "$ign" \
+            --report-format json --report-path "${RUNNER_TEMP}/gitleaks-tree.json" .
