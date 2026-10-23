@@ -156,3 +156,25 @@ func TestLocalTaskEnvDoesNotInheritServiceSecrets(t *testing.T) {
 		check(t, output)
 	})
 }
+
+// P3-3：执行前再次校验，数据库中已有的危险环境变量不会进入子进程
+func TestCommandExecutorRejectsDangerousTaskEnv(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "ran")
+	for _, name := range []string{"LD_PRELOAD", "Ld_Library_Path", "DYLD_INSERT_LIBRARIES", "bash_env", "ENV", "ifs", "LD_PRELOAD=/tmp/x.so"} {
+		output, err := NewCommandExecutor(zap.NewNop()).Execute(context.Background(), &CommandTask{
+			Command:     "touch",
+			Args:        model.StringList{marker},
+			Environment: model.KeyValueList{{Key: name, Value: "fake-env-value-canary"}},
+			Timeout:     5,
+		})
+		if !errors.Is(err, task.ErrForbiddenTaskEnv) || output != "" {
+			t.Fatalf("%q: want ErrForbiddenTaskEnv, got %v", name, err)
+		}
+		if strings.Contains(err.Error(), "fake-env-value-canary") {
+			t.Fatal("错误信息不应包含变量值")
+		}
+		if _, statErr := os.Stat(marker); statErr == nil {
+			t.Fatalf("%q: 命令不应被执行", name)
+		}
+	}
+}

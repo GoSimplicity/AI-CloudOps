@@ -36,6 +36,7 @@ import (
 	"strings"
 	"time"
 
+	crontask "github.com/GoSimplicity/AI-CloudOps/internal/cron/task"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 )
@@ -63,6 +64,12 @@ func (h *CommandExecutor) Execute(ctx context.Context, task *CommandTask) (strin
 	timeout := time.Duration(task.Timeout) * time.Second
 	if timeout <= 0 {
 		timeout = 5 * time.Minute // 默认5分钟
+	}
+
+	// 执行前再次校验：数据库中可能存在修复前保存的危险变量（LD_*、DYLD_*、BASH_ENV、ENV、IFS）
+	if err := crontask.ValidateTaskEnv(task.Environment); err != nil {
+		h.logger.Warn("拒绝执行：任务环境变量不安全", zap.String("command", task.Command), zap.Error(err))
+		return "", err
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)

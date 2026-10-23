@@ -169,3 +169,31 @@ func TestEnableCronJobLocalExecSwitch(t *testing.T) {
 		}
 	}
 }
+
+// P3-3：开关打开时，命令行任务的自定义环境变量拒绝 LD_*、DYLD_*、BASH_ENV、ENV、IFS（不区分大小写）
+func TestCronJobRejectsDangerousTaskEnv(t *testing.T) {
+	for _, name := range []string{"LD_PRELOAD", "ld_library_path", "DYLD_INSERT_LIBRARIES", "BASH_ENV", "env", "IFS", "LD_PRELOAD=/tmp/x.so"} {
+		env := model.KeyValueList{{Key: name, Value: "fake-value"}}
+
+		store := &localExecStore{}
+		req := createReq(model.CronJobTypeCommand)
+		req.Environment = env
+		if err := newLocalExecService(true, store, nil).CreateCronJob(context.Background(), req); !errors.Is(err, task.ErrForbiddenTaskEnv) || store.created != nil {
+			t.Fatalf("create %q: want ErrForbiddenTaskEnv and no write, got %v", name, err)
+		}
+
+		store = &localExecStore{job: &model.CronJob{JobType: model.CronJobTypeCommand}}
+		ureq := updateReq(model.CronJobTypeCommand)
+		ureq.Environment = env
+		if err := newLocalExecService(true, store, nil).UpdateCronJob(context.Background(), ureq); !errors.Is(err, task.ErrForbiddenTaskEnv) || store.updated != nil {
+			t.Fatalf("update %q: want ErrForbiddenTaskEnv and no write, got %v", name, err)
+		}
+	}
+
+	store := &localExecStore{}
+	req := createReq(model.CronJobTypeCommand)
+	req.Environment = model.KeyValueList{{Key: "APP_MODE", Value: "x"}, {Key: "ENVIRONMENT", Value: "dev"}}
+	if err := newLocalExecService(true, store, nil).CreateCronJob(context.Background(), req); err != nil || store.created == nil {
+		t.Fatalf("普通变量名应允许创建, got %v", err)
+	}
+}

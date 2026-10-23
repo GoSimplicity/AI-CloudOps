@@ -112,6 +112,10 @@ func (s *cronService) CreateCronJob(ctx context.Context, req *model.CreateCronJo
 		s.logger.Error("任务配置验证失败", zap.String("name", req.Name), zap.Error(err))
 		return err
 	}
+	if err := task.ValidateTaskEnv(req.Environment); err != nil {
+		s.logger.Warn("拒绝危险的任务环境变量", zap.String("name", req.Name), zap.Error(err))
+		return err
+	}
 
 	maxRetry := 3
 	if req.MaxRetry != nil {
@@ -162,6 +166,10 @@ func (s *cronService) UpdateCronJob(ctx context.Context, req *model.UpdateCronJo
 
 	if err := s.validateBasicJobConfig(req.JobType, req.Command, req.HTTPUrl, req.ScriptContent, req.SSHResourceID, req.SSHCommand); err != nil {
 		s.logger.Error("任务配置验证失败", zap.Int("id", req.ID), zap.Error(err))
+		return err
+	}
+	if err := task.ValidateTaskEnv(req.Environment); err != nil {
+		s.logger.Warn("拒绝危险的任务环境变量", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}
 
