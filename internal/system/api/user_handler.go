@@ -188,6 +188,9 @@ func (h *UserHandler) ChangePassword(ctx *gin.Context) {
 	req.UserID = uc.Uid
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		// SEC-28: 以 token 中的 uid 为准，绑定之后再强制覆盖一次，
+		// 不依赖 BindRequest 的通用受保护字段机制。
+		req.UserID = uc.Uid
 		return nil, h.service.ChangePassword(ctx.Request.Context(), &req)
 	})
 }
