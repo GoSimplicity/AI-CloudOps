@@ -70,6 +70,9 @@ run_gitleaks_staged() {
 }
 run_gitleaks_staged
 
+# 记录 gitleaks 扫描时的暂存区快照。后续步骤不得修改暂存区（否则新暂存的内容未经扫描）。
+INDEX_TREE_SCANNED="$(git write-tree)" || error_exit "无法读取暂存区（git write-tree 失败）"
+
 # 检查是否有Go文件变更
 if git diff --cached --quiet -- '*.go'; then
     warning_msg "未检测到 Go 文件变更，跳过Go相关检查"
@@ -100,20 +103,24 @@ else
     success_msg "go generate 执行成功"
 fi
 
-# 2. 代码格式化检查和自动修复
-info_msg "步骤 2/4: 检查代码格式..."
-
-# 查找所有需要格式化的Go文件
-UNFORMATTED_FILES=$(go fmt ./...)
-if [ -n "$UNFORMATTED_FILES" ]; then
-    warning_msg "以下文件已自动格式化:"
-    echo "$UNFORMATTED_FILES"
-    
-    # 将格式化后的文件添加到暂存区
-    for file in $UNFORMATTED_FILES; do
-        git add "$file"
-    done
-    warning_msg "格式化后的文件已自动添加到暂存区"
+# 2. 代码格式检查（只检查，不修改、不暂存）
+# 只检查“暂存的” .go 文件的“暂存版本”内容（git cat-file blob :path），与 gitleaks 扫描的内容一致。
+# 旧实现在 gitleaks 之后执行 `go fmt ./...` 并 `git add`，会把工作区中未暂存的改动（甚至从未暂存过的
+# .go 文件）连同其中未经扫描的密钥一起加入提交（SEC-01A 审查 G1/G2），已移除。
+info_msg "步骤 2/4: 检查暂存的 Go 文件格式 (gofmt)..."
+command -v gofmt >/dev/null 2>&1 || error_exit "未找到 gofmt，无法检查代码格式"
+UNFORMATTED_FILES=()
+while IFS= read -r -d '' file; do
+    if [ -n "$(git cat-file blob ":$file" | gofmt -l 2>&1)" ]; then
+        UNFORMATTED_FILES+=("$file")
+    fi
+done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.go')
+if [ ${#UNFORMATTED_FILES[@]} -gt 0 ]; then
+    echo -e "${RED}[PRE-COMMIT ERROR]${NC} 以下暂存的 Go 文件未按 gofmt 格式化（检查的是暂存版本）:"
+    printf '  %s\n' "${UNFORMATTED_FILES[@]}"
+    echo "请自行格式化并重新暂存后再提交，例如:"
+    echo "  gofmt -w <文件> && git add -p <文件>   # 注意只暂存你确认要提交的内容"
+    exit 1
 fi
 success_msg "代码格式检查完成"
 
@@ -152,6 +159,11 @@ if [ -n "$GENERATED_FILES" ]; then
     warning_msg "发现新生成的Go文件:"
     echo "$GENERATED_FILES"
     warning_msg "请检查这些文件是否应该被提交，如需要请手动 git add"
+fi
+
+# 防御性检查：gitleaks 扫描之后暂存区不得被任何步骤修改（如 go generate 的副作用），否则拒绝提交。
+if [ "$(git write-tree)" != "$INDEX_TREE_SCANNED" ]; then
+    error_exit "gitleaks 扫描后暂存区发生了变化，新暂存的内容未经密钥扫描，已阻止提交。请检查后重新 git commit。"
 fi
 
 success_msg "所有检查通过，准备提交"
