@@ -90,6 +90,7 @@ type Session struct {
 	cancel   context.CancelFunc              // 断开输入时取消所属exec上下文
 
 	closing    int32         // 已发送关闭帧，正在等待对端回应
+	deadlineMu sync.Mutex    // 串行化closing标记与读期限写入，避免Pong在关闭后把读期限延长回pongWait
 	peerInit   sync.Once     // 惰性创建peerClosed
 	peerOnce   sync.Once     // 只关闭一次peerClosed
 	peerClosed chan struct{} // 输入读取结束（对端关闭或连接断开）
@@ -191,7 +192,7 @@ func (t *Session) closeWithCode(code int, reason string) error {
 	}
 	if t.conn != nil {
 		deadline := time.Now().Add(closeGracePeriod)
-		atomic.StoreInt32(&t.closing, 1)
+		t.beginClosing(deadline)
 		// Gorilla的WriteControl可与其他写并发调用；不持writeMu，避免被卡住的数据帧写阻塞关闭
 		message := websocket.FormatCloseMessage(code, truncateCloseReason(reason))
 		if err := t.conn.WriteControl(websocket.CloseMessage, message, deadline); err == nil {
@@ -215,12 +216,31 @@ func truncateCloseReason(reason string) string {
 	return reason[:cut]
 }
 
+// beginClosing 在同一把锁下标记closing并收紧读期限，此后Pong不能再延长读期限
+func (t *Session) beginClosing(deadline time.Time) {
+	t.deadlineMu.Lock()
+	defer t.deadlineMu.Unlock()
+	atomic.StoreInt32(&t.closing, 1)
+	_ = t.conn.SetReadDeadline(deadline)
+}
+
+// extendReadDeadlineOnPong 收到Pong时延长读期限；已开始关闭时不延长。检查与写入在同一把锁下完成
+func (t *Session) extendReadDeadlineOnPong() {
+	t.deadlineMu.Lock()
+	defer t.deadlineMu.Unlock()
+	if atomic.LoadInt32(&t.closed) == 1 || atomic.LoadInt32(&t.closing) == 1 {
+		return
+	}
+	_ = t.conn.SetReadDeadline(time.Now().Add(pongWait))
+}
+
 // awaitPeerClose 等待对端回应关闭帧。若无其他goroutine在读，则自行读取直至收到关闭帧或超时；
 // 若stdin复制goroutine仍阻塞在Read中，由它读到关闭帧后通知，超时则直接断开
 func (t *Session) awaitPeerClose(deadline time.Time) {
-	_ = t.conn.SetReadDeadline(deadline)
 	if t.readMu.TryLock() {
 		defer t.readMu.Unlock()
+		// 拿到读锁后再收紧一次读期限：之前持锁的reader可能在关闭开始前刚处理过Pong
+		_ = t.conn.SetReadDeadline(deadline)
 		for {
 			if _, _, err := t.conn.NextReader(); err != nil {
 				return
@@ -468,11 +488,7 @@ func (t *terminaler) setupPongHandler(session *Session) {
 
 		t.logger.Debug("接收到Pong消息")
 		// 已发送关闭帧时不再延长读期限，保证关闭等待有上限
-		if atomic.LoadInt32(&session.closed) == 1 || atomic.LoadInt32(&session.closing) == 1 {
-			return nil
-		}
-
-		session.conn.SetReadDeadline(time.Now().Add(pongWait)) // nolint
+		session.extendReadDeadlineOnPong()
 		return nil
 	})
 }

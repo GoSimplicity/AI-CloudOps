@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -290,6 +291,101 @@ func TestCloseIsBoundedWhenPeerNeverReplies(t *testing.T) {
 			var ce *websocket.CloseError
 			if !asCloseError(err, &ce) || ce.Code != tc.code || ce.Text != tc.reason {
 				t.Fatalf("应读到关闭码 %d reason %q, got %v", tc.code, tc.reason, err)
+			}
+		})
+	}
+}
+
+// 对端持续发送 Pong（并夹杂输入），但从不回应关闭帧：Pong 不得把读期限延长回 pongWait，
+// 无论是关闭方自己读取，还是 stdin 复制 goroutine 正在读取，关闭都必须在上限内结束
+func TestCloseIsBoundedWhilePeerFloodsPongs(t *testing.T) {
+	// readerMode: 0=无并发reader（关闭方自己读）；1=stdin reader 持续读；
+	// 2=stdin reader 在关闭开始时停止读取（exec 结束后 stdin 复制随之停止的情形）
+	for readerMode, name := range []string{"close-reads-itself", "stdin-reader-active", "stdin-reader-stops-on-close"} {
+		readerMode := readerMode
+		t.Run(name, func(t *testing.T) {
+			ready := make(chan *websocket.Conn, 1)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
+				if err == nil {
+					ready <- conn
+				}
+			}))
+			defer srv.Close()
+			peer, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer peer.Close()
+			conn := <-ready
+			_, cancel := context.WithCancel(context.Background())
+			s := &Session{conn: conn, logger: zap.NewNop(), cancel: cancel}
+			(&terminaler{logger: zap.NewNop()}).setupPongHandler(s)
+
+			// 对端：只写不读（因此永远不会回应关闭帧），不停发送 Pong/Ping，并周期性发送输入让 reader 释放读锁
+			stopPeer := make(chan struct{})
+			peerDone := make(chan struct{})
+			go func() {
+				defer close(peerDone)
+				stdin, _ := json.Marshal(Message{Op: "stdin", Data: "x"})
+				for i := 0; ; i++ {
+					select {
+					case <-stopPeer:
+						return
+					default:
+					}
+					if err := peer.WriteControl(websocket.PongMessage, nil, time.Now().Add(time.Second)); err != nil {
+						return
+					}
+					if err := peer.WriteControl(websocket.PingMessage, nil, time.Now().Add(time.Second)); err != nil {
+						return
+					}
+					if i%16 == 0 {
+						if err := peer.WriteMessage(websocket.TextMessage, stdin); err != nil {
+							return
+						}
+					}
+					time.Sleep(100 * time.Microsecond)
+				}
+			}()
+			defer func() { close(stopPeer); <-peerDone }()
+
+			readerDone := make(chan struct{})
+			stopReading := make(chan struct{})
+			if readerMode > 0 {
+				go func() {
+					defer close(readerDone)
+					buf := make([]byte, 64)
+					for {
+						if _, err := s.Read(buf); err != nil {
+							return
+						}
+						if readerMode == 2 {
+							select {
+							case <-stopReading:
+								return
+							default:
+							}
+						}
+					}
+				}()
+			} else {
+				close(readerDone)
+			}
+
+			time.Sleep(200 * time.Millisecond) // 让 Pong 洪流先跑起来
+			close(stopReading)
+			start := time.Now()
+			if err := s.CloseNormally(); err != nil {
+				t.Fatal(err)
+			}
+			if elapsed := time.Since(start); elapsed > closeGracePeriod+500*time.Millisecond {
+				t.Fatalf("对端持续发送 Pong 时关闭等待过久: %v", elapsed)
+			}
+			select {
+			case <-readerDone:
+			case <-time.After(2 * time.Second):
+				t.Fatal("stdin reader 未在关闭后退出")
 			}
 		})
 	}
