@@ -81,3 +81,12 @@ OrbStack 已恢复原 2048 MiB 内存额度；临时 MySQL/Redis 调试端口已
 - `docker compose -f deploy/release/compose.yaml exec -T aiops python - < scripts/integration/mcp_smoke.py` 通过：真实内网鉴权列工具、计算器结果 14、匿名工具访问 401
 - 尚未配置真实模型或外部通知，不将 MCP 算术调用等同于 LLM 或 Kubernetes 工具全部验收
 - 后端镜像重建遇到 Alpine 索引瞬时 I/O 失败，独立验证索引恢复可达后已重试；最终运行时结果另记
+
+### 本轮全栈隔离验收
+
+- 八个服务均 healthy，入口 `http://127.0.0.1:18080`
+- `release-smoke.py --crud` 全通过：健康、数据库/Redis 就绪、HTML、匿名拒绝、登录、10 项业务列表、分类持久化与操作者保护、令牌刷新及注销撤销
+- `account_access.py --rbac` 全通过：账号创建、普通用户限制、只读权限、立即撤权、冻结/删除撤销旧令牌，测试账号与角色清理成功
+- `workorder_flow.py` 全通过：分类/表单/流程/模板/草稿/提交/审批完成、评论、流转与审计，创建对象清理成功
+- 所选 `Qwen/Qwen3-30B-A3B-Instruct-2507` 经真实硅基流动请求返回预期 calculate 工具调用，单次 186 token；此项尚不等同项目内助手全链路通过
+- 发布环境 `.env` 已确认被 Git 忽略，权限 0600；验证命令不输出密钥

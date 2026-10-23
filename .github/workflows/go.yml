@@ -44,7 +44,7 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
       - name: Gateway smoke
-        run: go test -tags=smoke ./internal/app ./internal/cron/handler
+        run: go test -tags=smoke ./internal/app ./internal/cron/api ./internal/cron/handler ./internal/cron/scheduler
 
       - name: Build
         run: go build -v main.go
