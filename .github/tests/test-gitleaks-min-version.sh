@@ -5,8 +5,9 @@
 #   钩子 H1 8.24.3（H1b 干净提交同样拒绝）/ H2 v8.18.4（旧版本走 protect 回退的路径）/ H3 无法解析（dev）/ H4 8.25（缺补丁号）
 #        H5 空输出 / H6 8.25.0-rc1                                     → 拒绝提交，合成密钥不进入提交
 #   对照 HC1 8.25.0 / HC2 v9.0.0 / HC3 真实版本 干净提交成功；HC4 8.25.0 暂存合成 PAT 仍被检出
+#   钩子 H8–H13（review3h P3-i）前导零 / 超长数字 / 四段 → 拒绝；对照 HC5 8.100.0 / HC6 v10.0.0 / HC7 8.25.999999 成功
 #   钩子 H7 不含 `gitleaks protect` 调用（回退已删除）
-#   setup（不依赖 husky 的仓库）S1 8.24.3 / S2 无法解析 → 非 0 退出；S3 8.25.0 → 成功
+#   setup（不依赖 husky 的仓库）S1 8.24.3 / S2 无法解析 / S4 前导零 / S5 超长 → 非 0 退出；S3 8.25.0 → 成功
 #   一致性 K1 钩子与 setup 中的 gitleaks_version_check 逐字一致
 # 用法: .github/tests/test-gitleaks-min-version.sh [--rev <git-rev>]   （对修复前版本运行应报 FAIL）
 # 在 mktemp -d 的临时仓库中运行；合成 PAT 在运行时随机生成，不是真实凭据。兼容 macOS bash 3.2 / BSD 工具。
@@ -78,6 +79,15 @@ hook_case '对照 HC1 8.25.0 干净提交'            '8.25.0'      clean  ok
 hook_case '对照 HC2 v9.0.0 干净提交'            'v9.0.0'      clean  ok
 hook_case '对照 HC3 真实 gitleaks 干净提交'      REAL          clean  ok
 hook_case '对照 HC4 8.25.0 暂存合成 PAT 仍被检出' '8.25.0'      secret refuse 'gitleaks 在暂存内容中发现'
+hook_case 'H8 主版本前导零（08.25.0）'          '08.25.0'     clean  refuse "$BAD"
+hook_case 'H9 次版本前导零（8.025.0）'          '8.025.0'     clean  refuse "$BAD"
+hook_case 'H10 补丁号前导零（8.25.00）'         '8.25.00'     clean  refuse "$BAD"
+hook_case 'H11 超长主版本（20 位数字）'          '99999999999999999999.0.0' secret refuse "$BAD"
+hook_case 'H12 超长补丁号（7 位数字）'           '8.25.1234567' clean refuse "$BAD"
+hook_case 'H13 四段版本（8.25.0.1）'            '8.25.0.1'    clean  refuse "$BAD"
+hook_case '对照 HC5 8.100.0 干净提交'           '8.100.0'     clean  ok
+hook_case '对照 HC6 v10.0.0 干净提交'           'v10.0.0'     clean  ok
+hook_case '对照 HC7 8.25.999999（6 位补丁号）'   '8.25.999999' clean  ok
 
 src .githooks/pre-commit >"$TMP/hook.txt"
 if grep -E '^[[:space:]]*gitleaks[[:space:]]+protect' "$TMP/hook.txt" >/dev/null; then fail 'H7 钩子不再回退到 gitleaks protect' "仍有: $(grep -m1 -E '^[[:space:]]*gitleaks[[:space:]]+protect' "$TMP/hook.txt")"
@@ -95,6 +105,8 @@ else
     }
     setup_case 'S1 setup：gitleaks 8.24.3' '8.24.3' fail
     setup_case 'S2 setup：版本无法解析'     'dev'    fail
+    setup_case 'S4 setup：前导零（08.25.0）' '08.25.0' fail
+    setup_case 'S5 setup：超长版本号' '99999999999999999999.0.0' fail
     setup_case '对照 S3 setup：gitleaks 8.25.0' '8.25.0' ok
 fi
 

@@ -45,19 +45,20 @@ fi
 # ---------------------------------------------------------------------------
 # gitleaks 最低版本 8.25.0（review3g N6）：.gitleaks.toml 使用多个 [[allowlists]]（含 targetRules/condition），
 # 该写法自 8.25.0 起才支持；更低版本的策略语义不同，且 8.19 之前没有 `gitleaks git --staged`。
-# 只接受 gitleaks version 输出的严格形式 X.Y.Z（可带前缀 v），无法解析一律视为不满足。
+# 只接受 gitleaks version 输出的严格形式 X.Y.Z（可带前缀 v；每段为不带前导零、最多 6 位的十进制数字），无法解析一律视为不满足。
 GITLEAKS_MIN_MAJOR=8
 GITLEAKS_MIN_MINOR=25
 gitleaks_version_check() {
     gl_ver_raw="$(gitleaks version 2>/dev/null | head -n 1)"
     gl_ver="${gl_ver_raw#v}"
-    case "$gl_ver" in
-        ''|*[!0-9.]*|.*|*.|*..*) return 2 ;;
-    esac
+    case "$gl_ver" in *.*.*) ;; *) return 2 ;; esac
     gl_major="${gl_ver%%.*}"; gl_rest="${gl_ver#*.}"
     gl_minor="${gl_rest%%.*}"; gl_patch="${gl_rest#*.}"
-    case "$gl_rest" in *.*) ;; *) return 2 ;; esac
-    case "$gl_patch" in ''|*.*) return 2 ;; esac
+    # review3h P3-i：三段都只能是十进制数字，不允许前导零（单独的 0 除外），每段最多 6 位；
+    # 过长的数字直接视为无法解析，不交给 [ ] 做整数比较（溢出时 [ ] 报错，会被误判成“版本过低”）
+    for gl_c in "$gl_major" "$gl_minor" "$gl_patch"; do
+        case "$gl_c" in ''|*[!0-9]*|0?*|???????*) return 2 ;; esac
+    done
     if [ "$gl_major" -gt "$GITLEAKS_MIN_MAJOR" ]; then return 0; fi
     if [ "$gl_major" -eq "$GITLEAKS_MIN_MAJOR" ] && [ "$gl_minor" -ge "$GITLEAKS_MIN_MINOR" ]; then return 0; fi
     return 1
