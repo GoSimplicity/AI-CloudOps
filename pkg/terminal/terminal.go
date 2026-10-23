@@ -36,6 +36,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
@@ -52,6 +53,11 @@ const (
 	endOfTransmission = "\u0004"            // 传输结束标志
 	pongWait          = 30 * time.Second    // Pong消息等待时间
 	pingPeriod        = (pongWait * 9) / 10 // Ping发送间隔（必须小于pongWait）
+	closeGracePeriod  = time.Second         // 发送关闭帧后等待对端回应关闭帧的最长时间
+	// maxCloseReasonBytes 关闭帧reason的字节上限（RFC 6455控制帧载荷125字节减去2字节关闭码）
+	maxCloseReasonBytes = 123
+	// terminalErrorCloseReason exec异常结束时关闭帧携带的用户可读说明，不包含内部错误细节
+	terminalErrorCloseReason = "终端会话异常结束"
 
 	defaultTerminalRows = 25 // 默认终端行数
 	defaultTerminalCols = 80 // 默认终端列数
@@ -82,6 +88,11 @@ type Session struct {
 	sizeMu   sync.Mutex                      // resize发送与关闭
 	pending  []byte                          // 尚未交付给调用者的stdin字节
 	cancel   context.CancelFunc              // 断开输入时取消所属exec上下文
+
+	closing    int32         // 已发送关闭帧，正在等待对端回应
+	peerInit   sync.Once     // 惰性创建peerClosed
+	peerOnce   sync.Once     // 只关闭一次peerClosed
+	peerClosed chan struct{} // 输入读取结束（对端关闭或连接断开）
 }
 
 /*
@@ -149,6 +160,79 @@ func (t *Session) Write(p []byte) (int, error) {
 		return 0, fmt.Errorf("发送消息失败: %w", err)
 	}
 	return len(p), nil
+}
+
+func (t *Session) peerDone() chan struct{} {
+	t.peerInit.Do(func() { t.peerClosed = make(chan struct{}) })
+	return t.peerClosed
+}
+
+func (t *Session) markPeerDone() {
+	done := t.peerDone()
+	t.peerOnce.Do(func() { close(done) })
+}
+
+// CloseNormally 在exec正常结束时使用：先发送1000正常关闭帧，
+// 在closeGracePeriod内等待对端回应关闭帧后再断开连接，避免客户端只看到1006
+func (t *Session) CloseNormally() error {
+	return t.closeWithCode(websocket.CloseNormalClosure, "")
+}
+
+// CloseWithError 在exec异常结束时使用：先发送1011关闭帧（reason为固定的用户可读说明，不含内部错误细节），
+// 与CloseNormally相同地有限等待对端回应后再断开连接
+func (t *Session) CloseWithError() error {
+	return t.closeWithCode(websocket.CloseInternalServerErr, terminalErrorCloseReason)
+}
+
+// closeWithCode 发送指定关闭码的关闭帧，写超时与等待均以closeGracePeriod为上限，最后断开连接
+func (t *Session) closeWithCode(code int, reason string) error {
+	if atomic.LoadInt32(&t.closed) == 1 {
+		return nil
+	}
+	if t.conn != nil {
+		deadline := time.Now().Add(closeGracePeriod)
+		atomic.StoreInt32(&t.closing, 1)
+		// Gorilla的WriteControl可与其他写并发调用；不持writeMu，避免被卡住的数据帧写阻塞关闭
+		message := websocket.FormatCloseMessage(code, truncateCloseReason(reason))
+		if err := t.conn.WriteControl(websocket.CloseMessage, message, deadline); err == nil {
+			t.awaitPeerClose(deadline)
+		} else {
+			t.logger.Debug("发送WebSocket关闭帧失败", zap.Error(err))
+		}
+	}
+	return t.Close()
+}
+
+// truncateCloseReason 保证关闭帧reason不超过协议上限（125字节控制帧载荷减去2字节关闭码），且不截断UTF-8字符
+func truncateCloseReason(reason string) string {
+	if len(reason) <= maxCloseReasonBytes {
+		return reason
+	}
+	cut := maxCloseReasonBytes
+	for cut > 0 && !utf8.RuneStart(reason[cut]) {
+		cut--
+	}
+	return reason[:cut]
+}
+
+// awaitPeerClose 等待对端回应关闭帧。若无其他goroutine在读，则自行读取直至收到关闭帧或超时；
+// 若stdin复制goroutine仍阻塞在Read中，由它读到关闭帧后通知，超时则直接断开
+func (t *Session) awaitPeerClose(deadline time.Time) {
+	_ = t.conn.SetReadDeadline(deadline)
+	if t.readMu.TryLock() {
+		defer t.readMu.Unlock()
+		for {
+			if _, _, err := t.conn.NextReader(); err != nil {
+				return
+			}
+		}
+	}
+	timer := time.NewTimer(time.Until(deadline))
+	defer timer.Stop()
+	select {
+	case <-t.peerDone():
+	case <-timer.C:
+	}
 }
 
 func (t *Session) Close() error {
@@ -223,6 +307,7 @@ func (t *Session) Read(p []byte) (int, error) {
 			return t.rejectInput()
 		}
 		if err != nil {
+			t.markPeerDone()
 			if t.cancel != nil {
 				t.cancel()
 			}
@@ -382,7 +467,8 @@ func (t *terminaler) setupPongHandler(session *Session) {
 		}
 
 		t.logger.Debug("接收到Pong消息")
-		if atomic.LoadInt32(&session.closed) == 1 {
+		// 已发送关闭帧时不再延长读期限，保证关闭等待有上限
+		if atomic.LoadInt32(&session.closed) == 1 || atomic.LoadInt32(&session.closing) == 1 {
 			return nil
 		}
 
@@ -425,7 +511,12 @@ func (t *terminaler) handleTerminalSession(ctx context.Context, shell, namespace
 
 	// 尝试执行终端命令，使用fallback机制
 	err := t.executeTerminalCommandWithFallback(ctx, namespace, podName, containerName, fallbackShells, session)
-	if err != nil && !errors.Is(err, context.Canceled) {
+	if err == nil {
+		// exec正常结束（如用户输入exit）：先发1000正常关闭帧再断开，客户端不再收到1006
+		if closeErr := session.CloseNormally(); closeErr != nil {
+			t.logger.Error("关闭终端会话失败", zap.Error(closeErr))
+		}
+	} else if !errors.Is(err, context.Canceled) {
 		// 检查连接状态，避免向已关闭连接发送消息
 		if atomic.LoadInt32(&session.closed) == 0 {
 			// 格式化用户友好的错误消息
@@ -434,6 +525,10 @@ func (t *terminaler) handleTerminalSession(ctx context.Context, shell, namespace
 
 			if writeErr := t.writeErrorMessage(session, errorMsg); writeErr != nil {
 				t.logger.Error("发送错误消息失败", zap.Error(writeErr))
+			}
+			// 再发1011关闭帧后断开，客户端可区分异常结束与正常exit（1000），而不是只看到1006
+			if closeErr := session.CloseWithError(); closeErr != nil {
+				t.logger.Error("关闭终端会话失败", zap.Error(closeErr))
 			}
 		} else {
 			t.logger.Debug("终端会话执行失败，但连接已关闭，跳过错误消息发送", zap.Error(err))
