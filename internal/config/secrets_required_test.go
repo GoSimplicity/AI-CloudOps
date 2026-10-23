@@ -16,7 +16,7 @@ func validConfigForTest() *Config {
 		Log:    LogConfig{Dir: "logs"},
 		MySQL:  MySQLConfig{Addr: "fake-dsn-value"},
 		Redis:  RedisConfig{Addr: "redis"},
-		JWT:    JWTConfig{Key1: "fake-key1-value", Key2: "fake-key2-value", Issuer: "fake-issuer-value"},
+		JWT:    JWTConfig{Key1: "fake-key1-" + randomTestKey(), Key2: "fake-key2-" + randomTestKey(), Issuer: "fake-issuer-value"},
 		Tree:   TreeConfig{PasswordEncryptionKey: "fake-tree-key-value"},
 	}
 }

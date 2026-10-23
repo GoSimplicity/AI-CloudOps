@@ -21,7 +21,7 @@ func TestProductionValidation(t *testing.T) {
 		{"invalid target", func(c *Config) { c.AIOps.BaseURL = "file:///tmp/socket" }, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			c := &Config{Server: ServerConfig{Port: "8889"}, Log: LogConfig{Dir: "logs"}, MySQL: MySQLConfig{Addr: "db"}, Redis: RedisConfig{Addr: "redis"}, JWT: JWTConfig{Key1: strings.Repeat("a", 32), Key2: strings.Repeat("b", 32), Issuer: "test-issuer"}, Tree: TreeConfig{PasswordEncryptionKey: strings.Repeat("c", 32)}}
+			c := &Config{Server: ServerConfig{Port: "8889"}, Log: LogConfig{Dir: "logs"}, MySQL: MySQLConfig{Addr: "db"}, Redis: RedisConfig{Addr: "redis"}, JWT: JWTConfig{Key1: randomTestKey(), Key2: randomTestKey(), Issuer: "test-issuer"}, Tree: TreeConfig{PasswordEncryptionKey: strings.Repeat("c", 32)}}
 			tt.change(c)
 			if err := c.Validate(); (err != nil) != tt.invalid {
 				t.Fatalf("unexpected validation result: %v", err)

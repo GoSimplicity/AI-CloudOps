@@ -127,7 +127,15 @@ cp env.example .env
 # Edit .env. With the dev Compose file, Redis listens on localhost:36379:
 #   REDIS_ADDR=localhost:36379
 # Set BOOTSTRAP_ADMIN_PASSWORD (>= 12 chars) to create the `admin` user on first start.
+# Replace JWT_KEY1 and JWT_KEY2 with two freshly generated keys (see below).
 go run main.go
+```
+
+JWT signing keys are validated in **every** environment, including development; there is no switch to relax this. `JWT_KEY1` and `JWT_KEY2` must each be at least 32 characters, must differ from each other, and must not be a repository sample or a historical default value (the placeholders in `env.example` are rejected). Generate two independent keys for local development, for example:
+
+```bash
+openssl rand -base64 48   # use the output as JWT_KEY1
+openssl rand -base64 48   # run again for JWT_KEY2
 ```
 
 The API listens on `http://localhost:8889` (`SERVER_PORT`). `GET /health` is a liveness probe only; it does not mean MySQL, Redis or external services are ready.
@@ -191,7 +199,7 @@ All settings can be provided as environment variables (see [`env.example`](env.e
 | `SERVER_PORT` | HTTP port, default `8889`. |
 | `SERVER_ALLOWED_ORIGINS` | Comma-separated list of exact browser origins allowed for CORS and WebSocket. Empty means same-origin only. |
 | `MYSQL_ADDR`, `REDIS_ADDR`, `REDIS_PASSWORD` | Database and Redis connection. |
-| `JWT_KEY1`, `JWT_KEY2`, `JWT_EXPIRATION` | JWT signing keys and settings. `JWT_KEY1` and `JWT_KEY2` are required. `JWT_EXPIRATION` is in minutes. |
+| `JWT_KEY1`, `JWT_KEY2`, `JWT_EXPIRATION` | JWT signing keys and settings. `JWT_KEY1` and `JWT_KEY2` are required in every environment: at least 32 characters each, distinct, and not a repository sample value (generate with `openssl rand -base64 48`). `JWT_EXPIRATION` is in minutes. |
 | `JWT_ISSUER` | Optional. The token issuer is configured as `jwt.issuer` in `config/*.yaml`; set this variable only to override it. The value must not be empty, and changing it invalidates all tokens already issued. |
 | `TREE_PASSWORD_ENCRYPTION_KEY` | Key used to encrypt stored host passwords. Keep it safe: changing it breaks decryption of existing credentials. |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Creates the `admin` account on the first start with an empty database (min. 12 characters). Remove it after the first successful start. Existing users are never reset. |
@@ -205,9 +213,10 @@ All settings can be provided as environment variables (see [`env.example`](env.e
 
 ### Production security requirements
 
-With `ENV=production` the backend refuses to start unless:
+In every environment (development included) the backend refuses to start unless `JWT_KEY1` and `JWT_KEY2` are distinct, at least 32 characters, and not the repository sample values.
 
-- `JWT_KEY1` and `JWT_KEY2` are distinct, at least 32 characters, and not the repository sample values.
+With `ENV=production` the backend additionally refuses to start unless:
+
 - `TREE_PASSWORD_ENCRYPTION_KEY` is exactly 32 bytes and not the sample value.
 - `MOCK_ENABLED=false`.
 - `AIOPS_API_KEY` is at least 32 characters whenever `AIOPS_BASE_URL` is set.

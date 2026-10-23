@@ -26,6 +26,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"os"
@@ -83,17 +85,17 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("aiops.base_url 必须是有效的 HTTP(S) 地址")
 		}
 	}
+	// JWT 密钥强度在所有环境都校验（不提供放宽开关），避免示例/短密钥在开发环境签发可用令牌
+	if err := c.JWT.validateKeys(); err != nil {
+		return err
+	}
 	if os.Getenv("ENV") == "production" {
-		for name, key := range map[string]string{"JWT_KEY1": c.JWT.Key1, "JWT_KEY2": c.JWT.Key2, "TREE_PASSWORD_ENCRYPTION_KEY": c.Tree.PasswordEncryptionKey} {
-			if len(key) < 32 || strings.HasPrefix(key, "ebe3vx") {
-				return fmt.Errorf("生产环境 %s 必须配置独立的至少32字符密钥", name)
-			}
+		key := c.Tree.PasswordEncryptionKey
+		if len(key) < 32 || strings.HasPrefix(key, "ebe3vx") {
+			return fmt.Errorf("生产环境 TREE_PASSWORD_ENCRYPTION_KEY 必须配置独立的至少32字符密钥")
 		}
 		if len(c.Tree.PasswordEncryptionKey) != 32 {
 			return fmt.Errorf("TREE_PASSWORD_ENCRYPTION_KEY 必须恰好32字节")
-		}
-		if c.JWT.Key1 == c.JWT.Key2 {
-			return fmt.Errorf("JWT 两个密钥不得相同")
 		}
 		if c.Mock.Enabled {
 			return fmt.Errorf("生产环境必须关闭 MOCK_ENABLED")
@@ -101,6 +103,45 @@ func (c *Config) Validate() error {
 		if c.AIOps.BaseURL != "" && len(c.AIOps.APIKey) < 32 {
 			return fmt.Errorf("生产环境 AIOPS_API_KEY 至少32字符")
 		}
+	}
+	return nil
+}
+
+// MinJWTKeyLength JWT_KEY1/JWT_KEY2 的最小长度（字节），所有环境一致
+const MinJWTKeyLength = 32
+
+// knownSampleJWTKeyPrefix 仓库历史示例 JWT 密钥的公共前缀特征
+const knownSampleJWTKeyPrefix = "ebe3vx"
+
+// knownSampleJWTKeySHA256 仓库历史上出现过的示例/默认 JWT 密钥（config/*.yaml、loader 默认值、
+// pkg/di/viper.go）的 sha256，只存哈希，不存明文。短于 MinJWTKeyLength 的历史示例值
+// （如 env.example 中的占位符）已被长度检查拒绝，无需列入。
+var knownSampleJWTKeySHA256 = map[string]struct{}{
+	"a34aa50ffba2ce2026189e29e930cd6ca798acc34d1e0c07c89aa2a80ec85f4b": {},
+	"2a390b2c185233a39ab396478d709409e30f9efad92226ddce7a98e79142785c": {},
+}
+
+func isKnownSampleJWTKey(key string) bool {
+	if strings.HasPrefix(key, knownSampleJWTKeyPrefix) {
+		return true
+	}
+	sum := sha256.Sum256([]byte(key))
+	_, ok := knownSampleJWTKeySHA256[hex.EncodeToString(sum[:])]
+	return ok
+}
+
+// validateKeys 校验 JWT 签名密钥：最小长度、两把不同、不是已知示例值。错误信息只含变量名，不含值
+func (j JWTConfig) validateKeys() error {
+	for _, k := range []struct{ name, value string }{{"JWT_KEY1", j.Key1}, {"JWT_KEY2", j.Key2}} {
+		if len(k.value) < MinJWTKeyLength {
+			return fmt.Errorf("%s 长度不足：至少需要%d字符（可用 openssl rand -base64 48 生成）", k.name, MinJWTKeyLength)
+		}
+		if isKnownSampleJWTKey(k.value) {
+			return fmt.Errorf("%s 不能使用仓库示例值或历史默认值，请重新生成", k.name)
+		}
+	}
+	if j.Key1 == j.Key2 {
+		return fmt.Errorf("JWT_KEY1 与 JWT_KEY2 不得相同")
 	}
 	return nil
 }

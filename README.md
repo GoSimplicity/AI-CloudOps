@@ -137,7 +137,15 @@ docker compose -f deploy/release/compose.yaml ps
 
 ### 源码开发
 
-本机后端使用 `go.mod` 指定的工具链：
+本机后端使用 `go.mod` 指定的工具链。所有环境（包括开发环境）启动时都会校验 JWT 密钥，且不提供放宽开关：
+`JWT_KEY1`、`JWT_KEY2` 各自至少32字符、两者不得相同、不能使用仓库示例值或历史默认值（`env.example` 中的占位符会被拒绝）。
+本地开发请分别生成两把独立密钥，例如：
+
+```sh
+openssl rand -base64 48   # 作为 JWT_KEY1
+openssl rand -base64 48   # 再运行一次，作为 JWT_KEY2
+```
+
 
 ```sh
 GOTOOLCHAIN=auto go test ./...
@@ -280,6 +288,7 @@ AI-CloudOps-aiops/
 
 生产环境设置 `ENV=production`、`MOCK_ENABLED=false`，并分别注入独立的
 `JWT_KEY1`、`JWT_KEY2`、`TREE_PASSWORD_ENCRYPTION_KEY`（至少32字符，不能使用仓库示例值）。
+其中 JWT 两把密钥的长度、互不相同和示例值检查在所有环境都执行，不仅限生产环境。
 首次空数据库启动使用 `BOOTSTRAP_ADMIN_PASSWORD`（至少12字符）创建管理员，成功后移除该变量；已有用户不会被重置。
 `SERVER_ALLOWED_ORIGINS` 是逗号分隔的精确 Origin 白名单，留空仅支持同源浏览器访问。
 
