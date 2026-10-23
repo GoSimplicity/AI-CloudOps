@@ -123,6 +123,7 @@ def main():
     database = parser.add_mutually_exclusive_group()
     database.add_argument("--mysql-migration", action="store_true")
     database.add_argument("--mysql-notification", action="store_true")
+    database.add_argument("--mysql-cloud-account", action="store_true")
     parser.add_argument("--container")
     args = parser.parse_args()
     try:
@@ -130,6 +131,8 @@ def main():
             isolated_mysql(args.container)
         elif args.mysql_notification:
             isolated_mysql(args.container, "./internal/workorder/dao", "TestMySQLNotificationChannelPagination")
+        elif args.mysql_cloud_account:
+            isolated_mysql(args.container, "./internal/tree/service", "TestMySQLCloudAccountRegionDelta")
         else:
             api_check(args.url)
     except (SchemaError, KeyError, ValueError):

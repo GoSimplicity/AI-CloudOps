@@ -266,112 +266,58 @@ func (s *cloudAccountService) UpdateCloudAccount(ctx context.Context, req *model
 		}
 	}
 
-	if err := s.dao.CreateWithTransaction(ctx, func(tx interface{}) error {
-		updateAccount := &model.CloudAccount{
-			Model: model.Model{ID: req.ID},
-		}
-		updateFields := make([]string, 0)
+	updateAccount := &model.CloudAccount{
+		Model: model.Model{ID: req.ID},
+	}
+	updateFields := make([]string, 0)
 
-		if req.Name != "" {
-			updateAccount.Name = req.Name
-			updateFields = append(updateFields, "name")
-		}
-		if req.AccountID != "" {
-			updateAccount.AccountID = req.AccountID
-			updateFields = append(updateFields, "account_id")
-		}
-		if req.AccountName != "" {
-			updateAccount.AccountName = req.AccountName
-			updateFields = append(updateFields, "account_name")
-		}
-		if req.AccountAlias != "" {
-			updateAccount.AccountAlias = req.AccountAlias
-			updateFields = append(updateFields, "account_alias")
-		}
-		if req.Description != "" {
-			updateAccount.Description = req.Description
-			updateFields = append(updateFields, "description")
-		}
-
-		// 加密并更新 AccessKey
-		if req.AccessKey != "" {
-			encryptedAccessKey, err := treeUtils.EncryptPassword(req.AccessKey)
-			if err != nil {
-				s.logger.Error("加密AccessKey失败", zap.Error(err))
-				return fmt.Errorf("加密AccessKey失败: %w", err)
-			}
-			updateAccount.AccessKey = encryptedAccessKey
-			updateFields = append(updateFields, "access_key")
-		}
-
-		// 加密并更新 SecretKey
-		if req.SecretKey != "" {
-			encryptedSecretKey, err := treeUtils.EncryptPassword(req.SecretKey)
-			if err != nil {
-				s.logger.Error("加密SecretKey失败", zap.Error(err))
-				return fmt.Errorf("加密SecretKey失败: %w", err)
-			}
-			updateAccount.SecretKey = encryptedSecretKey
-			updateFields = append(updateFields, "secret_key")
-		}
-
-		// 更新云账户基本信息（如果有字段需要更新）
-		if len(updateFields) > 0 {
-			if err := s.dao.UpdateWithFields(ctx, updateAccount, updateFields); err != nil {
-				s.logger.Error("更新云账户基本信息失败",
-					zap.Int("id", req.ID),
-					zap.Strings("fields", updateFields),
-					zap.Error(err))
-				return fmt.Errorf("更新云账户基本信息失败: %w", err)
-			}
-		}
-
-		// 如果需要更新区域，先删除旧的区域关联，再创建新的
-		if len(normalizedRegions) > 0 {
-			if err := s.dao.DeleteRegionsByAccountIDInTransaction(ctx, req.ID, tx); err != nil {
-				s.logger.Error("删除旧区域关联失败",
-					zap.Int("account_id", req.ID),
-					zap.Error(err))
-				return fmt.Errorf("删除旧区域关联失败: %w", err)
-			}
-
-			for _, regionItem := range normalizedRegions {
-				region := &model.CloudAccountRegion{
-					CloudAccountID: req.ID,
-					Region:         regionItem.Region,
-					RegionName:     regionItem.RegionName,
-					IsDefault:      regionItem.IsDefault,
-					Description:    regionItem.Description,
-					Status:         model.CloudAccountRegionEnabled,
-					CreateUserID:   account.CreateUserID, // 保持原创建者
-					CreateUserName: account.CreateUserName,
-				}
-
-				if err := s.dao.CreateRegionInTransaction(ctx, region, tx); err != nil {
-					s.logger.Error("创建新区域关联失败",
-						zap.Int("account_id", req.ID),
-						zap.String("region", regionItem.Region),
-						zap.Error(err))
-					return fmt.Errorf("创建新区域关联失败: %w", err)
-				}
-			}
-
-			s.logger.Info("成功更新云账户区域",
-				zap.Int("account_id", req.ID),
-				zap.Int("region_count", len(normalizedRegions)))
-		}
-
-		s.logger.Info("成功更新云账户",
-			zap.Int("account_id", req.ID),
-			zap.String("name", account.Name),
-			zap.Strings("updated_fields", updateFields),
-			zap.Bool("regions_updated", len(normalizedRegions) > 0))
-
-		return nil
-	}); err != nil {
-		return err
+	if req.Name != "" {
+		updateAccount.Name = req.Name
+		updateFields = append(updateFields, "name")
+	}
+	if req.AccountID != "" {
+		updateAccount.AccountID = req.AccountID
+		updateFields = append(updateFields, "account_id")
+	}
+	if req.AccountName != "" {
+		updateAccount.AccountName = req.AccountName
+		updateFields = append(updateFields, "account_name")
+	}
+	if req.AccountAlias != "" {
+		updateAccount.AccountAlias = req.AccountAlias
+		updateFields = append(updateFields, "account_alias")
+	}
+	if req.Description != "" {
+		updateAccount.Description = req.Description
+		updateFields = append(updateFields, "description")
 	}
 
+	// 加密并更新 AccessKey
+	if req.AccessKey != "" {
+		encryptedAccessKey, err := treeUtils.EncryptPassword(req.AccessKey)
+		if err != nil {
+			s.logger.Error("加密AccessKey失败", zap.Error(err))
+			return fmt.Errorf("加密AccessKey失败: %w", err)
+		}
+		updateAccount.AccessKey = encryptedAccessKey
+		updateFields = append(updateFields, "access_key")
+	}
+
+	// 加密并更新 SecretKey
+	if req.SecretKey != "" {
+		encryptedSecretKey, err := treeUtils.EncryptPassword(req.SecretKey)
+		if err != nil {
+			s.logger.Error("加密SecretKey失败", zap.Error(err))
+			return fmt.Errorf("加密SecretKey失败: %w", err)
+		}
+		updateAccount.SecretKey = encryptedSecretKey
+		updateFields = append(updateFields, "secret_key")
+	}
+	if err := s.dao.UpdateAccountAndRegions(ctx, updateAccount, updateFields, normalizedRegions); err != nil {
+		s.logger.Error("更新云账户失败", zap.Int("account_id", req.ID), zap.Error(err))
+		return err
+	}
+	s.logger.Info("成功更新云账户", zap.Int("account_id", req.ID), zap.Strings("updated_fields", updateFields), zap.Bool("regions_updated", normalizedRegions != nil))
 	return nil
 }
 

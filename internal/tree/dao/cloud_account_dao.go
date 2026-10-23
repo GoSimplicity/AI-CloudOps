@@ -35,6 +35,7 @@ import (
 )
 
 type CloudAccountDAO interface {
+	UpdateAccountAndRegions(context.Context, *model.CloudAccount, []string, []model.CreateCloudAccountRegionItem) error
 	Create(ctx context.Context, account *model.CloudAccount) error
 	CreateWithTransaction(ctx context.Context, fn func(tx interface{}) error) error
 	CreateInTransaction(ctx context.Context, account *model.CloudAccount, tx interface{}) error

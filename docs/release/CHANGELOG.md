@@ -196,3 +196,9 @@
 - 通知list新增可选channel枚举email/feishu/sms/webhook，分页保留page_size
 - MySQL8.4与SQLite按顶层JSON字符串精确匹配，在count和分页前应用，非LIKE或当前页筛选
 - 同数据在真实SQLite与隔离MySQL覆盖多页/总数、大小写/子串/嵌套/非数组/无效JSON与叠加条件；先红后绿、race/vet、全仓test/build通过；integration增加MySQL门槛，见 [notification-channel-filter.md](notification-channel-filter.md)
+
+## 云账户地域差量与原子更新
+
+- 父账户行锁内统一更新基本信息/凭据/地域，保留原地域ID/状态/关联，安全恢复历史soft-delete行
+- 拒绝移除仍有未软删除云资源关联的地域，失败时整笔回滚；省略regions不覆盖较新集合
+- 旧源码overlay在隔离MySQL真实复现1062；修复后MySQL唯一约束/并发/失败回滚、SQLite、race/vet与全仓测试通过，integration增加门槛，见 [cloud-account-region-update.md](cloud-account-region-update.md)
