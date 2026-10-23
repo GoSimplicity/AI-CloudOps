@@ -595,7 +595,7 @@ type WebhookConfig struct {
 }
 
 type ImFeishuConfig struct {
-	GroupMessageAPI       string `mapstructure:"group_message_api" env:"WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API" default:"https://open.feishu.cn/open-apis/im/v1/messages"`
+	GroupMessageAPI       string `mapstructure:"group_message_api" env:"WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API" default:"https://open.feishu.cn/open-apis/bot/v2/hook"`
 	RequestTimeoutSeconds int    `mapstructure:"request_timeout_seconds" env:"WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS" default:"10"`
 	PrivateRobotAppID     string `mapstructure:"private_robot_app_id" env:"WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_ID" default:""`
 	PrivateRobotAppSecret string `mapstructure:"private_robot_app_secret" env:"WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET" default:""`

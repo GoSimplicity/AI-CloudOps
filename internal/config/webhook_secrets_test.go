@@ -271,8 +271,9 @@ func TestLoadWebhookRejectsInvalidPort(t *testing.T) {
 			if err == nil || IsNonFatal(err) {
 				t.Fatalf("端口 %q 应导致启动失败, got %v", bad, err)
 			}
-			if !strings.Contains(err.Error(), "webhook.port") || !strings.Contains(err.Error(), "WEBHOOK_PORT") {
-				t.Fatalf("错误应列出键名和变量名: %v", err)
+			// 第二轮 N3：取自配置文件时只写“配置文件中的 webhook.port”，不提环境变量
+			if !strings.Contains(err.Error(), "配置文件中的 webhook.port") || strings.Contains(err.Error(), "环境变量") {
+				t.Fatalf("错误应列出配置文件中的键名、不提环境变量: %v", err)
 			}
 			if strings.TrimSpace(bad) != "" && strings.Contains(err.Error(), strings.TrimSpace(bad)) {
 				t.Fatalf("错误信息不应包含端口值: %v", err)
@@ -285,8 +286,8 @@ func TestLoadWebhookRejectsInvalidPort(t *testing.T) {
 	// 环境变量提供的非法端口同样失败
 	viper.Reset()
 	t.Setenv("WEBHOOK_PORT", "abc")
-	if _, _, err := loadWebhookFromFile(webhookConfigFile); err == nil {
-		t.Fatal("WEBHOOK_PORT=abc 应导致启动失败")
+	if _, _, err := loadWebhookFromFile(webhookConfigFile); err == nil || !strings.Contains(err.Error(), "webhook.port（环境变量 WEBHOOK_PORT）") {
+		t.Fatalf("WEBHOOK_PORT=abc 应导致启动失败，报错写明键名和变量名: %v", err)
 	}
 	// 带首尾空白的合法端口：去空白后通过，cfg 与全局都是去空白后的值
 	for _, tc := range []struct{ name, file, env, want string }{
@@ -343,12 +344,13 @@ func TestIsValidPortLeadingZeros(t *testing.T) {
 	}
 }
 
-// 整数字段严格解析：只接受十进制整数。字符串形式的 10.0、带空白、小数一律启动失败且不发布到全局；
+// 整数字段严格解析：只接受十进制整数。字符串形式的 10.0、中间带空白、小数一律启动失败且不发布到全局
+// （第二轮 N5：环境变量首尾的 " \t\r\n" 先去掉，" 10"/"10 " 改为接受；YAML 引号里的空白仍拒绝）；
 // 未加引号的 YAML 浮点数（10.0、10.5）按节点原始文本校验，同样启动失败（不再截断）
 func TestLoadWebhookIntegerFieldsStrict(t *testing.T) {
 	t.Setenv(WebhookMySQLAddrEnv, fakeWebhookDSN)
 	t.Setenv("WEBHOOK_PORT", "")
-	for _, bad := range []string{"10.0", " 10", "10 ", "10.5", "1e1", "abc"} {
+	for _, bad := range []string{"10.0", "1 0", "\v10", "10.5", "1e1", "abc"} {
 		t.Run("env/"+bad, func(t *testing.T) {
 			viper.Reset()
 			t.Cleanup(viper.Reset)

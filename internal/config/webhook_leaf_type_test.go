@@ -1,8 +1,6 @@
 package config
 
 import (
-	"os"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -47,13 +45,16 @@ func assertNoLeak(t *testing.T, msg string) {
 	}
 }
 
-// clearAllWebhookEnv 把全部 WEBHOOK_* 叶子变量置空（视为未设置）并注入假 DSN
+// clearAllWebhookEnv 把全部 WEBHOOK_* 叶子变量和父键变量置空（视为未设置）并注入假 DSN
 func clearAllWebhookEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv(WebhookMySQLAddrEnv, fakeWebhookDSN)
 	for _, s := range webhookLeafSpecs {
 		t.Setenv(s.env, "")
 	}
+	// 父键变量非空会直接启动失败，测试默认置空
+	t.Setenv("WEBHOOK", "")
+	t.Setenv("WEBHOOK_IM_FEISHU", "")
 }
 
 // nestedWebhookYAML 把 webhook.a.b 形式的键写成嵌套 YAML：webhook:\n  a:\n    b: val
@@ -177,7 +178,7 @@ func TestLoadWebhookParentNullOrEmptyMapAccepted(t *testing.T) {
 			if err != nil {
 				t.Fatalf("父键为空应正常加载: %v", err)
 			}
-			if cfg.ImFeishu.RequestTimeoutSeconds != 7 || cfg.ImFeishu.GroupMessageAPI != "https://open.feishu.cn/open-apis/im/v1/messages" {
+			if cfg.ImFeishu.RequestTimeoutSeconds != 7 || cfg.ImFeishu.GroupMessageAPI != "https://open.feishu.cn/open-apis/bot/v2/hook" {
 				t.Fatal("子键应取环境变量/默认值")
 			}
 			if n := compareWebhookCfgWithGlobal(t, reflect.ValueOf(*cfg), "webhook"); n != 12 {
@@ -260,6 +261,8 @@ func TestLoadWebhookSamePrefixKeys(t *testing.T) {
 
 // 未知键：不发布到全局、stderr 只告警一次（只写键名）、不拒绝启动；没有未知键时不告警
 func TestLoadWebhookUnknownKeysWarnOnceNotPublished(t *testing.T) {
+	// 第二轮：仓库 webhook.yaml 已删掉 7 个没有代码读取的键（alert_receive_queue_size、http_request_global_timeout_seconds、
+	// min_workers、max_workers、scale_threshold、scale_interval、im_feishu.private_message_api），不再告警
 	t.Run("repo-file", func(t *testing.T) {
 		viper.Reset()
 		t.Cleanup(viper.Reset)
@@ -268,18 +271,8 @@ func TestLoadWebhookUnknownKeysWarnOnceNotPublished(t *testing.T) {
 		if _, _, err := loadWebhookFromFile(webhookConfigFile); err != nil {
 			t.Fatalf("仓库 webhook.yaml 应正常加载: %v", err)
 		}
-		if len(*warns) != 1 {
-			t.Fatalf("应只告警一次, got %d", len(*warns))
-		}
-		w := (*warns)[0]
-		want := "webhook.alert_receive_queue_size, webhook.http_request_global_timeout_seconds, webhook.im_feishu.private_message_api, webhook.max_workers, webhook.min_workers, webhook.scale_interval, webhook.scale_threshold"
-		if !strings.Contains(w, want) {
-			t.Fatalf("告警应列出全部未知键名: %s", w)
-		}
-		for _, leak := range []string{"open-apis", "0.5", ": 100", ": 30"} {
-			if strings.Contains(w, leak) {
-				t.Fatalf("告警不应包含取值: %s", w)
-			}
+		if len(*warns) != 0 {
+			t.Fatalf("仓库 webhook.yaml 不应再有未知键告警, got %d", len(*warns))
 		}
 		var want12 []string
 		for _, s := range webhookLeafSpecs {
@@ -330,17 +323,23 @@ var webhookIntBounds = []struct {
 	{"webhook.fixed_workers", "WEBHOOK_FIXED_WORKERS", 1, 1024, 0},
 	{"webhook.default_upgrade_minutes", "WEBHOOK_DEFAULT_UPGRADE_MINUTES", 1, 10080, time.Minute},
 	{"webhook.common_map_renew_interval_seconds", "WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS", 1, 86400, time.Second},
-	{"webhook.im_feishu.request_timeout_seconds", "WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS", 0, 600, time.Second},
+	{"webhook.im_feishu.request_timeout_seconds", "WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS", 1, 600, time.Second},
 }
 
-func rangeErrFor(key, env string, min, max int) string {
-	return "Webhook 整数配置超出允许范围: " + key + "（环境变量 " + env + "）必须在 " + strconv.Itoa(min) + " 到 " + strconv.Itoa(max) + " 之间"
+// rangeErrFor 越界报错：取自环境变量写“KEY（环境变量 ENV）”，取自配置文件写“配置文件中的 KEY ”
+func rangeErrFor(src, key, env string, min, max int) string {
+	label := key + "（环境变量 " + env + "）"
+	if src != "env" {
+		label = "配置文件中的 " + key + " "
+	}
+	return "Webhook 整数配置超出允许范围: " + label + "必须在 " + strconv.Itoa(min) + " 到 " + strconv.Itoa(max) + " 之间"
 }
 
-// 整数字段只接受十进制整数：YAML 按节点原始文本校验（不加引号的 10.5 / 010 / 0x10 / +3 等不再被截断或按进制解析），环境变量同样严格
+// 整数字段只接受十进制整数：YAML 按节点原始文本校验（不加引号的 10.5 / 010 / 0x10 / +3 等不再被截断或按进制解析），
+// 环境变量同样严格（第二轮 N5：先去首尾 ASCII 空白，" 10"、"10 " 改为接受，见 TestLoadWebhookIntEnvTrimsASCIISpace）
 func TestLoadWebhookIntRawTextStrict(t *testing.T) {
 	yamlBad := []string{"10.5", "-0.5", "0x10", "0X10", "+3", "010", "00", "-0", "1e1", "10.0", "0o10", "0b1", "1_0", "true", ".inf", "\"010\"", "\"0x10\"", "\"+3\"", "\"10.5\"", "\" 10\"", "\"10 \"", "\"\"", "'-0.5'"}
-	envBad := []string{"010", "0x10", "+3", "10.5", "-0.5", " 10", "10 ", "-0", "1_0", "1e1", "abc", "１０"}
+	envBad := []string{"010", "0x10", "+3", "10.5", "-0.5", "1 0", "\v10", "-0", "1_0", "1e1", "abc", "１０"}
 	for _, b := range webhookIntBounds {
 		for _, bad := range yamlBad {
 			t.Run(b.key+"/yaml/"+bad, func(t *testing.T) {
@@ -348,7 +347,7 @@ func TestLoadWebhookIntRawTextStrict(t *testing.T) {
 				t.Cleanup(viper.Reset)
 				clearAllWebhookEnv(t)
 				_, _, err := loadWebhookFromFile(writeWebhookYAML(t, nestedWebhookYAML(b.key, bad)))
-				assertWebhookIntSyntaxError(t, err, b.key, b.env, bad)
+				assertWebhookIntSyntaxError(t, err, "yaml", b.key, b.env, bad)
 			})
 		}
 		for _, bad := range envBad {
@@ -358,7 +357,7 @@ func TestLoadWebhookIntRawTextStrict(t *testing.T) {
 				clearAllWebhookEnv(t)
 				t.Setenv(b.env, bad)
 				_, _, err := loadWebhookFromFile(writeWebhookYAML(t, "webhook:\n  port: \"8889\"\n"))
-				assertWebhookIntSyntaxError(t, err, b.key, b.env, bad)
+				assertWebhookIntSyntaxError(t, err, "env", b.key, b.env, bad)
 			})
 		}
 		for _, good := range []struct{ src, raw string }{{"yaml", "7"}, {"yaml", "\"7\""}, {"yaml", "'7'"}, {"env", "7"}} {
@@ -384,14 +383,18 @@ func TestLoadWebhookIntRawTextStrict(t *testing.T) {
 	}
 }
 
-func assertWebhookIntSyntaxError(t *testing.T, err error, key, env, bad string) {
+func assertWebhookIntSyntaxError(t *testing.T, err error, src, key, env, bad string) {
 	t.Helper()
 	if err == nil || IsNonFatal(err) {
 		t.Fatalf("%s=%q 应启动失败", key, bad)
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, key) || !strings.Contains(msg, env) || !strings.Contains(msg, "十进制整数") {
-		t.Fatalf("报错应列出键名、变量名并说明需要十进制整数: %s", msg)
+	want := key + "（环境变量 " + env + "）应为十进制整数"
+	if src != "env" {
+		want = "配置文件中的 " + key + " 应为十进制整数"
+	}
+	if !strings.Contains(msg, want) || (src != "env" && strings.Contains(msg, "环境变量")) {
+		t.Fatalf("报错应按来源列出键名（环境变量来源带变量名）并说明需要十进制整数: %s", msg)
 	}
 	if v := strings.Trim(strings.TrimSpace(bad), `"'`); len(v) >= 2 && strings.Contains(msg, v) {
 		t.Fatalf("报错不应包含取值: %s", msg)
@@ -442,8 +445,8 @@ func TestLoadWebhookIntUpperBounds(t *testing.T) {
 					if err == nil || IsNonFatal(err) {
 						t.Fatalf("%s=%s 应启动失败", b.key, bad)
 					}
-					if err.Error() != rangeErrFor(b.key, b.env, b.min, b.max) {
-						t.Fatalf("报错应只描述键名、变量名和范围\n got: %s\nwant: %s", err.Error(), rangeErrFor(b.key, b.env, b.min, b.max))
+					if want := rangeErrFor(src, b.key, b.env, b.min, b.max); err.Error() != want {
+						t.Fatalf("报错应只描述键名、来源和范围\n got: %s\nwant: %s", err.Error(), want)
 					}
 					if len(viper.AllKeys()) != 0 {
 						t.Fatal("失败时不应发布任何键到全局 viper")
@@ -666,37 +669,5 @@ func TestLoadWebhookStringLeafUsesRawText(t *testing.T) {
 	}
 }
 
-// 非 YAML 格式（如 TOML）不做节点扫描，只靠取值层兜底：浮点不截断、表（map）写进叶子报类型错误
-func TestLoadWebhookNonYAMLValueLevelChecks(t *testing.T) {
-	write := func(t *testing.T, body string) string {
-		p := filepath.Join(t.TempDir(), "webhook.toml")
-		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		return p
-	}
-	for _, tc := range []struct{ name, key, body string }{
-		{"float-int", "webhook.fixed_workers", "[webhook]\nfixed_workers = 10.5\n"},
-		{"float-timeout", "webhook.im_feishu.request_timeout_seconds", "[webhook.im_feishu]\nrequest_timeout_seconds = 3.0\n"},
-		{"table-leaf", "webhook.front_domain", "[webhook.front_domain]\nx = \"fake-leak-t\"\n"},
-		{"bool-int", "webhook.default_upgrade_minutes", "[webhook]\ndefault_upgrade_minutes = true\n"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			viper.Reset()
-			t.Cleanup(viper.Reset)
-			clearAllWebhookEnv(t)
-			_, _, err := loadWebhookFromFile(write(t, tc.body))
-			assertWebhookTypeError(t, err, tc.key)
-		})
-	}
-	t.Run("ok", func(t *testing.T) {
-		viper.Reset()
-		t.Cleanup(viper.Reset)
-		clearAllWebhookEnv(t)
-		cfg, _, err := loadWebhookFromFile(write(t, "[webhook]\nfixed_workers = 9\nport = \"8081\"\n"))
-		if err != nil || cfg.FixedWorkers != 9 || cfg.Port != "8081" {
-			t.Fatalf("TOML 正常值应加载成功: %v", err)
-		}
-		compareWebhookCfgWithGlobal(t, reflect.ValueOf(*cfg), "webhook")
-	})
-}
+// 第二轮起配置文件只接受 .yaml/.yml/.json：原“非 YAML 格式只靠取值层兜底”的用例改为启动失败，
+// 见 webhook_strict_scan_test.go 的 TestLoadWebhookRejectsNonYAMLFormats

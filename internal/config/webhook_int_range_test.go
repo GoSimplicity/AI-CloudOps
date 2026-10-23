@@ -16,7 +16,15 @@ type webhookIntFieldCase struct {
 	max       int
 	get       func(*WebhookConfig) int
 	yaml      func(v string) string
-	wantErr   string // 只含键名、变量名和上下限，不含取值
+	wantErr   string // 取自环境变量时的报错：只含键名、变量名和上下限，不含取值
+}
+
+// wantErrFor 按来源给出期望报错：配置文件来源写“配置文件中的 KEY”，不提环境变量
+func (c webhookIntFieldCase) wantErrFor(source string) string {
+	if source == "yaml" {
+		return strings.Replace(c.wantErr, c.key+"（环境变量 "+c.env+"）", "配置文件中的 "+c.key+" ", 1)
+	}
+	return c.wantErr
 }
 
 func webhookIntFieldCases() []webhookIntFieldCase {
@@ -33,12 +41,12 @@ func webhookIntFieldCases() []webhookIntFieldCase {
 		{"webhook.common_map_renew_interval_seconds", "WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS", false, 86400,
 			func(c *WebhookConfig) int { return c.CommonMapRenewIntervalSeconds }, top("common_map_renew_interval_seconds"),
 			"Webhook 整数配置超出允许范围: webhook.common_map_renew_interval_seconds（环境变量 WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS）必须在 1 到 86400 之间"},
-		{"webhook.im_feishu.request_timeout_seconds", "WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS", true, 600,
+		{"webhook.im_feishu.request_timeout_seconds", "WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS", false, 600,
 			func(c *WebhookConfig) int { return c.ImFeishu.RequestTimeoutSeconds },
 			func(v string) string {
 				return "webhook:\n  port: \"8889\"\n  im_feishu:\n    request_timeout_seconds: " + v + "\n"
 			},
-			"Webhook 整数配置超出允许范围: webhook.im_feishu.request_timeout_seconds（环境变量 WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS）必须在 0 到 600 之间"},
+			"Webhook 整数配置超出允许范围: webhook.im_feishu.request_timeout_seconds（环境变量 WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS）必须在 1 到 600 之间"},
 	}
 }
 
@@ -69,7 +77,8 @@ func loadWebhookIntCase(t *testing.T, c webhookIntFieldCase, source, v string) (
 	return cfg, err
 }
 
-// 每个整数字段：负数一律拒绝；不允许 0 的字段写 0 拒绝；报错只含键名、变量名和上下限、不含取值；失败不发布全局。环境变量与 YAML 两个来源都覆盖
+// 每个整数字段：负数一律拒绝；不允许 0 的字段写 0 拒绝（全部字段都不允许 0，im_feishu.request_timeout_seconds 自第二轮起最小 1）；
+// 报错按来源写“KEY（环境变量 ENV）”或“配置文件中的 KEY”，只含键名、变量名和上下限、不含取值；失败不发布全局。环境变量与 YAML 两个来源都覆盖
 func TestLoadWebhookIntFieldsRejectOutOfRange(t *testing.T) {
 	t.Setenv(WebhookMySQLAddrEnv, fakeWebhookDSN)
 	t.Setenv("WEBHOOK_PORT", "")
@@ -86,15 +95,15 @@ func TestLoadWebhookIntFieldsRejectOutOfRange(t *testing.T) {
 						t.Fatalf("%s=%s 应导致启动失败, got %v", c.key, bad, err)
 					}
 					msg := err.Error()
-					if !strings.Contains(msg, c.key) || !strings.Contains(msg, c.env) {
-						t.Fatalf("报错应包含键名和变量名: %s", msg)
+					if !strings.Contains(msg, c.key) || strings.Contains(msg, c.env) != (source == "env") {
+						t.Fatalf("报错应包含键名，且只有环境变量来源才提变量名: %s", msg)
 					}
 					// 单字符 "0" 会和上限（如 1024）中的数字撞上，靠下面的精确比对保证不含取值
 					if len(bad) > 1 && strings.Contains(msg, bad) {
 						t.Fatalf("报错不应包含取值: %s", msg)
 					}
-					if msg != c.wantErr {
-						t.Fatalf("报错应只描述键名、变量名和上下限\n got: %s\nwant: %s", msg, c.wantErr)
+					if want := c.wantErrFor(source); msg != want {
+						t.Fatalf("报错应只描述键名、来源和上下限\n got: %s\nwant: %s", msg, want)
 					}
 					if len(viper.AllKeys()) != 0 {
 						t.Fatal("失败时不应发布任何键到全局 viper")
@@ -179,7 +188,7 @@ func TestRepoWebhookConfigAndDefaultsSatisfyIntRules(t *testing.T) {
 			if err != nil && !IsNonFatal(err) {
 				t.Fatalf("应正常加载: %v", err)
 			}
-			if err := validateWebhookIntFields(cfg); err != nil {
+			if err := validateWebhookIntFields(cfg, nil); err != nil {
 				t.Fatal(err)
 			}
 		})

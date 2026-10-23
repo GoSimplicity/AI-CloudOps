@@ -36,6 +36,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/GoSimplicity/AI-CloudOps/pkg/runenv"
 	"github.com/spf13/pflag"
@@ -138,6 +139,15 @@ const webhookGlobalPrefix = "webhook."
 // 使用独立的 viper 实例读取文件与环境变量：DSN 只经由返回的 WebhookSecrets 传给数据库初始化，
 // 不写入全局 viper（mysql.addr 不会出现在全局配置中），也不受主程序 MYSQL_ADDR 影响
 func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, error) {
+	// 只接受 YAML（.json 按 YAML 子集走同一套结构扫描）；其他格式没有原文级校验，文件不存在时也直接拒绝
+	if err := checkWebhookConfigExt(configFile); err != nil {
+		return nil, nil, err
+	}
+	// 非空的父键环境变量（WEBHOOK、WEBHOOK_IM_FEISHU）会遮蔽整棵子树，叶子静默变成零值，直接失败
+	if err := checkWebhookParentEnvVars(); err != nil {
+		return nil, nil, err
+	}
+
 	v := viper.New()
 	v.SetConfigFile(configFile)
 	setWebhookDefaults(v)
@@ -146,7 +156,8 @@ func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, er
 
 	readErr := v.ReadInConfig()
 	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
-		return nil, nil, fmt.Errorf("读取Webhook配置文件失败: %w", readErr)
+		// 解析错误会回显文件内容（可能含密钥），只保留行号和原因
+		return nil, nil, fmt.Errorf("读取Webhook配置文件失败: %s", sanitizeWebhookParseError(readErr))
 	}
 
 	// 不再支持没有 webhook 根节点的旧平铺格式：这些键只会被忽略、静默回落到默认值（端口可能变化），
@@ -177,7 +188,8 @@ func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, er
 		return nil, nil, fmt.Errorf("缺少必需的密钥环境变量: %s（不提供内置默认值，请通过环境变量注入）", WebhookMySQLAddrEnv)
 	}
 
-	// 配置文件结构与原始文本校验（只看文件本身）：叶子写成 map/列表、父键写成标量/列表、整数字段不是十进制整数都在这里拒绝，
+	// 配置文件结构与原始文本校验（只看文件本身，按 YAML 合并规则算出的生效条目）：别名键、带引号的 <<、带点号的键、
+	// 大小写重复键、不允许的显式 tag、叶子写成 map/列表、父键写成标量/列表、整数字段不是十进制整数，
 	// 同时收集 webhook 下的未知键。文件里写错就失败，与该键是否被环境变量覆盖无关
 	var scan webhookFileScan
 	if readErr == nil {
@@ -189,7 +201,7 @@ func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, er
 
 	// 逐键取合并后的值（环境变量 > 配置文件 > 默认值）。v.UnmarshalKey("webhook") 只拿到配置文件里的
 	// webhook 子树，环境变量和默认值进不了 cfg（WEBHOOK_PORT 因此从未生效），所以不能直接用。
-	// 只构造这一次：解码 cfg 与发布到全局 viper 共用同一份、同一顺序
+	// 只构造这一次：解码 cfg 与发布到全局 viper 共用同一份、同一顺序。文件问题与取值问题一起汇总报错
 	merged, err := collectWebhookLeafValues(v, scan)
 	if err != nil {
 		return nil, nil, err
@@ -197,8 +209,8 @@ func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, er
 	rawPort, hasPort := merged.vals[webhookPortKey]
 	port := strings.TrimSpace(fmt.Sprint(rawPort))
 	if !hasPort || rawPort == nil || !isValidPort(port) {
-		// 只列出键名和变量名，不输出值
-		return nil, nil, fmt.Errorf("Webhook 端口 %s（环境变量 WEBHOOK_PORT）必须是 1-65535 的纯数字", webhookPortKey)
+		// 只列出键名和来源，不输出值
+		return nil, nil, fmt.Errorf("Webhook 端口 %s必须是 1-65535 的纯数字", webhookRangeLabel(webhookPortKey, merged.src[webhookPortKey]))
 	}
 	// 去掉前导零后的规范值（如 000080 → 80）同时用于监听和全局 webhook.port
 	merged.vals[webhookPortKey] = normalizePort(port)
@@ -208,7 +220,7 @@ func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, er
 		return nil, nil, err
 	}
 	// 整数字段范围校验：失败时与其他校验一样直接返回，不发布到全局
-	if err := validateWebhookIntFields(cfg); err != nil {
+	if err := validateWebhookIntFields(cfg, merged.src); err != nil {
 		return nil, nil, err
 	}
 
@@ -218,14 +230,95 @@ func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, er
 	}
 
 	// 只把 webhook.* 的已知叶子键发布到全局 viper，供 webhook 子系统现有读取方使用；mysql.* 与未知键不发布。
-	// 与 cfg 使用同一份合并后的值
+	// 与 cfg 使用同一份合并后的值。全局 viper 的 Set 不是并发安全的，并发加载时串行写入
+	webhookGlobalMu.Lock()
 	merged.apply(viper.Set)
+	webhookGlobalMu.Unlock()
 
 	secrets := &WebhookSecrets{MySQLAddr: addr}
 	if readErr != nil {
 		return cfg, secrets, NonFatalError{err: fmt.Errorf("读取Webhook配置文件失败: %w", readErr)}
 	}
 	return cfg, secrets, nil
+}
+
+// webhookGlobalMu 串行化 loadWebhookFromFile 对全局 viper 的写入
+var webhookGlobalMu sync.Mutex
+
+// webhookConfigExts 允许的配置文件扩展名（区分大小写）。.json 是 YAML 的子集，与 YAML 走同一套结构扫描
+var webhookConfigExts = map[string]bool{".yaml": true, ".yml": true, ".json": true}
+
+// checkWebhookConfigExt 拒绝 YAML/JSON 以外的配置文件格式（toml、ini、properties、hcl、env、无扩展名、大写扩展名等）
+func checkWebhookConfigExt(configFile string) error {
+	if webhookConfigExts[filepath.Ext(configFile)] {
+		return nil
+	}
+	return fmt.Errorf("Webhook 配置文件只支持 .yaml / .yml（.json 按 YAML 子集解析）格式，不支持 %s", configFile)
+}
+
+// webhookParentEnvVars 父键对应的环境变量名：WEBHOOK 与各父键（WEBHOOK_IM_FEISHU），按名字排序
+func webhookParentEnvVars() []string {
+	names := []string{"WEBHOOK"}
+	for p := range webhookKeySchema.parents {
+		names = append(names, strings.ToUpper(strings.ReplaceAll(p, ".", "_")))
+	}
+	sort.Strings(names)
+	return names
+}
+
+// checkWebhookParentEnvVars 父键环境变量非空即失败（空串与未设置等同，与 viper 一致），只列变量名
+func checkWebhookParentEnvVars() error {
+	var set []string
+	for _, name := range webhookParentEnvVars() {
+		if os.Getenv(name) != "" {
+			set = append(set, name)
+		}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	return fmt.Errorf("环境变量 %s 对应的是父键（整棵子树），非空时会遮蔽其下全部叶子键、使其静默变成零值，不支持；请删除或置空，改用叶子变量（如 WEBHOOK_PORT、WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS）",
+		strings.Join(set, ", "))
+}
+
+var (
+	webhookParseLineRe   = regexp.MustCompile(`line ([0-9]+)`)
+	webhookParseLinePfx  = regexp.MustCompile(`(?:yaml: )?line [0-9]+: `)
+	webhookParseQuotedRe = regexp.MustCompile("\"(?:[^\"\\\\]|\\\\.)*\"|'[^'\\n]*'|`[^`\\n]*`")
+)
+
+// webhookParseErrorMaxLen 脱敏后原因的最大长度（字节），防止异常错误串过长
+const webhookParseErrorMaxLen = 200
+
+// sanitizeWebhookParseError 把 viper / yaml.v3 / encoding/json 的解析错误收敛成“配置文件第 N 行: 原因”：
+// 引号、反引号里的内容（键名、取值片段）一律替换为 …，“invalid map key” 之后的内容整体丢弃，只保留行号和原因
+func sanitizeWebhookParseError(err error) string {
+	s := err.Error()
+	s = strings.ReplaceAll(s, "While parsing config: ", "")
+	s = strings.ReplaceAll(s, "yaml: unmarshal errors:", "")
+	if i := strings.Index(s, "invalid map key"); i >= 0 {
+		s = s[:i+len("invalid map key")]
+	}
+	s = webhookParseQuotedRe.ReplaceAllStringFunc(s, func(q string) string {
+		return q[:1] + "…" + q[len(q)-1:]
+	})
+	line := ""
+	if m := webhookParseLineRe.FindStringSubmatch(s); m != nil {
+		line = "配置文件第 " + m[1] + " 行: "
+		// 只去掉第一处 “line N: ” 前缀，其余（如 already defined at line 4）保留
+		if loc := webhookParseLinePfx.FindStringIndex(s); loc != nil {
+			s = s[:loc[0]] + s[loc[1]:]
+		}
+	}
+	s = strings.TrimPrefix(strings.TrimSpace(s), "yaml: ")
+	s = strings.Join(strings.Fields(s), " ")
+	if len(s) > webhookParseErrorMaxLen {
+		s = strings.ToValidUTF8(s[:webhookParseErrorMaxLen], "") + "…"
+	}
+	if line == "" {
+		line = "配置文件解析失败: "
+	}
+	return line + s
 }
 
 // webhookPortKey Webhook 监听端口的配置键
@@ -303,58 +396,116 @@ func buildWebhookSchema(t reflect.Type, root string) webhookSchema {
 // webhookDecimalInt 整数字段唯一接受的写法：十进制整数，可带负号，不允许前导零、+ 号、空白、小数点、下划线和进制前缀
 var webhookDecimalInt = regexp.MustCompile(`^(0|-?[1-9][0-9]*)$`)
 
-// webhookTypeErrorText 某个叶子/父键类型不对时的说明（只含键名和变量名，不含取值）
-func webhookTypeErrorText(key string) string {
-	if leaf, ok := webhookKeySchema.leaves[key]; ok {
-		if leaf.kind == reflect.Int {
-			return fmt.Sprintf("%s（环境变量 %s）应为十进制整数", key, leaf.env)
-		}
-		return fmt.Sprintf("%s 应为字符串", key)
-	}
-	return fmt.Sprintf("%s 应为 map 或留空", key)
+// webhookIssuePrefix 文件写法问题与取值类型问题汇总报错的前缀
+const webhookIssuePrefix = "Webhook 配置写法或类型错误: "
+
+// webhookIssues 汇总的问题：排序键 → 说明。按排序键输出，结果稳定；说明只含键名、变量名或行号，不含取值
+type webhookIssues map[string]string
+
+// addKey 记一条与键路径相关的问题（排序键以键路径开头，同一键的不同问题用 kind 区分）
+func (is webhookIssues) addKey(key, kind, text string) {
+	is[key+"\x00"+kind] = text
 }
 
-// webhookTypeError 汇总类型错误：按键名排序，只列键名
-func webhookTypeError(bad map[string]bool) error {
-	if len(bad) == 0 {
+// addLine 记一条只能用行号定位的问题，排在键路径类问题之后
+func (is webhookIssues) addLine(line int, kind, text string) {
+	is[fmt.Sprintf("~%09d\x00%s", line, kind)] = text
+}
+
+func (is webhookIssues) err() error {
+	if len(is) == 0 {
 		return nil
 	}
-	keys := make([]string, 0, len(bad))
-	for k := range bad {
+	keys := make([]string, 0, len(is))
+	for k := range is {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	items := make([]string, len(keys))
 	for i, k := range keys {
-		items[i] = webhookTypeErrorText(k)
+		items[i] = is[k]
 	}
-	return fmt.Errorf("Webhook 配置类型错误: %s", strings.Join(items, "；"))
+	return errors.New(webhookIssuePrefix + strings.Join(items, "；"))
+}
+
+// webhookSourceLabel 报错时按值的实际来源描述键：配置文件 / 环境变量 / 内置默认值
+func webhookSourceLabel(key, src string) string {
+	switch src {
+	case webhookSrcFile:
+		return "配置文件中的 " + key
+	case webhookSrcEnv:
+		env := ""
+		if leaf, ok := webhookKeySchema.leaves[key]; ok {
+			env = leaf.env
+		}
+		return fmt.Sprintf("%s（环境变量 %s）", key, env)
+	case webhookSrcDefault:
+		return key + "（内置默认值）"
+	}
+	return key
+}
+
+// 取值来源
+const (
+	webhookSrcFile    = "file"
+	webhookSrcEnv     = "env"
+	webhookSrcDefault = "default"
+)
+
+// webhookTypeErrorText 某个叶子/父键类型不对时的说明（只含键名、来源，不含取值）
+func webhookTypeErrorText(key, src string) string {
+	label := webhookRangeLabel(key, src)
+	if leaf, ok := webhookKeySchema.leaves[key]; ok {
+		if leaf.kind == reflect.Int {
+			return label + "应为十进制整数"
+		}
+		return label + "应为字符串"
+	}
+	return label + "应为 map 或留空"
 }
 
 // webhookFileScan 配置文件本身的扫描结果
 type webhookFileScan struct {
-	bad     map[string]bool   // 类型错误的键
+	bad     map[string]bool   // 已记问题的键（叶子或父键），取值阶段跳过这些键及其子键
+	issues  webhookIssues     // 文件写法问题
 	unknown []string          // webhook 下不认识的键（已排序去重，不展开子键）
-	raw     map[string]string // 叶子在文件里的原始标量文本（非 null）；大小写不同的重复键不记录
+	raw     map[string]string // 叶子在文件里生效条目的原始标量文本（非 null）
 }
 
-// scanWebhookConfigFile 用 yaml.v3 读取配置文件节点树，按两张表检查 webhook 子树。
-// 只处理 YAML/JSON（yaml.v3 可解析 JSON）；其他格式返回空结果，仍由 collectWebhookLeafValues 按取值类型兜底
-func scanWebhookConfigFile(path string) (webhookFileScan, error) {
-	scan := webhookFileScan{bad: map[string]bool{}, raw: map[string]string{}}
-	switch strings.ToLower(strings.TrimPrefix(filepath.Ext(path), ".")) {
-	case "yaml", "yml", "json":
-	default:
-		return scan, nil
+func (s *webhookFileScan) addBad(key, kind, text string) {
+	if s.bad == nil {
+		s.bad = map[string]bool{}
 	}
+	if s.issues == nil {
+		s.issues = webhookIssues{}
+	}
+	s.bad[key] = true
+	s.issues.addKey(key, kind, text)
+}
+
+func (s *webhookFileScan) addLine(line int, kind, text string) {
+	if s.issues == nil {
+		s.issues = webhookIssues{}
+	}
+	s.issues.addLine(line, kind, text)
+}
+
+// webhookYAMLMaxDepth 遍历合并结果时的最大深度（防御异常输入，正常配置远小于此）
+const webhookYAMLMaxDepth = 64
+
+// scanWebhookConfigFile 用 yaml.v3 读取配置文件节点树（YAML/JSON，扩展名已由 checkWebhookConfigExt 限定），检查：
+//   - 全文件结构：键写成别名（*x）、带引号或显式 tag 的 "<<"、同一 mapping 多个 <<；
+//   - 全文件按 YAML 合并结果：同一父节点下小写后相同的键（大小写变体或完全重复，口径同 check-webhook-env.sh），根节点带点号的键；
+//   - webhook 子树（按合并结果，只看生效条目）：带点号的键、父键/叶子类型、叶子的显式 tag、整数叶子的十进制原文
+func scanWebhookConfigFile(path string) (webhookFileScan, error) {
+	scan := webhookFileScan{bad: map[string]bool{}, issues: webhookIssues{}, raw: map[string]string{}}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return scan, fmt.Errorf("读取Webhook配置文件失败: %w", err)
+		return scan, errors.New("读取Webhook配置文件失败: 无法读取文件")
 	}
 	var doc yaml.Node
 	if err := yaml.Unmarshal(data, &doc); err != nil {
-		// viper 已成功解析过同一文件，这里只在文件被并发改动时出现；不回显内容
-		return scan, errors.New("读取Webhook配置文件失败: 无法解析 YAML 节点")
+		return scan, fmt.Errorf("读取Webhook配置文件失败: %s", sanitizeWebhookParseError(err))
 	}
 	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
 		return scan, nil
@@ -363,24 +514,26 @@ func scanWebhookConfigFile(path string) (webhookFileScan, error) {
 	if root.Kind != yaml.MappingNode {
 		return scan, nil
 	}
-	seen := map[string]int{}
+	checkYAMLKeyStructure(root, &scan)
+	checkYAMLCaseDuplicates(root, "", &scan, 0)
+
 	unknown := map[string]bool{}
-	forEachYAMLPair(root, func(k, val *yaml.Node) {
-		if strings.ToLower(k.Value) != "webhook" {
-			return
+	for _, p := range effectiveYAMLPairs(root, 0) {
+		lower := strings.ToLower(p.k.Value)
+		if strings.Contains(lower, ".") {
+			addDottedKeyIssue(&scan, lower, p.k.Line)
+			continue
+		}
+		if lower != "webhook" {
+			continue
 		}
 		switch {
-		case isYAMLNull(val):
+		case isYAMLNull(p.v):
 			// 根节点为空：走“没有 webhook 根节点”的告警分支
-		case val.Kind == yaml.MappingNode:
-			scanWebhookMapping(val, "webhook", &scan, seen, unknown)
+		case p.v.Kind == yaml.MappingNode:
+			scanWebhookMapping(p.v, "webhook", &scan, unknown, 0)
 		default:
-			scan.bad["webhook"] = true
-		}
-	})
-	for k, n := range seen {
-		if n > 1 {
-			delete(scan.raw, k)
+			scan.addBad("webhook", "type", webhookTypeErrorText("webhook", webhookSrcFile))
 		}
 	}
 	for k := range unknown {
@@ -390,62 +543,184 @@ func scanWebhookConfigFile(path string) (webhookFileScan, error) {
 	return scan, nil
 }
 
-// scanWebhookMapping 检查 prefix 对应 mapping 下的每个键：
+// addDottedKeyIssue 带点号的键：拼出的路径是 webhook 已知键时写键名，否则只写行号（不回显任意键名）
+func addDottedKeyIssue(scan *webhookFileScan, path string, line int) {
+	if _, ok := webhookKeySchema.leaves[path]; ok || webhookKeySchema.parents[path] || path == "webhook" {
+		scan.addBad(path, "dotted", fmt.Sprintf("配置文件中的 %s 写成了带点号的键名（第 %d 行），请改成嵌套写法", path, line))
+		return
+	}
+	scan.addLine(line, "dotted", fmt.Sprintf("配置文件第 %d 行的键名带点号，请改成嵌套写法", line))
+}
+
+// scanWebhookMapping 按合并结果检查 prefix 对应 mapping 下的每个生效键：
+//   - 键名带点号：拒绝；
 //   - 白名单父键：只能是 map 或 null，map 时递归；
-//   - 叶子：只能是标量（null 等同未写）；整数叶子的原始文本必须是十进制整数；
+//   - 叶子：只能是标量（null 等同未写）；显式 tag 只允许 !!str、!!int、!!null；整数叶子的原始文本必须是十进制整数；
 //   - 其他：记为未知键，不展开子键
-func scanWebhookMapping(m *yaml.Node, prefix string, scan *webhookFileScan, seen map[string]int, unknown map[string]bool) {
-	forEachYAMLPair(m, func(k, val *yaml.Node) {
-		key := prefix + "." + strings.ToLower(k.Value)
+func scanWebhookMapping(m *yaml.Node, prefix string, scan *webhookFileScan, unknown map[string]bool, depth int) {
+	if depth > webhookYAMLMaxDepth {
+		return
+	}
+	for _, p := range effectiveYAMLPairs(m, 0) {
+		k, val := p.k, p.v
+		lower := strings.ToLower(k.Value)
+		key := prefix + "." + lower
+		if strings.Contains(lower, ".") {
+			addDottedKeyIssue(scan, key, k.Line)
+			continue
+		}
 		if webhookKeySchema.parents[key] {
 			switch {
 			case isYAMLNull(val):
 			case val.Kind == yaml.MappingNode:
-				scanWebhookMapping(val, key, scan, seen, unknown)
+				scanWebhookMapping(val, key, scan, unknown, depth+1)
 			default:
-				scan.bad[key] = true
+				scan.addBad(key, "type", webhookTypeErrorText(key, webhookSrcFile))
 			}
-			return
+			continue
 		}
 		leaf, ok := webhookKeySchema.leaves[key]
 		if !ok {
 			unknown[key] = true
-			return
-		}
-		if val.Kind != yaml.ScalarNode {
-			scan.bad[key] = true
-			return
-		}
-		if isYAMLNull(val) {
-			return
-		}
-		if leaf.kind == reflect.Int && !webhookDecimalInt.MatchString(val.Value) {
-			scan.bad[key] = true
-			return
-		}
-		seen[key]++
-		scan.raw[key] = val.Value
-	})
-}
-
-// forEachYAMLPair 遍历 mapping 的键值对（解析别名；<< 合并键按 YAML 语义展开到同一层）
-func forEachYAMLPair(m *yaml.Node, fn func(k, val *yaml.Node)) {
-	for i := 0; i+1 < len(m.Content); i += 2 {
-		k, val := m.Content[i], resolveYAMLAlias(m.Content[i+1])
-		if k.Tag == "!!merge" || k.Value == "<<" {
-			switch val.Kind {
-			case yaml.MappingNode:
-				forEachYAMLPair(val, fn)
-			case yaml.SequenceNode:
-				for _, item := range val.Content {
-					if item = resolveYAMLAlias(item); item.Kind == yaml.MappingNode {
-						forEachYAMLPair(item, fn)
-					}
-				}
-			}
 			continue
 		}
-		fn(k, val)
+		if val.Kind != yaml.ScalarNode {
+			scan.addBad(key, "type", webhookTypeErrorText(key, webhookSrcFile))
+			continue
+		}
+		if val.Style&yaml.TaggedStyle != 0 && !webhookAllowedLeafTags[val.ShortTag()] {
+			scan.addBad(key, "tag", fmt.Sprintf("配置文件中的 %s 使用了不允许的 YAML tag（只允许 !!str、!!int、!!null 或不写）", key))
+			continue
+		}
+		if isYAMLNull(val) {
+			continue
+		}
+		if leaf.kind == reflect.Int && !webhookDecimalInt.MatchString(val.Value) {
+			scan.addBad(key, "type", webhookTypeErrorText(key, webhookSrcFile))
+			continue
+		}
+		// 大小写变体/重复键已由 checkYAMLCaseDuplicates 记到 scan.bad，取值阶段会跳过，这里不必再处理 raw 冲突
+		scan.raw[key] = val.Value
+	}
+}
+
+// webhookAllowedLeafTags 叶子允许的显式 tag
+var webhookAllowedLeafTags = map[string]bool{"!!str": true, "!!int": true, "!!null": true}
+
+// yamlPair 合并结果中的一个生效条目；v 已解析别名
+type yamlPair struct {
+	k, v *yaml.Node
+}
+
+// isYAMLMergeKey 只有不带引号、解析为 !!merge 的 << 才是合并键（带引号的 "<<" 由结构检查拒绝）
+func isYAMLMergeKey(k *yaml.Node) bool {
+	return k.Kind == yaml.ScalarNode && k.Value == "<<" && k.ShortTag() == "!!merge" &&
+		k.Style&(yaml.DoubleQuotedStyle|yaml.SingleQuotedStyle) == 0
+}
+
+// effectiveYAMLPairs 按 yaml.v3 的合并规则算出 mapping 的生效条目：
+//   - 本层显式写的键全部保留（含重复，交给重复键检查），优先于合并来的键；
+//   - << 的值是 mapping 或 mapping 列表（可为别名），列表里靠前的优先；来源自身的显式键优先于来源内部的 <<（递归）；
+//   - 合并来的键只有在同拼写的键尚未出现时才加入（与 yaml.v3 一致：大小写不同的变体都会进入结果）。
+//
+// 写成别名的键、带引号的 "<<" 不进入结果（由 checkYAMLKeyStructure 报错）
+func effectiveYAMLPairs(m *yaml.Node, depth int) []yamlPair {
+	var out []yamlPair
+	var merge *yaml.Node
+	taken := map[string]bool{}
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		k := m.Content[i]
+		if isYAMLMergeKey(k) {
+			merge = resolveYAMLAlias(m.Content[i+1]) // 与 yaml.v3 一致，多个 << 只有最后一个生效（结构检查已拒绝）
+			continue
+		}
+		if k.Kind != yaml.ScalarNode || k.Value == "<<" {
+			continue
+		}
+		out = append(out, yamlPair{k: k, v: resolveYAMLAlias(m.Content[i+1])})
+		taken[k.Value] = true
+	}
+	if merge == nil || depth > webhookYAMLMaxDepth {
+		return out
+	}
+	var sources []*yaml.Node
+	switch merge.Kind {
+	case yaml.MappingNode:
+		sources = []*yaml.Node{merge}
+	case yaml.SequenceNode:
+		for _, item := range merge.Content {
+			if item = resolveYAMLAlias(item); item.Kind == yaml.MappingNode {
+				sources = append(sources, item)
+			}
+		}
+	}
+	for _, src := range sources {
+		for _, p := range effectiveYAMLPairs(src, depth+1) {
+			if !taken[p.k.Value] {
+				taken[p.k.Value] = true
+				out = append(out, p)
+			}
+		}
+	}
+	return out
+}
+
+// checkYAMLKeyStructure 遍历整份文件的原始节点（不跟随别名，锚点处已遍历过），按行号报：
+// 键写成别名、带引号或显式 tag 的 "<<"、同一 mapping 下多个 <<
+func checkYAMLKeyStructure(n *yaml.Node, scan *webhookFileScan) {
+	switch n.Kind {
+	case yaml.MappingNode:
+		merges := 0
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			k := n.Content[i]
+			switch {
+			case k.Kind == yaml.AliasNode:
+				scan.addLine(k.Line, "alias", fmt.Sprintf("配置文件第 %d 行：键不能写成 YAML 别名（*名称），请直接写键名", k.Line))
+			case isYAMLMergeKey(k):
+				if merges++; merges == 2 {
+					scan.addLine(k.Line, "merge2", fmt.Sprintf("配置文件第 %d 行：同一层只能写一个 <<（多个时只有最后一个生效），请合并成 <<: [*a, *b]", k.Line))
+				}
+			case k.Kind == yaml.ScalarNode && (k.Value == "<<" || k.ShortTag() == "!!merge"):
+				scan.addLine(k.Line, "qmerge", fmt.Sprintf("配置文件第 %d 行：带引号或显式 tag 的 \"<<\" 不是合并键，不允许使用（合并请写不带引号的 <<）", k.Line))
+			}
+			checkYAMLKeyStructure(k, scan)
+			checkYAMLKeyStructure(n.Content[i+1], scan)
+		}
+	case yaml.SequenceNode, yaml.DocumentNode:
+		for _, c := range n.Content {
+			checkYAMLKeyStructure(c, scan)
+		}
+	}
+}
+
+// checkYAMLCaseDuplicates 按合并结果检查整份文件：同一父节点下小写后相同的键（大小写变体或完全相同）不合规，
+// 口径同 scripts/check-webhook-env.sh（ee753b4）：只报键路径（小写），列表项里的 mapping 不参与
+func checkYAMLCaseDuplicates(m *yaml.Node, prefix string, scan *webhookFileScan, depth int) {
+	if depth > webhookYAMLMaxDepth {
+		return
+	}
+	groups := map[string][]yamlPair{}
+	var order []string
+	for _, p := range effectiveYAMLPairs(m, 0) {
+		lower := strings.ToLower(p.k.Value)
+		if _, ok := groups[lower]; !ok {
+			order = append(order, lower)
+		}
+		groups[lower] = append(groups[lower], p)
+	}
+	for _, lower := range order {
+		path := lower
+		if prefix != "" {
+			path = prefix + "." + lower
+		}
+		if len(groups[lower]) > 1 {
+			scan.addBad(path, "dup", fmt.Sprintf("配置文件中的 %s 有仅大小写不同或完全相同的同层重复键（会互相覆盖，生效哪一个不确定）", path))
+		}
+		for _, p := range groups[lower] {
+			if p.v.Kind == yaml.MappingNode {
+				checkYAMLCaseDuplicates(p.v, path, scan, depth+1)
+			}
+		}
 	}
 }
 
@@ -460,10 +735,11 @@ func isYAMLNull(n *yaml.Node) bool {
 	return n == nil || (n.Kind == yaml.ScalarNode && n.ShortTag() == "!!null")
 }
 
-// webhookValues 逐键合并后的 webhook.* 叶子键取值；keys 已排序，写入顺序确定
+// webhookValues 逐键合并后的 webhook.* 叶子键取值；keys 已排序，写入顺序确定；src 记录每个键的取值来源
 type webhookValues struct {
 	keys []string
 	vals map[string]any
+	src  map[string]string
 }
 
 // apply 按 keys 的固定顺序逐个写入（发布到全局 viper 时使用）
@@ -473,47 +749,91 @@ func (m webhookValues) apply(set func(key string, val any)) {
 	}
 }
 
+// webhookIntEnvSpace 整数类环境变量允许去掉的首尾 ASCII 空白
+const webhookIntEnvSpace = " \t\r\n"
+
+// webhookUnderBadKey key 或其某个上级键已记过文件问题
+func webhookUnderBadKey(key string, bad map[string]bool) bool {
+	for k := key; ; {
+		if bad[k] {
+			return true
+		}
+		i := strings.LastIndex(k, ".")
+		if i < 0 {
+			return false
+		}
+		k = k[:i]
+	}
+}
+
 // collectWebhookLeafValues 按叶子类型表取每个叶子键合并后的值（环境变量 > 配置文件 > 默认值），并规范成字段的 Go 类型：
 //   - 只遍历叶子表，父键（白名单）与未知键天然不进入合并值；
-//   - 整数叶子：字符串（环境变量或加引号的 YAML）必须是十进制整数；取自配置文件的数值按文件原始文本解析
+//   - 叶子取不到值（IsSet=false，父键被遮蔽）一律报错，不跳过；
+//   - 整数叶子：环境变量去掉首尾 ASCII 空白（空格、\t、\r、\n）后必须是十进制整数；取自配置文件的按文件生效条目的原始文本解析
 //     （010 不会变成 8，10.5 不会截断成 10）；超出 int 范围的按边界值保留，交给范围校验报错；
-//   - 字符串叶子：取自配置文件的非字符串标量（如未加引号的 12345、true）用文件原始文本；
-//   - map、列表或其他无法表示的值报类型错误（与 scan 的结果一起汇总）。
+//   - 字符串叶子：环境变量原样保留；取自配置文件的非字符串标量（如未加引号的 12345、true）用文件原始文本；
+//   - map、列表或其他无法表示的值报类型错误。
 //
-// 报错只列键名
+// 与 scan 的文件问题一起汇总报错，按来源写“配置文件中的 KEY”或“KEY（环境变量 ENV）”，只列键名
 func collectWebhookLeafValues(v *viper.Viper, scan webhookFileScan) (webhookValues, error) {
-	bad := map[string]bool{}
-	for k := range scan.bad {
-		bad[k] = true
+	issues := webhookIssues{}
+	for k, t := range scan.issues {
+		issues[k] = t
 	}
-	m := webhookValues{vals: make(map[string]any, len(webhookKeySchema.leafKeys))}
+	m := webhookValues{vals: make(map[string]any, len(webhookKeySchema.leafKeys)), src: map[string]string{}}
 	for _, key := range webhookKeySchema.leafKeys {
-		if !v.IsSet(key) {
+		if webhookUnderBadKey(key, scan.bad) {
 			continue
 		}
-		if bad[key] {
+		if !v.IsSet(key) {
+			issues.addKey(key, "unset", fmt.Sprintf("%s 取不到值：其父键被环境变量或配置文件遮蔽", key))
 			continue
 		}
 		leaf := webhookKeySchema.leaves[key]
 		val := v.Get(key)
 		raw, fromFile := scan.raw[key]
+		src := webhookSrcDefault
 		var (
 			out any
 			ok  bool
 		)
-		if leaf.kind == reflect.Int {
-			out, ok = normalizeWebhookInt(val, raw, fromFile)
-		} else {
-			out, ok = normalizeWebhookString(val, raw, fromFile)
+		switch {
+		case os.Getenv(leaf.env) != "":
+			src = webhookSrcEnv
+			if s, isStr := val.(string); isStr && leaf.kind == reflect.Int {
+				out, ok = parseWebhookDecimalInt(strings.Trim(s, webhookIntEnvSpace))
+			} else if leaf.kind == reflect.Int {
+				out, ok = normalizeWebhookInt(val, "", false)
+			} else {
+				out, ok = normalizeWebhookString(val, "", false)
+			}
+		case fromFile:
+			src = webhookSrcFile
+			if leaf.kind == reflect.Int {
+				out, ok = parseWebhookDecimalInt(raw)
+			} else {
+				out, ok = normalizeWebhookString(val, raw, true)
+			}
+		default:
+			// 文件里有值但没有可用原文（如经别名键写入，已由结构检查报错）：报错仍按配置文件来源描述
+			if v.InConfig(key) {
+				src = webhookSrcFile
+			}
+			if leaf.kind == reflect.Int {
+				out, ok = normalizeWebhookInt(val, "", false)
+			} else {
+				out, ok = normalizeWebhookString(val, "", false)
+			}
 		}
 		if !ok {
-			bad[key] = true
+			issues.addKey(key, "type", webhookTypeErrorText(key, src))
 			continue
 		}
 		m.keys = append(m.keys, key)
 		m.vals[key] = out
+		m.src[key] = src
 	}
-	if err := webhookTypeError(bad); err != nil {
+	if err := issues.err(); err != nil {
 		return webhookValues{}, err
 	}
 	return m, nil
@@ -542,6 +862,8 @@ func clampWebhookInt(n int64) int {
 	return int(n)
 }
 
+// normalizeWebhookInt 规范整数叶子的取值。字符串按严格十进制解析；数值类型来自配置文件时按原始文本解析，
+// 否则（内置默认值）只接受整数类型，浮点不截断
 func normalizeWebhookInt(val any, raw string, fromFile bool) (any, bool) {
 	switch x := val.(type) {
 	case string:
@@ -551,7 +873,6 @@ func normalizeWebhookInt(val any, raw string, fromFile bool) (any, bool) {
 			// 数值来自配置文件：按原始文本解析，避免 YAML 的进制/浮点转换
 			return parseWebhookDecimalInt(raw)
 		}
-		// 没有原始文本（内置默认值，或 TOML 等非 YAML 格式）：只接受整数类型，浮点不截断
 		rv := reflect.ValueOf(x)
 		switch rv.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -668,28 +989,38 @@ type webhookIntRule struct {
 //     上限 10080（7 天），告警升级等待超过一周已无实际意义；
 //   - common_map_renew_interval_seconds：缓存刷新周期，加载阶段拒绝，缓存层保留防御性回退；
 //     最小 1，上限 86400（1 天），再长缓存基本不刷新；
-//   - im_feishu.request_timeout_seconds：用作 http.Client.Timeout（秒），Go 中 0 表示不设超时（不限制），
-//     不会立即超时也不会除零，允许 0；负数在 http.Client 中同样被当作不设超时，但不是有意义的写法，拒绝；
-//     上限 600（10 分钟），单次 HTTP 请求等更久与不设超时无异
+//   - im_feishu.request_timeout_seconds：用作 http.Client.Timeout（秒）。Go 中 0 和负数都表示不设超时，
+//     飞书接口卡住时请求会永久挂起，因此最小 1；上限 600（10 分钟），单次 HTTP 请求等更久与不设超时无异
 var webhookIntRules = []webhookIntRule{
 	{"webhook.fixed_workers", "WEBHOOK_FIXED_WORKERS", 1, 1024, func(c *WebhookConfig) int { return c.FixedWorkers }},
 	{"webhook.default_upgrade_minutes", "WEBHOOK_DEFAULT_UPGRADE_MINUTES", 1, 10080, func(c *WebhookConfig) int { return c.DefaultUpgradeMinutes }},
 	{"webhook.common_map_renew_interval_seconds", "WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS", 1, 86400, func(c *WebhookConfig) int { return c.CommonMapRenewIntervalSeconds }},
-	{"webhook.im_feishu.request_timeout_seconds", "WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS", 0, 600, func(c *WebhookConfig) int { return c.ImFeishu.RequestTimeoutSeconds }},
+	{"webhook.im_feishu.request_timeout_seconds", "WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS", 1, 600, func(c *WebhookConfig) int { return c.ImFeishu.RequestTimeoutSeconds }},
 }
 
-// validateWebhookIntFields 按 webhookIntRules 校验整数字段，列出全部不合法的键；报错只含键名、变量名和上下限，不含取值
-func validateWebhookIntFields(cfg *WebhookConfig) error {
+// validateWebhookIntFields 按 webhookIntRules 校验整数字段，列出全部不合法的键；报错按取值来源写
+// “配置文件中的 KEY” / “KEY（环境变量 ENV）” / “KEY（内置默认值）”，只含键名、变量名和上下限，不含取值。
+// src 为空（来源未知）时只写键名
+func validateWebhookIntFields(cfg *WebhookConfig, src map[string]string) error {
 	var bad []string
 	for _, r := range webhookIntRules {
 		if n := r.get(cfg); n < r.min || n > r.max {
-			bad = append(bad, fmt.Sprintf("%s（环境变量 %s）必须在 %d 到 %d 之间", r.key, r.env, r.min, r.max))
+			bad = append(bad, fmt.Sprintf("%s必须在 %d 到 %d 之间", webhookRangeLabel(r.key, src[r.key]), r.min, r.max))
 		}
 	}
 	if len(bad) > 0 {
 		return fmt.Errorf("Webhook 整数配置超出允许范围: %s", strings.Join(bad, "；"))
 	}
 	return nil
+}
+
+// webhookRangeLabel 类型/范围/端口报错里的键描述：来源未知时只写键名；以全角括号结尾时不再补空格
+func webhookRangeLabel(key, src string) string {
+	label := webhookSourceLabel(key, src)
+	if strings.HasSuffix(label, "）") {
+		return label
+	}
+	return label + " "
 }
 
 // isValidPort 端口必须是纯 ASCII 数字且在 1-65535 之间（调用方先去首尾空白）。
@@ -785,7 +1116,8 @@ func setWebhookDefaults(v *viper.Viper) {
 	v.SetDefault("webhook.default_upgrade_minutes", 60)
 	v.SetDefault("webhook.alert_manager_api", "http://localhost:9093")
 	v.SetDefault("webhook.common_map_renew_interval_seconds", 300)
-	v.SetDefault("webhook.im_feishu.group_message_api", "https://open.feishu.cn/open-apis/im/v1/messages")
+	// 群聊机器人 webhook 地址前缀，发送时拼成 <前缀>/<机器人 token>（见 content.SentFeishuGroup），不带尾斜杠
+	v.SetDefault("webhook.im_feishu.group_message_api", "https://open.feishu.cn/open-apis/bot/v2/hook")
 	v.SetDefault("webhook.im_feishu.request_timeout_seconds", 10)
 	v.SetDefault("webhook.im_feishu.private_robot_app_id", "")
 	v.SetDefault("webhook.im_feishu.private_robot_app_secret", "")

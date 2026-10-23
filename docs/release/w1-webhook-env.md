@@ -4,6 +4,10 @@
 
 **环境变量 > 配置文件（`config/webhook.yaml`，可用 `--config` 指定）> 默认值。**
 
+配置文件只支持 YAML：扩展名必须是 `.yaml` / `.yml`；`.json` 作为 YAML 的子集接受，走同一套 YAML 节点检查。
+其他扩展名（`.toml`、`.ini`、`.properties`、`.env`、`.hcl`、无扩展名等）webhook **启动失败**，报错
+`Webhook 配置文件只支持 .yaml / .yml（.json 按 YAML 子集解析）格式，不支持 PATH`。
+
 `internal/config/loader.go` 的 `loadWebhookFromFile` 用独立的 viper 实例读取三层来源，逐键取合并后的值，
 再用同一份值：
 
@@ -34,7 +38,7 @@
 | `WEBHOOK_DEFAULT_UPGRADE_MINUTES` | `webhook.default_upgrade_minutes` | `60` | `30` |
 | `WEBHOOK_ALERT_MANAGER_API` | `webhook.alert_manager_api` | `http://localhost:9093` | `http://localhost:9093` |
 | `WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS` | `webhook.common_map_renew_interval_seconds` | `300` | `10` |
-| `WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API` | `webhook.im_feishu.group_message_api` | `https://open.feishu.cn/open-apis/im/v1/messages` | `https://open.feishu.cn/open-apis/bot/v2/hook/` |
+| `WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API` | `webhook.im_feishu.group_message_api` | `https://open.feishu.cn/open-apis/bot/v2/hook` | 同默认值 |
 | `WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS` | `webhook.im_feishu.request_timeout_seconds` | `10` | `10` |
 | `WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_ID` | `webhook.im_feishu.private_robot_app_id` | 空 | 占位 `xxx` |
 | `WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET` | `webhook.im_feishu.private_robot_app_secret` | 空 | 占位 `xxx`（**凭据**，请用环境变量注入，不要写进文件） |
@@ -42,25 +46,63 @@
 
 说明：
 
+- **飞书群机器人地址**：`group_message_api` 是群机器人 webhook 的前缀，发送时拼成 `前缀/机器人 token`。默认值与仓库 `webhook.yaml`
+  都是 `https://open.feishu.cn/open-apis/bot/v2/hook`（不带结尾斜杠）；拼接前会先去掉前缀结尾的所有 `/`，
+  所以写成 `…/bot/v2/hook/` 或 `…/bot/v2/hook//` 也只会得到 `…/bot/v2/hook/<token>`。
+  （之前默认值是 `https://open.feishu.cn/open-apis/im/v1/messages`，这是开放平台“发送消息”接口，不是群机器人地址，拼上 token 后无法发送；
+  仓库 `webhook.yaml` 写的是带结尾斜杠的 `…/bot/v2/hook/`，拼出来是 `hook//<token>`。）
+  注意：环境变量 `WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API` 优先于文件和默认值；如果部署里仍设为 `…/im/v1/messages`，群消息仍然发不出去，请改成上面的地址或不设置。
 - **整数字段只接受十进制整数**（正则 `^(0|-?[1-9][0-9]*)$`），环境变量、加引号的 YAML 字符串和未加引号的 YAML 数值规则相同；
   YAML 数值按配置文件里的**原始文本**判断（用 yaml.v3 读节点），不经 YAML 的进制/浮点转换。以下写法 webhook **启动失败**：
-  `10.5`、`-0.5`、`10.0`、`1e1`、`0x10`、`0o10`、`0b1`、`+3`、`010`（前导零）、`00`、`-0`、`1_0`、`" 10"`、`"10 "`、空串（加引号时）、`true`、`.inf`。
+  `10.5`、`-0.5`、`10.0`、`1e1`、`0x10`、`0o10`、`0b1`、`+3`、`010`（前导零）、`00`、`-0`、`1_0`、`" 10"`、`"10 "`（YAML 引号内带空白）、空串（加引号时）、`true`、`.inf`。
   （之前：未加引号的 `10.5` / `10.0` 被截断为 10，`010` 按八进制得 8，`0x10` 得 16，`+10` 得 10。）
-  报错只列出键名和环境变量名（如 `webhook.fixed_workers（环境变量 WEBHOOK_FIXED_WORKERS）应为十进制整数`），**不含取值**。
-- **类型错误**：标量叶子（如 `front_domain`、`im_feishu.request_timeout_seconds`、`im_feishu.private_robot_app_secret`）写成 map（含 `{}`）或列表，
-  或父键 `webhook.im_feishu` / 根节点 `webhook` 写成标量或列表时，webhook **启动失败**，报错 `Webhook 配置类型错误: …` 只列键名。
-  只检查配置文件本身：**文件里写错时，即使该键被环境变量覆盖也会失败**。父键写成 `~` / `null` / 留空 / `{}` 合法，子键取环境变量/默认值；
-  叶子写成 `~` 等同未写。YAML 别名和 `<<` 合并键按展开后的结构检查。
+- **整数环境变量先去首尾 ASCII 空白**：整数字段的环境变量取值先去掉首尾的空格、`\t`、`\r`、`\n`，再按上面的正则严格校验，
+  所以 `WEBHOOK_FIXED_WORKERS=" 10"`、`"10\n"` 接受为 10；中间的空白（`1 0`）、其他空白（`\v`、全角空格）和全角数字仍然启动失败。
+  字符串字段的环境变量**原样使用**，不去空白（`webhook.port` 例外，见“端口校验”）。配置文件里加引号的 `" 10"` 不去空白，仍拒绝。
+- **报错按取值的实际来源描述键**，不含取值：值来自配置文件时写 `配置文件中的 KEY`（如 `配置文件中的 webhook.fixed_workers 应为十进制整数`），
+  来自环境变量时写 `KEY（环境变量 ENV）`（如 `webhook.fixed_workers（环境变量 WEBHOOK_FIXED_WORKERS）必须在 1 到 1024 之间`），
+  只有环境变量来源才提环境变量名；来自内置默认值时写 `KEY（内置默认值）`。
+- **写法或类型错误**：标量叶子（如 `front_domain`、`im_feishu.request_timeout_seconds`、`im_feishu.private_robot_app_secret`）写成 map（含 `{}`）或列表，
+  或父键 `webhook.im_feishu` / 根节点 `webhook` 写成标量或列表时，webhook **启动失败**，报错以 `Webhook 配置写法或类型错误: ` 开头，只列键名或行号，
+  多个问题按键名排序、用 `；` 分隔一次列出。只检查配置文件本身：**文件里写错时，即使该键被环境变量覆盖也会失败**。
+  父键写成 `~` / `null` / 留空 / `{}` 合法，子键取环境变量/默认值；叶子写成 `~` 等同未写。
+- **父键环境变量**：`WEBHOOK`、`WEBHOOK_IM_FEISHU` 不是配置项。它们设为非空值时，viper 会用这个字符串遮蔽整个 `webhook` / `webhook.im_feishu` 子树，
+  所以 webhook **启动失败**，报错只列出变量名（不含取值）。设为空串等同未设置。叶子变量（如 `WEBHOOK_PORT`、`WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS`）不受影响。
+  如果某个叶子因父键被遮蔽而取不到值，同样启动失败（`… 取不到值：其父键被环境变量或配置文件遮蔽`）；每个叶子都有内置默认值（有测试保证）。
+- **YAML 别名与合并键**：
+  - 键本身不能写成别名（`*a: 1`），启动失败。别名用作**值**（`front_domain: *a`）和不带引号的 `<<` 合并键照常展开，展开后的结构同样受本节全部检查。
+  - 合并优先级与 yaml.v3 一致：mapping 里显式写出的键优先于 `<<` 带入的键；`<<: [*a, *b]` 里靠前的来源优先；来源里显式写的键优先于来源自己的 `<<`。
+    **只检查最终生效的条目**：被覆盖的值即使写错也不报错（它不会被使用）。
+  - 同一层只能写一个 `<<`（yaml.v3 多个时只有最后一个生效），写多个启动失败（viper 读取时即按重复键报解析错误“第 N 行 mapping key 已定义”，结构扫描另有同层多个 `<<` 的检查兜底），请合并成 `<<: [*a, *b]`。
+  - 带引号的 `"<<"` / `'<<'`、`!!str <<` 不是合并键，viper 内部的 yaml.v3 却会把带引号的 `"<<"` 当合并键展开，两边结果不一致，因此一律启动失败。
+- **显式 tag**：叶子只允许 `!!str`、`!!int`、`!!null` 三种显式 tag；`!!float`、`!!bool`、`!!binary`、`!!timestamp`、自定义 tag 等启动失败，报错写键名和 tag 说明，不含取值。
+  不写 tag 时按上面的整数/字符串规则判断。
+- **键名不能带点号**：根节点下的键（如 `"webhook.port": "8889"`、`"webhook.im_feishu": 5`，即使同时有正常的 `webhook:` 块），
+  以及 `webhook:`、`webhook.im_feishu:` 下的键（如 `"im_feishu.request_timeout_seconds": 5`）带 `.` 时启动失败，请改成嵌套写法。
+  拼出的路径是 webhook 已知键时报错写键名，否则只写行号（不回显任意键名）。
+- **大小写重复键**（口径同 ee753b4 的 `scripts/check-webhook-env.sh`）：同一父节点下小写后相同的键（如 `port` 与 `PORT`、`im_feishu` 与 `IM_FEISHU`，
+  或完全相同的键）不合规，检查整份文件（不只 `webhook:` 下，`<<` 展开后的键也算），启动失败，报错只列小写后的键路径；列表项里的 mapping 不参与。
+  viper 对键名不区分大小写，同时出现时只会留下其中一个，所以直接拒绝。
+  **只写一种大小写**（如只写 `PORT:` 或 `Webhook:`）仍然接受，按小写键名取值；但写在根节点的平铺 `PORT` 仍按“旧格式”拒绝。
+- **配置文件解析失败**（YAML 语法错误、完全重复的键、tab 缩进等）时报错为 `读取Webhook配置文件失败: 配置文件第 N 行: 原因`：
+  去掉 viper/yaml 的前缀，引号里的内容（可能是键名或取值）一律替换为 `…`，只保留第一个行号和原因，最长 200 字符；解析器没给行号时写 `配置文件解析失败: 原因`。
 - 字符串字段写成未加引号的数字/布尔（如 `port: 8081`、`backend_domain: 007`）时取文件里的原始文本（`007` 不会变成 `7`，`0x50` 不会变成 `80`）。
 - 环境变量设为空串视为未设置，回落到配置文件/默认值。
 - **端口校验**：`webhook.port` 取合并后的值并去首尾空白，必须是纯数字；先去掉前导零，再要求在 1–65535 之间（`" 9998 "`、`000080` 可以，
-  `""`、`abc`、`0`、`0000`、`65536`、`065536`、`-1`、`+80`、`0x50` 不行），否则 webhook 启动失败；报错只列出键名 `webhook.port` 和变量名 `WEBHOOK_PORT`，不含取值。
-  去空白、去前导零后的值（如 `000080` → `80`）同时用于监听和全局 `webhook.port`。
-- **不要在 `webhook:` 下同时写 `port` 和 `PORT`**（或其他只有大小写不同的同名键）：viper 对键名不区分大小写，同时出现时取哪一个**未定义**。
+  `""`、`abc`、`0`、`0000`、`65536`、`065536`、`-1`、`+80`、`0x50` 不行），否则 webhook 启动失败；报错按来源写 `配置文件中的 webhook.port` 或
+  `webhook.port（环境变量 WEBHOOK_PORT）`，不含取值。去空白、去前导零后的值（如 `000080` → `80`）同时用于监听和全局 `webhook.port`。
+- **Kubernetes 注意**：如果同一命名空间里有名为 `webhook` 的 Service，kubelet 会给 Pod 注入 `WEBHOOK_PORT=tcp://<ClusterIP>:<端口>`
+  （以及 `WEBHOOK_SERVICE_HOST` 等），它会覆盖配置文件里的端口并让 webhook 按“端口非法”启动失败。规避：在 Pod spec 里设 `enableServiceLinks: false`，
+  或者把 Service 改名（不叫 `webhook`）。仓库 `deploy/` 当前没有 webhook 的 Kubernetes 清单，本提交未改部署文件。
 
-- **未知键**：`webhook:` 下不在 `WebhookConfig` 中的键（仓库 `webhook.yaml` 里的 `alert_receive_queue_size`、`http_request_global_timeout_seconds`、
-  `min_workers`、`max_workers`、`scale_threshold`、`scale_interval`、`im_feishu.private_message_api`，当前 Go 代码中没有读取它们）
-  **不发布到全局 viper**，也不拒绝启动；每次加载成功时记**一条** `[配置告警]`，只列出排序后的完整键名（未知 map 只列到该键本身，不展开子键），不含取值。
+- **未知键**：`webhook:` 下不在 `WebhookConfig` 中的键**不发布到全局 viper**，也不拒绝启动；每次加载成功时记**一条** `[配置告警]`，
+  只列出排序后的完整键名（未知 map 只列到该键本身，不展开子键），不含取值。
+  仓库 `webhook.yaml` 原有 7 个这样的键（`alert_receive_queue_size`、`http_request_global_timeout_seconds`、`min_workers`、`max_workers`、
+  `scale_threshold`、`scale_interval`、`im_feishu.private_message_api`），Go 代码中没有读取它们，本提交已从文件中删除，仓库文件加载时不再告警。
+  把它们接入代码（例如真正实现动态扩缩容工作者）不在本次范围内。
+- **已知限制（全局里的旧未知键）**：加载成功时只覆盖 12 个已知叶子键，不会清除全局 viper 里此前已有的其他 `webhook.*` 键
+  （例如同一进程中别处 `viper.Set` 写入的键）；这些键仍可被读到。本次只记录，不处理。
+- **已知限制（多文档 YAML）**：viper 与本检查都只读第一个文档（`---` 之后的文档被忽略，不报错也不告警）。是否改为拒绝多文档文件待 TL 决定。
 
 - **不再支持没有 `webhook` 根节点的旧格式。** 配置文件根节点下出现 `WebhookConfig` 的字段（`port`、`fixed_workers`、`front_domain`、
   `backend_domain`、`default_upgrade_minutes`、`alert_manager_api`、`common_map_renew_interval_seconds`、`im_feishu`）时，webhook **启动失败**，
@@ -73,7 +115,7 @@
 ### 整数字段取值范围
 
 `WebhookConfig` 全部整数字段如下。合并后的值（环境变量 > 配置文件 > 默认值）不在 `[下限, 上限]` 闭区间时 webhook **启动失败**，
-报错一次列出所有越界字段的键名、环境变量名和上下限（`…必须在 MIN 到 MAX 之间`），**不含取值**；与其他校验失败一样，不向全局 viper 发布任何键。
+报错一次列出所有越界字段的键名、来源（见上文“报错按取值的实际来源描述键”）和上下限（`…必须在 MIN 到 MAX 之间`），**不含取值**；与其他校验失败一样，不向全局 viper 发布任何键。
 超出 int 表示范围的写法（如 `99999999999999999999`）同样按越界报错。仓库 `config/webhook.yaml` 与内置默认值都满足下表。
 
 上限按语义取宽松但合理的值，同时保证乘以 `time.Second` / `time.Minute` 后不会溢出 `time.Duration`（int64 纳秒，约 292 年）：
@@ -83,9 +125,9 @@
 | `webhook.fixed_workers` | `WEBHOOK_FIXED_WORKERS` | `10`（仓库 yaml 未设置） | `1`–`1024` | 否 | 固定工作者数量。0 个工作者没有意义。（注：当前 `consumer.go` 只把它存进 `workerCount`，没有实际使用，告警按条起 goroutine 处理）。上限 1024 远超单进程合理并发，防止误写成超大值 |
 | `webhook.default_upgrade_minutes` | `WEBHOOK_DEFAULT_UPGRADE_MINUTES` | `60`（仓库 yaml 为 `30`） | `1`–`10080` | 否 | 告警升级等待分钟数，发送组 `upgrade_minutes` 为 0（即“用默认值”）时使用。`content.go` 按 `time.Since(StartsAt) > N 分钟` 判断，为 0 时所有 firing 告警立即升级。上限 10080 = 7 天 |
 | `webhook.common_map_renew_interval_seconds` | `WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS` | `300`（仓库 yaml 为 `10`） | `1`–`86400` | 否 | 发送组/用户/值班组/规则缓存的刷新周期（秒）。`<= 0` 在加载阶段拒绝，`cache.go` 保留防御性回退（告警并改用 60 秒）；`wait.UntilWithContext` 周期为 0 会不间断刷库。上限 86400 = 1 天 |
-| `webhook.im_feishu.request_timeout_seconds` | `WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS` | `10`（仓库 yaml 为 `10`） | `0`–`600` | **是**（0 = 不设超时） | 飞书机器人与 Alertmanager 静默接口 HTTP 请求的超时（秒），用作 `http.Client.Timeout`。Go 中 0 表示不设超时，不会立即超时或除零；负数在 `http.Client` 中同样等于不设超时，但不是有意义的写法，拒绝。上限 600 = 10 分钟 |
+| `webhook.im_feishu.request_timeout_seconds` | `WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS` | `10`（仓库 yaml 为 `10`） | `1`–`600` | 否 | 飞书机器人与 Alertmanager 静默接口 HTTP 请求的超时（秒），用作 `http.Client.Timeout`。Go 中 0 表示不设超时，对端无响应时请求会一直挂起，因此第二轮起拒绝 0；负数同理拒绝。上限 600 = 10 分钟 |
 
-注意：设为 `0` 的 `request_timeout_seconds` 会让对端无响应时请求一直挂起，生产环境不建议使用。
+注意：之前允许的 `request_timeout_seconds: 0`（不设超时）现在启动失败，请改成 1–600 之间的值。
 
 整数的解析方式：
 - 只接受十进制整数，未加引号的 YAML 小数**不再截断**：`fixed_workers: 10.5`、`10.0` 启动失败（之前得到 `10`）。
@@ -119,9 +161,11 @@
 - `webhook.port` 非法（空、非纯数字、去前导零后超出 1–65535）时现在加载配置阶段即失败；之前不做校验，直接拼进监听地址。
   带前导零的合法端口（如 `000080`）规范为 `80`。
 - 整数字段（`fixed_workers`、`default_upgrade_minutes`、`common_map_renew_interval_seconds`、`im_feishu.request_timeout_seconds`）
-  由宽松改为严格：环境变量或带引号的 YAML 写成 `10.0`、带空格或小数时**启动失败**（见上文“说明”）。升级前请检查 `.env` 与 `webhook.yaml`。
+  由宽松改为严格：环境变量或带引号的 YAML 写成 `10.0`、小数，或带引号的 YAML 里带空格时**启动失败**（见上文“说明”）；
+  整数环境变量首尾的空格、`\t`、`\r`、`\n` 会先去掉。升级前请检查 `.env` 与 `webhook.yaml`。
 - 整数字段新增范围校验：任何字段为负数，或 `fixed_workers`、`default_upgrade_minutes`、`common_map_renew_interval_seconds` 为 0 时**启动失败**
   （见“整数字段取值范围”）。之前这些值会被直接使用：缓存刷新周期 `<= 0` 回落到 60 秒，升级等待为 0 时立即升级。
+- `im_feishu.request_timeout_seconds` 的允许范围是 1–600：写 `0`（之前表示不设超时）现在**启动失败**。
 - 整数字段新增上限：`fixed_workers > 1024`、`default_upgrade_minutes > 10080`、`common_map_renew_interval_seconds > 86400`、
   `im_feishu.request_timeout_seconds > 600` 时**启动失败**。
 - 整数字段严格为十进制整数：未加引号的 YAML `10.5` / `10.0`（之前截断为 10）、`010`（之前八进制 8）、`0x10`、`+3`，以及环境变量 `010` / `0x10` / `+3`
@@ -137,4 +181,15 @@
   原“兼容旧配置”分支是 f25c744（`pkg/di/viper.go` 迁到 `internal/config/loader.go`）时加入的防御代码；此前全局 viper 一直只读 `webhook.*`，
   从未支持过平铺格式。而且该分支实际不会执行：根节点缺失时 `UnmarshalKey("webhook")` 不返回错误，平铺的键被**静默忽略**、回落到默认值
   （例如端口变成 8889，已在 70bf9fc 与 bb410eb 上用临时文件验证）。本提交把这种静默忽略改为明确报错。
+- 配置文件只接受 `.yaml` / `.yml` / `.json`；`--config` 指向 `.toml` 等其他格式现在**启动失败**（仓库与 `deploy/` 中没有这样的用法）。
+- 环境变量 `WEBHOOK`、`WEBHOOK_IM_FEISHU` 设为非空值现在**启动失败**（之前会静默遮蔽整个子树，叶子全部回落为零值或默认值）。
+- 配置文件里的以下写法现在**启动失败**：键写成别名、同一层多个 `<<`、带引号的 `"<<"`、叶子上的 `!!float` / `!!bool` 等显式 tag、
+  带点号的键名（根节点下，或 `webhook` / `im_feishu` 下）、同一父节点下大小写重复的键（整份文件）。
+- 配置文件解析失败的报错只保留行号和原因，引号内容替换为 `…`（之前会原样带出 viper/yaml 的报错，可能含取值）。
+- 报错描述改为按来源：配置文件里写错时写 `配置文件中的 KEY`，不再写成 `KEY（环境变量 ENV）`；报错前缀由 `Webhook 配置类型错误` 改为 `Webhook 配置写法或类型错误`。
+  依赖报错原文的告警规则需要同步。
+- 仓库 `webhook.yaml` 删除了 7 个没有代码读取的未知键，启动不再出现对应的 `[配置告警]`。
+- 飞书群机器人地址默认值改为 `https://open.feishu.cn/open-apis/bot/v2/hook`，拼接时去掉结尾斜杠：之前用默认值时群消息发往错误的 `im/v1/messages/<token>`，
+  用仓库 `webhook.yaml` 时拼成 `hook//<token>`。通过 `WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API` 设置了其他地址的部署不受影响（但若设为 `im/v1/messages` 仍发不出去）。
+- Kubernetes 中同命名空间有名为 `webhook` 的 Service 时，注入的 `WEBHOOK_PORT=tcp://…` 会让 webhook 启动失败（见上文“Kubernetes 注意”）。
 - 主后端（`SERVER_PORT`）和 webhook 默认都是 8889；部署在同一台机器或共享网络命名空间时，**用 `WEBHOOK_PORT` 错开 webhook 端口的做法从本提交起成立**。

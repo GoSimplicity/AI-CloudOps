@@ -47,7 +47,7 @@ func TestLoadWebhookNestedEnvStableWhenParentNullOrEmpty(t *testing.T) {
 					continue
 				}
 				// 未设环境变量的子键取默认值，cfg 与全局逐字段一致
-				if cfg.ImFeishu.GroupMessageAPI != "https://open.feishu.cn/open-apis/im/v1/messages" {
+				if cfg.ImFeishu.GroupMessageAPI != "https://open.feishu.cn/open-apis/bot/v2/hook" {
 					t.Fatalf("第 %d 次：未覆盖的子键应取默认值", i)
 				}
 				if n := compareWebhookCfgWithGlobal(t, reflect.ValueOf(*cfg), "webhook"); n != 12 {
