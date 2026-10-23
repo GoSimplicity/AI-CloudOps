@@ -70,7 +70,7 @@ if grep -q '^WEBHOOK_PORT=' "$TMP/env"; then
     if [ -z "$wp" ] || [ "$wp" = "$yaml_wh" ]; then ok "WEBHOOK_PORT='${wp}'（留空或与 config/webhook.yaml 一致）"
     else bad "WEBHOOK_PORT=${wp}，config/webhook.yaml webhook.port=${yaml_wh}（合入前不生效、合入后会改变监听端口）"; wh_eff="$wp"; fi
     block WEBHOOK_PORT >"$TMP/wp.txt"
-    for kw in '合入 sched/w1-mantou 前' '合入 sched/w1-mantou 后' 'config/webhook.yaml' '--config' '同一台机器' '优先级' 'PROMETHEUS_ALERT_WEBHOOK_ADDR'; do
+    for kw in '合入 sched/w1-mantou 前' '合入 sched/w1-mantou 后' 'config/webhook.yaml' '--config' '根节点' '同一台机器' '优先级' 'PROMETHEUS_ALERT_WEBHOOK_ADDR'; do
         if grep -F -q -e "$kw" "$TMP/wp.txt"; then ok "WEBHOOK_PORT 注释含「${kw}」"
         else bad "WEBHOOK_PORT 注释缺「${kw}」（需分别说明合入前/后、同机冲突、改端口方法与告警地址联动）"; fi
     done
