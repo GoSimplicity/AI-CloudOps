@@ -26,4 +26,4 @@ GOTOOLCHAIN=auto go test -race ./internal/config ./pkg/di
 GOTOOLCHAIN=auto go vet ./internal/config ./pkg/di
 ```
 
-测试使用隔离的内存 `database/sql` 驱动，无真实数据库凭据或外部网络连接。覆盖配置边界、环境变量加载、显式 DSN 超时保留、密码内问号不被误判为查询参数、连接池容量与空闲回收、启动失败关闭、有界 Ping 及版本查询期限。生产 MySQL 建表仍需独立部署验收
+测试使用隔离的内存 `database/sql` 驱动，无真实数据库凭据或外部网络连接。覆盖配置边界、环境变量加载、显式 DSN 超时保留、密码内问号及编码参数名不被误判为显式超时、连接池容量与空闲回收、启动失败关闭、有界 Ping 及版本查询期限。生产 MySQL 建表仍需独立部署验收

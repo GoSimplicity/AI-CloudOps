@@ -24,6 +24,8 @@ func TestMySQLDSNTimeoutPolicy(t *testing.T) {
 		{name: "explicit timeouts", dsn: "u:p@tcp(localhost:3306)/db?timeout=9s&readTimeout=7s&writeTimeout=4s", timeout: 9 * time.Second, read: 7 * time.Second, write: 4 * time.Second},
 		{name: "explicit zero", dsn: "u:p@tcp(localhost:3306)/db?timeout=0s"},
 		{name: "question in password", dsn: "u:p?timeout=0s@tcp(localhost:3306)/db", timeout: 5 * time.Second},
+		{name: "encoded key remains driver parameter", dsn: "u:p@tcp(localhost:3306)/db?time%6fut=0s", timeout: 5 * time.Second},
+		{name: "bare key does not disable default", dsn: "u:p@tcp(localhost:3306)/db?timeout", timeout: 5 * time.Second},
 		{name: "invalid DSN", dsn: "secret-password-invalid", invalid: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

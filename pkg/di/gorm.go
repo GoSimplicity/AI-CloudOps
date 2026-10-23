@@ -30,7 +30,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 
@@ -108,11 +107,14 @@ func mysqlDSNConfig(settings config.MySQLConfig) (*mysqlDriver.Config, error) {
 	if _, suffix, found := strings.Cut(databasePart, "?"); found {
 		query = suffix
 	}
-	params, err := url.ParseQuery(query)
-	if err != nil {
-		return nil, fmt.Errorf("MySQL DSN参数无效")
+	explicitTimeout := false
+	for _, parameter := range strings.Split(query, "&") {
+		key, _, found := strings.Cut(parameter, "=")
+		if found && key == "timeout" {
+			explicitTimeout = true
+		}
 	}
-	if !params.Has("timeout") {
+	if !explicitTimeout {
 		parsed.Timeout = settings.ConnectTimeout
 	}
 	return parsed, nil
