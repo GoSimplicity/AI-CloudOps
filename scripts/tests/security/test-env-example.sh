@@ -13,6 +13,11 @@
 # 用法: scripts/tests/security/test-env-example.sh [--rev <git-rev>]   （不带 --rev 检查工作区；对修复前版本运行应报 FAIL）
 # 只读：不修改任何文件；config/ 仅读取作对照。兼容 macOS（bash 3.2 / BSD grep、sed、awk）。
 set -eu
+# pipefail：bash（含 --posix 和 macOS 自带 3.2）、zsh、box 上的 dash 0.5.12 都实测支持；更老的 dash 或其它 sh 不支持，
+# 所以先在子 shell 里试一下，不支持就打印提示并在没有 pipefail 的情况下继续。没有 pipefail 时，下面 git grep 的
+# 出错码（>1）会被管道后面的 sed 盖住，出错时命中列表为空，“禁止出现”类检查可能漏报（与加 pipefail 之前的行为相同）。
+if (set -o pipefail) 2>/dev/null; then set -o pipefail
+else echo "注意: 当前 shell 不支持 set -o pipefail，按不带 pipefail 运行" >&2; fi
 
 REV=""
 while [ $# -gt 0 ]; do
@@ -31,6 +36,8 @@ trap 'rm -rf "$TMP"' EXIT
 FAILS=0
 ok()  { echo "PASS [$1]"; }
 bad() { echo "FAIL [$1]"; FAILS=$((FAILS+1)); }
+# gg_rc <rc>：git grep 没有命中时退出码为 1，属正常；其它非 0 是真出错（如 rev 或路径规格不对），直接中止
+gg_rc() { [ "$1" -eq 1 ] || { echo "git grep 出错（退出码 $1）" >&2; exit 2; }; }
 
 # src <路径>：从 --rev 或工作区取文件内容
 src() { if [ -n "$REV" ]; then git -C "$REPO" show "$REV:$1"; else cat "$REPO/$1"; fi; }
@@ -107,9 +114,9 @@ ALLOW_8888='docs/release/prometheus-scrape-auth.md'
 MANTOU_DOCS='docs/release/w1-jwt-config.md docs/release/w1-webhook-env.md'
 SELF='scripts/tests/security/test-env-example.sh'
 if [ -n "$REV" ]; then
-    git -C "$REPO" grep -n -I -F 8888 "$REV" -- . ':!internal/' ':!config/' ':!go.sum' 2>/dev/null | sed "s|^$REV:||" >"$TMP/hits" || true
+    git -C "$REPO" grep -n -I -F 8888 "$REV" -- . ':!internal/' ':!config/' ':!go.sum' 2>/dev/null | sed "s|^$REV:||" >"$TMP/hits" || gg_rc $?
 else
-    git -C "$REPO" grep -n -I -F 8888 -- . ':!internal/' ':!config/' ':!go.sum' 2>/dev/null >"$TMP/hits" || true
+    git -C "$REPO" grep -n -I -F 8888 -- . ':!internal/' ':!config/' ':!go.sum' 2>/dev/null >"$TMP/hits" || gg_rc $?
 fi
 : >"$TMP/bad8888"
 while IFS= read -r h; do
@@ -135,21 +142,24 @@ for kw in '单位是分钟' '合入 sched/w1-mantou 前' '合入 sched/w1-mantou
     else bad "JWT_EXPIRATION 注释缺「${kw}」"; fi
 done
 src deploy/release/compose.yaml >"$TMP/compose.yaml" 2>/dev/null || : >"$TMP/compose.yaml"
-cj="$(sed -n 's/^[[:space:]]*JWT_EXPIRATION:[[:space:]]*"\{0,1\}\([0-9]*\)"\{0,1\}.*/\1/p' "$TMP/compose.yaml" | head -n 1)"
+cj="$(sed -n '/^[[:space:]]*JWT_EXPIRATION:/{s/^[[:space:]]*JWT_EXPIRATION:[[:space:]]*"\{0,1\}\([0-9]*\)"\{0,1\}.*/\1/p;q;}' "$TMP/compose.yaml")"
 [ "$cj" = "$je" ] && ok "deploy/release/compose.yaml JWT_EXPIRATION=${cj} 与 env.example 一致" \
     || bad "deploy/release/compose.yaml JWT_EXPIRATION=${cj}，env.example 为 ${je}"
 if [ -n "$REV" ]; then
-    git -C "$REPO" grep -n -I -F JWT_EXPIRATION "$REV" -- . ':!internal/' ':!config/' 2>/dev/null | sed "s|^$REV:||" >"$TMP/jhits" || true
+    git -C "$REPO" grep -n -I -F JWT_EXPIRATION "$REV" -- . ':!internal/' ':!config/' 2>/dev/null | sed "s|^$REV:||" >"$TMP/jhits" || gg_rc $?
 else
-    git -C "$REPO" grep -n -I -F JWT_EXPIRATION -- . ':!internal/' ':!config/' 2>/dev/null >"$TMP/jhits" || true
+    git -C "$REPO" grep -n -I -F JWT_EXPIRATION -- . ':!internal/' ':!config/' 2>/dev/null >"$TMP/jhits" || gg_rc $?
 fi
 : >"$TMP/badjwt"
 # 单位按文件判断：一个 .md 提到 JWT_EXPIRATION 时，其中至少一处提到它的行写明分钟/minute
-for f in $(cut -d: -f1 "$TMP/jhits" | sort -u); do
+# 逐行读取文件名（文件名含空格也不会被拆开）；用 awk 按第一个字段精确比较文件名（不当正则，不做前缀匹配）
+cut -d: -f1 "$TMP/jhits" | sort -u >"$TMP/jfiles"
+while IFS= read -r f; do
     case "$f" in *.md) ;; *) continue ;; esac
     case " $MANTOU_DOCS " in *" $f "*) continue ;; esac
-    grep "^${f}:" "$TMP/jhits" | grep -E -q '分钟|minute' || echo "${f}（提到 JWT_EXPIRATION 但未写单位）" >>"$TMP/badjwt"
-done
+    F="$f" awk -F: '$1 == ENVIRON["F"] && /分钟|minute/ { found = 1; exit } END { exit !found }' "$TMP/jhits" \
+        || echo "${f}（提到 JWT_EXPIRATION 但未写单位）" >>"$TMP/badjwt"
+done <"$TMP/jfiles"
 while IFS= read -r h; do
     f="${h%%:*}"
     case "$f" in "$SELF"|env.example|deploy/release/compose.yaml|*.go) continue ;; esac
