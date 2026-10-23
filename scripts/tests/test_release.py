@@ -180,19 +180,26 @@ def _webhook_root_port(text):
     """从 webhook.yaml 文本取 webhook 根节点下的 port，没有时返回 None。
 
     不依赖固定缩进：以 webhook: 下第一个子键的缩进为准，只认这一层的 port（更深层的嵌套键不算）。
+    webhook 根节点重复、根键或 port 键名带引号（"webhook": / "port":）也抛 ValueError，不静默漏掉。
     值只能是 ASCII 纯数字（可加单/双引号，后面只能跟空白或“空白 + # 注释”；8889#oops、全角 ８８８９ 不算），
     8889suffix 这类写法、重复的 port、
     超出 1-65535 都抛 ValueError。不依赖 PyYAML，macOS 自带 python3 也能跑。
     """
     import re
-    ports, in_root, child = [], False, None
+    ports, in_root, child, roots = [], False, None, 0
     for raw in text.splitlines():
         body = raw.lstrip(" \t")
         if not body or body.startswith("#"):
             continue
         indent = len(raw) - len(body)
         if indent == 0:  # 顶层键
+            if re.match(r"""(["'])webhook\1[ \t]*:""", raw):
+                raise ValueError(f"webhook 根键带引号，测试解析不支持，请写成 webhook: ：{raw!r}")
             in_root = re.match(r"webhook[ \t]*:[ \t]*(#.*)?$", raw) is not None
+            roots += in_root
+            if roots > 1:
+                # YAML 里重复的映射键：yaml.v3（viper）直接报错，其他解析器取后一个，都不能只看第一个
+                raise ValueError("webhook.yaml 的 webhook 根节点重复")
             child = None
             continue
         if not in_root:
@@ -201,6 +208,8 @@ def _webhook_root_port(text):
             raise ValueError("webhook.yaml 缩进里有 Tab")
         if child is None:
             child = indent
+        if indent == child and re.match(r"""(["'])port\1[ \t]*:""", body):
+            raise ValueError(f"webhook.port 键名带引号，测试解析不支持，请写成 port: ：{body!r}")
         if indent != child or not re.match(r"port[ \t]*:", body):
             continue
         m = re.fullmatch(r"""port[ \t]*:[ \t]*(?:"([0-9]+)"|'([0-9]+)'|([0-9]+))(?:[ \t]+#.*)?[ \t]*""", body)
@@ -386,6 +395,21 @@ class WebhookYamlPortBoundaryTests(unittest.TestCase):
                       "８８８９", '"８８８９"', "8889#oops", '"8889"#oops', "'8889'#oops"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 _webhook_root_port(f"webhook:\n  port: {value}\n")
+
+    def test_rejects_duplicate_root(self):
+        # 负向：第二个 webhook 根里没有 port 时，旧实现只看到第一个根的 8889
+        for text in ('webhook:\n  port: "8889"\nwebhook:\n  min_workers: 1\n',
+                     'webhook:\n  port: "8889"\nserver:\n  port: 1\nwebhook:\n  front_domain: x\n',
+                     'webhook: # c\n  port: 8889\nwebhook:\n  port: 8889\n'):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                _webhook_root_port(text)
+
+    def test_rejects_quoted_keys(self):
+        # 负向：带引号的键名在 YAML 里与 port 等价，旧实现会跳过它
+        for text in ('webhook:\n  "port": "9999"\n', "webhook:\n  'port': 9999\n",
+                     'webhook:\n  port: 8889\n  "port": 9999\n', '"webhook":\n  port: 9999\n'):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                _webhook_root_port(text)
 
     def test_rejects_tab_indent(self):
         with self.assertRaises(ValueError):
