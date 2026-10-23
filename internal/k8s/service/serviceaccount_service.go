@@ -238,13 +238,39 @@ func (s *serviceAccountService) UpdateServiceAccountYaml(ctx context.Context, re
 		return err
 	}
 
-	// name/namespace 以 URL 为准（重试时按 URL 读取最新版本，YAML 中的 name/namespace/resourceVersion 不生效）；
+	// name/namespace 以 URL 为准（YAML 中的 name/namespace 不生效）；
 	// SEC-29：YAML 中的 secrets 同样忽略，保留集群现有引用（从详情 YAML 原样回写时不产生变化）
 	var requested []string
 	if serviceAccount.Secrets != nil {
 		requested = k8sutils.ServiceAccountSecretRefNames(serviceAccount.Secrets)
 	}
+	if rv := serviceAccount.ResourceVersion; rv != "" {
+		// YAML 带了 metadata.resourceVersion：严格乐观锁，只 Update 一次，版本过期返回 409，不重试
+		return s.updateWithResourceVersion(ctx, req.ClusterID, req.Namespace, req.Name, rv, serviceAccount, requested, "update_yaml")
+	}
+	// 未带 resourceVersion：RetryOnConflict，基于最新版本应用可编辑字段
 	return s.updateWithRetry(ctx, req.ClusterID, req.Namespace, req.Name, serviceAccount, requested, "update_yaml")
+}
+
+// updateWithResourceVersion 以调用方提交的 resourceVersion 做一次乐观锁更新；可编辑字段与 secrets 规则同 updateWithRetry。
+// 版本冲突返回 BusinessError{constants.ErrK8sResourceConflict}，handler 映射为 HTTP 409。
+func (s *serviceAccountService) updateWithResourceVersion(ctx context.Context, clusterID int, namespace, name, resourceVersion string, desired *corev1.ServiceAccount, requestedSecrets []string, op string) error {
+	err := s.serviceAccountManager.UpdateServiceAccountWithResourceVersion(ctx, clusterID, namespace, name, resourceVersion, func(latest *corev1.ServiceAccount) error {
+		s.warnIgnoredSecretRefs(latest, clusterID, requestedSecrets, op)
+		k8sutils.ApplyServiceAccountEditableFields(latest, desired)
+		return nil
+	})
+	if err != nil {
+		switch {
+		case errors.IsNotFound(err):
+			return fmt.Errorf("ServiceAccount不存在: %s/%s", namespace, name)
+		case errors.IsConflict(err):
+			return base.NewBusinessError(constants.ErrK8sResourceConflict, fmt.Sprintf(
+				"ServiceAccount %s/%s 已被修改（提交的 resourceVersion=%s 已过期），请重新获取 YAML 后再提交", namespace, name, resourceVersion))
+		}
+		return fmt.Errorf("更新ServiceAccount失败: %w", err)
+	}
+	return nil
 }
 
 func (s *serviceAccountService) CreateServiceAccountByYaml(ctx context.Context, req *model.CreateServiceAccountByYamlReq) error {
@@ -291,7 +317,8 @@ func (s *serviceAccountService) GetServiceAccountToken(ctx context.Context, req 
 	}
 	record.ServiceAccountUID = string(sa.UID)
 
-	secrets, err := s.serviceAccountManager.GetServiceAccountSecrets(ctx, req.ClusterID, req.Namespace, req.Name)
+	// 复用上面读到的 SA（归属校验用的也是同一个对象），不再重复 Get
+	secrets, err := s.serviceAccountManager.GetServiceAccountSecrets(ctx, req.ClusterID, sa)
 	if err != nil {
 		return nil, fail(k8sErrorStatusCode(err), fmt.Errorf("获取ServiceAccount关联的Secret失败: %w", err))
 	}
@@ -389,7 +416,7 @@ func (s *serviceAccountService) CreateServiceAccountToken(ctx context.Context, r
 	return &model.ServiceAccountTokenInfo{
 		Token:             tokenResp.Status.Token,
 		ExpirationSeconds: &expiration,
-		ExpirationTime:    tokenResp.Status.ExpirationTimestamp.Time.Format("2006-01-02T15:04:05Z"),
+		ExpirationTime:    tokenResp.Status.ExpirationTimestamp.Time.UTC().Format("2006-01-02T15:04:05Z"),
 	}, nil
 }
 

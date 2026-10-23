@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
@@ -22,12 +23,15 @@ type ServiceAccountManager interface {
 	// UpdateServiceAccountWithRetry 冲突时重试的更新：每次先 Get 最新版本，经 mutate 应用允许修改的字段后 Update；
 	// name/namespace 与 secrets 引用始终以集群最新版本为准
 	UpdateServiceAccountWithRetry(ctx context.Context, clusterID int, namespace, name string, mutate utils.ServiceAccountMutateFunc) error
+	// UpdateServiceAccountWithResourceVersion 严格乐观锁更新：以调用方提交的 resourceVersion 只 Update 一次，冲突直接返回 Conflict，不重试
+	UpdateServiceAccountWithResourceVersion(ctx context.Context, clusterID int, namespace, name, resourceVersion string, mutate utils.ServiceAccountMutateFunc) error
 	DeleteServiceAccount(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error
 
 	// 高级功能
 	PatchServiceAccount(ctx context.Context, clusterID int, namespace, name string, data []byte, patchType string) (*corev1.ServiceAccount, error)
 
-	GetServiceAccountSecrets(ctx context.Context, clusterID int, namespace, name string) ([]corev1.Secret, error)
+	// GetServiceAccountSecrets 读取 sa.secrets 引用的 Secret；sa 由调用方传入（复用已读取的对象，不再重复 Get）
+	GetServiceAccountSecrets(ctx context.Context, clusterID int, sa *corev1.ServiceAccount) ([]corev1.Secret, error)
 	GetServiceAccountTokens(ctx context.Context, clusterID int, namespace, name string) ([]string, error)
 	CreateServiceAccountToken(ctx context.Context, clusterID int, namespace, name string, tokenRequest *authv1.TokenRequest) (*authv1.TokenRequest, error)
 	BindServiceAccountToRole(ctx context.Context, clusterID int, namespace, saName, roleName string) error
@@ -174,6 +178,33 @@ func (m *serviceAccountManager) UpdateServiceAccountWithRetry(ctx context.Contex
 	return nil
 }
 
+func (m *serviceAccountManager) UpdateServiceAccountWithResourceVersion(ctx context.Context, clusterID int, namespace, name, resourceVersion string, mutate utils.ServiceAccountMutateFunc) error {
+	kubeClient, err := m.client.GetKubeClient(clusterID)
+	if err != nil {
+		m.logger.Error("获取Kubernetes客户端失败",
+			zap.Int("clusterID", clusterID),
+			zap.Error(err))
+		return err
+	}
+
+	if _, err := utils.UpdateServiceAccountWithResourceVersion(ctx, kubeClient.CoreV1().ServiceAccounts(namespace), name, resourceVersion, mutate); err != nil {
+		m.logger.Error("按resourceVersion更新ServiceAccount失败",
+			zap.Int("clusterID", clusterID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.String("resourceVersion", resourceVersion),
+			zap.Error(err))
+		return err
+	}
+
+	m.logger.Info("成功更新ServiceAccount",
+		zap.Int("clusterID", clusterID),
+		zap.String("namespace", namespace),
+		zap.String("name", name))
+
+	return nil
+}
+
 func (m *serviceAccountManager) DeleteServiceAccount(ctx context.Context, clusterID int, namespace, name string, deleteOptions metav1.DeleteOptions) error {
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -231,11 +262,11 @@ func (m *serviceAccountManager) PatchServiceAccount(ctx context.Context, cluster
 	return sa, nil
 }
 
-func (m *serviceAccountManager) GetServiceAccountSecrets(ctx context.Context, clusterID int, namespace, name string) ([]corev1.Secret, error) {
-	sa, err := m.GetServiceAccount(ctx, clusterID, namespace, name)
-	if err != nil {
-		return nil, err
+func (m *serviceAccountManager) GetServiceAccountSecrets(ctx context.Context, clusterID int, sa *corev1.ServiceAccount) ([]corev1.Secret, error) {
+	if sa == nil {
+		return nil, fmt.Errorf("ServiceAccount不能为空")
 	}
+	namespace, name := sa.Namespace, sa.Name
 
 	kubeClient, err := m.client.GetKubeClient(clusterID)
 	if err != nil {
@@ -274,7 +305,7 @@ func (m *serviceAccountManager) GetServiceAccountTokens(ctx context.Context, clu
 		return nil, err
 	}
 
-	secrets, err := m.GetServiceAccountSecrets(ctx, clusterID, namespace, name)
+	secrets, err := m.GetServiceAccountSecrets(ctx, clusterID, sa)
 	if err != nil {
 		return nil, err
 	}

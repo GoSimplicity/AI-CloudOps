@@ -115,3 +115,27 @@ func TestUpdateServiceAccountWithRetryNotFound(t *testing.T) {
 		t.Fatalf("SA 不存在时不应调用 Update, got %d", n)
 	}
 }
+
+// 严格乐观锁：以调用方提交的 resourceVersion 只 Update 一次；Conflict 原样返回、不重试；保留集群 secrets 与 name/namespace
+func TestUpdateServiceAccountWithResourceVersionSingleAttempt(t *testing.T) {
+	client := fake.NewSimpleClientset(newRetrySA())
+	client.PrependReactor("update", "serviceaccounts", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, conflictErr()
+	})
+	_, err := UpdateServiceAccountWithResourceVersion(context.Background(), client.CoreV1().ServiceAccounts("ops"), "app", "7", func(sa *corev1.ServiceAccount) error {
+		sa.Name, sa.Namespace = "evil", "kube-system"
+		sa.Secrets = nil
+		return nil
+	})
+	if !apierrors.IsConflict(err) {
+		t.Fatalf("应原样返回 Conflict: %v", err)
+	}
+	actions := saUpdateActions(client)
+	if len(actions) != 1 {
+		t.Fatalf("只应 Update 一次, got %d", len(actions))
+	}
+	sent := actions[0].GetObject().(*corev1.ServiceAccount)
+	if sent.ResourceVersion != "7" || sent.Name != "app" || sent.Namespace != "ops" || len(sent.Secrets) != len(newRetrySA().Secrets) {
+		t.Fatalf("提交对象应携带调用方 resourceVersion 并保留不可编辑字段: %+v", sent)
+	}
+}

@@ -36,7 +36,8 @@ func (handlerSAManager) GetServiceAccount(_ context.Context, _ int, namespace, n
 	return &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, UID: types.UID("uid-" + name)}}, nil
 }
 
-func (handlerSAManager) GetServiceAccountSecrets(_ context.Context, _ int, namespace, name string) ([]corev1.Secret, error) {
+func (handlerSAManager) GetServiceAccountSecrets(_ context.Context, _ int, sa *corev1.ServiceAccount) ([]corev1.Secret, error) {
+	namespace, name := sa.Namespace, sa.Name
 	return []corev1.Secret{{
 		ObjectMeta: metav1.ObjectMeta{Name: name + "-token", Namespace: namespace, Annotations: map[string]string{
 			corev1.ServiceAccountNameKey: name, corev1.ServiceAccountUIDKey: "uid-" + name,

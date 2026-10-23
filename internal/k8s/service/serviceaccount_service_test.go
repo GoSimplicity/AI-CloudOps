@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
@@ -45,16 +47,23 @@ type saManagerFixture struct {
 	// kube 为 UpdateServiceAccountWithRetry 使用的 fake clientset，首次使用时以 sa 为初始数据创建；
 	// 测试可预先设置并挂 reactor 模拟并发冲突
 	kube *fake.Clientset
+	// getCalls 记录 GetServiceAccount 调用次数；secretsSA 记录传给 GetServiceAccountSecrets 的 SA
+	getCalls  int
+	secretsSA *corev1.ServiceAccount
+	// tokenExpiry 非零时作为 TokenRequest 返回的过期时间（默认 metav1.Now()）
+	tokenExpiry time.Time
 }
 
 func (m *saManagerFixture) GetServiceAccount(_ context.Context, _ int, _, _ string) (*corev1.ServiceAccount, error) {
+	m.getCalls++
 	if m.getErr != nil {
 		return nil, m.getErr
 	}
 	return m.sa.DeepCopy(), nil
 }
 
-func (m *saManagerFixture) GetServiceAccountSecrets(_ context.Context, _ int, _, _ string) ([]corev1.Secret, error) {
+func (m *saManagerFixture) GetServiceAccountSecrets(_ context.Context, _ int, sa *corev1.ServiceAccount) ([]corev1.Secret, error) {
+	m.secretsSA = sa
 	out := make([]corev1.Secret, 0, len(m.secrets))
 	for i := range m.secrets {
 		out = append(out, *m.secrets[i].DeepCopy())
@@ -72,7 +81,7 @@ func (m *saManagerFixture) UpdateServiceAccount(_ context.Context, _ int, _ stri
 	return nil
 }
 
-func (m *saManagerFixture) UpdateServiceAccountWithRetry(ctx context.Context, _ int, namespace, name string, mutate k8sutils.ServiceAccountMutateFunc) error {
+func (m *saManagerFixture) ensureKube() {
 	if m.kube == nil {
 		var objs []runtime.Object
 		if m.sa != nil {
@@ -80,6 +89,20 @@ func (m *saManagerFixture) UpdateServiceAccountWithRetry(ctx context.Context, _ 
 		}
 		m.kube = fake.NewSimpleClientset(objs...)
 	}
+}
+
+func (m *saManagerFixture) UpdateServiceAccountWithResourceVersion(ctx context.Context, _ int, namespace, name, resourceVersion string, mutate k8sutils.ServiceAccountMutateFunc) error {
+	m.ensureKube()
+	updated, err := k8sutils.UpdateServiceAccountWithResourceVersion(ctx, m.kube.CoreV1().ServiceAccounts(namespace), name, resourceVersion, mutate)
+	if err != nil {
+		return err
+	}
+	m.updated = updated.DeepCopy()
+	return nil
+}
+
+func (m *saManagerFixture) UpdateServiceAccountWithRetry(ctx context.Context, _ int, namespace, name string, mutate k8sutils.ServiceAccountMutateFunc) error {
+	m.ensureKube()
 	updated, err := k8sutils.UpdateServiceAccountWithRetry(ctx, m.kube.CoreV1().ServiceAccounts(namespace), name, mutate)
 	if err != nil {
 		return err
@@ -97,6 +120,9 @@ func (m *saManagerFixture) CreateServiceAccountToken(_ context.Context, _ int, _
 	out := tr.DeepCopy()
 	out.Status.Token = fixtureIssuedToken
 	out.Status.ExpirationTimestamp = metav1.Now()
+	if !m.tokenExpiry.IsZero() {
+		out.Status.ExpirationTimestamp = metav1.NewTime(m.tokenExpiry)
+	}
 	return out, nil
 }
 
@@ -412,9 +438,9 @@ func countSAUpdates(c *fake.Clientset) int {
 	return n
 }
 
-// 第一次 Update 前集群中的 SA 被并发修改并返回 Conflict，第二次成功：JSON 与 YAML 两条路径都应基于最新版本重试、保留最新 secrets
+// 第一次 Update 前集群中的 SA 被并发修改并返回 Conflict（YAML 不带 resourceVersion，走 RetryOnConflict），第二次成功：JSON 与 YAML 两条路径都应基于最新版本重试、保留最新 secrets
 func TestUpdateServiceAccountRetriesOnConflict(t *testing.T) {
-	yamlContent := "apiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: other\n  namespace: kube-system\n  resourceVersion: \"1\"\n  labels:\n    team: ops\nsecrets:\n- name: admin-token\n"
+	yamlContent := "apiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: other\n  namespace: kube-system\n  labels:\n    team: ops\nsecrets:\n- name: admin-token\n"
 	for _, tt := range []struct {
 		name   string
 		update func(svc ServiceAccountService) error
@@ -513,5 +539,143 @@ func TestUpdateServiceAccountNotFoundSkipsUpdate(t *testing.T) {
 				t.Fatalf("SA 不存在时不应调用 Update, got %d", n)
 			}
 		})
+	}
+}
+
+// optimisticLockReactor 模拟 API Server 的乐观锁：Update 提交的 resourceVersion 与当前存储不一致时返回 Conflict，
+// 一致时把版本号加 1 后交给默认 tracker（fake clientset 本身不校验 resourceVersion）
+func optimisticLockReactor(t *testing.T, kube *fake.Clientset) {
+	gvr := corev1.SchemeGroupVersion.WithResource("serviceaccounts")
+	kube.PrependReactor("update", "serviceaccounts", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		obj := a.(k8stesting.UpdateAction).GetObject().(*corev1.ServiceAccount)
+		cur, err := kube.Tracker().Get(gvr, obj.Namespace, obj.Name)
+		if err != nil {
+			return true, nil, err
+		}
+		curRV := cur.(*corev1.ServiceAccount).ResourceVersion
+		if obj.ResourceVersion != curRV {
+			return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "serviceaccounts"}, obj.Name, errors.New("the object has been modified"))
+		}
+		next := obj.DeepCopy()
+		n, _ := strconv.Atoi(curRV)
+		next.ResourceVersion = strconv.Itoa(n + 1)
+		if err := kube.Tracker().Update(gvr, next, obj.Namespace); err != nil {
+			t.Errorf("tracker 更新失败: %v", err)
+		}
+		return true, next, nil
+	})
+}
+
+func saYamlWithRV(rv string) string {
+	y := "apiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: app\n  namespace: ops\n"
+	if rv != "" {
+		y += "  resourceVersion: \"" + rv + "\"\n"
+	}
+	return y + "  labels:\n    team: yaml\nsecrets:\n- name: admin-token\n"
+}
+
+// SEC-29(A)：YAML 带 resourceVersion 时严格乐观锁——版本过期只 Update 一次并返回 409 业务错误，不重试
+func TestUpdateServiceAccountYamlStaleResourceVersionReturnsConflict(t *testing.T) {
+	seed := newSAFixture()
+	seed.ResourceVersion = "5"
+	kube := fake.NewSimpleClientset(seed)
+	optimisticLockReactor(t, kube)
+	fx := &saManagerFixture{sa: newSAFixture(), kube: kube}
+	svc := NewServiceAccountService(fx, &auditFixture{}, zap.NewNop())
+
+	err := svc.UpdateServiceAccountYaml(context.Background(), &model.UpdateServiceAccountByYamlReq{ClusterID: 1, Namespace: "ops", Name: "app", YamlContent: saYamlWithRV("4")})
+	var bizErr *base.BusinessError
+	if !errors.As(err, &bizErr) || !errors.Is(bizErr.Code, constants.ErrK8sResourceConflict) {
+		t.Fatalf("过期 resourceVersion 应返回 ErrK8sResourceConflict 业务错误: %v", err)
+	}
+	if n := countSAUpdates(kube); n != 1 {
+		t.Fatalf("严格乐观锁只应 Update 一次（不重试）, got %d", n)
+	}
+	if fx.updated != nil {
+		t.Fatalf("冲突时不应视为更新成功: %+v", fx.updated)
+	}
+	cur, _ := kube.CoreV1().ServiceAccounts("ops").Get(context.Background(), "app", metav1.GetOptions{})
+	if cur.ResourceVersion != "5" || cur.Labels["team"] != "" {
+		t.Fatalf("冲突时集群对象不应被修改: %+v", cur.ObjectMeta)
+	}
+}
+
+func TestUpdateServiceAccountYamlCurrentResourceVersionSucceeds(t *testing.T) {
+	seed := newSAFixture()
+	seed.ResourceVersion = "5"
+	kube := fake.NewSimpleClientset(seed)
+	optimisticLockReactor(t, kube)
+	fx := &saManagerFixture{sa: newSAFixture(), kube: kube}
+	svc := NewServiceAccountService(fx, &auditFixture{}, zap.NewNop())
+
+	if err := svc.UpdateServiceAccountYaml(context.Background(), &model.UpdateServiceAccountByYamlReq{ClusterID: 1, Namespace: "ops", Name: "app", YamlContent: saYamlWithRV("5")}); err != nil {
+		t.Fatal(err)
+	}
+	if n := countSAUpdates(kube); n != 1 {
+		t.Fatalf("应只 Update 一次, got %d", n)
+	}
+	cur, _ := kube.CoreV1().ServiceAccounts("ops").Get(context.Background(), "app", metav1.GetOptions{})
+	if cur.ResourceVersion != "6" || cur.Labels["team"] != "yaml" {
+		t.Fatalf("应以提交的版本更新成功并应用字段: %+v", cur.ObjectMeta)
+	}
+	if got := k8sutils.ServiceAccountSecretRefNames(cur.Secrets); len(got) != 1 || got[0] != "app-token" {
+		t.Fatalf("乐观锁路径同样应忽略 YAML 中的 secrets、保留集群引用: %v", got)
+	}
+}
+
+// 不带 resourceVersion 时保持 RetryOnConflict：即使存储中的版本与 YAML 无关，也基于最新版本重试成功
+func TestUpdateServiceAccountYamlWithoutResourceVersionUsesRetry(t *testing.T) {
+	seed := newSAFixture()
+	seed.ResourceVersion = "5"
+	kube := fake.NewSimpleClientset(seed)
+	optimisticLockReactor(t, kube)
+	conflicts := 0
+	kube.PrependReactor("update", "serviceaccounts", func(k8stesting.Action) (bool, runtime.Object, error) {
+		if conflicts == 0 {
+			conflicts++
+			return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "serviceaccounts"}, "app", errors.New("the object has been modified"))
+		}
+		return false, nil, nil
+	})
+	fx := &saManagerFixture{sa: newSAFixture(), kube: kube}
+	svc := NewServiceAccountService(fx, &auditFixture{}, zap.NewNop())
+	if err := svc.UpdateServiceAccountYaml(context.Background(), &model.UpdateServiceAccountByYamlReq{ClusterID: 1, Namespace: "ops", Name: "app", YamlContent: saYamlWithRV("")}); err != nil {
+		t.Fatal(err)
+	}
+	if n := countSAUpdates(kube); n != 2 {
+		t.Fatalf("未带 resourceVersion 应走重试路径（冲突 1 次后成功）, update %d 次", n)
+	}
+	cur, _ := kube.CoreV1().ServiceAccounts("ops").Get(context.Background(), "app", metav1.GetOptions{})
+	if cur.Labels["team"] != "yaml" || cur.ResourceVersion != "6" {
+		t.Fatalf("重试后应基于最新版本更新成功: %+v", cur.ObjectMeta)
+	}
+}
+
+// SEC-29(B)：K8s 返回非 UTC 时区的过期时间时，响应中的 expiration_time 仍是正确的 UTC 字符串
+func TestCreateServiceAccountTokenExpirationTimeIsUTC(t *testing.T) {
+	cst := time.FixedZone("CST", 8*3600)
+	fx := &saManagerFixture{tokenExpiry: time.Date(2026, 10, 24, 9, 30, 15, 0, cst)}
+	svc := NewServiceAccountService(fx, &auditFixture{}, zap.NewNop())
+	got, err := svc.CreateServiceAccountToken(context.Background(), &model.CreateServiceAccountTokenReq{ClusterID: 1, Namespace: "ops", ServiceAccountName: "app"}, saActor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ExpirationTime != "2026-10-24T01:30:15Z" {
+		t.Fatalf("expiration_time 应转换为 UTC: %q", got.ExpirationTime)
+	}
+}
+
+// SEC-29 P3-3：GetServiceAccountToken 只读取一次 SA，并把同一个对象传给 GetServiceAccountSecrets
+func TestGetServiceAccountTokenReadsServiceAccountOnce(t *testing.T) {
+	fx := &saManagerFixture{sa: newSAFixture(), secrets: []corev1.Secret{tokenSecret("app-token", "app", "uid-app", fixtureOwnToken)}}
+	svc := NewServiceAccountService(fx, &auditFixture{}, zap.NewNop())
+	if _, err := svc.GetServiceAccountToken(context.Background(), &model.GetServiceAccountTokenReq{ClusterID: 1, Namespace: "ops", Name: "app"}, saActor); err != nil {
+		t.Fatal(err)
+	}
+	if fx.getCalls != 1 {
+		t.Fatalf("GetServiceAccount 应只调用一次, got %d", fx.getCalls)
+	}
+	if fx.secretsSA == nil || fx.secretsSA.Name != "app" || fx.secretsSA.UID != "uid-app" {
+		t.Fatalf("应把已读取的 SA 传给 GetServiceAccountSecrets: %+v", fx.secretsSA)
 	}
 }

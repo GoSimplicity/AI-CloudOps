@@ -251,7 +251,8 @@ func (h *K8sServiceAccountHandler) UpdateServiceAccountYaml(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+	// YAML 带 resourceVersion 时走乐观锁，版本冲突返回 HTTP 409
+	handleMappedRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.serviceAccountService.UpdateServiceAccountYaml(ctx.Request.Context(), &req)
 	})
 }

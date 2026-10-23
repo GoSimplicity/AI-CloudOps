@@ -51,4 +51,7 @@ var (
 	ErrK8sGetPodLogs            = errors.New("k8s get pod logs failed")
 	ErrK8sPortForward           = errors.New("k8s port forward failed")
 	ErrorK8sIngressHealthFailed = errors.New("k8s ingress check health failed")
+
+	// ErrK8sResourceConflict 乐观锁冲突（提交的 resourceVersion 已过期），handler 映射为 HTTP 409
+	ErrK8sResourceConflict = errors.New("k8s resource conflict")
 )

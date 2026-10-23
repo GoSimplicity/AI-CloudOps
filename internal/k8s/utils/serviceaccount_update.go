@@ -67,6 +67,28 @@ func UpdateServiceAccountWithRetry(ctx context.Context, saClient corev1client.Se
 	return updated, nil
 }
 
+// UpdateServiceAccountWithResourceVersion 严格乐观锁更新：调用方提交了 resourceVersion（如 YAML 中的 metadata.resourceVersion）时使用。
+// 先 Get 当前对象作为基础（保留不可编辑字段与集群维护的 secrets 引用），调用 mutate 应用允许修改的字段，
+// 再以调用方提交的 resourceVersion 只做一次 Update：版本过期时由 API Server 返回 409 Conflict，原样返回，不重试。
+// Get 失败（如 NotFound）直接返回且不调用 Update。
+func UpdateServiceAccountWithResourceVersion(ctx context.Context, saClient corev1client.ServiceAccountInterface, name, resourceVersion string, mutate ServiceAccountMutateFunc) (*corev1.ServiceAccount, error) {
+	latest, err := saClient.Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	keptName, keptNamespace := latest.Name, latest.Namespace
+	keptSecrets := append([]corev1.ObjectReference(nil), latest.Secrets...)
+	if mutate != nil {
+		if err := mutate(latest); err != nil {
+			return nil, err
+		}
+	}
+	latest.Name, latest.Namespace = keptName, keptNamespace
+	latest.Secrets = keptSecrets
+	latest.ResourceVersion = resourceVersion
+	return saClient.Update(ctx, latest, metav1.UpdateOptions{})
+}
+
 // ApplyServiceAccountEditableFields 把 desired 中允许通过更新接口修改的字段整体覆盖到 latest：
 // labels、annotations、automountServiceAccountToken、imagePullSecrets。
 // 其余字段（name/namespace、secrets、resourceVersion、uid、ownerReferences、finalizers 等）保持 latest 的值。

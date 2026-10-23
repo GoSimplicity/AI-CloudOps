@@ -322,14 +322,46 @@ func handleAuditedRequest(ctx *gin.Context, req interface{}, action func() (inte
 			base.InternalServerErrorWithDetails(ctx, map[string]interface{}{}, err.Error())
 			return
 		}
-		// 参数错误（如 TokenRequest 有效期越界）按项目约定返回 HTTP 400 + code=1
-		var bizErr *base.BusinessError
-		if errors.As(err, &bizErr) && errors.Is(bizErr.Code, constants.ErrInvalidParam) {
-			base.BadRequestError(ctx, err.Error())
-			return
-		}
-		base.ErrorWithMessage(ctx, err.Error())
+		respondBusinessError(ctx, err)
 		return
 	}
 	base.SuccessWithData(ctx, data)
+}
+
+// handleMappedRequest 与 base.HandleRequest 相同，但按 respondBusinessError 把带类型的业务错误映射为对应 HTTP 状态码
+func handleMappedRequest(ctx *gin.Context, req interface{}, action func() (interface{}, error)) {
+	if req != nil {
+		if err := base.BindRequest(ctx, req); err != nil {
+			base.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+			return
+		}
+	}
+	data, err := action()
+	if err != nil {
+		respondBusinessError(ctx, err)
+		return
+	}
+	if data != nil {
+		base.SuccessWithData(ctx, data)
+	} else {
+		base.Success(ctx)
+	}
+}
+
+// respondBusinessError 业务错误映射：BusinessError{constants.ErrInvalidParam} → HTTP 400；
+// BusinessError{constants.ErrK8sResourceConflict}（乐观锁冲突）→ HTTP 409；其余保持项目约定的 HTTP 200 + code=1
+func respondBusinessError(ctx *gin.Context, err error) {
+	var bizErr *base.BusinessError
+	if errors.As(err, &bizErr) {
+		switch {
+		case errors.Is(bizErr.Code, constants.ErrInvalidParam):
+			// 参数错误（如 TokenRequest 有效期越界）按项目约定返回 HTTP 400 + code=1
+			base.BadRequestError(ctx, err.Error())
+			return
+		case errors.Is(bizErr.Code, constants.ErrK8sResourceConflict):
+			base.ConflictError(ctx, err.Error())
+			return
+		}
+	}
+	base.ErrorWithMessage(ctx, err.Error())
 }
