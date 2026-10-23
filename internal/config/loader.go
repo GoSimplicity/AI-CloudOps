@@ -113,7 +113,18 @@ func LoadWebhook() (*WebhookConfig, error) {
 	configFile := pflag.String("config", "config/webhook.yaml", "配置文件路径")
 	pflag.Parse()
 
-	viper.SetConfigFile(*configFile)
+	return loadWebhookFromFile(*configFile)
+}
+
+// WebhookMySQLAddrEnv Webhook 进程的 MySQL DSN（含账号密码）环境变量，必需，无内置默认值
+const WebhookMySQLAddrEnv = "WEBHOOK_MYSQL_ADDR"
+
+// webhookMySQLAddrKey Webhook 进程读取 DSN 的 viper 键（internal/prometheus/webhook/di/gorm.go）
+const webhookMySQLAddrKey = "mysql.addr"
+
+// loadWebhookFromFile 加载指定的 Webhook 配置文件（不解析命令行参数，便于测试）
+func loadWebhookFromFile(configFile string) (*WebhookConfig, error) {
+	viper.SetConfigFile(configFile)
 	setWebhookDefaults()
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
@@ -124,6 +135,15 @@ func LoadWebhook() (*WebhookConfig, error) {
 	}
 
 	bindWebhookEnvVars()
+
+	// SEC-02A/SEC-22：DSN 整体由 WEBHOOK_MYSQL_ADDR 注入，配置文件不写、无默认值，缺失即失败。
+	// 用 viper.Set 固定取值，避免 AutomaticEnv 让主程序的 MYSQL_ADDR 或配置文件中的值生效
+	addr := strings.TrimSpace(os.Getenv(WebhookMySQLAddrEnv))
+	if addr == "" {
+		// 只列出变量名，不输出任何值
+		return nil, fmt.Errorf("缺少必需的密钥环境变量: %s（不提供内置默认值，请通过环境变量注入）", WebhookMySQLAddrEnv)
+	}
+	viper.Set(webhookMySQLAddrKey, addr)
 
 	cfg := &WebhookConfig{}
 	if err := viper.UnmarshalKey("webhook", cfg); err != nil {

@@ -19,4 +19,4 @@ webhook:
   scale_threshold: 0.5  # 扩缩容的阈值
   scale_interval: 5  # 扩缩容的时间间隔
 mysql:
-  addr: "root:root@tcp(mysql:3306)/CloudOps?charset=utf8mb4&parseTime=True&loc=Local"  # MySQL 连接地址
+  addr: "" # 敏感信息，不写入配置文件；由环境变量 WEBHOOK_MYSQL_ADDR 注入完整 DSN（必需，缺失时 webhook 启动即失败）
