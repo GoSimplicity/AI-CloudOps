@@ -62,6 +62,12 @@ services:
       ENV: production
       SERVER_PORT: "8889"
       MYSQL_ADDR: cloudops:${MYSQL_PASSWORD:?Generate .env first}@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local
+      MYSQL_MAX_OPEN_CONNS: ${MYSQL_MAX_OPEN_CONNS:-20}
+      MYSQL_MAX_IDLE_CONNS: ${MYSQL_MAX_IDLE_CONNS:-5}
+      MYSQL_CONN_MAX_LIFETIME: ${MYSQL_CONN_MAX_LIFETIME:-30m}
+      MYSQL_CONN_MAX_IDLE_TIME: ${MYSQL_CONN_MAX_IDLE_TIME:-5m}
+      MYSQL_CONNECT_TIMEOUT: ${MYSQL_CONNECT_TIMEOUT:-5s}
+      MYSQL_STARTUP_TIMEOUT: ${MYSQL_STARTUP_TIMEOUT:-10s}
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:?Generate .env first}
       JWT_KEY1: ${JWT_KEY1:?Generate .env first}

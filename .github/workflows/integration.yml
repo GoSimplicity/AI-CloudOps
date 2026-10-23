@@ -1,0 +1,68 @@
+name: Three-repository integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  COMPOSE_PROJECT_NAME: cloudops-ci-${{ github.run_id }}
+
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: AI-CloudOps
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: AI-CloudOps
+      - uses: actions/checkout@v4
+        with:
+          repository: GoSimplicity/AI-CloudOps-web
+          path: AI-CloudOps-web
+      - uses: actions/checkout@v4
+        with:
+          repository: GoSimplicity/AI-CloudOps-aiops
+          path: AI-CloudOps-aiops
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Record tested revisions
+        run: |
+          git rev-parse HEAD
+          git -C ../AI-CloudOps-web rev-parse HEAD
+          git -C ../AI-CloudOps-aiops rev-parse HEAD
+      - name: Generate private isolated configuration
+        run: python scripts/release-env.py
+      - name: Build and start isolated stack
+        run: docker compose -f deploy/release/compose.yaml up -d --build --wait --wait-timeout 300
+      - name: Gateway and session acceptance
+        run: python scripts/release-smoke.py --crud
+      - name: Real RBAC and workorder lifecycle
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import subprocess
+
+          settings = dict(line.split('=', 1) for line in Path('deploy/release/.env').read_text().splitlines() if '=' in line and not line.startswith('#'))
+          env = {**os.environ, 'BOOTSTRAP_ADMIN_PASSWORD': settings['BOOTSTRAP_ADMIN_PASSWORD']}
+          for script, arguments in [('account_access.py', ['--rbac']), ('workorder_flow.py', [])]:
+              subprocess.run(['python', 'scripts/integration/' + script, '--url', 'http://localhost:18080', *arguments], env=env, check=True)
+          PY
+      - name: Internal MCP authentication and calculator
+        run: docker compose -f deploy/release/compose.yaml exec -T aiops python - < scripts/integration/mcp_smoke.py
+      - name: Service status
+        if: always()
+        run: docker compose -f deploy/release/compose.yaml ps
+      - name: Remove this job's isolated resources
+        if: always()
+        run: docker compose -f deploy/release/compose.yaml down --volumes --remove-orphans
