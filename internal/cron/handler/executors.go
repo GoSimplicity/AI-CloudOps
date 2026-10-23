@@ -66,7 +66,7 @@ func (h *CommandExecutor) Execute(ctx context.Context, task *CommandTask) (strin
 		timeout = 5 * time.Minute // 默认5分钟
 	}
 
-	// 执行前再次校验：数据库中可能存在修复前保存的危险变量（LD_*、DYLD_*、BASH_ENV、ENV、IFS）
+	// 执行前再次校验：数据库中可能存在修复前保存的危险变量（LD_*、DYLD_*、BASH_ENV、ENV、IFS 等）；key/value 都为空的行跳过
 	if err := crontask.ValidateTaskEnv(task.Environment); err != nil {
 		h.logger.Warn("拒绝执行：任务环境变量不安全", zap.String("command", task.Command), zap.Error(err))
 		return "", err
@@ -312,7 +312,8 @@ func buildTaskEnv(taskEnv model.KeyValueList) []string {
 			env = append(env, kv)
 		}
 	}
-	for _, kv := range taskEnv {
+	// 历史数据中 key/value 都为空的行（前端新增时插入的空行）直接跳过，不生成 "=" 这样的无效条目
+	for _, kv := range crontask.NormalizeTaskEnv(taskEnv) {
 		env = append(env, fmt.Sprintf("%s=%s", kv.Key, kv.Value))
 	}
 	return env

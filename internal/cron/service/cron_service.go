@@ -92,6 +92,15 @@ func (s *cronService) allowLocalExec() bool {
 	return config.CronLocalExecAllowed()
 }
 
+// validateJobTaskEnv 只有命令行任务（JobType==Command）会把 Environment 注入子进程，因此只校验这一类；
+// HTTP/SSH/脚本等任务不使用该字段，不因其中的历史数据拦截保存
+func validateJobTaskEnv(jobType model.CronJobType, env model.KeyValueList) error {
+	if jobType != model.CronJobTypeCommand {
+		return nil
+	}
+	return task.ValidateTaskEnv(env)
+}
+
 // checkLocalExecAllowed 开关关闭时拒绝命令行/脚本任务类型
 func (s *cronService) checkLocalExecAllowed(jobType model.CronJobType) error {
 	if task.IsLocalExecJobType(jobType) && !s.allowLocalExec() {
@@ -112,7 +121,8 @@ func (s *cronService) CreateCronJob(ctx context.Context, req *model.CreateCronJo
 		s.logger.Error("任务配置验证失败", zap.String("name", req.Name), zap.Error(err))
 		return err
 	}
-	if err := task.ValidateTaskEnv(req.Environment); err != nil {
+	req.Environment = task.NormalizeTaskEnv(req.Environment)
+	if err := validateJobTaskEnv(req.JobType, req.Environment); err != nil {
 		s.logger.Warn("拒绝危险的任务环境变量", zap.String("name", req.Name), zap.Error(err))
 		return err
 	}
@@ -168,7 +178,8 @@ func (s *cronService) UpdateCronJob(ctx context.Context, req *model.UpdateCronJo
 		s.logger.Error("任务配置验证失败", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}
-	if err := task.ValidateTaskEnv(req.Environment); err != nil {
+	req.Environment = task.NormalizeTaskEnv(req.Environment)
+	if err := validateJobTaskEnv(req.JobType, req.Environment); err != nil {
 		s.logger.Warn("拒绝危险的任务环境变量", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}

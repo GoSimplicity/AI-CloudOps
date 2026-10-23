@@ -197,3 +197,56 @@ func TestCronJobRejectsDangerousTaskEnv(t *testing.T) {
 		t.Fatalf("普通变量名应允许创建, got %v", err)
 	}
 }
+
+// P2-2：前端新增环境变量会插入 {key:”,value:”} 空行，保存时丢弃而不是拒绝（创建、更新两条路径）
+func TestCronJobSaveDropsBlankEnvRows(t *testing.T) {
+	env := func() model.KeyValueList {
+		return model.KeyValueList{{Key: "", Value: ""}, {Key: "APP_MODE", Value: "x"}, {Key: "  ", Value: ""}}
+	}
+	store := &localExecStore{}
+	req := createReq(model.CronJobTypeCommand)
+	req.Environment = env()
+	if err := newLocalExecService(true, store, nil).CreateCronJob(context.Background(), req); err != nil || store.created == nil {
+		t.Fatalf("create: 空行不应导致拒绝, got %v", err)
+	}
+	if got := store.created.Environment; len(got) != 1 || got[0].Key != "APP_MODE" {
+		t.Fatalf("create: 空行应在保存前丢弃, got %v", got)
+	}
+
+	store = &localExecStore{job: &model.CronJob{JobType: model.CronJobTypeCommand}}
+	ureq := updateReq(model.CronJobTypeCommand)
+	ureq.Environment = env()
+	if err := newLocalExecService(true, store, nil).UpdateCronJob(context.Background(), ureq); err != nil || store.updated == nil {
+		t.Fatalf("update: 空行不应导致拒绝, got %v", err)
+	}
+	if got := store.updated.Environment; len(got) != 1 || got[0].Key != "APP_MODE" {
+		t.Fatalf("update: 空行应在保存前丢弃, got %v", got)
+	}
+
+	// key 为空但 value 非空仍拒绝
+	store = &localExecStore{}
+	req = createReq(model.CronJobTypeCommand)
+	req.Environment = model.KeyValueList{{Key: "", Value: "fake-value"}}
+	if err := newLocalExecService(true, store, nil).CreateCronJob(context.Background(), req); !errors.Is(err, task.ErrForbiddenTaskEnv) || store.created != nil {
+		t.Fatalf("key 为空、value 非空应拒绝, got %v", err)
+	}
+}
+
+// P2-2：只有命令行任务校验 Environment；HTTP、SSH 任务即使带“不合规”环境变量也不被拦
+func TestCronJobEnvOnlyValidatedForCommand(t *testing.T) {
+	bad := model.KeyValueList{{Key: "LD_PRELOAD", Value: "fake-value"}, {Key: "", Value: "fake-value"}, {Key: "A=B", Value: ""}}
+	for _, jobType := range []model.CronJobType{model.CronJobTypeHTTP, model.CronJobTypeSSH} {
+		store := &localExecStore{}
+		req := createReq(jobType)
+		req.Environment = bad
+		if err := newLocalExecService(true, store, nil).CreateCronJob(context.Background(), req); err != nil || store.created == nil {
+			t.Fatalf("create type=%d: 不应因 Environment 被拦, got %v", jobType, err)
+		}
+		store = &localExecStore{job: &model.CronJob{JobType: jobType}}
+		ureq := updateReq(jobType)
+		ureq.Environment = bad
+		if err := newLocalExecService(true, store, nil).UpdateCronJob(context.Background(), ureq); err != nil || store.updated == nil {
+			t.Fatalf("update type=%d: 不应因 Environment 被拦, got %v", jobType, err)
+		}
+	}
+}

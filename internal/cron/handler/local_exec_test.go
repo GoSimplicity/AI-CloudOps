@@ -178,3 +178,28 @@ func TestCommandExecutorRejectsDangerousTaskEnv(t *testing.T) {
 		}
 	}
 }
+
+// P2-2：执行路径上，数据库中已有的 {key:”,value:”} 空行被跳过，任务照常执行且不产生 "=" 条目
+func TestCommandExecutorSkipsBlankEnvRows(t *testing.T) {
+	output, err := NewCommandExecutor(zap.NewNop()).Execute(context.Background(), &CommandTask{
+		Command:     "env",
+		Environment: model.KeyValueList{{Key: "", Value: ""}, {Key: "TASK_VAR", Value: "task-value"}, {Key: " ", Value: ""}},
+		Timeout:     10,
+	})
+	if err != nil {
+		t.Fatalf("空行不应导致执行失败: %v", err)
+	}
+	if !strings.Contains(output, "TASK_VAR=task-value") {
+		t.Fatal("非空变量应传入子进程")
+	}
+	for _, line := range strings.Split(output, "\n") {
+		if strings.HasPrefix(line, "=") || strings.HasPrefix(line, " =") {
+			t.Fatalf("不应生成空变量名条目: %q", line)
+		}
+	}
+	for _, kv := range buildTaskEnv(model.KeyValueList{{Key: "", Value: ""}}) {
+		if strings.HasPrefix(kv, "=") {
+			t.Fatalf("buildTaskEnv 不应生成空变量名条目: %q", kv)
+		}
+	}
+}
