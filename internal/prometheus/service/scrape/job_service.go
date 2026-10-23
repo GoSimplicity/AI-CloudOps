@@ -32,6 +32,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	scrapeJobDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/utils"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	"go.uber.org/zap"
 )
@@ -88,6 +89,7 @@ func (s *scrapeJobService) CreateMonitorScrapeJob(ctx context.Context, req *mode
 		ScrapeTimeout:            req.ScrapeTimeout,
 		RefreshInterval:          req.RefreshInterval,
 		Port:                     req.Port,
+		TreeNodeIDs:              req.TreeNodeIDs,
 		IpAddress:                req.IpAddress,
 		KubeConfigFilePath:       req.KubeConfigFilePath,
 		TlsCaFilePath:            req.TlsCaFilePath,
@@ -98,6 +100,10 @@ func (s *scrapeJobService) CreateMonitorScrapeJob(ctx context.Context, req *mode
 		RelabelConfigsYamlString: req.RelabelConfigsYamlString,
 		CreateUserName:           req.CreateUserName,
 		Tags:                     req.Tags,
+	}
+
+	if _, err := utils.ScrapeHTTPClientConfig(monitorScrapeJob); err != nil {
+		return err
 	}
 
 	exists, err := s.dao.CheckMonitorScrapeJobExists(ctx, monitorScrapeJob.Name)
@@ -149,6 +155,7 @@ func (s *scrapeJobService) UpdateMonitorScrapeJob(ctx context.Context, req *mode
 		RelabelConfigsYamlString: req.RelabelConfigsYamlString,
 		RefreshInterval:          req.RefreshInterval,
 		Port:                     req.Port,
+		TreeNodeIDs:              req.TreeNodeIDs,
 		IpAddress:                req.IpAddress,
 		KubeConfigFilePath:       req.KubeConfigFilePath,
 		TlsCaFilePath:            req.TlsCaFilePath,
@@ -157,6 +164,10 @@ func (s *scrapeJobService) UpdateMonitorScrapeJob(ctx context.Context, req *mode
 		BearerTokenFile:          req.BearerTokenFile,
 		KubernetesSdRole:         req.KubernetesSdRole,
 		Tags:                     req.Tags,
+	}
+
+	if _, err := utils.ScrapeHTTPClientConfig(monitorScrapeJob); err != nil {
+		return err
 	}
 
 	// 检查 ID 是否有效

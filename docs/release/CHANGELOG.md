@@ -132,3 +132,10 @@
 - 租约协调等待不消耗失败预算；硬崩溃恢复遵守 SDK 同一有限预算，详见 [cron-retry.md](cron-retry.md)
 - 配置编辑限定字段，防止覆盖正在执行的状态、租约与历史输出
 - 验证：Cron 与 DI 的 smoke/race、go vet 通过，真实 SQLite 验证显式 0 与运行中编辑
+
+## Prometheus 采集认证与发现配置修复
+
+- 三种发现方式统一生成目标认证和 CA，校验互斥来源；仅操作配置导出恢复真实令牌，不修改 SDK 全局脱敏开关
+- 修复 HTTP-SD 节点 ID 保存、地址默认端口和 release 容器地址，保留原有查询参数
+- 完整生成配置参与缓存摘要，令牌等作业字段变化能刷新
+- 验证：本地真实 HTTPS 认证/CA、配置解析、缓存轮换与日志检查、race/vet、全仓 go test 通过；实际发布 v3.2.1 promtool 无网络临时容器验收通过，见 [prometheus-scrape-auth.md](prometheus-scrape-auth.md)

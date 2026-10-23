@@ -24,7 +24,7 @@ prometheus:
   enable_record: 0 # 1 开启记录 0 关闭记录
   alert_webhook_addr: "http://localhost:8889/api/v1/alerts/receive"
   alert_webhook_file_dir: "/tmp/webhook_files"
-  httpSdAPI: "http://localhost:8888/api/not_auth/getTreeNodeBindIps"
+  httpSdAPI: "http://localhost:8889/api/not_auth/getTreeNodeBindIps"
 mock:
   enabled: false # 是否开启mock
 notification:

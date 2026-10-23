@@ -167,7 +167,7 @@ func setDefaults() {
 	viper.SetDefault("prometheus.enable_record", 0)
 	viper.SetDefault("prometheus.alert_webhook_addr", "http://localhost:8889/api/v1/alerts/receive")
 	viper.SetDefault("prometheus.alert_webhook_file_dir", "/tmp/webhook_files")
-	viper.SetDefault("prometheus.httpSdAPI", "http://localhost:8888/api/not_auth/getTreeNodeBindIps")
+	viper.SetDefault("prometheus.httpSdAPI", "http://localhost:8889/api/not_auth/getTreeNodeBindIps")
 
 	viper.SetDefault("mock.enabled", true)
 

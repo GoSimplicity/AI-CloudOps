@@ -27,7 +27,11 @@ package cache
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -180,12 +184,6 @@ func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
 			// 从 Redis 读取池哈希，判断是否需要更新
 			hashKey := buildRedisHashKeyPrometheus(pool.Name)
 			cachedHash, _ := p.redis.Get(ctx, hashKey).Result()
-			if cachedHash == currentHash {
-				for _, ip := range pool.PrometheusInstances {
-					validIPs[ip] = struct{}{}
-				}
-				continue
-			}
 
 			baseConfig, err := p.CreateBaseConfig(pool)
 			if err != nil {
@@ -209,7 +207,7 @@ func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
 					configCopy.ScrapeConfigs = p.ApplyHashMod(scrapeConfigs, len(pool.PrometheusInstances), idx)
 				}
 
-				yamlData, err := yaml.Marshal(configCopy)
+				yamlData, err := marshalPrometheusConfig(configCopy)
 				if err != nil {
 					p.logger.Error(LogModuleMonitor+"配置序列化失败", zap.String("pool_name", pool.Name), zap.Error(err))
 					success = false
@@ -220,6 +218,18 @@ func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
 			}
 
 			if success {
+				// 作业、认证、服务发现地址也参与摘要，避免只改作业时被池缓存跳过
+				serialized, err := json.Marshal(instanceConfigs)
+				if err != nil {
+					return fmt.Errorf("配置摘要生成失败: %w", err)
+				}
+				currentHash = fmt.Sprintf("%x", sha256.Sum256(append([]byte(currentHash), serialized...)))
+				if cachedHash == currentHash {
+					for _, ip := range pool.PrometheusInstances {
+						validIPs[ip] = struct{}{}
+					}
+					continue
+				}
 				// 清理上一次该池的实例集合中已不存在的IP
 				setKey := buildRedisSetKeyPrometheusMainPoolIPs(pool.ID)
 				oldIPs, _ := p.redis.SMembers(ctx, setKey).Result()
@@ -379,6 +389,13 @@ func (p *prometheusConfigCache) GenerateScrapeConfigs(ctx context.Context, pool 
 			ScrapeTimeout:  utils.GenPromDuration(job.ScrapeTimeout),
 		}
 
+		clientConfig, err := utils.ScrapeHTTPClientConfig(job)
+		if err != nil {
+			p.logger.Error(LogModuleMonitor+"采集认证或TLS配置无效", zap.Int("job_id", job.ID), zap.Error(err))
+			continue
+		}
+		sc.HTTPClientConfig = clientConfig
+
 		if job.RelabelConfigsYamlString != "" {
 			if err := yaml.Unmarshal([]byte(job.RelabelConfigsYamlString), &sc.RelabelConfigs); err != nil {
 				p.logger.Error(LogModuleMonitor+"解析Relabel配置失败", zap.Error(err), zap.String("job_name", job.Name))
@@ -392,22 +409,23 @@ func (p *prometheusConfigCache) GenerateScrapeConfigs(ctx context.Context, pool 
 				p.logger.Error(LogModuleMonitor+"HTTP SD API地址为空", zap.String("job_name", job.Name))
 				continue
 			}
-			// HTTP SD: 传递端口与树节点ID集合
-			sdURL := fmt.Sprintf("%s?port=%d&tree_node_ids=%s", p.httpSdAPI, job.Port, stringSliceToString(job.TreeNodeIDs))
+			sdURL, err := url.Parse(p.httpSdAPI)
+			if err != nil || (sdURL.Scheme != "http" && sdURL.Scheme != "https") || sdURL.Host == "" {
+				p.logger.Error(LogModuleMonitor+"HTTP SD API地址无效", zap.Int("job_id", job.ID))
+				continue
+			}
+			query := sdURL.Query()
+			query.Set("port", strconv.Itoa(job.Port))
+			query.Set("tree_node_ids", stringSliceToString(job.TreeNodeIDs))
+			sdURL.RawQuery = query.Encode()
 			sc.ServiceDiscoveryConfigs = discovery.Configs{
 				&http.SDConfig{
-					URL:             sdURL,
-					RefreshInterval: utils.GenPromDuration(job.RefreshInterval),
+					URL:              sdURL.String(),
+					HTTPClientConfig: pcc.DefaultHTTPClientConfig,
+					RefreshInterval:  utils.GenPromDuration(job.RefreshInterval),
 				},
 			}
 		case model.ServiceDiscoveryTypeK8s:
-			// 采集目标的 HTTPClient 配置（用于实际抓取）
-			sc.HTTPClientConfig = pcc.HTTPClientConfig{
-				BearerTokenFile: job.BearerTokenFile,
-				TLSConfig: pcc.TLSConfig{
-					CAFile: job.TlsCaFilePath,
-				},
-			}
 			// 服务发现使用 kubeconfig 或集群内身份，避免与自定义 HTTP 配置互斥
 			sdHTTPClient := pcc.DefaultHTTPClientConfig
 
