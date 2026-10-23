@@ -31,10 +31,11 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/GoSimplicity/AI-CloudOps/pkg/runenv"
 )
 
 type Config struct {
@@ -91,11 +92,21 @@ func (c *Config) Validate() error {
 	if err := c.JWT.validateKeys(); err != nil {
 		return err
 	}
-	isProduction := os.Getenv("ENV") == "production"
+	isProduction := runenv.IsProduction()
 	if err := c.JWT.validateExpiration(isProduction); err != nil {
 		return err
 	}
 	if isProduction {
+		// 生产环境：其余密钥/关键配置同样不允许首尾空白、控制字符或不可见格式字符（错误信息只含变量名）
+		for _, v := range []struct{ name, value string }{
+			{"TREE_PASSWORD_ENCRYPTION_KEY", c.Tree.PasswordEncryptionKey},
+			{"JWT_ISSUER", c.JWT.Issuer},
+			{"AIOPS_API_KEY", c.AIOps.APIKey},
+		} {
+			if err := checkNoSpaceOrControl(v.name, v.value); err != nil {
+				return err
+			}
+		}
 		key := c.Tree.PasswordEncryptionKey
 		if len(key) < 32 || strings.HasPrefix(key, "ebe3vx") {
 			return fmt.Errorf("生产环境 TREE_PASSWORD_ENCRYPTION_KEY 必须配置独立的至少32字符密钥")
@@ -121,8 +132,12 @@ const MaxJWTExpirationMinutes = 1440
 var configWarnf = log.Printf
 
 // validateExpiration 校验访问令牌有效期上限（单位分钟）。
-// 环境判断沿用 Validate 中已有的 os.Getenv("ENV") == "production"
+// 小于等于 0 时 pkg/jwt 会回退到默认值 30 分钟，这里只记告警。环境判断使用 runenv.IsProduction
 func (j JWTConfig) validateExpiration(isProduction bool) error {
+	if j.Expiration <= 0 {
+		configWarnf("[配置告警] JWT_EXPIRATION（单位分钟）为%d，不是正数，将使用默认值 30", j.Expiration)
+		return nil
+	}
 	if j.Expiration <= MaxJWTExpirationMinutes {
 		return nil
 	}
@@ -177,6 +192,15 @@ func hasControlChar(s string) bool {
 	return false
 }
 
+// checkNoSpaceOrControl 值不能有首尾空白、控制字符或 Unicode 格式字符；空值不在此处判断。
+// 错误信息只含变量名和原因，不含值
+func checkNoSpaceOrControl(name, value string) error {
+	if strings.TrimSpace(value) != value || hasControlChar(value) {
+		return fmt.Errorf("%s 首尾不能有空白且不能包含控制字符或不可见格式字符（不会自动去除，请检查注入方式）", name)
+	}
+	return nil
+}
+
 // distinctCharCount 统计字符串中不同字符（按 rune）的个数
 func distinctCharCount(s string) int {
 	seen := make(map[rune]struct{}, len(s))
@@ -191,8 +215,8 @@ func distinctCharCount(s string) int {
 // 两把密钥规范化后不相同。错误信息只含变量名和原因，不含密钥值或其片段
 func (j JWTConfig) validateKeys() error {
 	for _, k := range []struct{ name, value string }{{"JWT_KEY1", j.Key1}, {"JWT_KEY2", j.Key2}} {
-		if strings.TrimSpace(k.value) != k.value || hasControlChar(k.value) {
-			return fmt.Errorf("%s 首尾不能有空白且不能包含控制字符或不可见格式字符（不会自动去除，请检查注入方式）", k.name)
+		if err := checkNoSpaceOrControl(k.name, k.value); err != nil {
+			return err
 		}
 		if len(k.value) < MinJWTKeyLength {
 			return fmt.Errorf("%s 长度不足：至少需要%d字节（可用 openssl rand -base64 48 或 openssl rand -hex 32 生成）", k.name, MinJWTKeyLength)

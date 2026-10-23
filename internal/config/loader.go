@@ -32,6 +32,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/GoSimplicity/AI-CloudOps/pkg/runenv"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -60,14 +61,10 @@ func Load() (*Config, *ExternalConfig, error) {
 	pflag.Parse()
 
 	if *configFile == "" {
-		env := os.Getenv("ENV")
-		if env == "" {
-			env = "development"
-		}
-		switch env {
-		case "production":
+		// 与 Config.Validate 使用同一判断（去首尾空白、忽略大小写），避免选了开发配置却按生产规则校验
+		if runenv.IsProduction() {
 			*configFile = "config/config.production.yaml"
-		default:
+		} else {
 			*configFile = "config/config.development.yaml"
 		}
 	}
