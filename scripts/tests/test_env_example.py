@@ -3,8 +3,13 @@
 只读取仓库里的 env.example、config/webhook.yaml、deploy/release/compose.yaml 和 Go 源码中的默认值 / 拼接格式，
 不连网、不启动进程；群机器人 token 用运行时生成的合成值。
 """
+import json
 import os
+import random
 import re
+import shutil
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -13,13 +18,102 @@ ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_PORTS = {"http": 80, "https": 443}
 
 
-def _env_example():
-    values = {}
-    for line in (ROOT / "env.example").read_text(encoding="utf-8").splitlines():
-        m = re.fullmatch(r"([A-Z][A-Z0-9_]*)=(.*)", line.strip())
-        if m:
-            values[m.group(1)] = m.group(2).strip()
-    return values
+_GODOTENV_SPACE = "\t\v\f\r \x85\xa0"  # parser.go isSpace：不含换行
+_EXPAND_VAR = re.compile(r"(\\)?(\$)(\()?\{?([A-Z0-9_]+)?\}?")
+
+
+def _go_unicode_isspace(ch):
+    # unicode.IsSpace：Latin-1 内只有这 8 个；Python 的 isspace 还把 \x1c-\x1f 算空白，要排除
+    return ch in "\t\n\v\f\r \x85\xa0" or (ord(ch) > 0xff and ch.isspace())
+
+
+def _godotenv_expand(value, seen):
+    def repl(m):
+        sub = _EXPAND_VAR.search(m.group(0))
+        if sub.group(1) == "\\" or sub.group(2) == "(":  # 原实现比较的是第 2 组（恒为 "$"），这一支只会因反斜杠命中
+            return m.group(0)[1:]
+        if sub.group(4):
+            return seen.get(sub.group(4), "")
+        return m.group(0)
+    return _EXPAND_VAR.sub(repl, value)
+
+
+def _godotenv_escapes(value):
+    value = re.sub(r"\\.", lambda m: {"n": "\n", "r": "\r"}.get(m.group(0)[1], m.group(0)), value)
+    return re.sub(r"\\([^$])", r"\1", value)
+
+
+def _godotenv_parse(text):
+    """逐条移植 github.com/joho/godotenv v1.5.1 parser.go（main.go 用 godotenv.Load() 读 .env）。
+
+    重复键后者生效；可带 export 前缀；分隔符 = 或 :；未加引号的值从行尾往前找第一个前面是空白的 #，
+    其后为注释（a#b 不是注释）；单引号原样，双引号展开 \\n \\r 和其他反斜杠转义；
+    未加引号和双引号的值展开 $NAME / ${NAME}，只看前面已解析的键，找不到为空串。
+    格式错误时抛 ValueError（godotenv.Load 同样报错）。
+    """
+    src = text.replace("\r\n", "\n")
+    out = {}
+    while True:
+        # getStatementStart：跳过空白（含换行）和 # 注释行
+        while True:
+            pos = next((i for i, ch in enumerate(src) if not _go_unicode_isspace(ch)), -1)
+            if pos == -1:
+                return out
+            src = src[pos:]
+            if src[0] != "#":
+                break
+            nl = src.find("\n")
+            if nl == -1:
+                return out
+            src = src[nl:]
+        # locateKeyName：键名按字节逐个检查（与 Go 的 for i, char := range []byte 一致）
+        src = src.lstrip(_GODOTENV_SPACE)
+        if src.startswith("export") and src[6:7] and src[6] in _GODOTENV_SPACE:
+            src = src[6:].lstrip(_GODOTENV_SPACE)
+        raw = src.encode("utf-8")
+        key, offset = b"", 0
+        for i, c in enumerate(raw):
+            ch = chr(c)  # rune(byte)：按 Latin-1 解释单个字节
+            if ch in _GODOTENV_SPACE:
+                continue
+            if ch in "=:":
+                key, offset = raw[:i], i + 1
+                break
+            if ch == "_" or ch == "." or ch.isalpha() or ch.isnumeric():
+                continue
+            raise ValueError(f"unexpected character {ch!r} in variable name")
+        if not raw:
+            raise ValueError("zero length string")
+        key = key.decode("utf-8", "replace").rstrip()
+        src = raw[offset:].decode("utf-8").lstrip(_GODOTENV_SPACE)
+        # extractVarValue
+        if src[:1] in ('"', "'"):
+            quote = src[0]
+            for i in range(1, len(src)):
+                if src[i] != quote or src[i - 1] == "\\":
+                    continue
+                value = src[:i].strip(quote)
+                if quote == '"':
+                    value = _godotenv_expand(_godotenv_escapes(value), out)
+                out[key] = value
+                src = src[i + 1:]
+                break
+            else:
+                raise ValueError("unterminated quoted value")
+            continue
+        eol = next((i for i, ch in enumerate(src) if ch in "\n\r"), len(src))
+        line, end = src[:eol], eol
+        for i in range(end - 1, 0, -1):
+            if line[i] == "#" and line[i - 1] in _GODOTENV_SPACE:
+                end = i
+                break
+        out[key] = _godotenv_expand(line[:end].strip(_GODOTENV_SPACE), out)
+        src = src[eol:]
+
+
+def _env_example(text=None):
+    """env.example 复制成 .env 后 backend 实际读到的值（godotenv v1.5.1 语义，见 _godotenv_parse）"""
+    return _godotenv_parse((ROOT / "env.example").read_text(encoding="utf-8") if text is None else text)
 
 
 def _ascii_port(url_or_netloc_port):
@@ -418,6 +512,109 @@ class AlertAddrFullUrlTests(unittest.TestCase):
         self.assertEqual(_alert_target("https://h/x"), ("https", "h", 443, "/x/api/v1/alerts/receive"))
         with self.assertRaises(ValueError):
             _alert_target("HTTP://h:1/api/v1/alerts/receive")
+
+
+_GODOTENV_CASES = [
+    # (内容, godotenv v1.5.1 解析结果)；合成值，与仓库 / 主机上的真实配置无关
+    ("export FOO=1\n", {"FOO": "1"}),
+    ("FOO = 1\nBAR: two\n", {"FOO": "1", "BAR": "two"}),
+    ("FOO=a # 注释\nBAR=a#b\nBAZ=a #b #c\n", {"FOO": "a", "BAR": "a#b", "BAZ": "a #b"}),
+    ("FOO=\"a b\" # 注释\nBAR='x # y'\n", {"FOO": "a b", "BAR": "x # y"}),
+    ("FOO=\"l1\\nl2\"\nBAR='raw\\n'\n", {"FOO": "l1\nl2", "BAR": "raw\\n"}),
+    ("A=1\nB=${A}x\nC=$A\nD=\\$A\nE=${MISSING}\nF='$A'\n", {"A": "1", "B": "1x", "C": "1", "D": "$A", "E": "", "F": "$A"}),
+    ("X=${LATER}\nLATER=v\n", {"X": "", "LATER": "v"}),
+    ("A=1\nA=2\n", {"A": "2"}),
+    ("lower.case=1\n", {"lower.case": "1"}),
+    ("  # 注释\n\tFOO=1  \r\nBAR=\n", {"FOO": "1", "BAR": ""}),
+]
+
+
+class GodotenvParserTests(unittest.TestCase):
+    """_env_example 与 backend 读 .env 的方式一致：main.go 调用 godotenv.Load()（go.mod 锁定 v1.5.1）"""
+
+    def test_semantics(self):
+        for text, expected in _GODOTENV_CASES:
+            with self.subTest(text=text):
+                self.assertEqual(_env_example(text), expected)
+
+    def test_rejects_malformed(self):
+        for text in ("FOO\n", 'FOO="unterminated\n', "FOO-BAR=1\n"):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                _env_example(text)
+
+    def test_env_example_parses(self):
+        self.assertIn("PROMETHEUS_ALERT_WEBHOOK_ADDR", _env_example())
+
+    def test_matches_real_godotenv(self):
+        # 可选交叉核对：只用本机模块缓存（GOPROXY=off、不切换工具链、不改 go.mod）；缺 go 或缓存时跳过
+        go = shutil.which("go")
+        if go is None:
+            self.skipTest("go 不可用，跳过与真实 godotenv 的交叉核对")
+        sums = [l for l in (ROOT / "go.sum").read_text(encoding="utf-8").splitlines()
+                if l.startswith("github.com/joho/godotenv v1.5.1")]
+        if len(sums) != 2:
+            self.skipTest("go.sum 里没有 godotenv v1.5.1")
+        rnd = random.Random(20261024)
+        alphabet = ["A", "B", "_", "x", "1", "=", ":", " ", "\t", "#", "\n", "\r", "\r\n", '"', "'", "\\", "$",
+                    "{", "}", "(", "export ", "\\n", "${A}", "$B", "é", "\xa0", "\x85", "\u3000", ".", "-", "１"]
+        cases = [t for t, _ in _GODOTENV_CASES] + [(ROOT / "env.example").read_text(encoding="utf-8")]
+        cases += ["".join(rnd.choice(alphabet) for _ in range(rnd.randint(0, 24))) for _ in range(3000)]
+        with tempfile.TemporaryDirectory() as tmp:
+            mod = Path(tmp) / "godotenvcheck"
+            mod.mkdir()
+            (mod / "go.mod").write_text("module godotenvcheck\n\ngo 1.22\n\nrequire github.com/joho/godotenv v1.5.1\n")
+            (mod / "go.sum").write_text("\n".join(sums) + "\n")
+            (mod / "main.go").write_text(_GODOTENV_GO)
+            env = {**os.environ, "GOTOOLCHAIN": "local", "GOPROXY": "off", "GOSUMDB": "off", "GOFLAGS": "",
+                   "GOCACHE": os.environ.get("GOCACHE") or str(Path(tmp) / "gocache")}
+            r = subprocess.run([go, "run", "."], cwd=mod, input=json.dumps(cases), env=env,
+                               capture_output=True, text=True, timeout=300)
+            if r.returncode != 0:
+                self.skipTest("本机模块缓存缺少 github.com/joho/godotenv v1.5.1，跳过交叉核对")
+        mismatches = []
+        for text, got in zip(cases, json.loads(r.stdout)):
+            want = {"err": True} if got.get("err") else {"ok": got.get("ok") or {}}
+            try:
+                mine = {"ok": _env_example(text)}
+            except ValueError:
+                mine = {"err": True}
+            if mine != want:
+                mismatches.append(text)
+        self.assertEqual(mismatches[:5], [], f"{len(mismatches)} / {len(cases)} 条与 godotenv 结果不同")
+
+
+_GODOTENV_GO = """package main
+
+import (
+	"encoding/json"
+	"os"
+	"strings"
+
+	"github.com/joho/godotenv"
+)
+
+type result struct {
+	OK  map[string]string `json:"ok,omitempty"`
+	Err bool              `json:"err,omitempty"`
+}
+
+func main() {
+	var cases []string
+	if err := json.NewDecoder(os.Stdin).Decode(&cases); err != nil {
+		panic(err)
+	}
+	out := make([]result, 0, len(cases))
+	for _, c := range cases {
+		m, err := godotenv.Parse(strings.NewReader(c))
+		if err != nil {
+			out = append(out, result{Err: true})
+			continue
+		}
+		out = append(out, result{OK: m})
+	}
+	_ = json.NewEncoder(os.Stdout).Encode(out)
+}
+"""
 
 
 class FeishuGroupMessageUrlTests(unittest.TestCase):
