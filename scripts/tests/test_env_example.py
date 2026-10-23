@@ -22,8 +22,23 @@ def _env_example():
     return values
 
 
+def _ascii_port(url_or_netloc_port):
+    """URL 里显式写出的端口必须是 ASCII 数字：Python 3.9/3.10 的 urllib 会把全角数字 ８８８９ 当成 8889。"""
+    import re
+    if url_or_netloc_port is not None and not re.fullmatch(r"[0-9]+", url_or_netloc_port):
+        raise ValueError(f"端口只能是 ASCII 数字: {url_or_netloc_port!r}")
+
+
+def _netloc_port(netloc):
+    # netloc 里冒号后的端口原文（IPv6 字面量跳过方括号）；没写端口返回 None
+    hostport = netloc.rpartition("@")[2]
+    tail = hostport.rpartition("]")[2] if hostport.startswith("[") else hostport
+    return tail.rpartition(":")[2] if ":" in tail else None
+
+
 def _url_port(url):
     parts = urlsplit(url if "://" in url else "http://" + url)
+    _ascii_port(_netloc_port(parts.netloc))
     scheme = parts.scheme.lower()
     if scheme not in _DEFAULT_PORTS:
         raise ValueError(f"不支持的 scheme: {scheme!r}")
@@ -43,12 +58,18 @@ def _go_default(key):
     return found[0]
 
 
-def _webhook_yaml_port():
-    # config/webhook.yaml 的 webhook.port（webhook: 根节点下第一层的 port）
+# webhook.port 的值：纯 ASCII 数字（可加单/双引号）；行内注释的 # 前必须有空白（YAML 规则，8889#oops 是一个标量）
+_PORT_VALUE = r"""(?:"([0-9]+)"|'([0-9]+)'|([0-9]+))(?:[ \t]+#.*)?[ \t]*"""
+
+
+def _webhook_yaml_port(text=None):
+    # config/webhook.yaml 的 webhook.port（webhook: 根节点下第一层的 port）；text 用于合成 YAML 用例
+    if text is None:
+        text = (ROOT / "config/webhook.yaml").read_text(encoding="utf-8")
     level = None
     in_root = False
     ports = []
-    for line in (ROOT / "config/webhook.yaml").read_text(encoding="utf-8").splitlines():
+    for line in text.splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         indent = len(line) - len(line.lstrip(" "))
@@ -61,7 +82,7 @@ def _webhook_yaml_port():
         if level is None:
             level = indent
         if indent == level:
-            m = re.fullmatch(r"port[ \t]*:[ \t]*(?:\"(\d+)\"|'(\d+)'|(\d+))[ \t]*(?:#.*)?", line.strip())
+            m = re.fullmatch(r"port[ \t]*:[ \t]*" + _PORT_VALUE, line.strip())
             if m:
                 ports.append(int(next(g for g in m.groups() if g)))
             elif re.match(r"port\s*:", line.strip()):
@@ -98,7 +119,8 @@ class WebhookPortConsistencyTests(unittest.TestCase):
         self.assertEqual(_url_port("http://h/x"), 80)
         self.assertEqual(_url_port("HTTPS://h/x"), 443)
         self.assertEqual(_url_port("h:8889"), 8889)
-        for bad in ("ftp://h:21/x", "http://h:0/x", "http://h:8889suffix/x", "http://h:70000/x"):
+        for bad in ("ftp://h:21/x", "http://h:0/x", "http://h:8889suffix/x", "http://h:70000/x",
+                    "http://h:８８８９/x", "h:８８８９"):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 _url_port(bad)
 
@@ -234,6 +256,20 @@ class GroupFormatParserTests(unittest.TestCase):
         ):
             with self.subTest(snippet=snippet), self.assertRaises(AssertionError):
                 _group_format(snippet)
+
+
+class WebhookYamlPortValueTests(unittest.TestCase):
+    """webhook.port 取值的正负向（合成 YAML）。"""
+
+    def test_accepts_ascii_digits_and_spaced_comment(self):
+        for value in ("8889", '"8889"', "'8889'", "8889 # c", '"8889"\t# c', "8889  "):
+            with self.subTest(value=value):
+                self.assertEqual(_webhook_yaml_port(f"webhook:\n  port: {value}\n"), 8889)
+
+    def test_rejects_fullwidth_digits_and_unspaced_hash(self):
+        for value in ("８８８９", '"８８８９"', "8889#oops", '"8889"#oops', "'8889'#oops"):
+            with self.subTest(value=value), self.assertRaises(AssertionError):
+                _webhook_yaml_port(f"webhook:\n  port: {value}\n")
 
 
 class FeishuGroupMessageUrlTests(unittest.TestCase):
