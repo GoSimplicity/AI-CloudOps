@@ -2,6 +2,8 @@
 # SEC-01A 第三轮补修（review3b 第 3 项）：历史中 RFC 6455 示例 nonce（24b8315 / 125bc27）要不要加带提交号的指纹。
 # 结论：不加。本脚本把依据固化为可重复的检查：
 #   T1  本地全量历史扫描 + HEAD 的 .gitleaks.toml：按值 allowlist 已覆盖历史提交中的 nonce → 不报
+#       （review3g N5：扫描前移走开发仓库的 .gitleaksignore，否则 gitleaks 自动加载其中的指纹，T1 的通过不能归因于 allowlist）
+#   T1b 对照：同样条件下只用默认规则（无 allowlist）→ 必须检出
 #   T2  CI 全量路径（push 默认分支且 before 全零 → 范围 = HEAD）：工作流按设计用默认规则 + 空 ignore，
 #       即使 HEAD 的 .gitleaksignore 里有 commit:path:rule:line 指纹也不加载 → 仍报（已知限制，记录在 README-ops）
 #   T3  对照：同样的指纹若被加载（默认规则 + 该 ignore）则不报 —— 说明 T2 仍报是因为 CI 不加载，而不是指纹写错
@@ -39,11 +41,21 @@ git -C "$GL_DEV" add -A; git -C "$GL_DEV" -c core.hooksPath=/dev/null commit -qm
 git -C "$GL_DEV" push -q origin HEAD:main
 HEAD_SHA="$(git -C "$GL_DEV" rev-parse HEAD)"
 
-# T1
+# T1（review3g N5）：先把开发仓库中的 .gitleaksignore 移走——gitleaks 总会自动读取“源目录/.gitleaksignore”，
+# 而上面第 2 个提交在其中写入了历史指纹，不移走时 T1 的通过可能来自指纹而不是 allowlist
+mv "$GL_DEV/.gitleaksignore" "$GL_TMP/dev.gitleaksignore"
 rc=0; gitleaks git --no-banner --redact --ignore-gitleaks-allow --config "$GL_DEV/.gitleaks.toml" \
     --gitleaks-ignore-path "$GL_TMP/empty.toml" --log-opts="HEAD" "$GL_DEV" >"$GL_TMP/t1.out" 2>&1 || rc=$?
-if [ "$rc" -eq 0 ]; then echo "PASS [T1 全量历史 + HEAD 配置：按值 allowlist 覆盖历史提交中的 nonce]"
+if [ "$rc" -eq 0 ]; then echo "PASS [T1 全量历史 + HEAD 配置（无任何 .gitleaksignore）：按值 allowlist 覆盖历史提交中的 nonce]"
 else echo "FAIL [T1 全量历史 + HEAD 配置仍报出（rc=${rc}）：allowlist 未覆盖历史 nonce]"; GL_FAILS=$((GL_FAILS+1)); fi
+# T1b 对照：同样无 .gitleaksignore、只用默认规则（无 allowlist）→ 必须检出，证明 T1 的通过来自 allowlist
+rc=0; gitleaks git --no-banner --redact --ignore-gitleaks-allow --config "$GL_TMP/default.toml" \
+    --gitleaks-ignore-path "$GL_TMP/empty.toml" --log-opts="HEAD" --report-format json --report-path "$GL_TMP/t1b.json" \
+    "$GL_DEV" >"$GL_TMP/t1b.out" 2>&1 || rc=$?
+t1b="$(python3 -c 'import json,sys; print(sum(1 for f in json.load(open(sys.argv[1])) or [] if f["File"]==sys.argv[2] and f["RuleID"]=="generic-api-key"))' "$GL_TMP/t1b.json" "$LT" 2>/dev/null || echo 0)"
+if [ "$rc" -ne 0 ] && [ "$t1b" -gt 0 ]; then echo "PASS [T1b 对照：无 allowlist、无 .gitleaksignore 时检出 ${t1b} 处（rc=${rc}）]"
+else echo "FAIL [T1b 对照：无 allowlist 时应检出（rc=${rc}，命中 ${t1b}）]"; GL_FAILS=$((GL_FAILS+1)); fi
+mv "$GL_TMP/dev.gitleaksignore" "$GL_DEV/.gitleaksignore"
 
 # T2：执行目标版本工作流的 Scan new commits（全量路径）
 gl_checkout "$HEAD_SHA"
