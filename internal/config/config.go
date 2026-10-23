@@ -195,7 +195,7 @@ func (j JWTConfig) validateKeys() error {
 			return fmt.Errorf("%s 首尾不能有空白且不能包含控制字符或不可见格式字符（不会自动去除，请检查注入方式）", k.name)
 		}
 		if len(k.value) < MinJWTKeyLength {
-			return fmt.Errorf("%s 长度不足：至少需要%d字符（可用 openssl rand -base64 48 生成）", k.name, MinJWTKeyLength)
+			return fmt.Errorf("%s 长度不足：至少需要%d字节（可用 openssl rand -base64 48 或 openssl rand -hex 32 生成）", k.name, MinJWTKeyLength)
 		}
 		if isKnownSampleJWTKey(k.value) {
 			return fmt.Errorf("%s 不能使用仓库示例值或历史默认值，请重新生成", k.name)
