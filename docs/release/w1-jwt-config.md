@@ -54,7 +54,8 @@
 
 - `cmd/webhook` 的默认端口（`internal/config/loader.go` 的 `webhook.port` 默认值和 `WebhookConfig.Port` 结构体标签）
   从 `8888` 改为 `8889`，与 `config/webhook.yaml` 中已有的 `port: "8889"` 一致。
-- `WEBHOOK_PORT` 环境变量仍可覆盖。
+- `WEBHOOK_PORT` 环境变量可覆盖。注意：基线及本提交之前，`WEBHOOK_PORT` 实际上没有改变监听端口（`cfg.Port` 只读配置文件），
+  已在后续提交中修复，详见 `docs/release/w1-webhook-env.md`（含支持的环境变量表与发布说明）。
 - `docs/release/prometheus-scrape-auth.md` 中的 8888 描述已同步更新。
 - 注意：主后端（`main.go`，`SERVER_PORT`）和告警 webhook（`cmd/webhook`，`WEBHOOK_PORT`）是**两个独立进程**，
   默认端口都是 8889。部署在同一台机器（或共享网络命名空间）时，必须用 `WEBHOOK_PORT` 把 webhook 端口错开，否则后启动的进程会端口冲突。
@@ -65,7 +66,7 @@
 | --- | --- | --- |
 | `env.example:19` | `JWT_EXPIRATION=3600` | 单位已明确为分钟，3600 即有效期 **60 小时**，且超过 1440 上限，`ENV=production` 会拒绝启动；建议改为 `30` |
 | `env.example:41` | `PROMETHEUS_HTTP_SD_API` 指向 `localhost:8888` | HTTP-SD 接口由主后端提供，应为 8889 |
-| `env.example:78` | `WEBHOOK_PORT=8888` | 显式覆盖了新默认值 8889 |
+| `env.example:78` | `WEBHOOK_PORT=8888` | 显式覆盖了新默认值 8889。修复后该值会真正生效（webhook 改为监听 8888），需与 `env.example:39` 的 `PROMETHEUS_ALERT_WEBHOOK_ADDR`（8889）对齐 |
 
 从 `env.example` 复制 `.env` 的环境在对齐前仍会使用 8888，`JWT_EXPIRATION` 为 3600 分钟。
 

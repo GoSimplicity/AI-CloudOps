@@ -214,7 +214,7 @@ All settings can be provided as environment variables (see [`env.example`](env.e
 | `MOCK_ENABLED` | Seed mock data for development. Must be `false` in production. |
 | `LLM_API_KEY`, `LLM_BASE_URL`, `ALIYUN_ACCESS_KEY_ID`, `ALIYUN_ACCESS_KEY_SECRET`, `TAVILY_API_KEY` | External service credentials (environment variables only). |
 | `NOTIFICATION_EMAIL_*`, `NOTIFICATION_FEISHU_*` | Email (SMTP) and Feishu notification channels. |
-| `WEBHOOK_*` | Settings for the alert webhook service in `cmd/webhook`. `WEBHOOK_PORT` defaults to `8889` (previously `8888`), matching `config/webhook.yaml`. |
+| `WEBHOOK_*` | Settings for the alert webhook service in `cmd/webhook`. `WEBHOOK_PORT` defaults to `8889` (previously `8888`), matching `config/webhook.yaml`, and must be a number between 1 and 65535. Environment variables override `config/webhook.yaml`, which overrides defaults; `WEBHOOK_MYSQL_ADDR` (full DSN) is required. See [docs/release/w1-webhook-env.md](docs/release/w1-webhook-env.md). |
 
 ### Production security requirements
 

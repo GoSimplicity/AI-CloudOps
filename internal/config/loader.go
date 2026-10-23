@@ -152,19 +152,30 @@ func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, er
 		return nil, nil, fmt.Errorf("缺少必需的密钥环境变量: %s（不提供内置默认值，请通过环境变量注入）", WebhookMySQLAddrEnv)
 	}
 
-	cfg := &WebhookConfig{}
-	if err := v.UnmarshalKey("webhook", cfg); err != nil {
-		// 兼容旧配置：如果没有 webhook 根节点，则尝试直接 unmarshal
-		if err2 := v.Unmarshal(cfg); err2 != nil {
-			return nil, nil, fmt.Errorf("解析Webhook配置失败: %w", err)
-		}
-	}
-
-	// 只把 webhook.* 发布到全局 viper，供 webhook 子系统现有读取方使用；mysql.* 等其他键不发布
+	// 逐键取合并后的值（环境变量 > 配置文件 > 默认值）。v.UnmarshalKey("webhook") 只拿到配置文件里的
+	// webhook 子树，环境变量和默认值进不了 cfg（WEBHOOK_PORT 因此从未生效），所以不能直接用
+	merged := make(map[string]any)
 	for _, key := range v.AllKeys() {
 		if strings.HasPrefix(key, webhookGlobalPrefix) {
-			viper.Set(key, v.Get(key))
+			merged[key] = v.Get(key)
 		}
+	}
+	port := strings.TrimSpace(fmt.Sprint(merged[webhookPortKey]))
+	if merged[webhookPortKey] == nil || !isValidPort(port) {
+		// 只列出键名和变量名，不输出值
+		return nil, nil, fmt.Errorf("Webhook 端口 %s（环境变量 WEBHOOK_PORT）必须是 1-65535 的纯数字", webhookPortKey)
+	}
+	merged[webhookPortKey] = port
+
+	cfg, err := decodeWebhookConfig(merged)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// 只把 webhook.* 发布到全局 viper，供 webhook 子系统现有读取方使用；mysql.* 等其他键不发布。
+	// 与 cfg 使用同一份合并后的值
+	for key, val := range merged {
+		viper.Set(key, val)
 	}
 
 	secrets := &WebhookSecrets{MySQLAddr: addr}
@@ -172,6 +183,39 @@ func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, er
 		return cfg, secrets, NonFatalError{err: fmt.Errorf("读取Webhook配置文件失败: %w", readErr)}
 	}
 	return cfg, secrets, nil
+}
+
+// webhookPortKey Webhook 监听端口的配置键
+const webhookPortKey = "webhook.port"
+
+// decodeWebhookConfig 把逐键合并后的 webhook.* 值解码为 WebhookConfig。
+// 借一个空白 viper 实例承载这些键再 UnmarshalKey，沿用 viper 默认的解码设置
+// （WeaklyTypedInput 与 decode hook），字符串 "3" 可转为 int；不新增直接依赖
+func decodeWebhookConfig(merged map[string]any) (*WebhookConfig, error) {
+	tmp := viper.New()
+	for key, val := range merged {
+		tmp.Set(key, val)
+	}
+	cfg := &WebhookConfig{}
+	if err := tmp.UnmarshalKey("webhook", cfg); err != nil {
+		return nil, fmt.Errorf("解析Webhook配置失败: %w", err)
+	}
+	return cfg, nil
+}
+
+// isValidPort 端口必须是纯 ASCII 数字且在 1-65535 之间（调用方先去首尾空白）
+func isValidPort(s string) bool {
+	if s == "" || len(s) > 5 {
+		return false
+	}
+	n := 0
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+		n = n*10 + int(r-'0')
+	}
+	return n >= 1 && n <= 65535
 }
 
 func setDefaults() {
