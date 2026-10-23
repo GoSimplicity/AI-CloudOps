@@ -143,6 +143,14 @@ func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, er
 		return nil, nil, fmt.Errorf("读取Webhook配置文件失败: %w", readErr)
 	}
 
+	// 不再支持没有 webhook 根节点的旧平铺格式：这些键只会被忽略、静默回落到默认值（端口可能变化），
+	// 所以直接失败并提示移到 webhook: 下
+	if misplaced := misplacedWebhookRootKeys(v); len(misplaced) > 0 {
+		// 只列出键名，不输出值
+		return nil, nil, fmt.Errorf("Webhook 配置文件根节点下出现了 webhook 字段 %s：不再支持没有 webhook 根节点的旧格式，请把这些键移到 webhook: 下",
+			strings.Join(misplaced, ", "))
+	}
+
 	bindStructEnvVars(v, reflect.TypeOf(WebhookConfig{}), "webhook")
 
 	// SEC-02A/SEC-22：DSN 整体由 WEBHOOK_MYSQL_ADDR 注入，配置文件不写、无默认值，缺失即失败
@@ -187,6 +195,20 @@ func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, er
 
 // webhookPortKey Webhook 监听端口的配置键
 const webhookPortKey = "webhook.port"
+
+// misplacedWebhookRootKeys 返回配置文件根节点下出现的 WebhookConfig 字段键名（如 port、fixed_workers），
+// 按结构体字段顺序。只看配置文件本身（InConfig），不受环境变量（如 PORT）和默认值影响
+func misplacedWebhookRootKeys(v *viper.Viper) []string {
+	var keys []string
+	t := reflect.TypeOf(WebhookConfig{})
+	for i := 0; i < t.NumField(); i++ {
+		key := t.Field(i).Tag.Get("mapstructure")
+		if key != "" && v.InConfig(key) {
+			keys = append(keys, key)
+		}
+	}
+	return keys
+}
 
 // decodeWebhookConfig 把逐键合并后的 webhook.* 值解码为 WebhookConfig。
 // 借一个空白 viper 实例承载这些键再 UnmarshalKey，沿用 viper 默认的解码设置

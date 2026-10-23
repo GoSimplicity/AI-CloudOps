@@ -42,6 +42,11 @@
 - `webhook.yaml` 里还有 `alert_receive_queue_size`、`min_workers` 等不在结构体中的键，它们没有 `env` 标签，不在上表中，
   不承诺可用环境变量覆盖。
 
+- **不再支持没有 `webhook` 根节点的旧格式。** 配置文件根节点下出现 `WebhookConfig` 的字段（`port`、`fixed_workers`、`front_domain`、
+  `backend_domain`、`default_upgrade_minutes`、`alert_manager_api`、`common_map_renew_interval_seconds`、`im_feishu`）时，webhook **启动失败**，
+  报错列出这些键名并提示移到 `webhook:` 下，不含取值。只检查配置文件本身：环境变量（如 `PORT`）和默认值不算；`mysql` 等非 webhook 键不受影响；
+  配置文件缺失时不做此检查。
+
 ### `WEBHOOK_MYSQL_ADDR`（单独说明）
 
 - webhook 进程的完整 MySQL DSN（含账号密码），**必填，没有默认值**。
@@ -67,4 +72,10 @@
 - 配置文件存在但没写 `port` 时，之前 `cfg.Port` 为空串（监听地址为 `":"`），现在取 `WEBHOOK_PORT`，未设置则取默认值 **8889**。
   配置文件整个缺失时，之前已经取默认值 8889（但同样忽略 `WEBHOOK_PORT`），现在 `WEBHOOK_PORT` 也会生效。
 - `webhook.port` 非法（空、非纯数字、超出 1–65535）时现在加载配置阶段即失败；之前不做校验，直接拼进监听地址。
+- **不再支持没有 `webhook` 根节点的旧格式（平铺写法）**，此类配置文件现在加载即失败，请把 `port`、`fixed_workers` 等键移到 `webhook:` 下。
+  排查结论：仓库内唯一的 webhook 配置文件 `config/webhook.yaml` 自引入起（3c47234）就带 `webhook` 根节点；`deploy/`（Kubernetes、release Compose、nginx、
+  Prometheus）、`Dockerfile`、`docker-compose.yaml` 中没有 webhook 配置文件，也没有 Helm values 或 ConfigMap 承载 webhook 配置。
+  原“兼容旧配置”分支是 f25c744（`pkg/di/viper.go` 迁到 `internal/config/loader.go`）时加入的防御代码；此前全局 viper 一直只读 `webhook.*`，
+  从未支持过平铺格式。而且该分支实际不会执行：根节点缺失时 `UnmarshalKey("webhook")` 不返回错误，平铺的键被**静默忽略**、回落到默认值
+  （例如端口变成 8889，已在 70bf9fc 与 bb410eb 上用临时文件验证）。本提交把这种静默忽略改为明确报错。
 - 主后端（`SERVER_PORT`）和 webhook 默认都是 8889；部署在同一台机器或共享网络命名空间时，**用 `WEBHOOK_PORT` 错开 webhook 端口的做法从本提交起成立**。
