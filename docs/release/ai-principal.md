@@ -15,3 +15,7 @@ AI 的既有 `/api/v1/assistant/stream` 为单独允许的完整 WebSocket 握�
 `internal/app/aiops_permissions.json` 与实际 AIOps HTTP/WebSocket 路由在三仓集成 CI 中对账，包含未进入 OpenAPI 的别名。修改 AIOps 路由时需要同步该目录；检查只导入本地应用并读取路由，不调用模型、通知或基础设施
 
 已执行 Go race smoke：伪造用户 ID 被覆盖、缺主体被拒绝且不调用下游、SSE 业务参数/流量保留，以及真实反向代理 101/数据帧/固定公开协议。Python 的会话归属与跨用户缓存回归由 AIOps 仓库记录，联合镜像验收在最终验证记录中单独标明
+
+真实隔离网关验收（Go 7f59b8a、AIOps/MCP b943bc5）：从实际权限目录给唯一临时普通角色仅授予 info 和 session 参数 GET，info 返回成功、未知会话返回下游 404、越界子路径和 POST query/confirm/notify 全部在网关拒绝 403；撤权后 info 立即 403。未调用模型或变更基础设施，角色、账号和管理员会话均清理。该流程已纳入 `account_access.py --rbac` 和三仓 CI
+
+普通助手只读策略镜像另行执行真实硅基流动原生 tool_calls 验收：2 次模型请求、1 次 MCP calculate 调用，计算器实际结果及模型最终回答均为14。该验收只允许 calculate，没有部署、修复或通知调用

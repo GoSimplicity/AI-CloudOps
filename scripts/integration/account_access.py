@@ -6,6 +6,7 @@ import os
 import secrets
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 
@@ -15,6 +16,8 @@ def main():
     parser.add_argument('--rbac', action='store_true')
     args = parser.parse_args()
     base = args.url.rstrip('/')
+    if urlsplit(base).hostname not in {'localhost', '127.0.0.1', '::1'}:
+        raise RuntimeError('Account acceptance only supports an isolated loopback gateway')
 
     def call(path, data=None, token=None, method=None):
         headers = {'User-Agent': 'cloudops-account-e2e/1.0'}
@@ -65,8 +68,21 @@ def main():
             ok('/api/workorder/category/list?page=1&size=10', token=user['accessToken'])
             assert call('/api/workorder/category/create', {'name': name, 'status': 1}, user['accessToken'])[0] == 403
             print('PASS catalog-based read-only role allows GET and rejects POST')
+            # AI 代理实际仍是一条通配 Gin 路由，细分授权必须在真实网关生效
+            ai_catalog = ok('/api/apis/list?page=1&size=100&search=/api/v1/assistant/', token=admin)['items']
+            ai_grants = [next(item['id'] for item in ai_catalog if item['path'] == path and item['method'] == 1)
+                         for path in ['/api/v1/assistant/info', '/api/v1/assistant/session/:session_id']]
+            ok(f'/api/role/update/{role_id}', {'name': name, 'code': name, 'status': 1, 'api_ids': ai_grants}, admin, 'PUT')
+            ok('/api/v1/assistant/info', token=user['accessToken'])
+            missing_session = '/api/v1/assistant/session/' + str(uuid4())
+            assert call(missing_session, token=user['accessToken'])[0] == 404
+            assert call(missing_session + '/extra', token=user['accessToken'])[0] == 403
+            for denied in ['/api/v1/assistant/query', '/api/v1/autofix/workflow/confirm', '/api/v1/autofix/notify']:
+                assert call(denied, {}, user['accessToken'])[0] == 403
+            print('PASS fine-grained AI grants reach metadata/session routes and reject model, repair and notification actions')
             ok('/api/role/revoke_users', {'user_id': user_id, 'role_ids': [role_id]}, admin)
             assert call('/api/workorder/category/list?page=1&size=10', token=user['accessToken'])[0] == 403
+            assert call('/api/v1/assistant/info', token=user['accessToken'])[0] == 403
             ok(f'/api/role/delete/{role_id}', token=admin, method='DELETE')
             role_id = None
             print('PASS role revocation immediately removes access and cleans owned role')
