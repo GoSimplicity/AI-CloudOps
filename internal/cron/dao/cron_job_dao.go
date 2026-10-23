@@ -48,7 +48,6 @@ type CronJobDAO interface {
 	DeleteCronJob(ctx context.Context, id int) error
 	UpdateCronJobStatus(ctx context.Context, id int, status model.CronJobStatus) error
 	CompareAndSwapCronJobStatus(ctx context.Context, id int, from, to model.CronJobStatus) (bool, error)
-	UpdateCronJobRunInfo(ctx context.Context, id int, lastRunTime *time.Time, status int8, duration int, output, errorMsg string) error
 	GetEnabledCronJobs(ctx context.Context) ([]*model.CronJob, error)
 	UpdateNextRunTime(ctx context.Context, id int, nextRunTime time.Time) error
 }
@@ -244,34 +243,6 @@ func (d *cronJobDAO) UpdateCronJobStatus(ctx context.Context, id int, status mod
 		Where("id = ?", id).
 		Update("status", status).Error; err != nil {
 		d.logger.Error("更新任务状态失败", zap.Int("id", id), zap.Int8("status", int8(status)), zap.Error(err))
-		return err
-	}
-	return nil
-}
-
-func (d *cronJobDAO) UpdateCronJobRunInfo(ctx context.Context, id int, lastRunTime *time.Time, status int8, duration int, output, errorMsg string) error {
-	updates := map[string]interface{}{
-		"last_run_status":   status,
-		"last_run_duration": duration,
-		"last_run_output":   output,
-		"last_run_error":    errorMsg,
-	}
-
-	if lastRunTime != nil {
-		updates["last_run_time"] = *lastRunTime
-	}
-
-	if status == 1 { // 成功
-		updates["success_count"] = gorm.Expr("success_count + 1")
-	} else if status == 2 { // 失败
-		updates["failure_count"] = gorm.Expr("failure_count + 1")
-	}
-	updates["run_count"] = gorm.Expr("run_count + 1")
-
-	if err := d.db.WithContext(ctx).Model(&model.CronJob{}).
-		Where("id = ?", id).
-		Updates(updates).Error; err != nil {
-		d.logger.Error("更新任务运行信息失败", zap.Int("id", id), zap.Error(err))
 		return err
 	}
 	return nil

@@ -164,3 +164,20 @@ func TestLegacyRunningIsNotBlindlyTakenOver(t *testing.T) {
 		t.Fatal("unattributed legacy running job was stolen")
 	}
 }
+
+func TestExpiredOwnerCannotRenewOrFinishBeforeTakeover(t *testing.T) {
+	db, store := leaseDatabase(t)
+	ctx := context.Background()
+	if ok, err := store.AcquireCronJobLease(ctx, 1, "expired-owner"); err != nil || !ok {
+		t.Fatal("claim failed")
+	}
+	if err := db.Exec(`UPDATE cl_cron_jobs SET lease_expires_at=CAST(strftime('%s','now') AS INTEGER)-1 WHERE id=1;`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := store.RenewCronJobLease(ctx, 1, "expired-owner"); err != nil || ok {
+		t.Fatal("expired owner resurrected its lease")
+	}
+	if ok, err := store.CompleteCronJobLease(ctx, 1, "expired-owner", nil, 1, 1, "late result", ""); err != nil || ok {
+		t.Fatal("expired owner committed late results")
+	}
+}

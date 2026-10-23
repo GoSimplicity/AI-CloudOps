@@ -18,6 +18,7 @@ import (
 type executionStore struct {
 	dao.CronJobDAO
 	status          model.CronJobStatus
+	owner           string
 	claimErr        error
 	beforeClaim     func()
 	stored          bool
@@ -27,7 +28,8 @@ type executionStore struct {
 func (s *executionStore) GetCronJob(context.Context, int) (*model.CronJob, error) {
 	return &model.CronJob{Model: model.Model{ID: 1}, Status: model.CronJobStatusEnabled, JobType: model.CronJobTypeHTTP, HTTPMethod: "GET", HTTPUrl: "http://fake.invalid"}, nil
 }
-func (s *executionStore) CompareAndSwapCronJobStatus(ctx context.Context, _ int, from, to model.CronJobStatus) (bool, error) {
+func (s *executionStore) AcquireCronJobLease(ctx context.Context, _ int, owner string) (bool, error) {
+	from, to := model.CronJobStatusEnabled, model.CronJobStatusRunning
 	if s.beforeClaim != nil {
 		s.beforeClaim()
 		s.beforeClaim = nil
@@ -43,12 +45,20 @@ func (s *executionStore) CompareAndSwapCronJobStatus(ctx context.Context, _ int,
 		return false, nil
 	}
 	s.status = to
+	s.owner = owner
 	return true, nil
 }
-func (s *executionStore) UpdateCronJobRunInfo(ctx context.Context, _ int, _ *time.Time, _ int8, _ int, _, _ string) error {
+func (s *executionStore) CompleteCronJobLease(ctx context.Context, _ int, owner string, _ *time.Time, _ int8, _ int, _, _ string) (bool, error) {
 	s.cleanupCanceled = ctx.Err() != nil
+	if s.owner != owner || ctx.Err() != nil {
+		return false, ctx.Err()
+	}
 	s.stored = true
-	return ctx.Err()
+	s.owner = ""
+	if s.status == model.CronJobStatusRunning {
+		s.status = model.CronJobStatusEnabled
+	}
+	return true, nil
 }
 
 type memoryTransport func(*http.Request) (*http.Response, error)
@@ -65,8 +75,8 @@ func TestProcessTaskPreservesAdministrativeState(t *testing.T) {
 		{name: "successful release", wantStatus: model.CronJobStatusEnabled, wantExecuted: true},
 		{name: "manual disable survives completion", disableDuringRun: true, wantStatus: model.CronJobStatusDisabled, wantExecuted: true},
 		{name: "cancelled execution releases state", cancelDuringRun: true, wantStatus: model.CronJobStatusEnabled, wantExecuted: true, wantError: true},
-		{name: "disable after initial read", disableBeforeClaim: true, wantStatus: model.CronJobStatusDisabled},
-		{name: "another worker claimed", otherWorkerClaims: true, wantStatus: model.CronJobStatusRunning},
+		{name: "disable after initial read", disableBeforeClaim: true, wantStatus: model.CronJobStatusDisabled, wantError: true},
+		{name: "another worker claimed", otherWorkerClaims: true, wantStatus: model.CronJobStatusRunning, wantError: true},
 		{name: "claim persistence failure", claimFailure: true, wantStatus: model.CronJobStatusEnabled, wantError: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

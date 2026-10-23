@@ -41,12 +41,14 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	treeDAO "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
+	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 	"go.uber.org/zap"
 )
 
 type CronHandlers struct {
-	logger *zap.Logger
+	leaseTicks <-chan time.Time
+	logger     *zap.Logger
 
 	// DAO层依赖
 	cronDAO      dao.CronJobDAO
@@ -115,19 +117,31 @@ func (h *CronHandlers) ProcessTask(ctx context.Context, t *asynq.Task) error {
 		return fmt.Errorf("获取任务详情失败: %w", err)
 	}
 
-	if job.Status != model.CronJobStatusEnabled {
+	if job.Status != model.CronJobStatusEnabled && job.Status != model.CronJobStatusRunning {
 		h.logger.Warn("任务已禁用，跳过执行", zap.Int("jobID", payload.JobID))
 		return nil
 	}
 
+	if job.Status == model.CronJobStatusRunning && job.LeaseOwner == "" {
+		return fmt.Errorf("旧版Running任务缺少执行归属，须在停止旧worker并核对结果后重新启用")
+	}
+	timeout := time.Duration(job.Timeout) * time.Second
+	if timeout <= 0 {
+		timeout = 5 * time.Minute
+	}
+	ctx, cancelExecution := context.WithTimeout(ctx, timeout)
+	defer cancelExecution()
 	startTime := time.Now()
-	claimed, err := h.cronDAO.CompareAndSwapCronJobStatus(ctx, payload.JobID, model.CronJobStatusEnabled, model.CronJobStatusRunning)
+	owner := uuid.NewString()
+	claimed, err := h.cronDAO.AcquireCronJobLease(ctx, payload.JobID, owner)
 	if err != nil {
-		return fmt.Errorf("获取任务执行权失败: %w", err)
+		return fmt.Errorf("获取任务执行租约失败: %w", err)
 	}
 	if !claimed {
-		return nil
+		return errCronLeaseBusy
 	}
+	stopLease := h.maintainLease(ctx, cancelExecution, payload.JobID, owner)
+	defer stopLease()
 
 	var result *ExecutionResult
 	switch job.JobType {
@@ -246,15 +260,18 @@ func (h *CronHandlers) ProcessTask(ctx context.Context, t *asynq.Task) error {
 		output = "执行成功"
 	}
 
-	// 任务取消后仍有界保存结果并释放执行状态，不覆盖人工禁用
+	if err := stopLease(); err != nil {
+		return err
+	}
+	// 任务取消后仍有界保存结果，但只能完成自己仍有效的租约
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	if err := h.cronDAO.UpdateCronJobRunInfo(cleanupCtx, payload.JobID, &startTime, status, duration, output, result.ErrorMsg); err != nil {
-		h.logger.Error("更新任务运行信息失败", zap.Int("jobID", payload.JobID), zap.Error(err))
+	completed, err := h.cronDAO.CompleteCronJobLease(cleanupCtx, payload.JobID, owner, &startTime, status, duration, output, result.ErrorMsg)
+	if err != nil {
+		return fmt.Errorf("完成任务租约失败: %w", err)
 	}
-
-	if _, err := h.cronDAO.CompareAndSwapCronJobStatus(cleanupCtx, payload.JobID, model.CronJobStatusRunning, model.CronJobStatusEnabled); err != nil {
-		h.logger.Error("恢复任务状态失败", zap.Int("jobID", payload.JobID), zap.Error(err))
+	if !completed {
+		return errCronLeaseLost
 	}
 
 	if result.Success {
