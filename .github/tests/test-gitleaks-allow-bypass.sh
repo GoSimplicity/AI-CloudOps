@@ -8,7 +8,8 @@
 #   18   CI：PR 同时提交密钥并把 .gitleaks.toml 改成全部放行                               → 必须拦下（用 base 的配置）
 #   18b  CI：PR 同时提交密钥并在 .gitleaksignore 加入它的指纹                              → 必须拦下（用 base 的忽略列表）
 #   19   CI：base 上没有 .gitleaks.toml，PR 新增一个全部放行的 .gitleaks.toml               → 必须拦下（用默认规则）
-#   U1/U2  gitleaks-base-config.sh：无基准时用默认规则；基准配置 [extend] path 拒绝
+#   U1/U2  gitleaks-base-config.sh：无基准时用默认规则；基准配置 [extend] path 拒绝（review3h：断言检查器的拒绝原因）
+#   对照 U2c：基准配置合法时通过
 #   对照 C1/C2：base 上的 allowlist / .gitleaksignore 确实生效（同一合成值在 CI 中放行）
 #
 # 用法: .github/tests/test-gitleaks-allow-bypass.sh [--rev <git-rev>]   （对修复前版本运行应报 FAIL）
@@ -109,6 +110,10 @@ if gl_has .github/scripts/gitleaks-base-config.sh; then
     gl_new_origin u1; printf '%s\n' "$ALLOW_ALL" >"$GL_DEV/.gitleaks.toml"; printf 'x:y:1\n' >"$GL_DEV/.gitleaksignore"
     git -C "$GL_DEV" add -A; git -C "$GL_DEV" commit -qm base; h="$(git -C "$GL_DEV" rev-parse HEAD)"
     gl_src .github/scripts/gitleaks-base-config.sh >"$GL_TMP/bc.sh"
+    # review3h P3-g：bc.sh 按 $(dirname "$0")/gitleaks-config-check.py 调检查器，必须一起复制；
+    # 否则检查器缺失也会让 bc.sh 失败，U2 会“因为缺文件”而误判通过
+    rm -f "$GL_TMP/gitleaks-config-check.py"
+    if gl_has .github/scripts/gitleaks-config-check.py; then gl_src .github/scripts/gitleaks-config-check.py >"$GL_TMP/gitleaks-config-check.py"; fi
     rc=0; (cd "$GL_DEV" && EVENT_NAME=push DEFAULT_BRANCH=main REF_NAME=main REF_TYPE=branch bash "$GL_TMP/bc.sh" "$h" "$GL_TMP/u1out") >"$GL_TMP/u1.log" 2>&1 || rc=$?
     if [ "$rc" -eq 0 ] && ! grep -q allowlists "$GL_TMP/u1out/gitleaks.toml" && grep -q 'useDefault = true' "$GL_TMP/u1out/gitleaks.toml" \
         && [ ! -s "$GL_TMP/u1out/gitleaksignore" ] && [ ! -e "$GL_DEV/.gitleaksignore" ]; then
@@ -118,8 +123,21 @@ if gl_has .github/scripts/gitleaks-base-config.sh; then
     git -C "$GL_DEV" add -A; git -C "$GL_DEV" commit -qm base; b="$(git -C "$GL_DEV" rev-parse HEAD)"
     printf 'b\n' >"$GL_DEV/a"; git -C "$GL_DEV" commit -qam two; h="$(git -C "$GL_DEV" rev-parse HEAD)"
     rc=0; (cd "$GL_DEV" && EVENT_NAME=push DEFAULT_BRANCH=main REF_NAME=main REF_TYPE=branch bash "$GL_TMP/bc.sh" "$b..$h" "$GL_TMP/u2out") >"$GL_TMP/u2.log" 2>&1 || rc=$?
-    if [ "$rc" -ne 0 ] && grep -q 'extend' "$GL_TMP/u2.log"; then echo "PASS [U2 基准配置 [extend] path 指向工作区文件时拒绝]"
-    else echo "FAIL [U2 基准配置使用 [extend] path 时应失败] rc=${rc}"; GL_FAILS=$((GL_FAILS+1)); fi
+    # 断言具体的拒绝原因（检查器的输出），不只看退出码和 "extend" 字样
+    if [ ! -f "$GL_TMP/gitleaks-config-check.py" ]; then
+        echo "FAIL [U2 基准配置使用 [extend] path 时应失败] 目标版本没有 .github/scripts/gitleaks-config-check.py"; GL_FAILS=$((GL_FAILS+1))
+    elif [ "$rc" -ne 0 ] && grep -F -q '配置的 [extend] 使用了 path' "$GL_TMP/u2.log"; then
+        echo "PASS [U2 基准配置 [extend] path 指向工作区文件时拒绝（检查器报 [extend] 使用了 path）]"
+    else echo "FAIL [U2 基准配置使用 [extend] path 时应失败且由检查器拒绝] rc=${rc}: $(tail -1 "$GL_TMP/u2.log")"; GL_FAILS=$((GL_FAILS+1)); fi
+    # 对照 U2c：同样的流程，基准配置合法（useDefault + 一条自定义规则）时通过，输出就是基准上的配置
+    gl_new_origin u2c; printf '[extend]\nuseDefault = true\n\n[[rules]]\nid = "u2c-rule"\nregex = %s\n' "'''u2c-[0-9]{8}'''" >"$GL_DEV/.gitleaks.toml"; printf 'a\n' >"$GL_DEV/a"
+    git -C "$GL_DEV" add -A; git -C "$GL_DEV" commit -qm base; b="$(git -C "$GL_DEV" rev-parse HEAD)"
+    printf 'b\n' >"$GL_DEV/a"; git -C "$GL_DEV" commit -qam two; h="$(git -C "$GL_DEV" rev-parse HEAD)"
+    rc=0; (cd "$GL_DEV" && EVENT_NAME=push DEFAULT_BRANCH=main REF_NAME=main REF_TYPE=branch bash "$GL_TMP/bc.sh" "$b..$h" "$GL_TMP/u2cout") >"$GL_TMP/u2c.log" 2>&1 || rc=$?
+    git -C "$GL_DEV" show "$b:.gitleaks.toml" >"$GL_TMP/u2c-base.toml"
+    if [ "$rc" -eq 0 ] && cmp -s "$GL_TMP/u2c-base.toml" "$GL_TMP/u2cout/gitleaks.toml"; then
+        echo "PASS [对照 U2c 基准配置合法（无 [extend] path）时通过，使用基准配置]"
+    else echo "FAIL [对照 U2c 基准配置合法时应通过] rc=${rc}: $(tail -1 "$GL_TMP/u2c.log")"; GL_FAILS=$((GL_FAILS+1)); fi
 else
     echo "FAIL [U1/U2] 目标版本没有 .github/scripts/gitleaks-base-config.sh（CI 仍使用 HEAD 的配置）"; GL_FAILS=$((GL_FAILS+1))
 fi
