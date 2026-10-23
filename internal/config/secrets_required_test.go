@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var requiredEnvNames = []string{"JWT_KEY1", "JWT_KEY2", "JWT_ISSUER", "MYSQL_ADDR", "TREE_PASSWORD_ENCRYPTION_KEY"}
+var requiredEnvNames = []string{"JWT_KEY1", "JWT_KEY2", "MYSQL_ADDR", "TREE_PASSWORD_ENCRYPTION_KEY"}
 
 func validConfigForTest() *Config {
 	return &Config{
@@ -29,7 +29,6 @@ func TestValidateRequiresSecretEnvVars(t *testing.T) {
 	clearers := map[string]func(*Config){
 		"JWT_KEY1":                     func(c *Config) { c.JWT.Key1 = "" },
 		"JWT_KEY2":                     func(c *Config) { c.JWT.Key2 = "  " },
-		"JWT_ISSUER":                   func(c *Config) { c.JWT.Issuer = "" },
 		"MYSQL_ADDR":                   func(c *Config) { c.MySQL.Addr = "" },
 		"TREE_PASSWORD_ENCRYPTION_KEY": func(c *Config) { c.Tree.PasswordEncryptionKey = "" },
 	}

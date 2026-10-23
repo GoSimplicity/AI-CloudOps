@@ -13,7 +13,6 @@ var configFiles = []string{"../../config/config.production.yaml", "../../config/
 var secretFields = map[string]string{
 	"jwt.key1":                       "JWT_KEY1",
 	"jwt.key2":                       "JWT_KEY2",
-	"jwt.issuer":                     "JWT_ISSUER",
 	"redis.password":                 "REDIS_PASSWORD",
 	"mysql.addr":                     "MYSQL_ADDR",
 	"tree.password_encryption_key":   "TREE_PASSWORD_ENCRYPTION_KEY",
@@ -71,7 +70,6 @@ func TestSecretsInjectedFromEnvironment(t *testing.T) {
 			got := map[string]string{
 				"jwt.key1":                       cfg.JWT.Key1,
 				"jwt.key2":                       cfg.JWT.Key2,
-				"jwt.issuer":                     cfg.JWT.Issuer,
 				"redis.password":                 cfg.Redis.Password,
 				"mysql.addr":                     cfg.MySQL.Addr,
 				"tree.password_encryption_key":   cfg.Tree.PasswordEncryptionKey,

@@ -6,7 +6,7 @@ log:
 jwt:
   key1: "" # 敏感信息，不写入配置文件；由环境变量 JWT_KEY1 注入（必需）
   key2: "" # 敏感信息，不写入配置文件；由环境变量 JWT_KEY2 注入（必需）
-  issuer: "" # 不写入配置文件；由环境变量 JWT_ISSUER 注入（必需，须与已签发令牌的 iss 一致）
+  issuer: "K5mBPBYNQeNWEBvCTE5msog3KSGTdhmx"
   expiration: 3600
 redis:
   addr: "localhost:6379"

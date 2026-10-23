@@ -145,8 +145,9 @@ func setDefaults() {
 	viper.SetDefault("log.dir", "./logs")
 	viper.SetDefault("log.level", "debug")
 
-	// jwt.key1/key2/issuer、mysql.addr、tree.password_encryption_key 无内置默认值，
-	// 必须通过环境变量注入，缺失时 Config.Validate 直接失败（见 requiredSecretEnvVars）
+	// jwt.key1/key2、mysql.addr、tree.password_encryption_key 无内置默认值，
+	// 必须通过环境变量注入，缺失时 Config.Validate 直接失败（见 requiredSecretEnvVars）。
+	// jwt.issuer 不是密钥，取自 config/*.yaml，可用环境变量 JWT_ISSUER 覆盖
 	viper.SetDefault("jwt.expiration", 3600)
 
 	viper.SetDefault("redis.addr", "localhost:6379")

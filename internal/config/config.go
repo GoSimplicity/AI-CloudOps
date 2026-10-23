@@ -66,6 +66,11 @@ func (c *Config) Validate() error {
 	if c.MySQL.Addr == "" {
 		return fmt.Errorf("mysql.addr 不能为空")
 	}
+	// jwt.issuer 不是密钥，由 config/*.yaml 提供（可用 JWT_ISSUER 覆盖）；
+	// 为空会使令牌校验跳过 iss 检查，因此仍要求非空
+	if strings.TrimSpace(c.JWT.Issuer) == "" {
+		return fmt.Errorf("jwt.issuer 不能为空")
+	}
 	if err := c.MySQL.Validate(); err != nil {
 		return err
 	}
@@ -101,13 +106,13 @@ func (c *Config) Validate() error {
 }
 
 // requiredSecretEnvVars 必须由环境变量注入、没有内置默认值的敏感配置
+// （jwt.issuer 不是密钥，已回到 config/*.yaml，不在此列）
 var requiredSecretEnvVars = []struct {
 	Env   string
 	Value func(*Config) string
 }{
 	{"JWT_KEY1", func(c *Config) string { return c.JWT.Key1 }},
 	{"JWT_KEY2", func(c *Config) string { return c.JWT.Key2 }},
-	{"JWT_ISSUER", func(c *Config) string { return c.JWT.Issuer }},
 	{"MYSQL_ADDR", func(c *Config) string { return c.MySQL.Addr }},
 	{"TREE_PASSWORD_ENCRYPTION_KEY", func(c *Config) string { return c.Tree.PasswordEncryptionKey }},
 }
