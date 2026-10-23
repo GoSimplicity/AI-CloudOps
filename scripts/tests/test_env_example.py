@@ -131,13 +131,19 @@ def _webhook_yaml_port(text=None):
         text = (ROOT / "config/webhook.yaml").read_text(encoding="utf-8")
     level = None
     in_root = False
+    roots = 0
     ports = []
     for line in text.splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         indent = len(line) - len(line.lstrip(" "))
         if indent == 0:
-            in_root = re.match(r"webhook\s*:", line) is not None
+            if re.match(r"""(["'])webhook\1[ \t]*:""", line):
+                raise AssertionError(f"webhook 根键带引号，测试解析不支持，请写成 webhook: ：{line!r}")
+            in_root = re.match(r"webhook[ \t]*:", line) is not None
+            roots += in_root
+            if roots > 1:
+                raise AssertionError("config/webhook.yaml 的 webhook 根节点重复")
             level = None
             continue
         if not in_root:
@@ -145,6 +151,8 @@ def _webhook_yaml_port(text=None):
         if level is None:
             level = indent
         if indent == level:
+            if re.match(r"""(["'])port\1[ \t]*:""", line.strip()):
+                raise AssertionError(f"webhook.port 键名带引号，测试解析不支持，请写成 port: ：{line.strip()!r}")
             m = re.fullmatch(r"port[ \t]*:[ \t]*" + _PORT_VALUE, line.strip())
             if m:
                 ports.append(int(next(g for g in m.groups() if g)))
@@ -347,6 +355,15 @@ class WebhookYamlPortValueTests(unittest.TestCase):
         for value in ("8889", '"8889"', "'8889'", "8889 # c", '"8889"\t# c', "8889  "):
             with self.subTest(value=value):
                 self.assertEqual(_webhook_yaml_port(f"webhook:\n  port: {value}\n"), 8889)
+
+    def test_rejects_duplicate_root_and_quoted_keys(self):
+        for text in ('webhook:\n  port: 8889\nwebhook:\n  min_workers: 1\n',
+                     'webhook:\n  port: 8889\nserver:\n  port: 1\nwebhook:\n  port: 8890\n',
+                     'webhook:\n  port: 8889\n  "port": 9999\n',
+                     "webhook:\n  'port': 9999\n",
+                     '"webhook":\n  port: 9999\n'):
+            with self.subTest(text=text), self.assertRaises(AssertionError):
+                _webhook_yaml_port(text)
 
     def test_rejects_fullwidth_digits_and_unspaced_hash(self):
         for value in ("８８８９", '"８８８９"', "8889#oops", '"8889"#oops', "'8889'#oops"):
