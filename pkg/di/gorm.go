@@ -26,13 +26,20 @@
 package di
 
 import (
+	"context"
+	"database/sql"
+	"database/sql/driver"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/config"
+	mysqlDriver "github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	glogger "gorm.io/gorm/logger"
 )
 
 func InitDB(cfg *config.Config, logger *zap.Logger) (*gorm.DB, error) {
@@ -43,29 +50,101 @@ func InitDB(cfg *config.Config, logger *zap.Logger) (*gorm.DB, error) {
 		logger = zap.NewNop()
 	}
 
-	addr := cfg.MySQL.Addr
-	db, err := gorm.Open(mysql.Open(addr), &gorm.Config{})
+	settings := cfg.MySQL.WithDefaults()
+	if err := settings.Validate(); err != nil {
+		return nil, err
+	}
+	connector, err := mysqlConnector(settings)
 	if err != nil {
-		logger.Error("数据库连接失败", zap.Error(err))
-		return nil, fmt.Errorf("数据库连接失败: %w", err)
+		return nil, err
 	}
-	sqlDB, err := db.DB()
+	sqlDB := sql.OpenDB(connector)
+	configureSQLPool(sqlDB, settings)
+	ctx, cancel := context.WithTimeout(context.Background(), settings.StartupTimeout)
+	defer cancel()
+	db, err := initializeSQLPool(ctx, sqlDB, func(ctx context.Context, pool *sql.DB) (*gorm.DB, error) {
+		// 保留驱动版本探测，覆盖其内部Background上下文
+		db, err := gorm.Open(mysql.New(mysql.Config{Conn: &startupPool{DB: pool, ctx: ctx}}), &gorm.Config{DisableAutomaticPing: true, Logger: glogger.Default.LogMode(glogger.Silent)})
+		if err != nil {
+			return nil, fmt.Errorf("数据库ORM初始化失败")
+		}
+		db.ConnPool = pool
+		db.Statement.ConnPool = pool
+		// 保持迁移逻辑，使用同一启动期限限制查询
+		if err := InitTables(db.WithContext(ctx)); err != nil {
+			return nil, fmt.Errorf("数据库表初始化失败")
+		}
+		db.Logger = glogger.Default
+		return db, nil
+	})
 	if err != nil {
-		logger.Error("获取sql.DB失败", zap.Error(err))
-		return nil, fmt.Errorf("获取sql.DB失败: %w", err)
+		logger.Error("数据库初始化失败")
+		return nil, err
 	}
-	if err := sqlDB.Ping(); err != nil {
-		logger.Error("数据库ping失败", zap.Error(err))
-		return nil, fmt.Errorf("数据库ping失败: %w", err)
-	}
-
-	if err := InitTables(db); err != nil {
-		logger.Error("初始化数据库表失败", zap.Error(err))
-		return nil, fmt.Errorf("初始化数据库表失败: %w", err)
-	}
-
 	logger.Info("数据库初始化成功")
 	return db, nil
+}
+
+func mysqlConnector(settings config.MySQLConfig) (driver.Connector, error) {
+	parsed, err := mysqlDSNConfig(settings)
+	if err != nil {
+		return nil, err
+	}
+	connector, err := mysqlDriver.NewConnector(parsed)
+	if err != nil {
+		return nil, fmt.Errorf("MySQL连接配置无效")
+	}
+	return connector, nil
+}
+
+func mysqlDSNConfig(settings config.MySQLConfig) (*mysqlDriver.Config, error) {
+	parsed, err := mysqlDriver.ParseDSN(settings.Addr)
+	if err != nil {
+		return nil, fmt.Errorf("MySQL DSN配置无效")
+	}
+	query := ""
+	// 与驱动一致，仅在最后一个斜线后的数据库名区域查找查询参数
+	databasePart := settings.Addr[strings.LastIndex(settings.Addr, "/")+1:]
+	if _, suffix, found := strings.Cut(databasePart, "?"); found {
+		query = suffix
+	}
+	params, err := url.ParseQuery(query)
+	if err != nil {
+		return nil, fmt.Errorf("MySQL DSN参数无效")
+	}
+	if !params.Has("timeout") {
+		parsed.Timeout = settings.ConnectTimeout
+	}
+	return parsed, nil
+}
+
+func configureSQLPool(pool *sql.DB, settings config.MySQLConfig) {
+	pool.SetMaxOpenConns(settings.MaxOpenConns)
+	pool.SetMaxIdleConns(settings.MaxIdleConns)
+	pool.SetConnMaxLifetime(settings.ConnMaxLifetime)
+	pool.SetConnMaxIdleTime(settings.ConnMaxIdleTime)
+}
+
+// startupPool 仅在GORM初始化阶段将版本查询纳入启动期限
+type startupPool struct {
+	*sql.DB
+	ctx context.Context
+}
+
+func (p *startupPool) QueryRowContext(_ context.Context, query string, args ...interface{}) *sql.Row {
+	return p.DB.QueryRowContext(p.ctx, query, args...)
+}
+
+func initializeSQLPool(ctx context.Context, pool *sql.DB, initialize func(context.Context, *sql.DB) (*gorm.DB, error)) (db *gorm.DB, err error) {
+	defer func() {
+		if err != nil {
+			_ = pool.Close()
+		}
+	}()
+	if err = pool.PingContext(ctx); err != nil {
+		return nil, fmt.Errorf("数据库启动连接检查失败")
+	}
+	return initialize(ctx, pool)
 }
 
 func CheckDBHealth(db *gorm.DB) error {

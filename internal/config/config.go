@@ -61,6 +61,9 @@ func (c *Config) Validate() error {
 	if c.MySQL.Addr == "" {
 		return fmt.Errorf("mysql.addr 不能为空")
 	}
+	if err := c.MySQL.Validate(); err != nil {
+		return err
+	}
 	if c.Redis.Addr == "" {
 		return fmt.Errorf("redis.addr 不能为空")
 	}
@@ -123,7 +126,13 @@ type RedisConfig struct {
 
 // MySQLConfig MySQL配置
 type MySQLConfig struct {
-	Addr string `mapstructure:"addr" env:"MYSQL_ADDR" default:"root:root@tcp(localhost:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local"`
+	MaxOpenConns    int           `mapstructure:"max_open_conns" env:"MYSQL_MAX_OPEN_CONNS"`
+	MaxIdleConns    int           `mapstructure:"max_idle_conns" env:"MYSQL_MAX_IDLE_CONNS"`
+	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime" env:"MYSQL_CONN_MAX_LIFETIME"`
+	ConnMaxIdleTime time.Duration `mapstructure:"conn_max_idle_time" env:"MYSQL_CONN_MAX_IDLE_TIME"`
+	ConnectTimeout  time.Duration `mapstructure:"connect_timeout" env:"MYSQL_CONNECT_TIMEOUT"`
+	StartupTimeout  time.Duration `mapstructure:"startup_timeout" env:"MYSQL_STARTUP_TIMEOUT"`
+	Addr            string        `mapstructure:"addr" env:"MYSQL_ADDR" default:"root:root@tcp(localhost:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local"`
 }
 
 type TreeConfig struct {
@@ -447,4 +456,41 @@ type ExternalConfig struct {
 	LLM    LLMConfig    `mapstructure:"llm"`
 	Aliyun AliyunConfig `mapstructure:"aliyun"`
 	Tavily TavilyConfig `mapstructure:"tavily"`
+}
+
+// WithDefaults 为程序内直接构造及省略的配置提供有限资源边界
+func (c MySQLConfig) WithDefaults() MySQLConfig {
+	if c.MaxOpenConns == 0 {
+		c.MaxOpenConns = 20
+	}
+	if c.MaxIdleConns == 0 {
+		c.MaxIdleConns = 5
+	}
+	if c.ConnMaxLifetime == 0 {
+		c.ConnMaxLifetime = 30 * time.Minute
+	}
+	if c.ConnMaxIdleTime == 0 {
+		c.ConnMaxIdleTime = 5 * time.Minute
+	}
+	if c.ConnectTimeout == 0 {
+		c.ConnectTimeout = 5 * time.Second
+	}
+	if c.StartupTimeout == 0 {
+		c.StartupTimeout = 10 * time.Second
+	}
+	return c
+}
+
+func (c MySQLConfig) Validate() error {
+	c = c.WithDefaults()
+	if c.MaxOpenConns < 1 || c.MaxOpenConns > 10000 {
+		return fmt.Errorf("mysql.max_open_conns 必须在1至10000之间")
+	}
+	if c.MaxIdleConns < 1 || c.MaxIdleConns > c.MaxOpenConns {
+		return fmt.Errorf("mysql.max_idle_conns 必须在1至max_open_conns之间")
+	}
+	if c.ConnMaxLifetime < 0 || c.ConnMaxIdleTime < 0 || c.ConnectTimeout < 0 || c.StartupTimeout < 0 {
+		return fmt.Errorf("MySQL连接期限必须为正数，零值使用默认配置")
+	}
+	return nil
 }

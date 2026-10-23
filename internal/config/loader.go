@@ -150,6 +150,13 @@ func setDefaults() {
 
 	viper.SetDefault("mysql.addr", "root:root@tcp(localhost:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local")
 
+	viper.SetDefault("mysql.max_open_conns", 20)
+	viper.SetDefault("mysql.max_idle_conns", 5)
+	viper.SetDefault("mysql.conn_max_lifetime", "30m")
+	viper.SetDefault("mysql.conn_max_idle_time", "5m")
+	viper.SetDefault("mysql.connect_timeout", "5s")
+	viper.SetDefault("mysql.startup_timeout", "10s")
+
 	viper.SetDefault("tree.check_status_cron", "@every 300s")
 	viper.SetDefault("tree.password_encryption_key", "ebe3vxIP7sblVvUHXb7ZaiMPuz4oXo0l")
 
