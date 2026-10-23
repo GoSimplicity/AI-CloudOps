@@ -50,21 +50,50 @@ run_gitleaks_staged() {
         echo "  然后执行: scripts/setup-git-hooks.sh" >&2
         exit 1
     fi
-    local repo_root config_args=()
-    repo_root="$(git rev-parse --show-toplevel)"
-    [ -f "$repo_root/.gitleaks.toml" ] && config_args=(--config "$repo_root/.gitleaks.toml")
+    local repo_root tmpd f
+    repo_root="$(git rev-parse --show-toplevel)" || { echo "[PRE-COMMIT ERROR] 无法确定仓库根目录" >&2; exit 1; }
+    # 策略文件只取暂存区（index）版本，与被扫描的暂存内容一致（review3g P3-1）。
+    # gitleaks 默认读取工作区的 .gitleaks.toml，且总会自动读取“源目录/.gitleaksignore”（工作区文件）：
+    # 未跟踪或有未暂存修改的放行配置/指纹会在提交时生效却不进入提交。因此这两个文件只要是未跟踪、
+    # 或工作区与暂存区不一致（含工作区中删除），一律拒绝提交，请先暂存（git add）或还原（git restore）。
+    for f in .gitleaks.toml .gitleaksignore; do
+        if git -C "$repo_root" ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then
+            if ! git -C "$repo_root" diff --quiet -- "$f"; then
+                echo "[PRE-COMMIT ERROR] $f 有未暂存的修改（或在工作区中被删除），gitleaks 策略只认暂存区版本，已阻止提交。" >&2
+                echo "  请先 git add $f 或 git restore $f 后重新提交。" >&2
+                exit 1
+            fi
+        elif [ -e "$repo_root/$f" ] || [ -L "$repo_root/$f" ]; then
+            echo "[PRE-COMMIT ERROR] $f 未跟踪（不在暂存区），会被 gitleaks 读取却不进入提交，已阻止提交。" >&2
+            echo "  请先 git add $f 或删除该文件后重新提交。" >&2
+            exit 1
+        fi
+    done
+    tmpd="$(mktemp -d "${TMPDIR:-/tmp}/gitleaks-hook.XXXXXX")" || { echo "[PRE-COMMIT ERROR] mktemp 失败" >&2; exit 1; }
+    if git -C "$repo_root" cat-file -e ":.gitleaks.toml" 2>/dev/null; then
+        git -C "$repo_root" show ":.gitleaks.toml" >"$tmpd/gitleaks.toml" || { rm -rf "$tmpd"; echo "[PRE-COMMIT ERROR] 无法读取暂存区的 .gitleaks.toml" >&2; exit 1; }
+    else
+        # 暂存区没有配置：显式使用默认规则（不受 GITLEAKS_CONFIG 等环境变量影响）
+        printf '[extend]\nuseDefault = true\n' >"$tmpd/gitleaks.toml"
+    fi
+    if git -C "$repo_root" cat-file -e ":.gitleaksignore" 2>/dev/null; then
+        git -C "$repo_root" show ":.gitleaksignore" >"$tmpd/gitleaksignore" || { rm -rf "$tmpd"; echo "[PRE-COMMIT ERROR] 无法读取暂存区的 .gitleaksignore" >&2; exit 1; }
+    else
+        : >"$tmpd/gitleaksignore"
+    fi
+    # 残余风险：暂存区配置中的 [extend] path 仍按当前目录读取工作区文件（CI 侧由 gitleaks-config-check.py 拒绝）。
     # --ignore-gitleaks-allow：源码里的 "gitleaks:allow" 行内注释不再豁免任何发现（任何人都能在密钥行后加这条注释）；
     #   误报只能在 .gitleaks.toml 中按值精确放行（SEC-01A 第三轮 P3-1）。
-    # ${config_args[@]+...}：macOS 自带 bash 3.2 在 set -u 下展开空数组会报 unbound variable。
     # gitleaks >= 8.19 uses `gitleaks git --staged`; older versions use `gitleaks protect --staged`.
     if gitleaks git --help 2>/dev/null | grep -q -- '--staged'; then
         gitleaks git --pre-commit --staged --redact --no-banner --verbose --ignore-gitleaks-allow \
-            ${config_args[@]+"${config_args[@]}"} "$repo_root"
+            --config "$tmpd/gitleaks.toml" --gitleaks-ignore-path "$tmpd/gitleaksignore" "$repo_root"
     else
         gitleaks protect --staged --redact --no-banner --verbose --ignore-gitleaks-allow \
-            ${config_args[@]+"${config_args[@]}"} --source "$repo_root"
+            --config "$tmpd/gitleaks.toml" --gitleaks-ignore-path "$tmpd/gitleaksignore" --source "$repo_root"
     fi
     local rc=$?
+    rm -rf "$tmpd"
     if [ $rc -ne 0 ]; then
         echo "" >&2
         echo "[PRE-COMMIT ERROR] gitleaks 在暂存内容中发现疑似密钥（以上输出已脱敏），提交已被阻止。" >&2
