@@ -321,7 +321,7 @@ class ReleaseComposeWebhookAddrTests(unittest.TestCase):
 
     def test_backend_alert_webhook_addr_targets_webhook_port(self):
         addr = self._jq('.services.backend.environment.PROMETHEUS_ALERT_WEBHOOK_ADDR // ""')
-        self.assertTrue(addr, "backend 未设置 PROMETHEUS_ALERT_WEBHOOK_ADDR（代码默认 localhost:8889 在容器里指向 backend 自己）")
+        self.assertTrue(addr, "backend 未设置 PROMETHEUS_ALERT_WEBHOOK_ADDR（代码默认 localhost:8889，Alertmanager 推送时指向它自己所在的容器或主机）")
         host, port, path = _alert_addr_target(addr)
         self.assertEqual(host, "webhook")
         self.assertEqual(self._jq('.services.webhook | type'), "object", "compose 里没有 webhook 服务")
@@ -338,6 +338,23 @@ class ReleaseComposeWebhookAddrTests(unittest.TestCase):
         self.assertIn(f"127.0.0.1:{port}/", health)
         self.assertIn(f"http://webhook:{port}/api/v1/alerts/receive",
                       (ROOT / "deploy/release/alertmanager.yml").read_text())
+
+class AlertAddrLocalhostWordingTests(unittest.TestCase):
+    """告警地址由 Alertmanager 按它推送：localhost 指向 Alertmanager 所在的容器或主机，不是 backend。文档不能写反。"""
+
+    FILES = ("docs/release/README.md", "deploy/release/compose.yaml", "env.example", "scripts/tests/test_release.py")
+    WRONG = "指向 backend " + "自己"  # 拆开写，避免本文件自身命中
+
+    def test_no_points_to_backend_itself(self):
+        for rel in self.FILES:
+            with self.subTest(file=rel):
+                self.assertNotIn(self.WRONG, (ROOT / rel).read_text(encoding="utf-8"))
+
+    def test_release_readme_says_alertmanager_host(self):
+        text = (ROOT / "docs/release/README.md").read_text(encoding="utf-8")
+        line = next(l for l in text.splitlines() if "PROMETHEUS_ALERT_WEBHOOK_ADDR" in l and "localhost:8889" in l)
+        self.assertIn("指向 Alertmanager 所在的容器或主机", line)
+
 
 class AlertAddrBoundaryTests(unittest.TestCase):
     """告警地址解析边界（r3inc P3-3）：scheme 白名单、按 scheme 取默认端口。不需要 Docker"""

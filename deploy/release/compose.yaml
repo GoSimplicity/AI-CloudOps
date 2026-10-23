@@ -67,7 +67,7 @@ services:
       # 告警推送地址：backend 按它生成 Alertmanager 的 webhook 接收地址，目标是 webhook 服务（不是 backend 自己），
       # 与 alertmanager.yml 的 http://webhook:8889/api/v1/alerts/receive 一致。本模板用 Compose 默认网络，服务名 webhook 可解析；
       # 端口 8889 来自 webhook 镜像内 config/webhook.yaml（compose 不给 webhook 传 WEBHOOK_PORT），两边改端口要同步。
-      # 不设时代码默认 http://localhost:8889/...，在 backend 容器里指向 backend 自己。完整 URL 和 host:port 两种写法代码都接受；
+      # 不设时代码默认 http://localhost:8889/...：Alertmanager 按它推送，localhost 指向 Alertmanager 所在的容器或主机。完整 URL 和 host:port 两种写法代码都接受；
       # 完整 URL 的 scheme 必须是小写 http:// 或 https://（代码区分大小写，HTTP:// 会被当成 host:port 拼出错误地址）。
       # Alertmanager 在 Compose 网络外（解析不了服务名 webhook）时，在 .env 或 shell 环境里设 PROMETHEUS_ALERT_WEBHOOK_ADDR
       # 覆盖为它能访问到的 webhook 地址（webhook 默认不发布端口，需自行暴露）；未设或为空时用下面的默认值。
