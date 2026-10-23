@@ -15,9 +15,9 @@ env:
   # 官方发行版二进制（免费，不需要 gitleaks-action 的组织 license）
   GITLEAKS_VERSION: 8.30.1
   GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
-  # 后端 HEAD 仍有 config/ 与 internal/ 下的硬编码默认密钥（属后端负责人，见 SEC-01A 阻塞项），
-  # 修复后改为 "true" 以同时扫描整个工作树。
-  GITLEAKS_SCAN_TREE: "false"
+  # 同时扫描整个工作树。config/ 与 internal/ 下的硬编码默认密钥已在 sched/w1-mantou（SEC-22）中移除；
+  # 与该分支合并后的工作树经 gitleaks dir 扫描为 0 条。单独的 sched/w1-shaomai 未包含该修复，此步骤会失败。
+  GITLEAKS_SCAN_TREE: "true"
 
 jobs:
   gitleaks:
