@@ -9,5 +9,5 @@ route:
 receivers:
   - name: cloudops-webhook
     webhook_configs:
-      - url: http://webhook:8888/api/v1/alerts/receive
+      - url: http://webhook:8889/api/v1/alerts/receive
         send_resolved: true

@@ -26,5 +26,5 @@ COPY --from=builder /app/webhook ./webhook
 # 默认读取 ./config/webhook.yaml（--config 可改）；DSN 不在文件里，由环境变量 WEBHOOK_MYSQL_ADDR 注入
 COPY --from=builder /app/config/webhook.yaml ./config/webhook.yaml
 USER cloudops
-EXPOSE 8888
+EXPOSE 8889
 CMD ["./webhook"]
