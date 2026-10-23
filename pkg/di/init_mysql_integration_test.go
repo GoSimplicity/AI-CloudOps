@@ -57,8 +57,36 @@ func TestMySQLStartupMigrationAndYAMLCRUD(t *testing.T) {
 	if err := tasks.CreateYamlTask(ctx, task); err != nil {
 		t.Fatal("task create failed")
 	}
+	account := &model.CloudAccount{Name: "audit-fixture", Provider: model.ProviderAliyun, AccessKey: "fake-encrypted-access", SecretKey: "fake-encrypted-secret"}
+	if err := db.Omit("Regions", "CloudResources").Create(account).Error; err != nil {
+		t.Fatal("audit account fixture failed")
+	}
+	region := &model.CloudAccountRegion{CloudAccountID: account.ID, Region: "cn-fixture"}
+	if err := db.Omit("CloudAccount").Create(region).Error; err != nil {
+		t.Fatal("audit region fixture failed")
+	}
+	resource := &model.TreeCloudResource{Name: "audit-fixture", InstanceID: "audit-fixture", CloudAccountID: account.ID, CloudAccountRegionID: region.ID, ResourceType: 1}
+	if err := db.Omit("CloudAccount", "CloudAccountRegion", "TreeNodes").Create(resource).Error; err != nil {
+		t.Fatal("audit resource fixture failed")
+	}
+	// 模拟旧版本绕过 DAO 写入的私钥审计，并保留普通审计作为对照
+	legacy := &model.CloudResourceChangeLog{ResourceID: resource.ID, FieldName: "key", OldValue: "old-sensitive-marker", NewValue: "new-sensitive-marker", ChangeTime: time.Now()}
+	ordinary := &model.CloudResourceChangeLog{ResourceID: resource.ID, FieldName: "environment", NewValue: "local", ChangeTime: time.Now()}
+	if err := db.Omit("CloudResource").Create(legacy).Error; err != nil {
+		t.Fatal("legacy audit fixture failed")
+	}
+	if err := db.Omit("CloudResource").Create(ordinary).Error; err != nil {
+		t.Fatal("ordinary audit fixture failed")
+	}
 	if err := InitTables(db); err != nil {
 		t.Fatal("idempotent migration failed")
+	}
+	var scrubbed, retained model.CloudResourceChangeLog
+	if err := db.First(&scrubbed, legacy.ID).Error; err != nil || scrubbed.NewValue != model.CredentialAuditRedaction || scrubbed.OldValue != model.CredentialAuditRedaction {
+		t.Fatal("legacy credential audit not scrubbed")
+	}
+	if err := db.First(&retained, ordinary.ID).Error; err != nil || retained.NewValue != "local" {
+		t.Fatal("ordinary audit changed during migration")
 	}
 	saved, err := tasks.GetYamlTaskByID(ctx, task.ID, 42)
 	if err != nil || saved.TemplateID != template.ID || len(saved.Variables) != 1 || saved.Variables[0] != "owner=fixture" {

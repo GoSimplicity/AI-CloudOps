@@ -364,6 +364,7 @@ func (d *treeCloudDAO) GetSyncHistoryList(ctx context.Context, req *model.GetClo
 }
 
 func (d *treeCloudDAO) CreateChangeLog(ctx context.Context, log *model.CloudResourceChangeLog) error {
+	*log = log.Redacted()
 	if err := d.db.WithContext(ctx).Create(log).Error; err != nil {
 		d.logger.Error("创建变更日志失败", zap.Error(err))
 		return err

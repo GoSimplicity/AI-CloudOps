@@ -38,7 +38,7 @@ func InitTables(db *gorm.DB) error {
 		return fmt.Errorf("数据库连接为空，跳过表初始化")
 	}
 
-	return db.AutoMigrate(
+	if err := db.AutoMigrate(
 		// auth
 		&model.User{},
 		&model.Department{},
@@ -87,5 +87,16 @@ func InitTables(db *gorm.DB) error {
 		&model.WorkorderInstanceTimeline{},
 
 		&model.CronJob{},
-	)
+	); err != nil {
+		return err
+	}
+	return scrubCloudCredentialAudit(db)
+}
+
+// scrubCloudCredentialAudit 清理旧版本审计副本，保留事件、操作者和原始时间
+func scrubCloudCredentialAudit(db *gorm.DB) error {
+	return db.Unscoped().Model(&model.CloudResourceChangeLog{}).
+		Where("LOWER(TRIM(field_name)) IN ?", []string{"key", "password"}).
+		Where("old_value <> ? OR new_value <> ?", model.CredentialAuditRedaction, model.CredentialAuditRedaction).
+		UpdateColumns(map[string]any{"old_value": model.CredentialAuditRedaction, "new_value": model.CredentialAuditRedaction}).Error
 }
