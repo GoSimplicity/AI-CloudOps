@@ -5,7 +5,13 @@
 # 2026-10-24（第三轮审查 P2-1）：原先 internal/middleware/login_test.go 中 RFC 6455 示例 nonce 的 4 条指纹
 # （工作树 path:rule:109/130；历史 24b8315:...:106/127）已删除。指纹按“文件+规则+行号”放行，
 # 同一行换成真实密钥也会被放行；现改为 .gitleaks.toml 中按值精确匹配的 [[allowlists]]。
-# 实测：删除指纹 + 加 allowlist 后，工作树扫描、全量历史扫描均不再报出这两处（证据见 review3/p2-1-measure.log）。
+# 实测：删除指纹 + 加 allowlist 后，工作树扫描、以 HEAD 配置做的全量历史扫描均不再报出这两处（证据见 review3/p2-1-measure.log）。
+#
+# 已知限制（review3b）：CI 全量路径（push 默认分支且 before 全零/不可达，范围 = 全部历史）没有可信基准，
+# 工作流按设计使用 gitleaks 默认规则 + 空忽略列表，既不用 .gitleaks.toml 的 allowlist，也不加载本文件。
+# 因此历史提交 24b8315（login_test.go:106/127）、125bc27（:109/130，在 sched/w1-mantou）中的示例 nonce 在该路径下仍会报出，
+# 在这里加 commit:path:rule:line 指纹也不会生效（.github/tests/test-gitleaks-history-fullscan.sh 实测），故不加。
+# 增量路径（PR / 普通 push）用 base 上的配置，且这两个提交合入 main 后不会再落在增量范围内。
 #
 # 如确需新增条目：只允许 commit:path:rule:line 形式的单条历史指纹，写明原因并经评审；
 # 不要用 path:rule:line（会放行该行今后的任何值），也不要按整个文件忽略。
