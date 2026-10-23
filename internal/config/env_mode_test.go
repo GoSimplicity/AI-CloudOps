@@ -24,7 +24,8 @@ func setOrUnsetEnv(t *testing.T, raw string, set bool) {
 func TestProductionChecksFollowNormalizedEnv(t *testing.T) {
 	weak := func() *Config {
 		return &Config{Server: ServerConfig{Port: "8889"}, Log: LogConfig{Dir: "logs"}, MySQL: MySQLConfig{Addr: "db"}, Redis: RedisConfig{Addr: "redis"},
-			JWT: JWTConfig{Key1: "short", Key2: "short2"}, Tree: TreeConfig{PasswordEncryptionKey: "short3"}, Mock: MockConfig{Enabled: true}}
+			// JWT 密钥强度与 issuer 在所有环境都校验（w1 validateKeys），这里给合规值；只留生产专属的弱项（TREE 密钥过短、mock 开启）
+			JWT: JWTConfig{Key1: randomTestKey(), Key2: randomTestKey(), Issuer: "fake-issuer-value"}, Tree: TreeConfig{PasswordEncryptionKey: "short3"}, Mock: MockConfig{Enabled: true}}
 	}
 	for _, tt := range []struct {
 		raw     string
@@ -46,7 +47,7 @@ func TestProductionChecksFollowNormalizedEnv(t *testing.T) {
 	// 合规的生产配置在别名下也能通过
 	setOrUnsetEnv(t, " Prod ", true)
 	ok := &Config{Server: ServerConfig{Port: "8889"}, Log: LogConfig{Dir: "logs"}, MySQL: MySQLConfig{Addr: "db"}, Redis: RedisConfig{Addr: "redis"},
-		JWT: JWTConfig{Key1: strings.Repeat("a", 32), Key2: strings.Repeat("b", 32)}, Tree: TreeConfig{PasswordEncryptionKey: strings.Repeat("c", 32)}}
+		JWT: JWTConfig{Key1: randomTestKey(), Key2: randomTestKey(), Issuer: "fake-issuer-value"}, Tree: TreeConfig{PasswordEncryptionKey: strings.Repeat("c", 32)}}
 	if err := ok.Validate(); err != nil {
 		t.Errorf("ENV=\" Prod \" 下合规配置不应失败：%v", err)
 	}

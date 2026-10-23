@@ -133,7 +133,7 @@ const MaxJWTExpirationMinutes = 1440
 var configWarnf = log.Printf
 
 // validateExpiration 校验访问令牌有效期上限（单位分钟）。
-// 小于等于 0 时 pkg/jwt 会回退到默认值 30 分钟，这里只记告警。环境判断使用 runenv.IsProduction
+// 小于等于 0 时 pkg/jwt 会回退到默认值 30 分钟，这里只记告警。环境判断使用 envmode.IsProduction（失败即关闭）
 func (j JWTConfig) validateExpiration(isProduction bool) error {
 	if j.Expiration <= 0 {
 		configWarnf("[配置告警] JWT_EXPIRATION（单位分钟）为%d，不是正数，将使用默认值 30", j.Expiration)

@@ -50,8 +50,23 @@ func TestJWTExpirationUpperBound1440Passes(t *testing.T) {
 	}
 }
 
+// 只有 envmode 识别为开发环境（development/dev，去首尾空白、忽略大小写）时 1441 分钟才告警继续；
+// 空值、test、production-x 失败即关闭，按生产拒绝（不告警）
 func TestJWTExpirationUpperBoundNonProductionWarns(t *testing.T) {
-	for _, env := range []string{"", "development", "test"} {
+	for _, env := range []string{"", "test", "production-x"} {
+		t.Run("fail-closed/"+env, func(t *testing.T) {
+			t.Setenv("ENV", env)
+			warns := captureConfigWarn(t)
+			err := expirationTestConfig(MaxJWTExpirationMinutes + 1).Validate()
+			if err == nil || !strings.Contains(err.Error(), "JWT_EXPIRATION") {
+				t.Fatalf("ENV=%q 应按生产拒绝 1441 分钟, got %v", env, err)
+			}
+			if len(*warns) != 0 {
+				t.Fatalf("ENV=%q 应直接返回错误而非告警: %v", env, *warns)
+			}
+		})
+	}
+	for _, env := range []string{"development", "dev", " DEV "} {
 		t.Run(env, func(t *testing.T) {
 			t.Setenv("ENV", env)
 			warns := captureConfigWarn(t)
