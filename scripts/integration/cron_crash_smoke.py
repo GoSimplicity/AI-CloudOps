@@ -32,14 +32,14 @@ parser.add_argument("--recovery-timeout", type=int, default=330)
 args = parser.parse_args()
 if not args.execute:
     parser.exit(2, "需要 --execute；仅应在独立开发验收机器运行\n")
+if not 30 <= args.recovery_timeout <= 600:
+    parser.error("recovery-timeout 必须为30至600秒")
 if os.environ.get("CRON_ALLOW_LOCAL_EXEC", "").strip().lower() != "true":
     parser.exit(
         2,
         "需要先设置 CRON_ALLOW_LOCAL_EXEC=true：本脚本使用本地命令任务（job_type=2）"
         "验证崩溃恢复，该开关仅注入本工具的临时独立 backend 容器\n",
     )
-if not 30 <= args.recovery_timeout <= 600:
-    parser.error("recovery-timeout 必须为30至600秒")
 try:
     image = subprocess.check_output(
         ["docker", "image", "inspect", "--format", "{{.Id}}", args.image],
