@@ -29,6 +29,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"strings"
@@ -90,7 +91,11 @@ func (c *Config) Validate() error {
 	if err := c.JWT.validateKeys(); err != nil {
 		return err
 	}
-	if os.Getenv("ENV") == "production" {
+	isProduction := os.Getenv("ENV") == "production"
+	if err := c.JWT.validateExpiration(isProduction); err != nil {
+		return err
+	}
+	if isProduction {
 		key := c.Tree.PasswordEncryptionKey
 		if len(key) < 32 || strings.HasPrefix(key, "ebe3vx") {
 			return fmt.Errorf("生产环境 TREE_PASSWORD_ENCRYPTION_KEY 必须配置独立的至少32字符密钥")
@@ -105,6 +110,26 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("生产环境 AIOPS_API_KEY 至少32字符")
 		}
 	}
+	return nil
+}
+
+// MaxJWTExpirationMinutes JWT_EXPIRATION（访问令牌有效期，单位分钟）的上限：24 小时。
+// 超过上限时 production 拒绝启动，其他环境只记告警并继续启动
+const MaxJWTExpirationMinutes = 1440
+
+// configWarnf 配置校验阶段的告警输出（此时业务 logger 尚未初始化，使用标准库 log 输出到 stderr）；测试中可替换
+var configWarnf = log.Printf
+
+// validateExpiration 校验访问令牌有效期上限（单位分钟）。
+// 环境判断沿用 Validate 中已有的 os.Getenv("ENV") == "production"
+func (j JWTConfig) validateExpiration(isProduction bool) error {
+	if j.Expiration <= MaxJWTExpirationMinutes {
+		return nil
+	}
+	if isProduction {
+		return fmt.Errorf("生产环境 JWT_EXPIRATION（单位分钟）不得超过%d（24小时），当前为%d；发布配置建议值为30", MaxJWTExpirationMinutes, j.Expiration)
+	}
+	configWarnf("[配置告警] JWT_EXPIRATION（单位分钟）为%d，超过上限%d（24小时）；非生产环境继续启动，生产环境将拒绝启动", j.Expiration, MaxJWTExpirationMinutes)
 	return nil
 }
 
@@ -141,10 +166,11 @@ func isKnownSampleJWTKey(key string) bool {
 	return ok
 }
 
-// hasControlChar 密钥中是否含控制字符（含换行、制表符、NUL 等）
+// hasControlChar 密钥中是否含控制字符（含换行、制表符、NUL 等）或 Unicode 格式字符
+// （unicode.Cf，如零宽空格 U+200B、BOM U+FEFF、从右到左覆盖 U+202E），后者肉眼不可见、复制粘贴时易混入
 func hasControlChar(s string) bool {
 	for _, r := range s {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
 			return true
 		}
 	}
@@ -166,7 +192,7 @@ func distinctCharCount(s string) int {
 func (j JWTConfig) validateKeys() error {
 	for _, k := range []struct{ name, value string }{{"JWT_KEY1", j.Key1}, {"JWT_KEY2", j.Key2}} {
 		if strings.TrimSpace(k.value) != k.value || hasControlChar(k.value) {
-			return fmt.Errorf("%s 首尾不能有空白且不能包含控制字符（不会自动去除，请检查注入方式）", k.name)
+			return fmt.Errorf("%s 首尾不能有空白且不能包含控制字符或不可见格式字符（不会自动去除，请检查注入方式）", k.name)
 		}
 		if len(k.value) < MinJWTKeyLength {
 			return fmt.Errorf("%s 长度不足：至少需要%d字符（可用 openssl rand -base64 48 生成）", k.name, MinJWTKeyLength)
