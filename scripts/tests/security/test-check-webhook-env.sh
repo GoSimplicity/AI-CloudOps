@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# review3f/review3g/review3h(P3-e)：scripts/check-webhook-env.sh 的回归测试（规则对应 sched/w1-mantou 0146077 的 loader 校验）。
+# review3f/review3g/review3h：scripts/check-webhook-env.sh 的回归测试（规则对应 sched/w1-mantou 0146077 的 loader 校验）。
 # 每个用例分别用 sh、bash、bash --posix 运行被测脚本（机器上没有的解释器跳过），断言退出码与指定字段的结论；
 # 另断言输出里不出现任何取值（合成的哨兵数字 / 合成密钥）。只读：样本写在 mktemp 目录；config/ 只读取。
 # 用法: scripts/tests/security/test-check-webhook-env.sh      兼容 macOS（bash 3.2 / BSD grep、sed、awk）。
@@ -102,6 +102,58 @@ y emptyval "webhook:
 y sentinel "webhook:
   fixed_workers: $NUM"
 printf 'webhook:\r\n  port: "8889"\r\n  fixed_workers: 3\r\n' >"$TMP/crlf.yaml"
+# review3h P3-d：先去注释再判断（制表符 + 注释、行尾注释），多文档、块标量里的 port 不误报；不支持的写法判不合规/请人工检查
+printf 'webhook:\t# 注释\n  port: "8889"\n' >"$TMP/tabc.yaml"
+y spc "webhook: # 注释
+  port: 8889 # 端口
+  im_feishu: # 飞书
+    request_timeout_seconds: 10 # 秒"
+y multidoc "webhook:
+  port: \"8889\"
+---
+webhook:
+  port: abc
+  PORT: 1
+port: 1"
+y leaddoc "---
+webhook:
+  port: 8889"
+y blockscalar "doc: |
+  webhook:
+  port: 1
+webhook:
+  port: \"8889\"
+  note: |
+    port: abc
+    PORT: 1
+
+    fixed_workers: x
+  fixed_workers: 3
+mysql:
+  desc: >-
+    port: 1
+    port: 2"
+y qhash "webhook:
+  front_domain: \"http://x/#/a\" # 注释
+  backend_domain: 'it''s # 不是注释'
+  alert_manager_api: http://x/a#b
+  port: 8889"
+y uflow "webhook:
+  im_feishu: {request_timeout_seconds: 0}"
+y uflowseq "webhook:
+  port: [1]"
+y uanchor "base: &b
+  port: 1
+webhook:
+  <<: *b"
+y ualias "webhook:
+  port: *p"
+y uesc "webhook:
+  \"po\\x72t\": 1"
+y uq "webhook:
+  ? port
+  : 1"
+printf 'webhook:\n\tport: 1\n' >"$TMP/utab.yaml"
 printf 'WEBHOOK_FIXED_WORKERS="12"\nexport WEBHOOK_PORT=9001\nWEBHOOK_MYSQL_ADDR=u:%s@tcp(h:1)/d\nWEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET=%s\n' "$SEC" "$SEC" >"$TMP/a.env"
 
 # case_ <名字> <期望退出码> <期望行（“字段: 结论前缀”，可多条用 | 分隔）> -- [一个 VAR=值] -- <参数…>
@@ -172,6 +224,20 @@ case_ "哨兵值不回显" 0 "webhook.fixed_workers: 合规（配置文件）" -
 case_ "CRLF 文件" 0 "webhook.port: 合规（配置文件）|webhook.fixed_workers: 合规（配置文件）" -- -- $C "$TMP/crlf.yaml"
 case_ "--env-file（引号、export、密钥行）" 0 "webhook.fixed_workers: 合规（环境变量 WEBHOOK_FIXED_WORKERS）|webhook.port: 合规（环境变量 WEBHOOK_PORT）" -- -- --env-file "$TMP/a.env"
 case_ "--config 文件不存在" 2 "配置文件不可读" -- -- $C "$TMP/nope.yaml"
+# review3h P3-d
+case_ "webhook:<TAB># 注释" 0 "配置文件根节点: 合规|配置文件写法: 合规|webhook.port: 合规（配置文件）" -- -- $C "$TMP/tabc.yaml"
+case_ "webhook: # 注释 与行尾注释" 0 "配置文件根节点: 合规|webhook.port: 合规（配置文件）|webhook.im_feishu.request_timeout_seconds: 合规（配置文件）" -- -- $C "$TMP/spc.yaml"
+case_ "多文档 --- 只看第一个文档（loader 同）" 0 "配置文件根节点: 合规|配置文件重复键: 合规|webhook.port: 合规（配置文件）|配置文件写法: 告警（多文档" -- -- $C "$TMP/multidoc.yaml"
+case_ "开头的 --- 不算多文档" 0 "配置文件根节点: 合规|配置文件写法: 合规|webhook.port: 合规（配置文件）|结果: 合规（告警 0 项）" -- -- $C "$TMP/leaddoc.yaml"
+case_ "块标量里的 port/webhook 不算键" 0 "配置文件根节点: 合规|配置文件重复键: 合规|配置文件写法: 合规|webhook.port: 合规（配置文件）|webhook.fixed_workers: 合规（配置文件）" -- -- $C "$TMP/blockscalar.yaml"
+case_ "引号内与非空白后的 # 不算注释（对照）" 0 "配置文件写法: 合规|配置文件重复键: 合规|webhook.port: 合规（配置文件）|结果: 合规（告警 0 项）" -- -- $C "$TMP/qhash.yaml"
+case_ "内联表 im_feishu: {...}" 1 "配置文件写法: 不合规（含本脚本不支持的 YAML 写法：内联表/数组 第 2 行；请人工检查）" -- -- $C "$TMP/uflow.yaml"
+case_ "内联数组 port: [1]" 1 "配置文件写法: 不合规（含本脚本不支持的 YAML 写法：内联表/数组 第 2 行；请人工检查）" -- -- $C "$TMP/uflowseq.yaml"
+case_ "锚点 + 合并键 <<: *b" 1 "配置文件写法: 不合规（含本脚本不支持的 YAML 写法：锚点/别名 第 1 行, 合并键 << 第 4 行, 锚点/别名 第 4 行；请人工检查）" -- -- $C "$TMP/uanchor.yaml"
+case_ "别名 port: *p" 1 "配置文件写法: 不合规（含本脚本不支持的 YAML 写法：锚点/别名 第 2 行；请人工检查）" -- -- $C "$TMP/ualias.yaml"
+case_ "转义键 \"po\\x72t\"" 1 "配置文件写法: 不合规（含本脚本不支持的 YAML 写法：转义键 第 2 行；请人工检查）" -- -- $C "$TMP/uesc.yaml"
+case_ "复杂键 ? port" 1 "配置文件写法: 不合规（含本脚本不支持的 YAML 写法：复杂键 ? 第 2 行；请人工检查）" -- -- $C "$TMP/uq.yaml"
+case_ "制表符缩进" 1 "配置文件写法: 不合规（含本脚本不支持的 YAML 写法：制表符缩进 第 2 行；请人工检查）" -- -- $C "$TMP/utab.yaml"
 # review3h P3-e：临时文件用 mktemp 创建并检查；TMPDIR 不可用时报错退出 2，不得继续出结论；运行后不留临时文件
 case_ "TMPDIR 不存在" 2 "无法创建临时文件" -- "TMPDIR=$TMP/no-such-dir" -- $C "$TMP/repo.yaml"
 case_ "TMPDIR 不存在（无 --config）" 2 "无法创建临时文件" -- "TMPDIR=$TMP/no-such-dir" --

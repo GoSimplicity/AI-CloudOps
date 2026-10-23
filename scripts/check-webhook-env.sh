@@ -15,6 +15,7 @@
 #   im_feishu.request_timeout_seconds  十进制整数 >= 0（0 = 不设超时，合规但生产不推荐，输出“告警”）
 #   同一层重复的键（port 和 PORT 同写，或任意仅大小写不同 / 完全相同的同名键，如 front_domain 与 FRONT_DOMAIN、
 #                 im_feishu 下的 app_id 与 APP_ID；loader 键名不区分大小写，结果未定义）→ 不合规（review3g）
+#   写法（review3h）  内联表/数组、锚点/别名/<<、转义键、? 复杂键、制表符缩进 → 不合规（请人工检查）；多文档 → 告警（只检查第一个文档）
 # 退出码: 0 = 无不合规（可能有告警），1 = 有不合规，2 = 用法错误或文件不可读。
 # 兼容 POSIX sh / bash --posix / macOS（bash 3.2、BSD awk）。
 set -u
@@ -51,28 +52,72 @@ envval() {
 }
 
 # ---------- 配置文件解析（只认本仓库 webhook.yaml 的块状写法）----------
-# 输出（制表符分隔）：TOP <小写键> | ROOT <empty|block|inline> | WH <小写键> [<值>] | IM <小写键> [<值>]
-# 只有 5 个检查字段输出值，其余键（含 mysql.addr、app_secret）只输出键名。
+# 输出（制表符分隔）：TOP <小写键> | ROOT <empty|block|inline> | WH <小写键> [<值>] | IM <小写键> [<值>] | DUP <键路径>
+#                    | UNSUP <类别> <行号> | MULTI <行号>
+# 只有 5 个检查字段输出值，其余键（含 mysql.addr、app_secret）只输出键名；UNSUP / MULTI 只输出类别和行号。
+# review3h P3-d：
+#   - 先去注释再分类：引号外、行首或前面是空格/制表符的 # 起到行尾都是注释（webhook:<TAB># 注释 不再被当成单行值）；
+#   - 多文档：第一个文档之后的 ---（或 ...）起不再解析（loader 只读第一个文档），输出 MULTI 由调用方报告警；
+#   - 块标量（| / > 及其修饰符）的内容行不当键解析（里面写 port: / webhook: 不误报）；
+#   - 本脚本不支持、可能让结论失真的写法输出 UNSUP，调用方判“不合规/请人工检查”：内联表/数组（{...} / [...]，空 {} [] 除外）、
+#     锚点/别名（&x / *x）、合并键 <<、带转义的引号键（"po\x72t"）、复杂键 ?、制表符缩进。
 parse_cfg() {
     awk '
-    BEGIN { li = -1; sd = 0 }
+    BEGIN { li = -1; sd = 0; bs = -1; started = 0 }
     function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
-    function val(s,   q, i) {          # 去注释、去外层引号；带引号时保留引号内原样（含空格）
+    # 去注释：引号只在标量开头（行首、或前一个非空白字符是 : - ? , [ {）才算开始；双引号内反斜杠转义下一个字符，单引号内两个连续单引号表示一个单引号
+    function stripc(s,   i, n, ch, q, p) {
+        q = ""; p = ""; n = length(s)
+        for (i = 1; i <= n; i++) {
+            ch = substr(s, i, 1)
+            if (q != "") {
+                if (q == "\"" && ch == "\\") { i++; continue }
+                if (ch == q) {
+                    if (q == "\047" && substr(s, i + 1, 1) == "\047") { i++; continue }
+                    q = ""; p = ch
+                }
+                continue
+            }
+            if ((ch == "\"" || ch == "\047") && (p == "" || p == ":" || p == "-" || p == "?" || p == "," || p == "[" || p == "{")) { q = ch; continue }
+            if (ch == "#" && (i == 1 || substr(s, i - 1, 1) == " " || substr(s, i - 1, 1) == "\t")) return substr(s, 1, i - 1)
+            if (ch != " " && ch != "\t") p = ch
+        }
+        return s
+    }
+    function val(s,   q, i) {          # 去外层引号；带引号时保留引号内原样（含空格）
         s = trim(s)
         q = substr(s, 1, 1)
         if (q == "\"" || q == "\047") { i = index(substr(s, 2), q); if (i > 0) return substr(s, 2, i - 1); return substr(s, 2) }
         sub(/[ \t]+#.*$/, "", s); return trim(s)
     }
     function want(k) { return k == "port" || k == "fixed_workers" || k == "default_upgrade_minutes" || k == "common_map_renew_interval_seconds" || k == "request_timeout_seconds" }
+    function unsup(c) { print "UNSUP\t" c "\t" NR }
     {
         sub(/\r$/, "")
-        if ($0 ~ /^[ \t]*(#|$)/) next
-        if ($0 ~ /^---/) next
+        if ($0 ~ /^(---|\.\.\.)([ \t]|$)/) { if (started) { print "MULTI\t" NR; exit } ; next }
+        if (bs >= 0) {                  # 块标量内容：空行或缩进大于引出它的那一行
+            if ($0 ~ /^[ \t]*$/) next
+            match($0, /^ */); if (RLENGTH > bs) next
+            bs = -1
+        }
+        $0 = stripc($0)
+        if ($0 ~ /^[ \t]*$/) next
+        started = 1
+        if ($0 ~ /^ *\t/) { unsup("制表符缩进"); next }
         match($0, /^ */); ind = RLENGTH
         line = substr($0, ind + 1)
+        if (line ~ /^\?([ \t]|$)/ || line ~ /^-[ \t]+\?([ \t]|$)/) { unsup("复杂键 ?"); next }
+        if (line ~ /^-[ \t]+[{[]/) unsup("内联表/数组")
         c = index(line, ":"); if (c == 0) next
+        rk = trim(substr(line, 1, c - 1)); sub(/^-[ \t]+/, "", rk)
+        if (rk ~ /^["\047]/ && index(rk, "\\") > 0) unsup("转义键")
         k = tolower(trim(substr(line, 1, c - 1))); gsub(/^["\047]|["\047]$/, "", k)
         rest = substr(line, c + 1)
+        r = trim(rest)
+        if (rk == "<<" || rk ~ /^-[ \t]+<<$/) unsup("合并键 <<")
+        if (r ~ /^[&*]/) unsup("锚点/别名")
+        if (r ~ /^[{[]/ && r != "{}" && r != "[]" && !(ind == 0 && k == "webhook")) unsup("内联表/数组")
+        if (r ~ /^[|>][-+0-9]*$/) bs = ind
         # 重复键（review3g）：按缩进维护键路径，同一父节点下小写后相同的键算重复；列表（- 开头）里的键不参与
         if (li >= 0 && ind <= li && line !~ /^-/) li = -1
         if (line ~ /^-/) { if (li < 0 || ind < li) li = ind }
@@ -134,6 +179,12 @@ else
     say "配置文件根节点" "未检查（没有 --config）"
 fi
 if [ -n "$CFG" ]; then
+    # 不支持的写法（review3h P3-d）：只报类别和行号，不报取值
+    uns="$(grep "^UNSUP${TAB}" "$P" | awk -F "$TAB" '{ printf "%s%s 第 %s 行", (NR > 1 ? ", " : ""), $2, $3 }')"
+    if [ -n "$uns" ]; then say "配置文件写法" "不合规（含本脚本不支持的 YAML 写法：${uns}；请人工检查）"; NG=$((NG+1))
+    elif grep -q "^MULTI${TAB}" "$P"; then
+        say "配置文件写法" "告警（多文档：第 $(grep "^MULTI${TAB}" "$P" | cut -f2) 行起的后续文档未检查，loader 只读第一个文档）"; WARN=$((WARN+1))
+    else say "配置文件写法" "合规"; fi
     dups="$(grep "^DUP${TAB}" "$P" | cut -f2 | tr '\n' ' ' | sed 's/ $//; s/ /, /g')"
     if [ -n "$dups" ]; then say "配置文件重复键" "不合规（同一层有仅大小写不同或完全相同的键：${dups}；loader 键名不区分大小写，结果未定义）"; NG=$((NG+1))
     else say "配置文件重复键" "合规"; fi
