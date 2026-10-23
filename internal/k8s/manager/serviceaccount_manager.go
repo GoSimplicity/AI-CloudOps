@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
+	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"go.uber.org/zap"
 	authv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -239,18 +240,30 @@ func (m *serviceAccountManager) GetServiceAccountSecrets(ctx context.Context, cl
 }
 
 func (m *serviceAccountManager) GetServiceAccountTokens(ctx context.Context, clusterID int, namespace, name string) ([]string, error) {
+	sa, err := m.GetServiceAccount(ctx, clusterID, namespace, name)
+	if err != nil {
+		return nil, err
+	}
+
 	secrets, err := m.GetServiceAccountSecrets(ctx, clusterID, namespace, name)
 	if err != nil {
 		return nil, err
 	}
 
+	// SEC-29：只返回注解指向本 SA（名称 + UID）的 token，sa.secrets 中借挂的其他 SA token 一律忽略
 	var tokens []string
-	for _, secret := range secrets {
-		if secret.Type == corev1.SecretTypeServiceAccountToken {
-			if token, exists := secret.Data["token"]; exists {
-				tokens = append(tokens, string(token))
+	for i := range secrets {
+		if !utils.IsServiceAccountTokenSecretFor(&secrets[i], sa) {
+			if secrets[i].Type == corev1.SecretTypeServiceAccountToken {
+				m.logger.Warn("忽略不属于该ServiceAccount的token Secret",
+					zap.Int("clusterID", clusterID),
+					zap.String("namespace", namespace),
+					zap.String("serviceAccountName", name),
+					zap.String("secretName", secrets[i].Name))
 			}
+			continue
 		}
+		tokens = append(tokens, string(secrets[i].Data[corev1.ServiceAccountTokenKey]))
 	}
 
 	m.logger.Debug("获取ServiceAccount的Token",

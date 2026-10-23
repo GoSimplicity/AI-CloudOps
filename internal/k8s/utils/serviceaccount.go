@@ -245,3 +245,53 @@ func CreateServiceAccountToken(ctx context.Context, kubeClient *kubernetes.Clien
 
 	return resp, nil
 }
+
+// IsServiceAccountTokenSecretFor 判断 secret 是否是 sa 自己的 token Secret（SEC-29）：
+// 类型必须是 kubernetes.io/service-account-token，注解 kubernetes.io/service-account.name 必须等于 SA 名称，
+// 若存在注解 kubernetes.io/service-account.uid 则必须等于 SA 的 UID，且命名空间一致、token 非空。
+// sa.secrets 只是引用列表，任何能更新 SA 的人都能把别的 SA 的 token Secret 挂进来，因此不能仅凭引用信任。
+func IsServiceAccountTokenSecretFor(secret *corev1.Secret, sa *corev1.ServiceAccount) bool {
+	if secret == nil || sa == nil || sa.Name == "" {
+		return false
+	}
+	if secret.Type != corev1.SecretTypeServiceAccountToken {
+		return false
+	}
+	if secret.Namespace != "" && sa.Namespace != "" && secret.Namespace != sa.Namespace {
+		return false
+	}
+	if secret.Annotations[corev1.ServiceAccountNameKey] != sa.Name {
+		return false
+	}
+	if uid, ok := secret.Annotations[corev1.ServiceAccountUIDKey]; ok && uid != string(sa.UID) {
+		return false
+	}
+	return len(secret.Data[corev1.ServiceAccountTokenKey]) > 0
+}
+
+// SelectServiceAccountTokenSecret 从 SA 引用的 Secrets 中挑出第一个属于该 SA 的 token Secret；
+// rejected 返回被拒绝的 service-account-token 类型 Secret 名称（只含名称，便于记录日志）。
+func SelectServiceAccountTokenSecret(sa *corev1.ServiceAccount, secrets []corev1.Secret) (selected *corev1.Secret, rejected []string) {
+	for i := range secrets {
+		secret := &secrets[i]
+		if IsServiceAccountTokenSecretFor(secret, sa) {
+			if selected == nil {
+				selected = secret
+			}
+			continue
+		}
+		if secret.Type == corev1.SecretTypeServiceAccountToken {
+			rejected = append(rejected, secret.Name)
+		}
+	}
+	return selected, rejected
+}
+
+// ServiceAccountSecretRefNames 返回 SA secrets 引用中的名称列表
+func ServiceAccountSecretRefNames(refs []corev1.ObjectReference) []string {
+	names := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		names = append(names, ref.Name)
+	}
+	return names
+}

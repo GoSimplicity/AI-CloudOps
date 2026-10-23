@@ -49,7 +49,8 @@ var skipAuthPaths = map[string]bool{
 // explicitGrantRoutes 敏感路由只接受按路由显式授予的权限：授权路径必须与路由模板（gin FullPath）逐字相等且方法一致。
 // 通配符（/api/k8s/*、/*）、参数化路径（如 /api/k8s/secret/:a/:b/:c/:action）以及具体请求路径都不覆盖。
 var explicitGrantRoutes = map[string]bool{
-	model.K8sSecretRevealRoute: true,
+	model.K8sSecretRevealRoute:        true,
+	model.K8sServiceAccountTokenRoute: true, // GET 读取 token Secret、POST TokenRequest 签发，均按方法精确授权
 }
 
 // HTTP方法映射

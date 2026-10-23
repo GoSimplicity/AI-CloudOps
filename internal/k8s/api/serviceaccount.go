@@ -281,8 +281,12 @@ func (h *K8sServiceAccountHandler) GetServiceAccountToken(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.Name = name
 
-	base.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.serviceAccountService.GetServiceAccountToken(ctx.Request.Context(), &req)
+	actor := sensitiveReadActor(ctx)
+	// token 响应禁止被浏览器或中间代理缓存
+	setNoStore(ctx)
+
+	handleAuditedRequest(ctx, &req, func() (interface{}, error) {
+		return h.serviceAccountService.GetServiceAccountToken(ctx.Request.Context(), &req, actor)
 	})
 }
 
@@ -311,7 +315,29 @@ func (h *K8sServiceAccountHandler) CreateServiceAccountToken(ctx *gin.Context) {
 	req.Namespace = namespace
 	req.ServiceAccountName = name
 
-	base.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return h.serviceAccountService.CreateServiceAccountToken(ctx.Request.Context(), &req)
+	actor := sensitiveReadActor(ctx)
+	setNoStore(ctx)
+
+	handleAuditedRequest(ctx, &req, func() (interface{}, error) {
+		return h.serviceAccountService.CreateServiceAccountToken(ctx.Request.Context(), &req, actor)
 	})
+}
+
+// sensitiveReadActor 从登录态中提取敏感接口（Secret reveal、SA token）审计所需的操作者信息
+func sensitiveReadActor(ctx *gin.Context) model.SecretRevealActor {
+	user := base.GetUserInfoFromGinContext(ctx)
+	return model.SecretRevealActor{
+		UserID:    user.UserID,
+		Username:  user.Username,
+		IP:        user.IP,
+		UserAgent: user.UserAgent,
+		TraceID:   ctx.GetHeader("X-Trace-ID"),
+		Endpoint:  ctx.Request.URL.Path,
+	}
+}
+
+// setNoStore 敏感响应禁止被浏览器或中间代理缓存
+func setNoStore(ctx *gin.Context) {
+	ctx.Header("Cache-Control", "no-store")
+	ctx.Header("Pragma", "no-cache")
 }
