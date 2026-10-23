@@ -288,8 +288,9 @@ func (s *secretService) UpdateSecret(ctx context.Context, req *model.UpdateSecre
 
 	updatedSecret := existingSecret.DeepCopy()
 
+	// SEC-25：请求未携带 data（nil）时保留集群现有 data；携带空对象 {} 表示删除全部 data 键
 	updatedSecret.Data = preserveRedactedData(map[string][]byte(req.Data), existingSecret.Data)
-	updatedSecret.Data, updatedSecret.StringData = preserveRedactedStringData(req.StringData, updatedSecret.Data, existingSecret)
+	updatedSecret.Data, updatedSecret.StringData = preserveRedactedStringData(req.StringData, map[string][]byte(req.Data), updatedSecret.Data, existingSecret)
 	updatedSecret.Labels = req.Labels
 	updatedSecret.Annotations = preserveLastApplied(req.Annotations, existingSecret.Annotations)
 
@@ -475,9 +476,19 @@ func (s *secretService) UpdateSecretByYaml(ctx context.Context, req *model.Updat
 // preserveRedactedData 兼容脱敏后的详情回填：请求中值为空、而集群中该键已有非空值时保留原值。
 // 详情接口只返回空值，前端若直接回填提交，不能因此把真实值清空。
 // 如需删除某个键，请在请求中去掉该键。
+//
+// SEC-25 P3-2：requested 为 nil（请求未携带 data 字段或为 null）时视为“不修改 data”，返回集群现有 data 的副本；
+// requested 为非 nil 的空 map（请求携带 "data": {}）时视为显式清空，返回空 map，集群中的 data 键全部删除。
 func preserveRedactedData(requested, existing map[string][]byte) map[string][]byte {
 	if requested == nil {
-		return nil
+		if existing == nil {
+			return nil
+		}
+		kept := make(map[string][]byte, len(existing))
+		for k, v := range existing {
+			kept[k] = append([]byte(nil), v...)
+		}
+		return kept
 	}
 	out := make(map[string][]byte, len(requested))
 	for k, v := range requested {
@@ -497,7 +508,11 @@ func preserveRedactedData(requested, existing map[string][]byte) map[string][]by
 // 因此：stringData 中值为空、而集群中该键已有非空值（data 优先，其次 stringData）时，
 // 从 stringData 中移除该键，并在 data 中保留原值（请求 data 对同名键给了非空新值时以请求为准）。
 // 集群中不存在或原值为空的键按原样写入。返回处理后的 data 与 stringData。
-func preserveRedactedStringData(requested map[string]string, data map[string][]byte, existing *corev1.Secret) (map[string][]byte, map[string]string) {
+//
+// SEC-25 P3-1：只有请求的 data 同样“包含”该键时才恢复原值——requestedData 为 nil（未携带 data，整体保留）
+// 或 requestedData 中有该键。请求 data 非 nil 且不含该键时，表示该键已被用户删除：从 stringData 中移除，
+// 也不写回 data，更新后该键被删除（不会因为 stringData 中残留的空串被恢复，也不会被写成空值）。
+func preserveRedactedStringData(requested map[string]string, requestedData, data map[string][]byte, existing *corev1.Secret) (map[string][]byte, map[string]string) {
 	if requested == nil {
 		return data, nil
 	}
@@ -516,6 +531,10 @@ func preserveRedactedStringData(requested map[string]string, data map[string][]b
 				}
 			}
 			if ok && len(old) > 0 {
+				if _, inRequest := requestedData[k]; requestedData != nil && !inRequest {
+					delete(data, k)
+					continue
+				}
 				if data == nil {
 					data = map[string][]byte{}
 				}
