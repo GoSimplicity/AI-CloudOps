@@ -132,7 +132,7 @@ func (h *handler) ParseRefreshClaims(tokenStr string) (*RefreshClaims, error) {
 	var rc RefreshClaims
 	token, err := jwt.ParseWithClaims(tokenStr, &rc, func(token *jwt.Token) (interface{}, error) {
 		return h.key2, nil
-	}, jwt.WithValidMethods([]string{"HS512"}), jwt.WithExpirationRequired())
+	}, jwt.WithValidMethods([]string{"HS512"}), jwt.WithExpirationRequired(), jwt.WithIssuer(h.issuer))
 	if err != nil {
 		return nil, fmt.Errorf("解析刷新令牌失败: %w", err)
 	}
@@ -186,6 +186,8 @@ func (h *handler) setRefreshToken(_ *gin.Context, uid int, username string, ssid
 		AccountType: accountType,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(h.rcExpiration)),
+			// 与访问令牌一致写入 issuer，解析时校验，防止旧 issuer 的刷新令牌换取新 issuer 的访问令牌
+			Issuer: h.issuer,
 		},
 	}
 

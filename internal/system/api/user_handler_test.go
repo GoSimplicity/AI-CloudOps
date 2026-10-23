@@ -68,3 +68,45 @@ func TestRefreshRechecksAccount(t *testing.T) {
 		})
 	}
 }
+
+// issuerCheckingRecorder 使用真实 JWT 解析，仅记录是否签发了新访问令牌
+type issuerCheckingRecorder struct {
+	ijwt.Handler
+	issued bool
+}
+
+func (*issuerCheckingRecorder) CheckSession(*gin.Context, string) error { return nil }
+func (s *issuerCheckingRecorder) SetJWTToken(*gin.Context, int, string, string, int8) (string, error) {
+	s.issued = true
+	return "new-token", nil
+}
+
+func TestRefreshRejectsTokenFromOtherIssuer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	key1, key2 := strings.Repeat("a", 32), strings.Repeat("b", 32)
+	oldIssuer := ijwt.NewJWTHandler(nil, ijwt.Config{Key1: key1, Key2: key2, Issuer: "cloudops-old"})
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest("POST", "/login", nil)
+	_, refreshToken, err := oldIssuer.SetLoginToken(ctx, 7, "admin", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tt := range []struct {
+		issuer     string
+		wantIssued bool
+	}{{"cloudops-new", false}, {"cloudops-old", true}} {
+		t.Run(tt.issuer, func(t *testing.T) {
+			tokens := &issuerCheckingRecorder{Handler: ijwt.NewJWTHandler(nil, ijwt.Config{Key1: key1, Key2: key2, Issuer: tt.issuer})}
+			handler := NewUserHandler(refreshUserReader{user: &model.User{Username: "admin", Enable: 1}}, tokens)
+			engine := gin.New()
+			engine.POST("/refresh", handler.RefreshToken)
+			req := httptest.NewRequest("POST", "/refresh", strings.NewReader(`{"refreshToken":"`+refreshToken+`"}`))
+			req.Header.Set("Content-Type", "application/json")
+			engine.ServeHTTP(httptest.NewRecorder(), req)
+			if tokens.issued != tt.wantIssued {
+				t.Fatalf("issuer=%s 时 issued=%v，期望 %v", tt.issuer, tokens.issued, tt.wantIssued)
+			}
+		})
+	}
+}
