@@ -53,7 +53,10 @@ func InitTables(db *gorm.DB) error {
 		&model.TreeLocalResource{},
 		&model.TreeCloudResource{},
 		&model.CloudAccount{},
+		&model.CloudAccountRegion{},
 		&model.K8sCluster{},
+		&model.K8sYamlTemplate{},
+		&model.K8sYamlTask{},
 		&model.CloudResourceSyncHistory{},
 		&model.CloudResourceChangeLog{},
 
@@ -80,6 +83,7 @@ func InitTables(db *gorm.DB) error {
 		&model.WorkorderCategory{},
 		&model.WorkorderNotification{},
 		&model.WorkorderNotificationLog{},
+		&model.WorkorderNotificationQueue{},
 		&model.WorkorderInstanceTimeline{},
 
 		&model.CronJob{},

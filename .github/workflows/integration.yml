@@ -39,6 +39,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: AI-CloudOps/go.mod
+          cache-dependency-path: AI-CloudOps/go.sum
+      - name: Startup migration model registration
+        run: go test ./pkg/di -run '^TestStartupRegistersEveryPersistentModel$' -count=1
       - name: Record tested revisions
         run: |
           git rev-parse HEAD
@@ -48,6 +54,8 @@ jobs:
         run: python scripts/release-env.py
       - name: Build and start isolated stack
         run: docker compose -f deploy/release/compose.yaml up -d --build --wait --wait-timeout 300
+      - name: Isolated MySQL full migration and YAML persistence
+        run: python scripts/integration/schema_smoke.py --mysql-migration
       - name: Gateway and session acceptance
         run: python scripts/release-smoke.py --crud
       - name: Real RBAC and workorder lifecycle
@@ -59,7 +67,7 @@ jobs:
 
           settings = dict(line.split('=', 1) for line in Path('deploy/release/.env').read_text().splitlines() if '=' in line and not line.startswith('#'))
           env = {**os.environ, 'BOOTSTRAP_ADMIN_PASSWORD': settings['BOOTSTRAP_ADMIN_PASSWORD']}
-          for script, arguments in [('account_access.py', ['--rbac']), ('workorder_flow.py', [])]:
+          for script, arguments in [('schema_smoke.py', []), ('account_access.py', ['--rbac']), ('workorder_flow.py', [])]:
               subprocess.run(['python', 'scripts/integration/' + script, '--url', 'http://localhost:18080', *arguments], env=env, check=True)
           PY
       - name: Internal MCP authentication and calculator

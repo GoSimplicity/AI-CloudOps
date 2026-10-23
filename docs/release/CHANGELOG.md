@@ -183,3 +183,10 @@
 - 保留JSON stdin/resize/stdout与raw兼容格式，限制解压后message512KiB、stdin64KiB、resize1024B
 - 完整消息先验限后交付，压缩/未压缩超限关闭自身连接并取消exec，首读零部分交付且无EOT
 - 真实WS先红后绿，合法JSON六倍转义、并发/心跳/关闭/resize既有回归及race/vet与全仓build通过，见 [pod-terminal-input-limits.md](pod-terminal-input-limits.md)
+
+## 完整启动迁移与YAML数据库门槛
+
+- 注册YAML模板/任务、通知队列和账号区域；普通AST测试核对所有TableName模型防漏，无需为SQLite索引作用域改合法MySQL schema
+- 随机限权MySQL库验证完整/幂等迁移和YAML CRUD，finally清理0；拒绝skip/未匹配测试冒充验收
+- 三仓integration增加模型注册、真实隔离MySQL与启动后YAML双list业务码门槛
+- 先红后绿、真实MySQL、DI smoke/race/vet及全仓Go测试通过，见 [startup-schema.md](startup-schema.md)；共享镜像由主流程统一更新
