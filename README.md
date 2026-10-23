@@ -295,6 +295,9 @@ AI-CloudOps-aiops/
 
 生产环境设置 `ENV=production`、`MOCK_ENABLED=false`，并分别注入独立的
 `JWT_KEY1`、`JWT_KEY2`（各至少32字节）、`TREE_PASSWORD_ENCRYPTION_KEY`（恰好32字节），均不能使用仓库示例值。
+`ENV` 去首尾空白、忽略大小写后等于 `production` 即视为生产环境（如 ` Production `、`PRODUCTION`）。
+生产环境下 `TREE_PASSWORD_ENCRYPTION_KEY`、`JWT_ISSUER`、`AIOPS_API_KEY` 也不能有首尾空白、控制字符或不可见格式字符（不会自动去除）。
+`JWT_EXPIRATION` 小于等于 0 时记告警日志并使用默认值 30。
 其中 JWT 两把密钥的长度、熵（不同字符至少10个）、首尾空白/控制字符与不可见格式字符、互不相同和示例值（尽力而为，只匹配前缀片段和已登记哈希）检查在所有环境都执行，不仅限生产环境。
 首次空数据库启动使用 `BOOTSTRAP_ADMIN_PASSWORD`（至少12字符）创建管理员，成功后移除该变量；已有用户不会被重置。
 `SERVER_ALLOWED_ORIGINS` 是逗号分隔的精确 Origin 白名单，留空仅支持同源浏览器访问。
@@ -311,10 +314,12 @@ AI-CloudOps-aiops/
 自定义环境变量（`environment` 字段）只对命令行任务（类型 2）生效，也只对这一类在保存和执行时校验；HTTP、SSH、脚本任务不使用该字段，不会因其中内容被拦截（SSH 任务使用独立的 `ssh_environment`）。
 命令行任务的环境变量规则：
 - 变量名和值都为空的行（前端点“添加”后未填写的空行）在保存前丢弃，执行时跳过，不会报错；
+- 变量名保存前去掉首尾空白（不改大小写）；
 - 变量名为空但值非空时拒绝保存和执行；
 - 变量名去首尾空白后必须匹配 `^[A-Za-z_][A-Za-z0-9_]*$`（字母或下划线开头，只含字母、数字、下划线），否则拒绝。
   包含 `=`、NUL、`%`（如 `BASH_FUNC_echo%%`）、`-`、`.`、空格、非 ASCII 字符或零宽字符的变量名都会被拒绝；
 - 格式合法后再过拒绝名单（不区分大小写）：前缀 `LD_*`、`DYLD_*`、`BASH_FUNC_*`、`MALLOC_*`，以及 `BASH_ENV`、`ENV`、`PROMPT_COMMAND`、`IFS`、`SHELLOPTS`、`BASHOPTS`、`PS4`、`GCONV_PATH`、`GLIBC_TUNABLES`、`LOCPATH`；
+- 去首尾空白后变量名重复（如 ` FOO` 与 `FOO`）时报“变量名重复”。区分大小写：Linux 下 `FOO` 与 `foo` 是两个变量，不算重复；
 - `PYTHONPATH`、`NODE_OPTIONS`、`PERL5OPT` 有正当用途，目前允许设置，但它们同样能让 Python/Node/Perl 在启动时加载任意模块或执行代码，请与命令本身同等审查；
 - 这是纵深防御：命令行任务本身就能在后端主机上执行任意命令，环境变量校验不能替代对任务创建/编辑权限的控制；
 - 报错只包含变量名，不包含变量值。数据库中已有的不合规命令行任务会在执行时被拒绝，需要编辑后重新保存。

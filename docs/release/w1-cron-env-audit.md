@@ -2,17 +2,21 @@
 
 > **需要用户批准后才能执行。** 本文件只是草稿，编写时没有连接任何数据库，也没有执行过。
 > 语句全部是只读的 `SELECT`，不会修改数据。执行前请在只读账号或从库上先确认。
+> **需要 MySQL ≥ 8.0.17**（用到 `JSON_TABLE`、ICU 版 `REGEXP_LIKE`/`REGEXP_REPLACE` 和 `LATERAL` 派生表，其中 `LATERAL`
+> 自 8.0.14 起才支持；按 8.0.17 作为最低验证版本）。发布环境为 MySQL 8.4，满足要求。
 
 ## 背景
 
 新规则（`internal/cron/task/task_env.go`）只对命令行任务（`job_type = 2`）校验 `environment`：
 
 - key（去首尾空白后）和 value 都为空的行：保存前丢弃，执行时跳过（不拒绝）；
+- 保存前 key 去首尾空白后入库（不改大小写）；
 - 拒绝：key 为空但 value 非空；
 - **变量名白名单格式**：key 去首尾空白后必须匹配 `^[A-Za-z_][A-Za-z0-9_]*$`，否则拒绝。
   这同时挡住 `=`、NUL、`%`（如 `BASH_FUNC_echo%%`）、`-`、`.`、空格、非 ASCII 字母，以及夹带零宽字符的变体（如 `L\u200bD_PRELOAD`）；
 - 格式合法后再过拒绝名单（转大写比较）：前缀 `LD_`、`DYLD_`、`BASH_FUNC_`、`MALLOC_`；
-  精确名 `BASH_ENV`、`ENV`、`PROMPT_COMMAND`、`IFS`、`SHELLOPTS`、`BASHOPTS`、`PS4`、`GCONV_PATH`、`GLIBC_TUNABLES`、`LOCPATH`。
+  精确名 `BASH_ENV`、`ENV`、`PROMPT_COMMAND`、`IFS`、`SHELLOPTS`、`BASHOPTS`、`PS4`、`GCONV_PATH`、`GLIBC_TUNABLES`、`LOCPATH`；
+- 拒绝：key 去首尾空白后重复（“变量名重复”，区分大小写；`FOO` 与 `foo` 在 Linux 上是两个变量，不算重复）。查询 6 列出存量中的重复。
 
 存量中命中拒绝规则的命令行任务，升级后**执行时会被拒绝**，需要编辑后重新保存。
 
@@ -174,7 +178,38 @@ WHERE j.deleted_at = 0
 ORDER BY j.id, e.idx;
 ```
 
+## 查询 6：去首尾空白后变量名重复的命令行任务（只读）
+
+如 ` FOO` 与 `FOO`。比较区分大小写（`utf8mb4_bin`），与 Go 端一致。只输出变量名和出现次数，不输出值。
+
+```sql
+-- 只读审计。需要用户批准后才能执行。
+SELECT j.id, j.name, j.status,
+       LEFT(e.k_trim, 64)          AS env_key,
+       HEX(LEFT(e.k_trim, 64))     AS env_key_hex,
+       COUNT(*)                    AS occurrences
+FROM cl_cron_jobs AS j
+JOIN JSON_TABLE(
+       IF(JSON_VALID(j.environment), j.environment, '[]'), '$[*]'
+       COLUMNS (
+         idx FOR ORDINALITY,
+         k   VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PATH '$.key' NULL ON EMPTY
+       )
+     ) AS e0
+JOIN LATERAL (
+       SELECT REGEXP_REPLACE(COALESCE(e0.k, ''), '^[[:space:]]+|[[:space:]]+$', '') AS k_trim
+     ) AS e
+WHERE j.deleted_at = 0
+  AND j.job_type = 2
+  AND e.k_trim <> ''
+GROUP BY j.id, j.name, j.status, e.k_trim
+HAVING COUNT(*) > 1
+ORDER BY j.id, env_key;
+```
+
 ## 说明与局限
+
+- 需要 MySQL ≥ 8.0.17。5.7 没有 `JSON_TABLE`、`LATERAL` 和 ICU 正则；8.0.17 之前的 8.0 版本未按此要求验证，请勿执行。
 
 - `JSON_TABLE` 的输入统一写成 `IF(JSON_VALID(j.environment), j.environment, '[]')`：MySQL 不保证 `WHERE` 中的
   `JSON_VALID` 先于 `JSON_TABLE` 求值，非法 JSON 会让整条查询报错；非法 JSON 的行由查询 2 单独列出。

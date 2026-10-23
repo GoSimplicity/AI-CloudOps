@@ -13,7 +13,11 @@
   `POST /api/user/refresh_token` 换取新访问令牌并重放原请求，刷新失败才回到登录页。普通 HTTP 请求对用户无感。
 - 若部署环境显式设置了 `JWT_EXPIRATION`，以环境变量为准；请勿按秒填写。
 - **上限 1440 分钟（24 小时）**：`Config.Validate` 中超过 1440 时，`ENV=production` 拒绝启动并报错；
-  其他环境在启动时记一条告警日志（标准错误输出，`[配置告警]` 开头）后继续启动。环境判断沿用现有的 `ENV == "production"`。
+  其他环境在启动时记一条告警日志（标准错误输出，`[配置告警]` 开头）后继续启动。
+  生产环境判断统一使用 `pkg/runenv.IsProduction()`：`ENV` 去首尾空白、忽略大小写后等于 `production`
+  （`production`、` Production `、`PRODUCTION` 均视为生产）。配置文件选择（`internal/config/loader.go`）、
+  `Config.Validate` 和 SSH `known_hosts` 要求（`pkg/ssh/hostkey.go`）使用同一判断。
+- `JWT_EXPIRATION` 小于等于 0 时不报错，但记一条告警日志，提示“将使用默认值 30”（`pkg/jwt` 对非正数回退到 30 分钟）。
   因此按旧习惯填 `3600` 的生产环境升级后会启动失败，需改为 `30`。
 
 ## 2. 旧刷新令牌失效，所有用户需重新登录一次
@@ -36,6 +40,9 @@
    这不是对所有示例值的完整匹配：不含该片段、也未登记哈希的其他示例或泄露值无法识别，仍需人工确保使用新生成的密钥。
 4. **低熵检查**：不同字符少于 10 个即拒绝（例如 32 个相同字符）。
 5. 两把密钥去首尾空白、忽略大小写后不得相同。
+
+`ENV=production` 时，`TREE_PASSWORD_ENCRYPTION_KEY`、`JWT_ISSUER`、`AIOPS_API_KEY`（非空时）同样做第 1 条检查
+（首尾空白、控制字符、`unicode.Cf` 格式字符），不自动去除。
 
 所有报错只包含变量名和原因，不会输出密钥内容。推荐用 `openssl rand -base64 48` 分别生成两把密钥
 （README 中已标注为「第一次启动必做」）。用 hex 时请用 `openssl rand -hex 32`（输出 64 个十六进制字符，即 64 字节）。
@@ -68,7 +75,13 @@
 
 - 只对命令行任务（类型 2）校验 `environment`；HTTP、SSH 任务不再因该字段被拦截。
 - key 和 value 都为空的行保存前丢弃、执行时跳过。
-- 只拒绝以下情况：key 为空但 value 非空、key 含 `=` 或 NUL，以及拒绝名单中的变量名。
+- 保存前变量名去首尾空白后入库（不改大小写，value 原样保留）。
+- 拒绝以下三种情况：
+  1. key 为空但 value 非空；
+  2. key 去首尾空白后不匹配 `^[A-Za-z_][A-Za-z0-9_]*$`；
+  3. 命中拒绝名单（不区分大小写）。
+- 另外，去首尾空白后变量名重复（如 ` FOO` 与 `FOO`）时报“变量名重复”并拒绝。重复判断**区分大小写**：
+  Linux 环境变量区分大小写，`os/exec` 也按区分大小写去重（同名时最后一个生效），`FOO` 与 `foo` 会作为两个变量注入，因此不算重复。
 - 拒绝名单新增 `BASH_FUNC_*`、`MALLOC_*`（前缀），以及 `SHELLOPTS`、`BASHOPTS`、`PS4`、`PROMPT_COMMAND`、`GCONV_PATH`、`GLIBC_TUNABLES`、`LOCPATH`。
 - 变量名先按白名单格式 `^[A-Za-z_][A-Za-z0-9_]*$` 校验（去首尾空白后），不匹配即拒绝，再过拒绝名单；
   可拦掉 `BASH_FUNC_echo%%`、夹带零宽字符的 `L\u200bD_PRELOAD` 等变体。
