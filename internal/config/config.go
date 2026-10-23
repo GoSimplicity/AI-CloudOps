@@ -33,6 +33,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 )
 
 type Config struct {
@@ -110,38 +111,75 @@ func (c *Config) Validate() error {
 // MinJWTKeyLength JWT_KEY1/JWT_KEY2 的最小长度（字节），所有环境一致
 const MinJWTKeyLength = 32
 
-// knownSampleJWTKeyPrefix 仓库历史示例 JWT 密钥的公共前缀特征
+// MinJWTKeyDistinctChars JWT_KEY1/JWT_KEY2 至少包含的不同字符数（低熵检查），所有环境一致
+const MinJWTKeyDistinctChars = 10
+
+// knownSampleJWTKeyPrefix 仓库历史示例 JWT 密钥的公共特征片段（小写）；规范化后的密钥只要包含它即视为示例值
 const knownSampleJWTKeyPrefix = "ebe3vx"
 
 // knownSampleJWTKeySHA256 仓库历史上出现过的示例/默认 JWT 密钥（config/*.yaml、loader 默认值、
-// pkg/di/viper.go）的 sha256，只存哈希，不存明文。短于 MinJWTKeyLength 的历史示例值
-// （如 env.example 中的占位符）已被长度检查拒绝，无需列入。
+// pkg/di/viper.go）经 normalizeJWTKey（TrimSpace + 转小写）规范化后的 sha256，只存哈希，不存明文。
+// 短于 MinJWTKeyLength 的历史示例值（如 env.example 中的占位符）已被长度检查拒绝，无需列入。
 var knownSampleJWTKeySHA256 = map[string]struct{}{
-	"a34aa50ffba2ce2026189e29e930cd6ca798acc34d1e0c07c89aa2a80ec85f4b": {},
-	"2a390b2c185233a39ab396478d709409e30f9efad92226ddce7a98e79142785c": {},
+	"6abfa9f69aedd171caef8ebb66d0cae42fed837296072494b95e0d3e4792f991": {},
+	"c676817a27c052d1688446836f6d02d26c04632bcf9c5ac0b2dd3285a393da2b": {},
+}
+
+// normalizeJWTKey 仅用于比较（示例值、两把密钥是否相同）：去掉首尾空白并转小写。
+// 签名仍使用原值；首尾有空白的密钥会先被 validateKeys 直接拒绝，不做静默 trim
+func normalizeJWTKey(key string) string {
+	return strings.ToLower(strings.TrimSpace(key))
 }
 
 func isKnownSampleJWTKey(key string) bool {
-	if strings.HasPrefix(key, knownSampleJWTKeyPrefix) {
+	n := normalizeJWTKey(key)
+	if strings.Contains(n, knownSampleJWTKeyPrefix) {
 		return true
 	}
-	sum := sha256.Sum256([]byte(key))
+	sum := sha256.Sum256([]byte(n))
 	_, ok := knownSampleJWTKeySHA256[hex.EncodeToString(sum[:])]
 	return ok
 }
 
-// validateKeys 校验 JWT 签名密钥：最小长度、两把不同、不是已知示例值。错误信息只含变量名，不含值
+// hasControlChar 密钥中是否含控制字符（含换行、制表符、NUL 等）
+func hasControlChar(s string) bool {
+	for _, r := range s {
+		if unicode.IsControl(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// distinctCharCount 统计字符串中不同字符（按 rune）的个数
+func distinctCharCount(s string) int {
+	seen := make(map[rune]struct{}, len(s))
+	for _, r := range s {
+		seen[r] = struct{}{}
+	}
+	return len(seen)
+}
+
+// validateKeys 校验 JWT 签名密钥（所有环境一致）：
+// 首尾无空白且不含控制字符、最小长度、不是已知示例值（规范化后比较）、不同字符数不少于 MinJWTKeyDistinctChars、
+// 两把密钥规范化后不相同。错误信息只含变量名和原因，不含密钥值或其片段
 func (j JWTConfig) validateKeys() error {
 	for _, k := range []struct{ name, value string }{{"JWT_KEY1", j.Key1}, {"JWT_KEY2", j.Key2}} {
+		if strings.TrimSpace(k.value) != k.value || hasControlChar(k.value) {
+			return fmt.Errorf("%s 首尾不能有空白且不能包含控制字符（不会自动去除，请检查注入方式）", k.name)
+		}
 		if len(k.value) < MinJWTKeyLength {
 			return fmt.Errorf("%s 长度不足：至少需要%d字符（可用 openssl rand -base64 48 生成）", k.name, MinJWTKeyLength)
 		}
 		if isKnownSampleJWTKey(k.value) {
 			return fmt.Errorf("%s 不能使用仓库示例值或历史默认值，请重新生成", k.name)
 		}
+		if distinctCharCount(k.value) < MinJWTKeyDistinctChars {
+			return fmt.Errorf("%s 熵过低：不同字符少于%d个（可用 openssl rand -base64 48 生成）", k.name, MinJWTKeyDistinctChars)
+		}
 	}
-	if j.Key1 == j.Key2 {
-		return fmt.Errorf("JWT_KEY1 与 JWT_KEY2 不得相同")
+	if normalizeJWTKey(j.Key1) == normalizeJWTKey(j.Key2) {
+		return fmt.Errorf("JWT_KEY1 与 JWT_KEY2 不得相同（忽略大小写比较）")
 	}
 	return nil
 }
@@ -189,7 +227,7 @@ type JWTConfig struct {
 	Key1       string `mapstructure:"key1" env:"JWT_KEY1"`
 	Key2       string `mapstructure:"key2" env:"JWT_KEY2"`
 	Issuer     string `mapstructure:"issuer" env:"JWT_ISSUER"`
-	Expiration int64  `mapstructure:"expiration" env:"JWT_EXPIRATION" default:"3600"`
+	Expiration int64  `mapstructure:"expiration" env:"JWT_EXPIRATION" default:"30"`
 }
 
 // RedisConfig Redis配置
@@ -496,7 +534,7 @@ func (c *FeishuConfig) GetTenantAccessTokenAPI() string {
 
 // WebhookConfig Webhook配置（用于webhook子系统）
 type WebhookConfig struct {
-	Port                          string         `mapstructure:"port" env:"WEBHOOK_PORT" default:"8888"`
+	Port                          string         `mapstructure:"port" env:"WEBHOOK_PORT" default:"8889"`
 	FixedWorkers                  int            `mapstructure:"fixed_workers" env:"WEBHOOK_FIXED_WORKERS" default:"10"`
 	FrontDomain                   string         `mapstructure:"front_domain" env:"WEBHOOK_FRONT_DOMAIN" default:"http://localhost:3000"`
 	BackendDomain                 string         `mapstructure:"backend_domain" env:"WEBHOOK_BACKEND_DOMAIN" default:"http://localhost:8889"`

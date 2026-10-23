@@ -7,7 +7,7 @@ jwt:
   key1: "" # 敏感信息，不写入配置文件；由环境变量 JWT_KEY1 注入（必需）
   key2: "" # 敏感信息，不写入配置文件；由环境变量 JWT_KEY2 注入（必需）
   issuer: "K5mBPBYNQeNWEBvCTE5msog3KSGTdhmx"
-  expiration: 3600
+  expiration: 30 # 访问令牌有效期，单位：分钟（30 = 30 分钟）
 redis:
   addr: "localhost:6379"
   password: "" # 敏感信息，不写入配置文件；由环境变量 REDIS_PASSWORD 注入（可选）

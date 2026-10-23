@@ -186,7 +186,7 @@ func setDefaults() {
 	// jwt.key1/key2、mysql.addr、tree.password_encryption_key 无内置默认值，
 	// 必须通过环境变量注入，缺失时 Config.Validate 直接失败（见 requiredSecretEnvVars）。
 	// jwt.issuer 不是密钥，取自 config/*.yaml，可用环境变量 JWT_ISSUER 覆盖
-	viper.SetDefault("jwt.expiration", 3600)
+	viper.SetDefault("jwt.expiration", 30) // 单位：分钟
 
 	viper.SetDefault("redis.addr", "localhost:6379")
 	viper.SetDefault("redis.password", "")
@@ -236,7 +236,7 @@ func setDefaults() {
 }
 
 func setWebhookDefaults(v *viper.Viper) {
-	v.SetDefault("webhook.port", "8888")
+	v.SetDefault("webhook.port", "8889")
 	v.SetDefault("webhook.fixed_workers", 10)
 	v.SetDefault("webhook.front_domain", "http://localhost:3000")
 	v.SetDefault("webhook.backend_domain", "http://localhost:8889")

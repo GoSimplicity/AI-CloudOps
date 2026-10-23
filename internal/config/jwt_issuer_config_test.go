@@ -92,8 +92,8 @@ func setRequiredSecretsForTest(t *testing.T, file string) {
 	} else {
 		t.Setenv("ENV", "development")
 	}
-	t.Setenv("JWT_KEY1", "fake-key1-"+strings.Repeat("a", 32))
-	t.Setenv("JWT_KEY2", "fake-key2-"+strings.Repeat("b", 32))
+	t.Setenv("JWT_KEY1", "fake-key1-"+randomTestKey())
+	t.Setenv("JWT_KEY2", "fake-key2-"+randomTestKey())
 	t.Setenv("MYSQL_ADDR", "fake_user:fake_pass@tcp(127.0.0.1:3306)/fake")
 	t.Setenv("TREE_PASSWORD_ENCRYPTION_KEY", strings.Repeat("t", 32))
 }
