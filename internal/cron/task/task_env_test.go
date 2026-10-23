@@ -124,3 +124,39 @@ func TestValidateTaskEnvNameAllowlistFormat(t *testing.T) {
 		t.Fatalf("合法变量名不应被拒绝: %v", err)
 	}
 }
+
+// NormalizeTaskEnv 存库前去掉 key 首尾空白，不改大小写和 value
+func TestNormalizeTaskEnvTrimsKeys(t *testing.T) {
+	got := NormalizeTaskEnv(model.KeyValueList{{Key: " FOO ", Value: " v "}, {Key: "\tBar\n", Value: "x"}, {Key: "  ", Value: ""}})
+	want := model.KeyValueList{{Key: "FOO", Value: " v "}, {Key: "Bar", Value: "x"}}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+// 去首尾空白后的变量名重复即拒绝；大小写不同不算重复（Linux 环境变量区分大小写，os/exec 也按区分大小写去重）
+func TestValidateTaskEnvRejectsDuplicateNames(t *testing.T) {
+	const value = "fake-env-value-canary"
+	for _, env := range []model.KeyValueList{
+		{{Key: "FOO", Value: "1"}, {Key: "FOO", Value: value}},
+		{{Key: " FOO", Value: "1"}, {Key: "FOO", Value: value}},
+		{{Key: "FOO", Value: "1"}, {Key: "BAR", Value: "2"}, {Key: "FOO\t", Value: value}},
+		{{Key: "foo", Value: "1"}, {Key: " foo ", Value: value}},
+	} {
+		err := ValidateTaskEnv(env)
+		if !errors.Is(err, ErrForbiddenTaskEnv) || !strings.Contains(err.Error(), "变量名重复") {
+			t.Fatalf("%v 应因变量名重复被拒绝, got %v", env, err)
+		}
+		if strings.Contains(err.Error(), value) {
+			t.Fatalf("错误信息不应包含变量值: %v", err)
+		}
+	}
+	// 空行（key/value 都为空）可以出现多次，不算重复
+	if err := ValidateTaskEnv(model.KeyValueList{{Key: "", Value: ""}, {Key: " ", Value: ""}, {Key: "A", Value: "1"}}); err != nil {
+		t.Fatalf("多个空行不应算重复: %v", err)
+	}
+	// 大小写不同是两个变量
+	if err := ValidateTaskEnv(model.KeyValueList{{Key: "FOO", Value: "1"}, {Key: "foo", Value: "2"}, {Key: "Foo", Value: "3"}}); err != nil {
+		t.Fatalf("大小写不同不应算重复: %v", err)
+	}
+}

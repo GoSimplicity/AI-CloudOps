@@ -42,8 +42,8 @@ func isBlankTaskEnvRow(kv model.KeyValue) bool {
 	return strings.TrimSpace(kv.Key) == "" && kv.Value == ""
 }
 
-// NormalizeTaskEnv 丢弃 key 与 value 都为空的行，其余行原样保留（顺序不变）。
-// 保存前调用；不做其他改写，非法行仍交给 ValidateTaskEnv 拒绝
+// NormalizeTaskEnv 丢弃 key 与 value 都为空的行，其余行的 key 去首尾空白、value 原样保留（顺序不变）。
+// 保存前与注入子进程前调用；不做其他改写（不改大小写），非法行仍交给 ValidateTaskEnv 拒绝
 func NormalizeTaskEnv(env model.KeyValueList) model.KeyValueList {
 	if env == nil {
 		return nil
@@ -53,6 +53,7 @@ func NormalizeTaskEnv(env model.KeyValueList) model.KeyValueList {
 		if isBlankTaskEnvRow(kv) {
 			continue
 		}
+		kv.Key = strings.TrimSpace(kv.Key)
 		out = append(out, kv)
 	}
 	return out
@@ -61,8 +62,10 @@ func NormalizeTaskEnv(env model.KeyValueList) model.KeyValueList {
 // ValidateTaskEnv 校验命令行任务（JobType==Command）的自定义环境变量。
 // 这是纵深防御：类型 2 任务本身就能执行任意命令，这里只防止通过环境变量改变动态链接器或 shell 的行为。
 // 规则：key 与 value 都为空的行跳过；变量名去首尾空白后必须匹配 ^[A-Za-z_][A-Za-z0-9_]*$（同时挡住空名、'='、NUL、
-// '%'、零宽字符等），再统一转大写与拒绝名单比较。错误信息只包含变量名（格式非法时用 %q 显示不可见字符），不包含变量值
+// '%'、零宽字符等），再统一转大写与拒绝名单比较；去首尾空白后的变量名重复（区分大小写，与 Linux 及 os/exec
+// 注入行为一致：FOO 与 foo 是两个变量，同名时只有最后一个生效）时拒绝。错误信息只包含变量名（格式非法时用 %q 显示不可见字符），不包含变量值
 func ValidateTaskEnv(env model.KeyValueList) error {
+	seen := make(map[string]struct{}, len(env))
 	for _, kv := range env {
 		if isBlankTaskEnvRow(kv) {
 			continue
@@ -83,6 +86,10 @@ func ValidateTaskEnv(env model.KeyValueList) error {
 				return fmt.Errorf("%w: %s（禁止 %s* 系列）", ErrForbiddenTaskEnv, name, prefix)
 			}
 		}
+		if _, dup := seen[name]; dup {
+			return fmt.Errorf("%w: 变量名重复: %s", ErrForbiddenTaskEnv, name)
+		}
+		seen[name] = struct{}{}
 	}
 	return nil
 }
