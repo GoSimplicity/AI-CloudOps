@@ -82,3 +82,7 @@ python3 scripts/release-smoke.py
 网络无法稳定访问 npm 官方源时，可在私有 `.env` 中设置 `NPM_REGISTRY=https://registry.npmmirror.com`。默认使用官方源，不关闭 TLS 或变更锁文件。
 
 独立 MCP 服务复用 AIOps 镜像，只在 Compose 内网监听 9000，使用同一服务密钥；AIOps 通过 `MCP_SERVER_URL=http://mcp:9000` 连接。健康检查仅代表进程可用，具体工具仍需要各自的数据源配置。
+
+## 定时脚本运行环境
+
+后端发布镜像包含 Bash、Python3 和 Node.js，分别支持现有 shell、Python、JavaScript 脚本类型。运行命令具有后端容器的权限，应限制相关菜单/API 的角色授权。任务输出按持久化字段预算截断并标明，不将超限数据无限缓存在内存中。

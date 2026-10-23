@@ -13,7 +13,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     
 FROM alpine:latest
 ENV TZ=Asia/Shanghai
-RUN apk --no-cache add ca-certificates tzdata wget curl && \
+RUN apk --no-cache add ca-certificates tzdata wget curl bash python3 nodejs && \
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
     echo $TZ > /etc/timezone
 WORKDIR /app

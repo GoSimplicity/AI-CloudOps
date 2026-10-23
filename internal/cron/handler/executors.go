@@ -233,6 +233,7 @@ func (h *ScriptExecutor) Execute(ctx context.Context, task *ScriptTask) (string,
 
 	// 根据脚本类型选择解释器
 	var interpreter string
+	argument := "-c"
 	switch strings.ToLower(task.Type) {
 	case "shell", "bash", "sh":
 		interpreter = "/bin/bash"
@@ -240,12 +241,13 @@ func (h *ScriptExecutor) Execute(ctx context.Context, task *ScriptTask) (string,
 		interpreter = "python3"
 	case "node", "nodejs", "javascript":
 		interpreter = "node"
+		argument = "-e"
 	default:
 		return "", fmt.Errorf("不支持的脚本类型: %s", task.Type)
 	}
 
 	// 执行脚本
-	cmd := exec.CommandContext(ctx, interpreter, "-c", task.Content)
+	cmd := exec.CommandContext(ctx, interpreter, argument, task.Content)
 
 	// 执行并捕获输出
 	stdout, stderr := newOutputBuffer(), newOutputBuffer()

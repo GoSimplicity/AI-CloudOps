@@ -24,3 +24,9 @@
 - 使用完整启用列表，移除 1000 条截断；数据库查询失败保留原有调度
 - 实际 Asynq 内存注册/注销回归与 race 检查通过，无 Redis 或生产任务执行
 - CI/发布冒烟扩展至 cron handler，覆盖实际子进程输出与 HTTP 边界
+
+## 2026-10-23：脚本执行运行时
+
+- Node.js 使用 `-e` 执行脚本，替代仅语法检查的 `-c`，运行错误按真实失败返回
+- 发布后端镜像包含 Bash、Python3、Node，匹配已有脚本类型契约
+- `go test -race -tags=smoke ./internal/cron/handler` 通过：真实 Bash/Python/Node 输出、Node 运行异常、取消与已有输出边界
