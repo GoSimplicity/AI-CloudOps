@@ -31,3 +31,5 @@ GOTOOLCHAIN=auto go test ./...
 ```
 
 测试只访问本机回环网络，不访问生产 Kubernetes 集群。实际 Pod WebSocket 与服务器 shell 的部署验收单独记录，不能用本机传输测试替代真实集群验收
+
+后续补充了压缩后消息与 stdin 大小的独立上限，见 [pod-terminal-input-limits.md](pod-terminal-input-limits.md)。

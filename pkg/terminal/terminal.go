@@ -218,7 +218,10 @@ func (t *Session) Read(p []byte) (int, error) {
 			}
 			return count, nil
 		}
-		_, raw, err := t.conn.ReadMessage()
+		raw, err := t.readInputMessage()
+		if errors.Is(err, errTerminalInputLimit) {
+			return t.rejectInput()
+		}
 		if err != nil {
 			if t.cancel != nil {
 				t.cancel()
@@ -235,14 +238,23 @@ func (t *Session) Read(p []byte) (int, error) {
 		}
 		var message Message
 		if json.Unmarshal(raw, &message) != nil {
+			if len(raw) > maxTerminalStdinBytes {
+				return t.rejectInput()
+			}
 			t.logger.Debug("兼容原始stdin消息", zap.Int("长度", len(raw)))
 			t.pending = raw
 			continue
 		}
 		switch message.Op {
 		case "stdin":
+			if len(message.Data) > maxTerminalStdinBytes {
+				return t.rejectInput()
+			}
 			t.pending = []byte(message.Data)
 		case "resize":
+			if len(raw) > maxTerminalControlBytes {
+				return t.rejectInput()
+			}
 			t.queueSize(remotecommand.TerminalSize{Width: message.ColSize, Height: message.RowSize})
 		case "":
 		default:

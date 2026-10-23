@@ -177,3 +177,9 @@
 - 双终端通过terminal_mode=pty-v1显式使用binary stdin/output与text resize，cloudops-v1鉴权及legacy入口保留
 - 远端ECHO=1、尺寸验限与window-change，压缩后输入与控制消息先完整验限再交付
 - 真实SSH协议fixture覆盖Ctrl+C/方向键/64KiB/二进制并发输出、resize与关闭/deadline；真实WS压缩/非法帧/日志及双handler回归、race/vet、全仓test/build通过，Wire实际生成，见 [ssh-pty.md](ssh-pty.md)
+
+## Pod终端解压后输入边界
+
+- 保留JSON stdin/resize/stdout与raw兼容格式，限制解压后message512KiB、stdin64KiB、resize1024B
+- 完整消息先验限后交付，压缩/未压缩超限关闭自身连接并取消exec，首读零部分交付且无EOT
+- 真实WS先红后绿，合法JSON六倍转义、并发/心跳/关闭/resize既有回归及race/vet与全仓build通过，见 [pod-terminal-input-limits.md](pod-terminal-input-limits.md)
