@@ -33,4 +33,6 @@ AI网关内部凭据隔离、生产默认密钥/Mock配置校验。
 无凭据、不可路由的 `example.invalid` 配置。删除当前内容不能撤销 Git 历史中的凭据，
 相关集群管理员必须轮换曾公开的客户端证书/密钥并审查访问记录；本次未改写历史或操作真实集群。
 
-历史 `mock/user_mock.go` 曾内置 mock 管理员口令（SEC-27）。当前 mock 在 `ENV=production` 时默认关闭，口令只从 `MOCK_ADMIN_PASSWORD` 读取，未设置时不创建管理员。曾经开启过 mock 的环境中，`admin` 可能仍在使用旧的内置口令；删除代码不会修改已有账号，需要由负责人确认并另行修改口令。
+运行环境由 `ENV` 统一判定（`pkg/envmode`，SEC-27）：取值去除首尾空白并忽略大小写，`production`/`prod`/`prd` 为生产，`development`/`dev`、`test`/`testing` 为非生产；未设置或无法识别时 `config.Load` 拒绝启动，其他调用方（如 `pkg/ssh` 主机密钥策略、mock 兜底）一律按生产处理。
+
+历史 `mock/user_mock.go` 曾内置 mock 管理员口令（SEC-27）。当前 mock 在生产环境默认关闭，口令只从 `MOCK_ADMIN_PASSWORD` 读取，未设置时不创建管理员。曾经开启过 mock 的环境中，`admin` 可能仍在使用旧的内置口令；删除代码不会修改已有账号，需要由负责人确认并另行修改口令。

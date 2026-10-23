@@ -132,7 +132,7 @@ go run main.go
 
 The API listens on `http://localhost:8889` (`SERVER_PORT`). `GET /health` is a liveness probe only; it does not mean MySQL, Redis or external services are ready.
 
-Configuration precedence is **environment variables > config file > defaults**. `ENV=production` selects `config/config.production.yaml`; anything else uses `config/config.development.yaml`. You can also pass `--config <file>`.
+Configuration precedence is **environment variables > config file > defaults**. `ENV` is required: `ENV=production` (aliases `prod`, `prd`) selects `config/config.production.yaml`; `ENV=development` (alias `dev`) or `ENV=test` (alias `testing`) uses `config/config.development.yaml`. Values are trimmed and case-insensitive. If `ENV` is unset or unrecognised the backend refuses to start; set `ENV=development` in `.env` for local development. You can also pass `--config <file>` (ENV is still required).
 
 ### 3. Run the web console
 
@@ -187,7 +187,7 @@ All settings can be provided as environment variables (see [`env.example`](env.e
 
 | Variable | Description |
 | --- | --- |
-| `ENV` | `development` (default) or `production`. Production turns on the strict checks below. |
+| `ENV` | Required. `development`/`dev`, `test`/`testing` or `production`/`prod`/`prd` (trimmed, case-insensitive). Unset or unknown values are rejected at startup. Production turns on the strict checks below. |
 | `SERVER_PORT` | HTTP port, default `8889`. |
 | `SERVER_ALLOWED_ORIGINS` | Comma-separated list of exact browser origins allowed for CORS and WebSocket. Empty means same-origin only. |
 | `MYSQL_ADDR`, `REDIS_ADDR`, `REDIS_PASSWORD` | Database and Redis connection. |
@@ -197,7 +197,7 @@ All settings can be provided as environment variables (see [`env.example`](env.e
 | `SSH_KNOWN_HOSTS` | Path to an operator-verified OpenSSH `known_hosts` file used for web terminal and SSH connections. |
 | `AIOPS_BASE_URL` | URL of the AIOps service, e.g. `http://aiops:8080`. Enables the `/api/v1/*` gateway. |
 | `AIOPS_API_KEY` | Shared service key sent to the AIOps service as `X-API-Key`. Must match the Python service. Never put it in frontend config. |
-| `MOCK_ENABLED` | Seed mock data for development. Defaults to `true`, or `false` when `ENV=production`; enabling it in production is rejected at startup. |
+| `MOCK_ENABLED` | Seed mock data for development. Defaults to `true` in development/test and `false` in production; enabling it in production is rejected at startup. |
 | `MOCK_ADMIN_PASSWORD` | Password for the mock `admin` account (min. 12 characters), only used when mock is enabled and the user table is empty. If unset, no mock admin is created. There is no built-in password. |
 | `LLM_API_KEY`, `LLM_BASE_URL`, `ALIYUN_ACCESS_KEY_ID`, `ALIYUN_ACCESS_KEY_SECRET`, `TAVILY_API_KEY` | External service credentials (environment variables only). |
 | `NOTIFICATION_EMAIL_*`, `NOTIFICATION_FEISHU_*` | Email (SMTP) and Feishu notification channels. |
@@ -205,7 +205,7 @@ All settings can be provided as environment variables (see [`env.example`](env.e
 
 ### Production security requirements
 
-With `ENV=production` the backend refuses to start unless:
+With `ENV=production` (or `prod`/`prd`) the backend refuses to start unless:
 
 - `JWT_KEY1` and `JWT_KEY2` are distinct, at least 32 characters, and not the repository sample values.
 - `TREE_PASSWORD_ENCRYPTION_KEY` is exactly 32 bytes and not the sample value.

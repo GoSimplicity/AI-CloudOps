@@ -27,7 +27,10 @@ func TestMockDefaultFollowsEnvironment(t *testing.T) {
 	}{
 		{"production defaults off", "production", "", false},
 		{"development defaults on", "development", "", true},
-		{"unset ENV is development", "", "", true},
+		{"unset ENV fails closed", "", "", false},
+		{"unknown ENV fails closed", "staging", "", false},
+		{"production alias defaults off", " PROD ", "", false},
+		{"dev alias defaults on", "Dev", "", true},
 		{"explicit off in development", "development", "false", false},
 		{"explicit on in production still loads (rejected by Validate)", "production", "true", true},
 	} {

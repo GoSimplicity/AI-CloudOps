@@ -278,6 +278,8 @@ AI-CloudOps-aiops/
 
 ### 生产启动安全要求
 
+`ENV` 必须显式设置：生产用 `ENV=production`（别名 `prod`、`prd`），本地开发用 `ENV=development`（别名 `dev`），测试用 `ENV=test`（别名 `testing`，复用开发配置）；
+取值会去除首尾空白并忽略大小写。`ENV` 未设置或无法识别时拒绝启动，不会按开发环境静默运行（`env.example` 已含 `ENV=development`，本地开发复制为 `.env` 即可）。
 生产环境设置 `ENV=production`（此时 `MOCK_ENABLED` 默认即为 `false`，显式开启会拒绝启动），并分别注入独立的
 `JWT_KEY1`、`JWT_KEY2`、`TREE_PASSWORD_ENCRYPTION_KEY`（至少32字符，不能使用仓库示例值）。
 首次空数据库启动使用 `BOOTSTRAP_ADMIN_PASSWORD`（至少12字符）创建管理员，成功后移除该变量；已有用户不会被重置。

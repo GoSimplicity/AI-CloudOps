@@ -32,6 +32,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/GoSimplicity/AI-CloudOps/pkg/envmode"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -59,20 +60,12 @@ func Load() (*Config, *ExternalConfig, error) {
 	configFile := pflag.String("config", "", "配置文件路径")
 	pflag.Parse()
 
-	if *configFile == "" {
-		env := os.Getenv("ENV")
-		if env == "" {
-			env = "development"
-		}
-		switch env {
-		case productionEnv:
-			*configFile = "config/config.production.yaml"
-		default:
-			*configFile = "config/config.development.yaml"
-		}
+	file, err := resolveConfigFile(*configFile)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	viper.SetConfigFile(*configFile)
+	viper.SetConfigFile(file)
 	setDefaults()
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
@@ -101,6 +94,28 @@ func Load() (*Config, *ExternalConfig, error) {
 	}
 
 	return cfg, ext, nil
+}
+
+// resolveConfigFile 校验 ENV 并确定主配置文件路径。
+// ENV 必须显式且可识别：未设置或未知取值直接拒绝启动，不会静默按开发环境处理。
+// 即使通过 --config 指定了配置文件也要校验，因为 Validate 的生产校验、mock 默认值等同样依赖 ENV。
+func resolveConfigFile(explicit string) (string, error) {
+	mode, err := envmode.Current()
+	if err != nil {
+		return "", fmt.Errorf("运行环境校验失败: %w", err)
+	}
+	if explicit != "" {
+		return explicit, nil
+	}
+	switch mode {
+	case envmode.Production:
+		return "config/config.production.yaml", nil
+	case envmode.Development, envmode.Test:
+		// 仓库只提供开发与生产两份配置，测试环境复用开发配置。
+		return "config/config.development.yaml", nil
+	default:
+		return "", fmt.Errorf("运行环境校验失败: 未处理的运行环境 %q", mode)
+	}
 }
 
 // LoadWebhook 加载 Webhook 子系统配置，支持优先级：环境变量 > 配置文件 > 默认值。
@@ -169,7 +184,7 @@ func setDefaults() {
 	viper.SetDefault("prometheus.alert_webhook_file_dir", "/tmp/webhook_files")
 	viper.SetDefault("prometheus.httpSdAPI", "http://localhost:8889/api/not_auth/getTreeNodeBindIps")
 
-	// mock 默认值随环境变化：生产环境（ENV=production）默认关闭，其余环境保持开启。
+	// mock 默认值随环境变化：生产环境（ENV 为 production/prod/prd，或未设置/无法识别）默认关闭，开发/测试环境保持开启。
 	// 显式配置（配置文件 mock.enabled 或环境变量 MOCK_ENABLED）仍然优先；生产环境开启会被 Validate 拒绝。
 	viper.SetDefault("mock.enabled", defaultMockEnabled())
 
@@ -210,12 +225,12 @@ func setWebhookDefaults() {
 	viper.SetDefault("webhook.im_feishu.tenant_access_token_api", "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal")
 }
 
-// productionEnv 是 ENV 环境变量在生产环境下的取值，与 Load 选择配置文件、Validate 的生产校验使用同一判定。
-const productionEnv = "production"
-
-// IsProduction 判断当前进程是否运行在生产环境（ENV=production）。
+// IsProduction 判断当前进程是否应按生产环境处理，委托给 pkg/envmode，
+// 与 Load 选择配置文件、Validate 的生产校验、pkg/ssh 的主机密钥策略使用同一判定。
+// ENV 会先 TrimSpace、ToLower 再匹配别名（production/prod/prd）；未设置或未知取值按生产处理（fail closed），
+// 而 Load 会对这两种情况直接拒绝启动。
 func IsProduction() bool {
-	return os.Getenv("ENV") == productionEnv
+	return envmode.IsProduction()
 }
 
 // defaultMockEnabled 返回 mock.enabled 的默认值：生产环境关闭，其余环境开启。
