@@ -45,6 +45,8 @@ python3 scripts/release-smoke.py
 - `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL` 可在本地 `.env` 中配置。不得将提供商密钥放入前端的 `VITE_*` 配置。
 - Kubernetes 与 SSH 使用组织提供的最小权限凭据。部署模板不挂载开发者本机 kubeconfig，不连接已有集群执行修复。
 
+AIOps 飞书自定义机器人可在服务端私有 `.env` 设置 `FEISHU_WEBHOOK_URL`，Compose 仅向 AIOps 注入为 `FEISHU_WEBHOOK`；`NOTIFICATION_ENABLED=false` 可关闭。该地址本身是凭据，不进入 Git、日志或前端。通过 JWT/RBAC 授权的 `POST /api/v1/autofix/notify` 显式发送；初始化和普通页面读取不会测试发送。按[飞书官方机器人合同](https://open.feishu.cn/document/client-docs/bot-v3/add-custom-bot)，HTTP200还必须有整数业务code0才确认成功。工单飞书应用通道使用独立App ID/Secret及接收人ID，不将机器人地址当chat_id。
+
 ## 升级与回滚
 
 升级前备份 MySQL、Redis、AIOps 数据卷及 `.env`，保存三仓 commit SHA 和镜像 digest。尤其保留 `TREE_PASSWORD_ENCRYPTION_KEY`，更换它会影响已存资产密码的解密。先在数据库副本上演练升级；当前 GORM 自动迁移并不等价于可逆迁移。

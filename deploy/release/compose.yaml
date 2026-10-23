@@ -114,6 +114,8 @@ services:
       LLM_TASK_MODEL: ${LLM_TASK_MODEL:-Qwen/Qwen2.5-14B-Instruct}
       LLM_EMBEDDING_MODEL: ${LLM_EMBEDDING_MODEL:-BAAI/bge-m3}
       RAG_OPENAI_EMBEDDING_MODEL: ${RAG_OPENAI_EMBEDDING_MODEL:-BAAI/bge-m3}
+      NOTIFICATION_ENABLED: ${NOTIFICATION_ENABLED:-true}
+      FEISHU_WEBHOOK: ${FEISHU_WEBHOOK_URL:-}
     volumes:
       - aiops:/app/data
     depends_on:

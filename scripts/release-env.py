@@ -21,6 +21,8 @@ def main():
     content += "".join(f"{name}={value}\n" for name, value in values.items())
     content += "PUBLIC_ORIGIN=http://localhost:18080\nHTTP_PORT=18080\n"
     content += "BIND_ADDRESS=127.0.0.1\nRELEASE_VERSION=local\n"
+    content += "# Optional AIOps custom bot; keep the webhook credential private.\n"
+    content += "NOTIFICATION_ENABLED=true\nFEISHU_WEBHOOK_URL=\n"
     descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "w") as output:
         output.write(content)
