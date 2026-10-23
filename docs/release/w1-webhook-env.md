@@ -50,8 +50,10 @@
 - **端口校验**：`webhook.port` 取合并后的值并去首尾空白，必须是纯数字；先去掉前导零，再要求在 1–65535 之间（`" 9998 "`、`000080` 可以，
   `""`、`abc`、`0`、`0000`、`65536`、`065536`、`-1`、`+80`、`0x50` 不行），否则 webhook 启动失败；报错只列出键名 `webhook.port` 和变量名 `WEBHOOK_PORT`，不含取值。
   去空白、去前导零后的值（如 `000080` → `80`）同时用于监听和全局 `webhook.port`。
+- **不要在 `webhook:` 下同时写 `port` 和 `PORT`**（或其他只有大小写不同的同名键）：viper 对键名不区分大小写，同时出现时取哪一个**未定义**。
+
 - `webhook.yaml` 里还有 `alert_receive_queue_size`、`min_workers` 等不在结构体中的键，它们没有 `env` 标签，不在上表中，
-  不承诺可用环境变量覆盖。
+  不承诺可用环境变量覆盖，也不做整数范围校验（当前 Go 代码中没有读取它们）。
 
 - **不再支持没有 `webhook` 根节点的旧格式。** 配置文件根节点下出现 `WebhookConfig` 的字段（`port`、`fixed_workers`、`front_domain`、
   `backend_domain`、`default_upgrade_minutes`、`alert_manager_api`、`common_map_renew_interval_seconds`、`im_feishu`）时，webhook **启动失败**，
@@ -60,6 +62,24 @@
 
 - **配置文件存在但没有 `webhook` 根节点**（含写成 `webhook:` 而值为 null、空文件）时，记一条 `[配置告警]` 并继续启动，`webhook.*` 全部取环境变量/默认值；
   告警只列出文件路径和文件根节点下的键名，不含取值。配置文件缺失时仍按原来的“读取配置文件失败”告警处理，不重复提示。
+
+### 整数字段取值范围
+
+`WebhookConfig` 全部整数字段如下。合并后的值（环境变量 > 配置文件 > 默认值）低于下限时 webhook **启动失败**，报错一次列出所有越界字段的键名、
+环境变量名和下限，**不含取值**；与其他校验失败一样，不向全局 viper 发布任何键。不设上限。仓库 `config/webhook.yaml` 与内置默认值都满足下表。
+
+| yaml 键 | 环境变量 | 默认值 | 允许范围 | 是否允许 0 | 含义与 0 值规则依据 |
+| --- | --- | --- | --- | --- | --- |
+| `webhook.fixed_workers` | `WEBHOOK_FIXED_WORKERS` | `10`（仓库 yaml 未设置） | `>= 1` | 否 | 固定工作者数量。0 个工作者没有意义。（注：当前 `consumer.go` 只把它存进 `workerCount`，没有实际使用，告警按条起 goroutine 处理） |
+| `webhook.default_upgrade_minutes` | `WEBHOOK_DEFAULT_UPGRADE_MINUTES` | `60`（仓库 yaml 为 `30`） | `>= 1` | 否 | 告警升级等待分钟数，发送组 `upgrade_minutes` 为 0（即“用默认值”）时使用。`content.go` 按 `time.Since(StartsAt) > N 分钟` 判断，为 0 时所有 firing 告警立即升级 |
+| `webhook.common_map_renew_interval_seconds` | `WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS` | `300`（仓库 yaml 为 `10`） | `>= 1` | 否 | 发送组/用户/值班组/规则缓存的刷新周期（秒）。`cache.go` 对 `<= 0` 告警并改用 60 秒；`wait.UntilWithContext` 周期为 0 会不间断刷库 |
+| `webhook.im_feishu.request_timeout_seconds` | `WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS` | `10`（仓库 yaml 为 `10`） | `>= 0` | **是**（0 = 不设超时） | 飞书机器人与 Alertmanager 静默接口 HTTP 请求的超时（秒），用作 `http.Client.Timeout`。Go 中 0 表示不设超时，不会立即超时或除零；负数在 `http.Client` 中同样等于不设超时，但不是有意义的写法，拒绝 |
+
+注意：设为 `0` 的 `request_timeout_seconds` 会让对端无响应时请求一直挂起，生产环境不建议使用。
+
+整数的解析方式（当前行为，不做改动）：
+- 未加引号的 YAML 小数会被**截断**：`fixed_workers: 10.5` 得到 `10`（`10.0` 同理）；加引号的 `"10.5"` 或环境变量 `10.5` 则启动失败。
+- 字符串按 Go 进制前缀解析：`010` 按**八进制**解析为 `8`，`0x10` 为 `16`；环境变量和 YAML 都一样，不要给整数写前导零。
 
 ### `WEBHOOK_MYSQL_ADDR`（单独说明）
 
@@ -89,6 +109,8 @@
   带前导零的合法端口（如 `000080`）规范为 `80`。
 - 整数字段（`fixed_workers`、`default_upgrade_minutes`、`common_map_renew_interval_seconds`、`im_feishu.request_timeout_seconds`）
   由宽松改为严格：环境变量或带引号的 YAML 写成 `10.0`、带空格或小数时**启动失败**（见上文“说明”）。升级前请检查 `.env` 与 `webhook.yaml`。
+- 整数字段新增范围校验：任何字段为负数，或 `fixed_workers`、`default_upgrade_minutes`、`common_map_renew_interval_seconds` 为 0 时**启动失败**
+  （见“整数字段取值范围”）。之前这些值会被直接使用：缓存刷新周期 `<= 0` 回落到 60 秒，升级等待为 0 时立即升级。
 - **不再支持没有 `webhook` 根节点的旧格式（平铺写法）**，此类配置文件现在加载即失败，请把 `port`、`fixed_workers` 等键移到 `webhook:` 下。
   排查结论：仓库内唯一的 webhook 配置文件 `config/webhook.yaml` 自引入起（3c47234）就带 `webhook` 根节点；`deploy/`（Kubernetes、release Compose、nginx、
   Prometheus）、`Dockerfile`、`docker-compose.yaml` 中没有 webhook 配置文件，也没有 Helm values 或 ConfigMap 承载 webhook 配置。

@@ -189,6 +189,10 @@ func loadWebhookFromFile(configFile string) (*WebhookConfig, *WebhookSecrets, er
 	if err != nil {
 		return nil, nil, err
 	}
+	// 整数字段范围校验：失败时与其他校验一样直接返回，不发布到全局
+	if err := validateWebhookIntFields(cfg); err != nil {
+		return nil, nil, err
+	}
 
 	// 只把 webhook.* 发布到全局 viper，供 webhook 子系统现有读取方使用；mysql.* 等其他键不发布。
 	// 与 cfg 使用同一份合并后的值
@@ -303,6 +307,43 @@ func decodeWebhookConfig(merged webhookValues) (*WebhookConfig, error) {
 		return nil, fmt.Errorf("解析Webhook配置失败: %w", err)
 	}
 	return cfg, nil
+}
+
+// webhookIntRule webhook 整数字段的取值下限（不设上限）
+type webhookIntRule struct {
+	key string
+	env string
+	min int
+	get func(*WebhookConfig) int
+}
+
+// webhookIntRules WebhookConfig 全部整数字段的规则，0 是否合法依据各字段在 webhook 子系统中的实际用法：
+//   - fixed_workers：工作者数量，0 个工作者没有意义，最小 1；
+//   - default_upgrade_minutes：发送组 upgrade_minutes 为 0 时（含义为“用默认值”）的升级等待分钟数，
+//     content.go 用 time.Since(StartsAt) > N 分钟判断，为 0 时所有 firing 告警立即升级，等待失去意义，最小 1；
+//   - common_map_renew_interval_seconds：缓存刷新周期，cache.go 对 <=0 告警并改用 60 秒，
+//     wait.UntilWithContext 周期为 0 会不间断刷库，最小 1；
+//   - im_feishu.request_timeout_seconds：用作 http.Client.Timeout（秒），Go 中 0 表示不设超时（不限制），
+//     不会立即超时也不会除零，允许 0；负数在 http.Client 中同样被当作不设超时，但不是有意义的写法，拒绝
+var webhookIntRules = []webhookIntRule{
+	{"webhook.fixed_workers", "WEBHOOK_FIXED_WORKERS", 1, func(c *WebhookConfig) int { return c.FixedWorkers }},
+	{"webhook.default_upgrade_minutes", "WEBHOOK_DEFAULT_UPGRADE_MINUTES", 1, func(c *WebhookConfig) int { return c.DefaultUpgradeMinutes }},
+	{"webhook.common_map_renew_interval_seconds", "WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS", 1, func(c *WebhookConfig) int { return c.CommonMapRenewIntervalSeconds }},
+	{"webhook.im_feishu.request_timeout_seconds", "WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS", 0, func(c *WebhookConfig) int { return c.ImFeishu.RequestTimeoutSeconds }},
+}
+
+// validateWebhookIntFields 按 webhookIntRules 校验整数字段，列出全部不合法的键；报错只含键名、变量名和下限，不含取值
+func validateWebhookIntFields(cfg *WebhookConfig) error {
+	var bad []string
+	for _, r := range webhookIntRules {
+		if r.get(cfg) < r.min {
+			bad = append(bad, fmt.Sprintf("%s（环境变量 %s）必须 >= %d", r.key, r.env, r.min))
+		}
+	}
+	if len(bad) > 0 {
+		return fmt.Errorf("Webhook 整数配置超出允许范围: %s", strings.Join(bad, "；"))
+	}
+	return nil
 }
 
 // isValidPort 端口必须是纯 ASCII 数字且在 1-65535 之间（调用方先去首尾空白）。
