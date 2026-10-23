@@ -31,6 +31,12 @@ jobs:
           fetch-depth: 0 # 范围计算需要完整历史与 origin/<默认分支>
           persist-credentials: false # 不把 GITHUB_TOKEN 写入 .git/config（本 job 不需要推送）
 
+      # 固定到完整 commit SHA（v7.1.0，git ls-remote https://github.com/actions/setup-python refs/tags/v7.1.0 核对）
+      # gitleaks-config-check.py 需要 Python 3.11+ 的 tomllib，不依赖 runner 镜像自带的 python3 版本
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
       - name: Install gitleaks (pinned + sha256)
         run: |
           set -euo pipefail
