@@ -199,7 +199,8 @@ All settings can be provided as environment variables (see [`env.example`](env.e
 | `SERVER_PORT` | HTTP port, default `8889`. |
 | `SERVER_ALLOWED_ORIGINS` | Comma-separated list of exact browser origins allowed for CORS and WebSocket. Empty means same-origin only. |
 | `MYSQL_ADDR`, `REDIS_ADDR`, `REDIS_PASSWORD` | Database and Redis connection. |
-| `JWT_KEY1`, `JWT_KEY2`, `JWT_EXPIRATION` | JWT signing keys and settings. `JWT_KEY1` and `JWT_KEY2` are required in every environment: at least 32 characters each, distinct, and not a repository sample value (generate with `openssl rand -base64 48`). `JWT_EXPIRATION` is in minutes. |
+| `JWT_KEY1`, `JWT_KEY2`, `JWT_EXPIRATION` | JWT signing keys and settings. `JWT_KEY1` and `JWT_KEY2` are required in every environment: at least 32 characters each, distinct, and not a repository sample value (generate with `openssl rand -base64 48`). `JWT_EXPIRATION` is the access-token lifetime in **minutes** (not seconds); the release configuration uses `30`. A value such as `3600` means 60 hours. |
+| `CRON_ALLOW_LOCAL_EXEC` | `cron.allow_local_exec`, default `false`. Allows command (type 2) and script (type 4) jobs to run on the backend host. Read at startup; restart the backend after changing it. See the notes below. |
 | `JWT_ISSUER` | Optional. The token issuer is configured as `jwt.issuer` in `config/*.yaml`; set this variable only to override it. The value must not be empty, and changing it invalidates all tokens already issued. |
 | `TREE_PASSWORD_ENCRYPTION_KEY` | Key used to encrypt stored host passwords. Keep it safe: changing it breaks decryption of existing credentials. |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Creates the `admin` account on the first start with an empty database (min. 12 characters). Remove it after the first successful start. Existing users are never reset. |
@@ -228,6 +229,8 @@ Other security behaviour to be aware of:
 - Every protected request and token refresh re-checks the current account. Frozen, deleted or renamed accounts are rejected immediately, and authentication fails closed if the database is unavailable.
 - `POST /api/user/signup` requires an `admin` session. New users are normal accounts by default.
 - Non-admin users need explicit role permissions for each `/api/v1/` path they call. Service accounts no longer bypass role checks.
+- Turning `CRON_ALLOW_LOCAL_EXEC` off only blocks creating, enabling, scheduling and running command/script jobs from then on. It does **not** stop command or script processes that are already running (or background processes they spawned); check the backend host and terminate leftovers manually.
+- When `CRON_ALLOW_LOCAL_EXEC` is on, custom environment variables of command jobs may not set `LD_*`, `DYLD_*`, `BASH_ENV`, `ENV` or `IFS` (case-insensitive).
 
 See [docs/security-baseline.md](docs/security-baseline.md) for the vulnerability scan baseline and the list of hardened boundaries.
 
