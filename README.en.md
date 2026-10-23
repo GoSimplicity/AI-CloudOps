@@ -131,7 +131,9 @@ cp env.example .env
 go run main.go
 ```
 
-JWT signing keys are validated in **every** environment, including development; there is no switch to relax this. `JWT_KEY1` and `JWT_KEY2` must each be at least 32 characters, must differ from each other, and must not be a repository sample or a historical default value (the placeholders in `env.example` are rejected). Generate two independent keys for local development, for example:
+JWT signing keys are validated in **every** environment, including development; there is no switch to relax this. `JWT_KEY1` and `JWT_KEY2` must each be at least 32 characters with at least 10 distinct characters, must not have leading/trailing whitespace or contain control characters (nothing is trimmed silently), must differ from each other (compared case-insensitively after trimming), and must not be or contain a repository sample or historical default value (the placeholders in `env.example` are rejected, in any letter case). Error messages name the variable and the reason only; they never print the key.
+
+**Required before the first start:** generate two independent keys and put them in `.env`, otherwise the backend refuses to start:
 
 ```bash
 openssl rand -base64 48   # use the output as JWT_KEY1
@@ -199,9 +201,9 @@ All settings can be provided as environment variables (see [`env.example`](env.e
 | `SERVER_PORT` | HTTP port, default `8889`. |
 | `SERVER_ALLOWED_ORIGINS` | Comma-separated list of exact browser origins allowed for CORS and WebSocket. Empty means same-origin only. |
 | `MYSQL_ADDR`, `REDIS_ADDR`, `REDIS_PASSWORD` | Database and Redis connection. |
-| `JWT_KEY1`, `JWT_KEY2`, `JWT_EXPIRATION` | JWT signing keys and settings. `JWT_KEY1` and `JWT_KEY2` are required in every environment: at least 32 characters each, distinct, and not a repository sample value (generate with `openssl rand -base64 48`). `JWT_EXPIRATION` is the access-token lifetime in **minutes** (not seconds); the release configuration uses `30`. A value such as `3600` means 60 hours. |
+| `JWT_KEY1`, `JWT_KEY2`, `JWT_EXPIRATION` | JWT signing keys and settings. `JWT_KEY1` and `JWT_KEY2` are required in every environment: at least 32 characters each, distinct, and not a repository sample value (generate with `openssl rand -base64 48`). `JWT_EXPIRATION` is the access-token lifetime in **minutes** (not seconds); the default and the release configuration are `30`. A value such as `3600` means 60 hours. Expired access tokens are renewed automatically by the frontend with the refresh token (valid for 7 days). |
 | `CRON_ALLOW_LOCAL_EXEC` | `cron.allow_local_exec`, default `false`. Allows command (type 2) and script (type 4) jobs to run on the backend host. Read at startup; restart the backend after changing it. See the notes below. |
-| `JWT_ISSUER` | Optional. The token issuer is configured as `jwt.issuer` in `config/*.yaml`; set this variable only to override it. The value must not be empty, and changing it invalidates all tokens already issued. |
+| `JWT_ISSUER` | Optional. The token issuer is configured as `jwt.issuer` in `config/*.yaml`; set this variable only to override it. The value must not be empty (the backend fails to start otherwise), and changing it invalidates all tokens already issued. After upgrading to the release that requires an issuer (`iss`), all older refresh tokens without `iss` are invalid and every user has to log in again once. |
 | `TREE_PASSWORD_ENCRYPTION_KEY` | Key used to encrypt stored host passwords. Keep it safe: changing it breaks decryption of existing credentials. |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Creates the `admin` account on the first start with an empty database (min. 12 characters). Remove it after the first successful start. Existing users are never reset. |
 | `SSH_KNOWN_HOSTS` | Path to an operator-verified OpenSSH `known_hosts` file used for web terminal and SSH connections. |
@@ -210,11 +212,11 @@ All settings can be provided as environment variables (see [`env.example`](env.e
 | `MOCK_ENABLED` | Seed mock data for development. Must be `false` in production. |
 | `LLM_API_KEY`, `LLM_BASE_URL`, `ALIYUN_ACCESS_KEY_ID`, `ALIYUN_ACCESS_KEY_SECRET`, `TAVILY_API_KEY` | External service credentials (environment variables only). |
 | `NOTIFICATION_EMAIL_*`, `NOTIFICATION_FEISHU_*` | Email (SMTP) and Feishu notification channels. |
-| `WEBHOOK_*` | Settings for the alert webhook service in `cmd/webhook`. |
+| `WEBHOOK_*` | Settings for the alert webhook service in `cmd/webhook`. `WEBHOOK_PORT` defaults to `8889` (previously `8888`), matching `config/webhook.yaml`. |
 
 ### Production security requirements
 
-In every environment (development included) the backend refuses to start unless `JWT_KEY1` and `JWT_KEY2` are distinct, at least 32 characters, and not the repository sample values.
+In every environment (development included) the backend refuses to start unless `JWT_KEY1` and `JWT_KEY2` are distinct (case-insensitive), at least 32 characters with at least 10 distinct characters, free of leading/trailing whitespace and control characters, and not (or containing) the repository sample values.
 
 With `ENV=production` the backend additionally refuses to start unless:
 
@@ -230,7 +232,11 @@ Other security behaviour to be aware of:
 - `POST /api/user/signup` requires an `admin` session. New users are normal accounts by default.
 - Non-admin users need explicit role permissions for each `/api/v1/` path they call. Service accounts no longer bypass role checks.
 - Turning `CRON_ALLOW_LOCAL_EXEC` off only blocks creating, enabling, scheduling and running command/script jobs from then on. It does **not** stop command or script processes that are already running (or background processes they spawned); check the backend host and terminate leftovers manually.
-- When `CRON_ALLOW_LOCAL_EXEC` is on, custom environment variables of command jobs may not set `LD_*`, `DYLD_*`, `BASH_ENV`, `ENV` or `IFS` (case-insensitive).
+- Custom environment variables (the `environment` field) apply only to command jobs (type 2), and only command jobs are validated on save and before execution. HTTP, SSH and script jobs do not use this field and are never blocked by its content (SSH jobs use the separate `ssh_environment`). For command jobs:
+  - rows whose name and value are both empty (blank rows added in the UI) are dropped on save and skipped at execution;
+  - a row with an empty name but a non-empty value, or a name containing `=` or NUL, is rejected;
+  - these names are rejected (case-insensitive): prefixes `LD_*`, `DYLD_*`, `BASH_FUNC_*`, `MALLOC_*`, and `BASH_ENV`, `ENV`, `IFS`, `SHELLOPTS`, `BASHOPTS`, `PS4`, `GCONV_PATH`, `GLIBC_TUNABLES`, `LOCPATH`;
+  - errors name the variable only, never its value. Existing non-compliant command jobs are rejected at execution until they are edited and saved again.
 
 See [docs/security-baseline.md](docs/security-baseline.md) for the vulnerability scan baseline and the list of hardened boundaries.
 
