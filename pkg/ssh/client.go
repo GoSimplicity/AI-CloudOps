@@ -80,6 +80,7 @@ type Client interface {
 	// WebTerminal 提供Web终端功能
 	WebTerminal(userID int, conn *websocket.Conn) error
 	WebTerminalContext(context.Context, int, *websocket.Conn) error
+	WebTerminalWithOptionsContext(context.Context, int, *websocket.Conn, TerminalOptions) error
 }
 
 // client SSH客户端实现

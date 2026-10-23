@@ -26,8 +26,11 @@
 package ssh
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -37,11 +40,13 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// TerminalReader 实现从WebSocket读取数据的io.Reader接口
+// MaxTerminalFrameBytes 限制单条输入消息，超限不交付给SSH
 const MaxTerminalFrameBytes = 64 * 1024
 
 // TerminalReader 按原始帧保留剩余输入，legacy每帧只补一次换行
 type TerminalReader struct {
+	pty          bool
+	resize       func(int, int) error
 	mu           sync.Mutex
 	pending      []byte
 	conn         *websocket.Conn
@@ -51,17 +56,19 @@ type TerminalReader struct {
 
 // TerminalWriter 实现向WebSocket写入数据的io.Writer接口
 type TerminalWriter struct {
-	mu     sync.Mutex
-	conn   *websocket.Conn
-	logger *zap.Logger
+	messageType int
+	mu          sync.Mutex
+	conn        *websocket.Conn
+	logger      *zap.Logger
 }
 
-// Read 从WebSocket读取用户输入的命令数据
+// NewTerminalReader 保留已发布的逐消息命令格式
 func NewTerminalReader(conn *websocket.Conn, logger *zap.Logger, onDisconnect context.CancelFunc) *TerminalReader {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-	conn.SetReadLimit(MaxTerminalFrameBytes)
+	// 线路上保留压缩开销空间，解压后仍由LimitReader严格限制
+	conn.SetReadLimit(MaxTerminalFrameBytes * 2)
 	return &TerminalReader{conn: conn, logger: logger, onDisconnect: onDisconnect}
 }
 func NewTerminalWriter(conn *websocket.Conn, logger *zap.Logger) *TerminalWriter {
@@ -71,19 +78,70 @@ func NewTerminalWriter(conn *websocket.Conn, logger *zap.Logger) *TerminalWriter
 	return &TerminalWriter{conn: conn, logger: logger}
 }
 
+func NewTerminalReaderWithOptions(conn *websocket.Conn, logger *zap.Logger, cancel context.CancelFunc, options TerminalOptions, resize func(int, int) error) *TerminalReader {
+	reader := NewTerminalReader(conn, logger, cancel)
+	reader.pty = options.Mode == TerminalModePTY
+	reader.resize = resize
+	return reader
+}
+func NewTerminalWriterWithOptions(conn *websocket.Conn, logger *zap.Logger, options TerminalOptions) *TerminalWriter {
+	writer := NewTerminalWriter(conn, logger)
+	if options.Mode == TerminalModePTY {
+		writer.messageType = websocket.BinaryMessage
+	}
+	return writer
+}
+func (r *TerminalReader) inputError() (int, error) {
+	if r.onDisconnect != nil {
+		r.onDisconnect()
+	}
+	_ = r.conn.Close()
+	return 0, fmt.Errorf("终端输入结束")
+}
 func (r *TerminalReader) Read(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if len(r.pending) == 0 {
-		_, message, err := r.conn.ReadMessage()
+	for len(r.pending) == 0 {
+		kind, stream, err := r.conn.NextReader()
 		if err != nil {
-			if r.onDisconnect != nil {
-				r.onDisconnect()
+			return r.inputError()
+		}
+		limit := MaxTerminalFrameBytes
+		if r.pty && kind == websocket.TextMessage {
+			limit = MaxTerminalControlBytes
+		}
+		message, err := io.ReadAll(io.LimitReader(stream, int64(limit)+1))
+		if err != nil || len(message) > limit {
+			return r.inputError()
+		}
+		if r.pty {
+			if kind == websocket.BinaryMessage {
+				r.pending = message
+				continue
 			}
-			return 0, fmt.Errorf("终端输入结束")
+			if kind != websocket.TextMessage || len(message) > MaxTerminalControlBytes {
+				return r.inputError()
+			}
+			var control struct {
+				Op   string `json:"op"`
+				Rows int    `json:"row_size"`
+				Cols int    `json:"col_size"`
+			}
+			decoder := json.NewDecoder(bytes.NewReader(message))
+			decoder.DisallowUnknownFields()
+			if decoder.Decode(&control) != nil || control.Op != "resize" || ValidateTerminalSize(control.Rows, control.Cols) != nil {
+				return r.inputError()
+			}
+			if decoder.Decode(new(any)) != io.EOF {
+				return r.inputError()
+			}
+			if r.resize == nil || r.resize(control.Rows, control.Cols) != nil {
+				return r.inputError()
+			}
+			continue
 		}
 		if len(message) == 0 || message[len(message)-1] != '\n' {
 			message = append(message, '\n')
@@ -107,7 +165,11 @@ func (w *TerminalWriter) Write(p []byte) (n int, err error) {
 	if err = w.conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
 		return 0, fmt.Errorf("终端输出期限设置失败")
 	}
-	err = w.conn.WriteMessage(websocket.TextMessage, p)
+	kind := w.messageType
+	if kind == 0 {
+		kind = websocket.TextMessage
+	}
+	err = w.conn.WriteMessage(kind, p)
 	if err != nil {
 		w.logger.Warn("向WebSocket写入消息失败")
 		return 0, fmt.Errorf("终端输出结束")
@@ -123,6 +185,15 @@ func (c *client) WebTerminal(userID int, conn *websocket.Conn) error {
 
 // WebTerminalContext 只中断当前连接捕获的传输，最终Close由会话所有者执行
 func (c *client) WebTerminalContext(parent context.Context, userID int, conn *websocket.Conn) error {
+	return c.WebTerminalWithOptionsContext(parent, userID, conn, TerminalOptions{})
+}
+
+func (c *client) WebTerminalWithOptionsContext(parent context.Context, userID int, conn *websocket.Conn, options TerminalOptions) error {
+	normalized, err := options.Normalize()
+	if err != nil {
+		return err
+	}
+	options = normalized
 	if parent == nil || conn == nil {
 		return fmt.Errorf("终端上下文与WebSocket不能为空")
 	}
@@ -149,7 +220,7 @@ func (c *client) WebTerminalContext(parent context.Context, userID int, conn *we
 			<-interrupted
 		}
 	}()
-	err := c.webTerminal(userID, conn, cancel, func() { setupTimer.Stop() })
+	err = c.webTerminal(userID, conn, cancel, func() { setupTimer.Stop() }, options)
 	if parent.Err() != nil {
 		return parent.Err()
 	}
@@ -159,8 +230,8 @@ func (c *client) WebTerminalContext(parent context.Context, userID int, conn *we
 	return err
 }
 
-func (c *client) webTerminal(userID int, conn *websocket.Conn, onDisconnect context.CancelFunc, onStarted func()) error {
-	writer := NewTerminalWriter(conn, c.logger)
+func (c *client) webTerminal(userID int, conn *websocket.Conn, onDisconnect context.CancelFunc, onStarted func(), options TerminalOptions) error {
+	writer := NewTerminalWriterWithOptions(conn, c.logger, options)
 	if conn == nil {
 		return fmt.Errorf("WebSocket连接不能为空")
 	}
@@ -209,8 +280,11 @@ func (c *client) webTerminal(userID int, conn *websocket.Conn, onDisconnect cont
 		ssh.TTY_OP_OSPEED: 14400, // 输出波特率
 	}
 
-	// 请求伪终端（PTY）
-	if err := session.RequestPty("xterm", 25, 80, modes); err != nil {
+	// 显式PTY依赖远端回显，旧命令模式保持关闭
+	if options.Mode == TerminalModePTY {
+		modes[ssh.ECHO] = 1
+	}
+	if err := session.RequestPty("xterm", options.Rows, options.Cols, modes); err != nil {
 		errMsg := "请求伪终端失败"
 		c.logger.Error(errMsg, zap.Error(err))
 		if _, writeErr := writer.Write([]byte("错误: 无法创建终端\r\n")); writeErr != nil {
@@ -219,7 +293,7 @@ func (c *client) webTerminal(userID int, conn *websocket.Conn, onDisconnect cont
 		return fmt.Errorf("%s: %w", errMsg, err)
 	}
 
-	reader := NewTerminalReader(conn, c.logger, onDisconnect)
+	reader := NewTerminalReaderWithOptions(conn, c.logger, onDisconnect, options, session.WindowChange)
 
 	// 将WebSocket连接设置为SSH会话的输入输出流
 	session.Stdin = reader  // 标准输入：从WebSocket读取用户命令

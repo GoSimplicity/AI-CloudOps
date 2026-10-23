@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -24,6 +25,7 @@ type EcsSSH interface {
 	Close() error
 	Web2SSH(ws *websocket.Conn)
 	Web2SSHContext(context.Context, *websocket.Conn) error
+	Web2SSHWithOptionsContext(context.Context, *websocket.Conn, sshclient.TerminalOptions) error
 }
 
 type ecsSSH struct {
@@ -244,7 +246,6 @@ func (s *ecsSSH) Close() error {
 *************************** Web终端SSH实现 ***************************
  */
 
-// MyReader 实现从WebSocket读取数据的io.Reader接口
 // Web2SSH 保留已发布的逐帧命令格式，新增上下文入口供会话所有者取消
 func (s *ecsSSH) Web2SSH(ws *websocket.Conn) {
 	if s.Web2SSHContext(context.Background(), ws) != nil {
@@ -252,6 +253,14 @@ func (s *ecsSSH) Web2SSH(ws *websocket.Conn) {
 	}
 }
 func (s *ecsSSH) Web2SSHContext(parent context.Context, ws *websocket.Conn) error {
+	return s.Web2SSHWithOptionsContext(parent, ws, sshclient.TerminalOptions{})
+}
+func (s *ecsSSH) Web2SSHWithOptionsContext(parent context.Context, ws *websocket.Conn, options sshclient.TerminalOptions) error {
+	normalized, err := options.Normalize()
+	if err != nil {
+		return err
+	}
+	options = normalized
 	if parent == nil || ws == nil {
 		return fmt.Errorf("终端上下文与WebSocket不能为空")
 	}
@@ -294,22 +303,32 @@ func (s *ecsSSH) Web2SSHContext(parent context.Context, ws *websocket.Conn) erro
 		}
 		s.sessionMu.Unlock()
 	}()
-	timer := time.AfterFunc(10*time.Second, cancel)
+	var setupExpired atomic.Bool
+	timer := time.AfterFunc(10*time.Second, func() { setupExpired.Store(true); cancel() })
 	defer timer.Stop()
 	modes := ssh.TerminalModes{ssh.ECHO: 0, ssh.TTY_OP_ISPEED: 14400, ssh.TTY_OP_OSPEED: 14400}
-	if err := session.RequestPty("xterm", 25, 80, modes); err != nil {
+	if options.Mode == sshclient.TerminalModePTY {
+		modes[ssh.ECHO] = 1
+	}
+	if err := session.RequestPty("xterm", options.Rows, options.Cols, modes); err != nil {
 		if parent.Err() != nil {
 			return parent.Err()
 		}
+		if setupExpired.Load() {
+			return context.DeadlineExceeded
+		}
 		return fmt.Errorf("请求SSH伪终端失败")
 	}
-	writer := sshclient.NewTerminalWriter(ws, s.logger)
-	session.Stdin = sshclient.NewTerminalReader(ws, s.logger, cancel)
+	writer := sshclient.NewTerminalWriterWithOptions(ws, s.logger, options)
+	session.Stdin = sshclient.NewTerminalReaderWithOptions(ws, s.logger, cancel, options, session.WindowChange)
 	session.Stdout = writer
 	session.Stderr = writer
 	if err := session.Shell(); err != nil {
 		if parent.Err() != nil {
 			return parent.Err()
+		}
+		if setupExpired.Load() {
+			return context.DeadlineExceeded
 		}
 		return fmt.Errorf("启动SSH终端失败")
 	}

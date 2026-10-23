@@ -45,6 +45,7 @@ func (cloudTerminalResourceService) GetTreeCloudResourceForConnection(_ context.
 type isolatedTerminal struct {
 	mu         sync.Mutex
 	config     ssh.Config
+	options    ssh.TerminalOptions
 	closed     chan struct{}
 	once       sync.Once
 	closeCalls atomic.Int32
@@ -82,6 +83,12 @@ func (s *isolatedTerminal) WebTerminalContext(ctx context.Context, _ int, conn *
 			return err
 		}
 	}
+}
+func (s *isolatedTerminal) WebTerminalWithOptionsContext(ctx context.Context, id int, conn *websocket.Conn, options ssh.TerminalOptions) error {
+	s.mu.Lock()
+	s.options = options
+	s.mu.Unlock()
+	return s.WebTerminalContext(ctx, id, conn)
 }
 func (s *isolatedTerminal) Close() error {
 	s.closeCalls.Add(1)
@@ -214,5 +221,47 @@ func TestTerminalSessionIsolation(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestTerminalPTYOptionsAndInvalidQueryBeforeConnect(t *testing.T) {
+	for _, kind := range []string{"local", "cloud"} {
+		t.Run(kind, func(t *testing.T) {
+			var calls atomic.Int32
+			client := &isolatedTerminal{closed: make(chan struct{})}
+			factory := TerminalClientFactory(func() TerminalClient { calls.Add(1); return client })
+			engine := gin.New()
+			engine.Use(func(c *gin.Context) { c.Set("user", jwt.UserClaims{Uid: 7}); c.Next() })
+			upgrader := &websocket.Upgrader{Subprotocols: []string{wsprotocol.Protocol}}
+			if kind == "local" {
+				handler := NewTreeLocalHandler(terminalResourceService{}, factory, upgrader, zap.NewNop())
+				engine.GET("/terminal/:id", handler.ConnectTerminal)
+			} else {
+				handler := NewTreeCloudHandler(cloudTerminalResourceService{}, factory, upgrader, zap.NewNop())
+				engine.GET("/terminal/:id", handler.ConnectCloudResourceTerminal)
+			}
+			invalid := httptest.NewRecorder()
+			engine.ServeHTTP(invalid, httptest.NewRequest("GET", "/terminal/1?terminal_mode=pty-v1&rows=0", nil))
+			if invalid.Code != 400 || calls.Load() != 0 {
+				t.Fatal("invalid terminal options opened SSH")
+			}
+			server := httptest.NewServer(engine)
+			defer server.Close()
+			conn, _, err := (&websocket.Dialer{Subprotocols: []string{wsprotocol.Protocol}}).Dial("ws"+strings.TrimPrefix(server.URL, "http")+"/terminal/1?terminal_mode=pty-v1&cols=96&rows=37", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+			_ = conn.SetReadDeadline(time.Now().Add(time.Second))
+			if _, _, err := conn.ReadMessage(); err != nil {
+				t.Fatal(err)
+			}
+			client.mu.Lock()
+			options := client.options
+			client.mu.Unlock()
+			if options.Mode != ssh.TerminalModePTY || options.Rows != 37 || options.Cols != 96 || conn.Subprotocol() != wsprotocol.Protocol {
+				t.Fatal("PTY options or auth subprotocol changed")
+			}
+		})
 	}
 }

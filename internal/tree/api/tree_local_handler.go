@@ -40,6 +40,7 @@ import (
 type TerminalClient interface {
 	ConnectContext(context.Context, *ssh.Config) error
 	WebTerminalContext(context.Context, int, *websocket.Conn) error
+	WebTerminalWithOptionsContext(context.Context, int, *websocket.Conn, ssh.TerminalOptions) error
 	Close() error
 }
 type TerminalClientFactory func() TerminalClient
@@ -148,6 +149,12 @@ func (h *TreeLocalHandler) DeleteTreeLocal(ctx *gin.Context) {
 
 // ConnectTerminal 连接终端
 func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
+	options, err := ssh.ParseTerminalOptions(ctx.Request.URL.Query())
+	if err != nil {
+		base.BadRequest(ctx, base.StatusError, nil, err.Error())
+		return
+	}
+
 	var req model.GetTreeLocalResourceDetailReq
 
 	id, err := base.GetParamID(ctx)
@@ -215,7 +222,7 @@ func (h *TreeLocalHandler) ConnectTerminal(ctx *gin.Context) {
 	}()
 
 	// 启动终端会话
-	if err := client.WebTerminalContext(ctx.Request.Context(), uc.Uid, ws); err != nil {
+	if err := client.WebTerminalWithOptionsContext(ctx.Request.Context(), uc.Uid, ws, options); err != nil {
 		h.logger.Warn("Web终端会话已结束")
 		return
 	}

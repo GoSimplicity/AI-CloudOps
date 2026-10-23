@@ -5,6 +5,8 @@ package ssh
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,6 +17,7 @@ import (
 	wsprotocol "github.com/GoSimplicity/AI-CloudOps/pkg/websocket"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestWebTerminalContextOwnsCancellation(t *testing.T) {
@@ -223,5 +226,147 @@ func TestLegacyReaderOversizedFrameCancelsWithoutReturningInput(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("oversized input stalled")
+	}
+}
+
+func TestPTYInvalidControlsCloseWithoutDeliveringStdin(t *testing.T) {
+	for _, message := range []string{`not-json`, `{"op":"stdin","row_size":1,"col_size":1}`, `{"op":"resize","row_size":0,"col_size":80}`, `{"op":"resize","row_size":25,"col_size":1001}`, `{"op":"resize","row_size":25,"col_size":80,"unknown":1}`, `{"op":"resize","row_size":25,"col_size":80} {}`, strings.Repeat(" ", MaxTerminalControlBytes+1)} {
+		done := make(chan error, 1)
+		web := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
+			if err != nil {
+				done <- err
+				return
+			}
+			defer conn.Close()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			resized := false
+			reader := NewTerminalReaderWithOptions(conn, zap.NewNop(), cancel, TerminalOptions{Mode: TerminalModePTY}, func(int, int) error { resized = true; return nil })
+			var buf [8]byte
+			n, err := reader.Read(buf[:])
+			if err == nil || n != 0 || ctx.Err() == nil || resized {
+				done <- errors.New("invalid control affected SSH input or window")
+				return
+			}
+			done <- nil
+		}))
+		conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(web.URL, "http"), nil)
+		if err != nil {
+			web.Close()
+			t.Fatal(err)
+		}
+		_ = conn.WriteMessage(websocket.TextMessage, []byte(message))
+		_ = conn.SetReadDeadline(time.Now().Add(time.Second))
+		if _, _, err := conn.ReadMessage(); err == nil {
+			t.Fatal("invalid control left peer connected")
+		}
+		conn.Close()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("invalid control blocked reader")
+		}
+		web.Close()
+	}
+}
+
+func TestPTYMalformedInputDoesNotEnterLifecycleLogs(t *testing.T) {
+	upstream := sshtest.StartTerminal(t)
+	t.Setenv("ENV", "production")
+	t.Setenv("SSH_KNOWN_HOSTS", upstream.KnownHosts)
+	core, logs := observer.New(zap.DebugLevel)
+	client := NewClient(zap.New(core))
+	defer client.Close()
+	if err := client.ConnectContext(context.Background(), &Config{Host: upstream.Host, Port: upstream.Port, Username: "fixture", Password: sshtest.Password, Mode: AuthModePassword}); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
+		if err != nil {
+			done <- err
+			return
+		}
+		done <- client.WebTerminalWithOptionsContext(context.Background(), 7, conn, TerminalOptions{Mode: TerminalModePTY})
+	}))
+	defer server.Close()
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	select {
+	case <-upstream.Started:
+	case <-time.After(time.Second):
+		t.Fatal("shell handshake missing")
+	}
+	_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"op":"private-input-canary","data":"private-input-canary"}`))
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("invalid control left bridge alive")
+	}
+	for _, entry := range logs.All() {
+		if strings.Contains(entry.Message+fmt.Sprint(entry.ContextMap()), "private-input-canary") {
+			t.Fatal("input reached SSH lifecycle log")
+		}
+	}
+}
+
+func TestCompressedPTYMessagesRespectDecodedInputLimit(t *testing.T) {
+	for _, oversized := range []bool{false, true} {
+		size := MaxTerminalFrameBytes
+		if oversized {
+			size += 4096
+		}
+		payload := strings.Repeat("x", size)
+		done := make(chan error, 1)
+		web := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			conn, err := (&websocket.Upgrader{EnableCompression: true}).Upgrade(w, r, nil)
+			if err != nil {
+				done <- err
+				return
+			}
+			defer conn.Close()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			reader := NewTerminalReaderWithOptions(conn, zap.NewNop(), cancel, TerminalOptions{Mode: TerminalModePTY}, nil)
+			if oversized {
+				var buf [17]byte
+				n, err := reader.Read(buf[:])
+				if n != 0 || err == nil || ctx.Err() == nil {
+					done <- errors.New("compressed oversize delivered partial input")
+					return
+				}
+			} else {
+				decoded := make([]byte, size)
+				n, err := io.ReadFull(reader, decoded)
+				if err != nil || n != size || string(decoded) != payload {
+					done <- errors.New("valid compressed input changed")
+					return
+				}
+			}
+			done <- nil
+		}))
+		conn, _, err := (&websocket.Dialer{EnableCompression: true}).Dial("ws"+strings.TrimPrefix(web.URL, "http"), nil)
+		if err != nil {
+			web.Close()
+			t.Fatal(err)
+		}
+		_ = conn.WriteMessage(websocket.BinaryMessage, []byte(payload))
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("compressed input stalled")
+		}
+		conn.Close()
+		web.Close()
 	}
 }

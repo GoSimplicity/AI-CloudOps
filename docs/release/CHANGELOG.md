@@ -171,3 +171,9 @@
 - 分支和标签流程固定拉取实际发布使用的Prometheus v3.2.1，通过CLOUDOPS_PROMTOOL_IMAGE激活真实promtool配置校验，不再让镜像契约测试仅依赖本机手动开关
 - 把采集配置本地HTTPS、主后端安全数据库日志及webhook数据库日志smoke包加入发布门槛
 - 相同环境开关下三包race/smoke通过，工作流YAML解析通过；未创建标签或发布GitHub Release
+
+## SSH显式PTY模式
+
+- 双终端通过terminal_mode=pty-v1显式使用binary stdin/output与text resize，cloudops-v1鉴权及legacy入口保留
+- 远端ECHO=1、尺寸验限与window-change，压缩后输入与控制消息先完整验限再交付
+- 真实SSH协议fixture覆盖Ctrl+C/方向键/64KiB/二进制并发输出、resize与关闭/deadline；真实WS压缩/非法帧/日志及双handler回归、race/vet、全仓test/build通过，Wire实际生成，见 [ssh-pty.md](ssh-pty.md)
