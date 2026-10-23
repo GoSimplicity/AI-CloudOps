@@ -6,7 +6,8 @@
 #         本人负责的范围（env.example、deploy/、docs/、scripts/、.github/、根目录 README* / compose / Makefile）
 #         不得再以“值”的形式出现旧端口 8888（注释里解释历史默认值可以；登记的例外见 ALLOW_8888）。
 #   JWT   JWT_EXPIRATION=30（单位分钟），注释写明单位与合入前/后默认值，并与 deploy/release/compose.yaml 一致；
-#         本人负责的范围内提到 JWT_EXPIRATION 的文档都写明单位为分钟，且不再出现 JWT_EXPIRATION=3600。
+#         本人负责的范围内提到 JWT_EXPIRATION 的每个文档都写明单位为分钟，且不再出现 JWT_EXPIRATION=3600。
+#   合入   也可在合入 sched/w1-mantou 后的工作区运行：馒头新增的 w1-*.md 只登记；“8888 改为 8889”同行说明不算旧值。
 #   Redis REDIS_PASSWORD 值为空且注释标明 compose 必填。
 #
 # 用法: scripts/tests/security/test-env-example.sh [--rev <git-rev>]   （不带 --rev 检查工作区；对修复前版本运行应报 FAIL）
@@ -100,7 +101,10 @@ grep -F -q 'WEBHOOK_PORT' "$TMP/aw.txt" && ok "PROMETHEUS_ALERT_WEBHOOK_ADDR 注
 # ---------- 旧端口 8888 ----------
 # 登记的例外（不属本人范围或另有归属，见 README-ops）：
 #   docs/release/prometheus-scrape-auth.md —— 该行在 sched/w1-mantou 中已由馒头改写，合并时以其版本为准
+#   MANTOU_DOCS —— 馒头 sched/w1-mantou 新增的发布说明（合入后才出现），其中引用旧 env.example 的 8888/3600 作为
+#     迁移说明，归馒头，只登记不检查
 ALLOW_8888='docs/release/prometheus-scrape-auth.md'
+MANTOU_DOCS='docs/release/w1-jwt-config.md docs/release/w1-webhook-env.md'
 SELF='scripts/tests/security/test-env-example.sh'
 if [ -n "$REV" ]; then
     git -C "$REPO" grep -n -I -F 8888 "$REV" -- . ':!internal/' ':!config/' ':!go.sum' 2>/dev/null | sed "s|^$REV:||" >"$TMP/hits" || true
@@ -111,7 +115,9 @@ fi
 while IFS= read -r h; do
     f="${h%%:*}"; rest="${h#*:}"; text="${rest#*:}"
     [ "$f" = "$SELF" ] && continue
-    case " $ALLOW_8888 " in *" $f "*) echo "  登记例外: ${f}:${rest%%:*}"; continue ;; esac
+    case " $ALLOW_8888 $MANTOU_DOCS " in *" $f "*) echo "  登记例外: ${f}:${rest%%:*}"; continue ;; esac
+    # 同一行同时写了 8889 的，是“8888 改为 8889”一类迁移说明，不算旧值
+    case "$text" in *8889*) continue ;; esac
     # 注释行（# 或 // 开头）只是解释历史默认值，不算“值”
     stripped="$(printf '%s' "$text" | sed 's/^[[:space:]]*//')"
     case "$stripped" in '#'*|'//'*) continue ;; esac
@@ -138,12 +144,16 @@ else
     git -C "$REPO" grep -n -I -F JWT_EXPIRATION -- . ':!internal/' ':!config/' 2>/dev/null >"$TMP/jhits" || true
 fi
 : >"$TMP/badjwt"
+# 单位按文件判断：一个 .md 提到 JWT_EXPIRATION 时，其中至少一处提到它的行写明分钟/minute
+for f in $(cut -d: -f1 "$TMP/jhits" | sort -u); do
+    case "$f" in *.md) ;; *) continue ;; esac
+    case " $MANTOU_DOCS " in *" $f "*) continue ;; esac
+    grep "^${f}:" "$TMP/jhits" | grep -E -q '分钟|minute' || echo "${f}（提到 JWT_EXPIRATION 但未写单位）" >>"$TMP/badjwt"
+done
 while IFS= read -r h; do
     f="${h%%:*}"
     case "$f" in "$SELF"|env.example|deploy/release/compose.yaml|*.go) continue ;; esac
-    case "$f" in
-        *.md) printf '%s' "$h" | grep -E -q '分钟|minute' || echo "${h}（未写单位）" >>"$TMP/badjwt" ;;
-    esac
+    case " $MANTOU_DOCS " in *" $f "*) echo "  登记（馒头）: ${f}:$(printf '%s' "${h#*:}" | cut -d: -f1)"; continue ;; esac
     if printf '%s' "$h" | grep -E -q 'JWT_EXPIRATION[=:][[:space:]]*"?3600'; then echo "${h}（3600）" >>"$TMP/badjwt"; fi
 done <"$TMP/jhits"
 if [ -s "$TMP/badjwt" ]; then bad "本人范围内 JWT_EXPIRATION 说明不符：$(tr '\n' ' ' <"$TMP/badjwt")"
