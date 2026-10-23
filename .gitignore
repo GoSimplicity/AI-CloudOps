@@ -123,6 +123,8 @@ AI-CloudOps
 # SEC-01A: 本地集群凭据与环境变量文件（含备份如 .env.bak-*），禁止提交
 /deploy/kubernetes/config
 .env.*
-# 模板保持跟踪（必须放在上面的忽略规则之后）
-!*.example
-!.env.example
+# 模板保持跟踪（必须放在上面的忽略规则之后）。只逐个放行被跟踪的模板（SEC-01A 审查 P3）：
+# 不用 "!*.example"，以免把 .env.prod.example 之类被 .env.* 忽略的文件重新放出来。新增模板需在此显式登记。
+!/env.example
+!/deploy/release/env.example
+!/deploy/kubernetes/config.example
