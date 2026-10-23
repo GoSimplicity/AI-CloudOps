@@ -28,6 +28,7 @@ package di
 import (
 	cronApi "github.com/GoSimplicity/AI-CloudOps/internal/cron/api"
 	k8sApi "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
+	"github.com/GoSimplicity/AI-CloudOps/internal/middleware"
 	notAuthHandler "github.com/GoSimplicity/AI-CloudOps/internal/not_auth/api"
 	prometheusApi "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/api"
 	systemApi "github.com/GoSimplicity/AI-CloudOps/internal/system/api"
@@ -93,7 +94,7 @@ func InitGinServer(
 	cronJobHdl *cronApi.CronJobHandler,
 ) *gin.Engine {
 	server := gin.New()
-	server.Use(gin.Recovery())
+	server.Use(middleware.SafeRecovery(gin.DefaultErrorWriter))
 	server.Use(m...)
 	userHdl.RegisterRoutes(server)
 	departmentHdl.RegisterRouters(server)

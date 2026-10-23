@@ -86,6 +86,7 @@ func TestCredentialTransport(t *testing.T) {
 		{"normal execute bearer", "/api/cron/job/execute/1", "Bearer test-token", "", false, 204},
 		{"websocket protocol", "/api/k8s/pod/1/ns/pod/containers/web/exec", "", "cloudops-v1, cloudops-auth.test-token", true, 204},
 		{"legacy websocket query", "/api/k8s/pod/1/ns/pod/containers/web/exec?token=test-token", "", "", true, 204},
+		{"fake ordinary HTTP upgrade", "/api/cron/job/execute/1?token=test-token", "", "", true, 401},
 		{"HTTP query forbidden", "/api/cron/job/execute/1?token=test-token", "", "", false, 401},
 		{"duplicate protocol rejected", "/api/k8s/pod/1/ns/pod/containers/web/exec?token=test-token", "", "cloudops-auth.first, cloudops-auth.second", true, 401},
 	} {
@@ -93,13 +94,16 @@ func TestCredentialTransport(t *testing.T) {
 			session := &transportSession{}
 			engine := gin.New()
 			engine.Use(NewJWTMiddleware(session, liveUserReader{user: &model.User{Username: "admin", Enable: 1, AccountType: 1}}).CheckLogin())
-			engine.NoRoute(func(c *gin.Context) { c.Status(204) })
+			engine.Any("/api/cron/job/execute/:id", func(c *gin.Context) { c.Status(204) })
+			engine.GET("/api/k8s/pod/:cluster_id/:namespace/:name/containers/:container/exec", func(c *gin.Context) { c.Status(204) })
 			req := httptest.NewRequest("GET", tt.path, nil)
 			req.Header.Set("Authorization", tt.authorization)
 			req.Header.Set("Sec-WebSocket-Protocol", tt.protocol)
 			if tt.upgrade {
 				req.Header.Set("Connection", "Upgrade")
 				req.Header.Set("Upgrade", "websocket")
+				req.Header.Set("Sec-WebSocket-Version", "13")
+				req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
 			}
 			rec := httptest.NewRecorder()
 			engine.ServeHTTP(rec, req)
@@ -107,5 +111,24 @@ func TestCredentialTransport(t *testing.T) {
 				t.Fatalf("status %d expected %d", rec.Code, tt.status)
 			}
 		})
+	}
+}
+
+func TestFakeUpgradePOSTCannotUseBrowserCredential(t *testing.T) {
+	session := &transportSession{}
+	engine := gin.New()
+	engine.Use(NewJWTMiddleware(session, liveUserReader{user: &model.User{Username: "admin", Enable: 1, AccountType: 1}}).CheckLogin())
+	called := false
+	engine.POST("/api/cron/job/execute/:id", func(c *gin.Context) { called = true; c.Status(204) })
+	req := httptest.NewRequest("POST", "/api/cron/job/execute/1?token=test-token", nil)
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Sec-WebSocket-Version", "13")
+	req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	req.Header.Set("Sec-WebSocket-Protocol", "cloudops-v1, cloudops-auth.test-token")
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+	if rec.Code != 401 || called {
+		t.Fatal("ordinary POST accepted a forged WebSocket credential")
 	}
 }

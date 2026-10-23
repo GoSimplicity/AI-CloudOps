@@ -26,7 +26,9 @@
 package middleware
 
 import (
+	"encoding/base64"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
+	"net/http"
 	"strings"
 
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
@@ -68,7 +70,7 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 
 		tokenStr = m.ExtractToken(ctx)
 		// 仅升级请求使用 WebSocket 凭据，普通 execute API 继续使用请求头
-		if websocket.IsWebSocketUpgrade(ctx.Request) && tokenStr == "" {
+		if browserWebSocketRequest(ctx) && tokenStr == "" {
 			protocols := ctx.GetHeader("Sec-WebSocket-Protocol")
 			tokenStr = ws.TokenFromProtocols(protocols)
 			if tokenStr == "" && !strings.Contains(protocols, ws.CredentialProtocolPrefix) {
@@ -107,5 +109,22 @@ func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 
 		ctx.Set("user", uc)
 		ctx.Next()
+	}
+}
+
+// browserWebSocketRequest 仅在已注册终端路由与完整握手上使用浏览器凭据
+func browserWebSocketRequest(c *gin.Context) bool {
+	if c.Request.Method != http.MethodGet || !websocket.IsWebSocketUpgrade(c.Request) || c.GetHeader("Sec-WebSocket-Version") != "13" {
+		return false
+	}
+	key, err := base64.StdEncoding.DecodeString(c.GetHeader("Sec-WebSocket-Key"))
+	if err != nil || len(key) != 16 {
+		return false
+	}
+	switch c.FullPath() {
+	case "/api/tree/local/terminal/:id", "/api/tree/cloud/:id/terminal", "/api/k8s/pod/:cluster_id/:namespace/:name/containers/:container/exec":
+		return true
+	default:
+		return false
 	}
 }
