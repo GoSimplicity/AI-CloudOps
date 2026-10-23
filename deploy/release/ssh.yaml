@@ -1,0 +1,12 @@
+# 可选：将经过可信渠道核验的主机公钥库只读挂载到后端
+services:
+  backend:
+    environment:
+      SSH_KNOWN_HOSTS: /run/cloudops/ssh_known_hosts
+    volumes:
+      - type: bind
+        source: ${SSH_KNOWN_HOSTS_FILE:?Set an existing verified known_hosts file}
+        target: /run/cloudops/ssh_known_hosts
+        read_only: true
+        bind:
+          create_host_path: false

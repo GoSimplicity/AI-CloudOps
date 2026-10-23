@@ -3,6 +3,8 @@ package ssh
 import (
 	"fmt"
 	sshclient "github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
+	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -115,8 +117,8 @@ func (s *ecsSSH) Connect(ip string, port int, username string, password string, 
 	config.Auth = []ssh.AuthMethod{auth}
 
 	// 建立SSH连接
-	addr := fmt.Sprintf("%s:%d", ip, port)
-	sshClient, err := ssh.Dial("tcp", addr, config)
+	addr := net.JoinHostPort(ip, strconv.Itoa(port))
+	sshClient, err := sshclient.DialWithTimeout("tcp", addr, config)
 	if err != nil {
 		s.logger.Error("SSH连接失败",
 			zap.String("地址", addr),
@@ -151,15 +153,10 @@ func (s *ecsSSH) Connect(ip string, port int, username string, password string, 
 
 // AddPublicKeyToRemoteHost 将公钥添加到远程主机的authorized_keys文件中
 func (s *ecsSSH) AddPublicKeyToRemoteHost(publicKey string) error {
-	if publicKey == "" {
-		return fmt.Errorf("公钥内容不能为空")
+	command, err := sshclient.AuthorizedKeyCommand(publicKey)
+	if err != nil {
+		return err
 	}
-
-	// 清理公钥内容，移除多余的空白字符
-	cleanedKey := strings.TrimSpace(publicKey)
-
-	// 构建安全的命令：创建.ssh目录、添加公钥、设置正确的权限
-	command := fmt.Sprintf(`mkdir -p -m 700 ~/.ssh && echo '%s' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`, cleanedKey)
 
 	result, err := s.Run(command)
 	if err != nil {
@@ -200,20 +197,20 @@ func (s *ecsSSH) Run(command string) (string, error) {
 		}
 	}()
 
-	s.logger.Debug("执行命令", zap.String("命令", command))
+	s.logger.Debug("执行命令", zap.Int("命令长度", len(command)))
 	buf, err := session.CombinedOutput(command)
 	s.LastResult = string(buf)
 
 	if err != nil {
 		s.logger.Error("命令执行失败",
-			zap.String("命令", command),
-			zap.String("输出", s.LastResult),
+			zap.Int("命令长度", len(command)),
+			zap.Int("输出长度", len(s.LastResult)),
 			zap.Error(err))
 		return s.LastResult, fmt.Errorf("执行命令失败: %w", err)
 	}
 
 	s.logger.Debug("命令执行成功",
-		zap.String("命令", command),
+		zap.Int("命令长度", len(command)),
 		zap.String("输出长度", fmt.Sprintf("%d字符", len(s.LastResult))))
 	return s.LastResult, nil
 }

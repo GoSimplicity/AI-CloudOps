@@ -27,6 +27,8 @@ package ssh
 
 import (
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -131,8 +133,8 @@ func (c *client) Connect(config *Config) error {
 	sshConfig.Auth = []ssh.AuthMethod{auth}
 
 	// 建立连接
-	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
-	sshClient, err := ssh.Dial("tcp", addr, sshConfig)
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
+	sshClient, err := DialWithTimeout("tcp", addr, sshConfig)
 	if err != nil {
 		c.logger.Error("SSH连接失败",
 			zap.String("地址", addr),
@@ -168,20 +170,20 @@ func (c *client) Run(command string) (string, error) {
 		}
 	}()
 
-	c.logger.Debug("执行命令", zap.String("命令", command))
+	c.logger.Debug("执行命令", zap.Int("命令长度", len(command)))
 	output, err := session.CombinedOutput(command)
 	result := string(output)
 
 	if err != nil {
 		c.logger.Error("命令执行失败",
-			zap.String("命令", command),
-			zap.String("输出", result),
+			zap.Int("命令长度", len(command)),
+			zap.Int("输出长度", len(result)),
 			zap.Error(err))
 		return result, fmt.Errorf("执行命令失败: %w", err)
 	}
 
 	c.logger.Debug("命令执行成功",
-		zap.String("命令", command),
+		zap.Int("命令长度", len(command)),
 		zap.Int("输出长度", len(result)))
 
 	return result, nil
@@ -242,12 +244,10 @@ func (c *client) CloseSession(userID int) error {
 
 // AddPublicKey 添加公钥到远程主机
 func (c *client) AddPublicKey(publicKey string) error {
-	if publicKey == "" {
-		return fmt.Errorf("公钥内容不能为空")
+	command, err := AuthorizedKeyCommand(publicKey)
+	if err != nil {
+		return err
 	}
-
-	cleanedKey := strings.TrimSpace(publicKey)
-	command := fmt.Sprintf(`mkdir -p -m 700 ~/.ssh && echo '%s' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`, cleanedKey)
 
 	result, err := c.Run(command)
 	if err != nil {
