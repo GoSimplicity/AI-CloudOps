@@ -64,6 +64,11 @@ services:
       ENV: production
       SERVER_PORT: "8889"
       PROMETHEUS_HTTP_SD_API: ${PROMETHEUS_HTTP_SD_API:-http://backend:8889/api/not_auth/getTreeNodeBindIps}
+      # 告警推送地址：backend 按它生成 Alertmanager 的 webhook 接收地址，目标是 webhook 服务（不是 backend 自己），
+      # 与 alertmanager.yml 的 http://webhook:8889/api/v1/alerts/receive 一致。本模板用 Compose 默认网络，服务名 webhook 可解析；
+      # 端口 8889 来自 webhook 镜像内 config/webhook.yaml（compose 不给 webhook 传 WEBHOOK_PORT），两边改端口要同步。
+      # 不设时代码默认 http://localhost:8889/...，在 backend 容器里指向 backend 自己。完整 URL 和 host:port 两种写法代码都接受。
+      PROMETHEUS_ALERT_WEBHOOK_ADDR: http://webhook:8889/api/v1/alerts/receive
       MYSQL_ADDR: cloudops:${MYSQL_PASSWORD:?Generate .env first}@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local
       MYSQL_MAX_OPEN_CONNS: ${MYSQL_MAX_OPEN_CONNS:-20}
       MYSQL_MAX_IDLE_CONNS: ${MYSQL_MAX_IDLE_CONNS:-5}
