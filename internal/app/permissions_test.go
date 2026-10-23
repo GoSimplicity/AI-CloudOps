@@ -84,3 +84,29 @@ func TestAIProxyCatalogSupportsSeparateAssistantAndWorkflowGrants(t *testing.T) 
 		}
 	}
 }
+
+func TestPermissionCatalogNamesSecretReveal(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, _ := db.DB()
+	pool.SetMaxOpenConns(1)
+	defer pool.Close()
+	if err := db.AutoMigrate(&model.Api{}); err != nil {
+		t.Fatal(err)
+	}
+	engine := gin.New()
+	engine.GET(model.K8sSecretRevealRoute, func(c *gin.Context) { c.Status(200) })
+	app := &App{db: db, server: engine}
+	if err := app.bootstrapPermissionCatalog(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var row model.Api
+	if err := db.Where("path = ? AND method = ?", model.K8sSecretRevealRoute, 1).First(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	if row.Name != model.K8sSecretRevealPermissionName {
+		t.Fatalf("权限名=%q", row.Name)
+	}
+}

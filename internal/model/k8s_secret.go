@@ -47,21 +47,85 @@ const (
 
 // K8sSecret Kubernetes Secret
 type K8sSecret struct {
-	Name        string            `json:"name" binding:"required,min=1,max=200"`      // Secret名称
-	Namespace   string            `json:"namespace" binding:"required,min=1,max=200"` // 所属命名空间
-	ClusterID   int               `json:"cluster_id" gorm:"index;not null"`           // 所属集群ID
-	UID         string            `json:"uid" gorm:"size:100"`                        // Secret UID
-	Type        K8sSecretType     `json:"type"`                                       // Secret类型
-	Data        BinaryDataMap     `json:"data"`                                       // 加密数据
-	StringData  map[string]string `json:"string_data"`                                // 明文数据
-	Labels      map[string]string `json:"labels"`                                     // 标签
-	Annotations map[string]string `json:"annotations"`                                // 注解
-	Immutable   bool              `json:"immutable"`                                  // 是否不可变
-	DataCount   int               `json:"data_count"`                                 // 数据条目数量
-	Size        string            `json:"size"`                                       // 数据大小
-	Age         string            `json:"age"`                                        // 存在时间
-	CreatedAt   time.Time         `json:"created_at"`                                 // 创建时间
-	RawSecret   *corev1.Secret    `json:"-"`                                          // 原始 Secret 对象，不序列化到 JSON
+	Name       string            `json:"name" binding:"required,min=1,max=200"`      // Secret名称
+	Namespace  string            `json:"namespace" binding:"required,min=1,max=200"` // 所属命名空间
+	ClusterID  int               `json:"cluster_id" gorm:"index;not null"`           // 所属集群ID
+	UID        string            `json:"uid" gorm:"size:100"`                        // Secret UID
+	Type       K8sSecretType     `json:"type"`                                       // Secret类型
+	Data       BinaryDataMap     `json:"data"`                                       // 默认脱敏：仅保留键，值恒为空字符串；明文需调用 reveal 接口
+	StringData map[string]string `json:"string_data"`                                // 默认脱敏：仅保留键，值恒为空字符串
+	// DataKeys / StringDataKeys 脱敏后的键与原始值字节数（按 key 升序）
+	DataKeys       []SecretKeyInfo   `json:"data_keys"`
+	StringDataKeys []SecretKeyInfo   `json:"string_data_keys"`
+	Redacted       bool              `json:"redacted"`    // 为 true 表示 data/string_data 的值已被移除
+	Labels         map[string]string `json:"labels"`      // 标签
+	Annotations    map[string]string `json:"annotations"` // 注解
+	Immutable      bool              `json:"immutable"`   // 是否不可变
+	DataCount      int               `json:"data_count"`  // 数据条目数量
+	Size           string            `json:"size"`        // 数据大小
+	Age            string            `json:"age"`         // 存在时间
+	CreatedAt      time.Time         `json:"created_at"`  // 创建时间
+	RawSecret      *corev1.Secret    `json:"-"`           // 原始 Secret 对象，不序列化到 JSON
+}
+
+// SecretKeyInfo Secret 中单个键的脱敏描述，只包含键名与值的字节数，不包含值
+type SecretKeyInfo struct {
+	Key  string `json:"key"`
+	Size int    `json:"size"` // 值的字节数（data 为解码后的原始字节数）
+}
+
+// RevealSecretReq 获取Secret明文请求（每次调用都会写审计）
+type RevealSecretReq struct {
+	ClusterID int      `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	Namespace string   `json:"namespace" form:"namespace" binding:"required" comment:"命名空间"`   // 命名空间
+	Name      string   `json:"name" form:"name" binding:"required" comment:"Secret名称"`         // Secret名称
+	Keys      []string `json:"keys" form:"keys" comment:"仅返回指定的键，为空时返回全部"`                     // 仅返回指定的键
+}
+
+// K8sSecretReveal Secret 明文响应
+type K8sSecretReveal struct {
+	ClusterID  int               `json:"cluster_id"`
+	Namespace  string            `json:"namespace"`
+	Name       string            `json:"name"`
+	Type       K8sSecretType     `json:"type"`
+	Data       BinaryDataMap     `json:"data"`        // base64 编码的明文，与改造前 detail 的 data 编码一致
+	StringData map[string]string `json:"string_data"` // 明文（通常为空，K8s 会合并进 data）
+	Keys       []string          `json:"keys"`        // 本次返回的键（同时写入审计）
+}
+
+// SecretRevealActor reveal 操作者信息（由 handler 从登录态中提取）
+type SecretRevealActor struct {
+	UserID    int
+	Username  string
+	IP        string
+	UserAgent string
+	TraceID   string
+	Endpoint  string
+}
+
+// K8sSecretRevealRoute Secret 明文接口的完整路由（权限码），仅允许按该路由显式授权，通配符授权不生效
+const K8sSecretRevealRoute = "/api/k8s/secret/:cluster_id/:namespace/:name/reveal"
+
+// K8sSecretRevealPermissionName Secret 明文接口在接口目录中的权限名
+const K8sSecretRevealPermissionName = "k8s:secret:reveal"
+
+const (
+	SecretRevealAuditAction     = "k8s_secret_reveal"
+	SecretRevealAuditOperation  = "REVEAL"
+	SecretRevealAuditTargetType = "k8s_secret"
+)
+
+// SecretRevealAuditRecord reveal 审计内容，写入 AuditLog.RequestBody。只含元数据与键名，绝不含值。
+type SecretRevealAuditRecord struct {
+	Action     string   `json:"action"`
+	UserID     int      `json:"user_id"`
+	Username   string   `json:"username"`
+	ClusterID  int      `json:"cluster_id"`
+	Namespace  string   `json:"namespace"`
+	Name       string   `json:"name"`
+	Keys       []string `json:"keys"`
+	Success    bool     `json:"success"`
+	RevealedAt string   `json:"revealed_at"` // RFC3339 UTC
 }
 
 // GetSecretListReq 获取Secret列表请求

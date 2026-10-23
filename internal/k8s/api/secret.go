@@ -50,6 +50,7 @@ func (h *K8sSecretHandler) RegisterRouters(server *gin.Engine) {
 		k8sGroup.GET("/secret/:cluster_id/list", h.GetSecretList)
 		k8sGroup.GET("/secret/:cluster_id/:namespace/:name/detail", h.GetSecret)
 		k8sGroup.GET("/secret/:cluster_id/:namespace/:name/detail/yaml", h.GetSecretYAML)
+		k8sGroup.GET("/secret/:cluster_id/:namespace/:name/reveal", h.RevealSecret)
 		k8sGroup.POST("/secret/:cluster_id/create", h.CreateSecret)
 		k8sGroup.POST("/secret/:cluster_id/create/yaml", h.CreateSecretByYaml)
 		k8sGroup.PUT("/secret/:cluster_id/:namespace/:name/update", h.UpdateSecret)
@@ -253,5 +254,51 @@ func (h *K8sSecretHandler) UpdateSecretByYaml(ctx *gin.Context) {
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.secretService.UpdateSecretByYaml(ctx.Request.Context(), &req)
+	})
+}
+
+// RevealSecret 返回 Secret 明文（SEC-25）。list/detail/yaml 默认脱敏，明文只能经此接口获取，
+// 每次调用都会写一条审计（只含操作者、集群、命名空间、名称与键名）。
+func (h *K8sSecretHandler) RevealSecret(ctx *gin.Context) {
+	var req model.RevealSecretReq
+
+	clusterID, err := base.GetCustomParamID(ctx, "cluster_id")
+	if err != nil {
+		base.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	namespace, err := base.GetParamCustomName(ctx, "namespace")
+	if err != nil {
+		base.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	name, err := base.GetParamCustomName(ctx, "name")
+	if err != nil {
+		base.BadRequestError(ctx, err.Error())
+		return
+	}
+
+	req.ClusterID = clusterID
+	req.Namespace = namespace
+	req.Name = name
+
+	user := base.GetUserInfoFromGinContext(ctx)
+	actor := model.SecretRevealActor{
+		UserID:    user.UserID,
+		Username:  user.Username,
+		IP:        user.IP,
+		UserAgent: user.UserAgent,
+		TraceID:   ctx.GetHeader("X-Trace-ID"),
+		Endpoint:  ctx.Request.URL.Path,
+	}
+
+	// 明文响应禁止被浏览器或中间代理缓存
+	ctx.Header("Cache-Control", "no-store")
+	ctx.Header("Pragma", "no-cache")
+
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return h.secretService.RevealSecret(ctx.Request.Context(), &req, actor)
 	})
 }
