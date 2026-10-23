@@ -1,0 +1,15 @@
+# gitleaks 指纹忽略列表（SEC-01A）。gitleaks dir/git/pre-commit 会自动读取仓库根目录下的本文件。
+#
+# 只忽略 RFC 6455 第 1.3 节公开示例 Sec-WebSocket-Key（"the sample nonce" 的 base64）
+# 在 internal/middleware/login_test.go 中的两处 generic-api-key 误报，不是凭据。
+#
+# 注意：指纹带行号，比较脆弱。login_test.go 在这两行之前增删行后，指纹会失效，扫描会重新报出这两处。
+#       届时请用 `gitleaks dir . --redact --config .gitleaks.toml` 确认新行号并更新下面的条目；
+#       不要改成按整个文件忽略。
+#
+# 工作树扫描（gitleaks dir / 预提交）：path:rule:line
+internal/middleware/login_test.go:generic-api-key:109
+internal/middleware/login_test.go:generic-api-key:130
+# 历史扫描（gitleaks git，CI 全量扫描）：commit:path:rule:line。这两行在 24b8315 中引入，当时行号为 106/127。
+24b8315ac139a68eceef744508ac3d873ae96bda:internal/middleware/login_test.go:generic-api-key:106
+24b8315ac139a68eceef744508ac3d873ae96bda:internal/middleware/login_test.go:generic-api-key:127
