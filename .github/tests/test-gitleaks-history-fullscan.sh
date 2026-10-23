@@ -8,6 +8,7 @@
 #       即使 HEAD 的 .gitleaksignore 里有 commit:path:rule:line 指纹也不加载 → 仍报（已知限制，记录在 README-ops）
 #   T3  对照：同样的指纹若被加载（默认规则 + 该 ignore）则不报 —— 说明 T2 仍报是因为 CI 不加载，而不是指纹写错
 #   T4  目标版本的 .gitleaksignore 没有有效条目，且注释如实写明 CI 全量路径不使用 allowlist/本文件
+#   T5  目标版本的 .gitleaks.toml 不声称 RFC 6455 allowlist 可删除（review3g：历史中默认规则仍有 4 处命中）
 #
 # 用法: .github/tests/test-gitleaks-history-fullscan.sh [--rev <git-rev>]   （对修复前版本运行应报 FAIL）
 # 依赖: git、gitleaks、python3。夹具为生成的最小 Go 文件，不读取 internal/ 下的真实文件。
@@ -82,4 +83,9 @@ else echo "FAIL [T4 .gitleaksignore 有有效条目: $(printf '%s' "$active" | t
 if grep -F -q 'CI 全量' "$GL_TMP/target.ign" && grep -F -q '默认规则' "$GL_TMP/target.ign"; then
     echo "PASS [T4 .gitleaksignore 注释写明 CI 全量路径用默认规则、不加载本文件]"
 else echo "FAIL [T4 .gitleaksignore 注释未写明 CI 全量路径的限制（仍声称全量历史扫描不再报出）]"; GL_FAILS=$((GL_FAILS+1)); fi
+# T5（review3g 注释修正）：.gitleaks.toml 不得再声称 RFC 6455 allowlist “不再命中任何内容/可删除”——历史仍含该 nonce（T1b 即证）
+if grep -F -q '可在之后删除' "$GL_TMP/target.gitleaks.toml" || grep -F -q '不再命中任何内容' "$GL_TMP/target.gitleaks.toml"; then
+    echo "FAIL [T5 .gitleaks.toml 仍声称 RFC 6455 allowlist 可删除（历史中仍有命中）]"; GL_FAILS=$((GL_FAILS+1))
+elif grep -F -q '必须保留' "$GL_TMP/target.gitleaks.toml"; then echo "PASS [T5 .gitleaks.toml 注释写明历史仍命中、allowlist 必须保留]"
+else echo "FAIL [T5 .gitleaks.toml 注释未写明 allowlist 必须保留]"; GL_FAILS=$((GL_FAILS+1)); fi
 gl_finish
