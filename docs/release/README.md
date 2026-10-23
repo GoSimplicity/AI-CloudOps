@@ -4,13 +4,13 @@
 
 ## 部署目录
 
-三个仓库需要同级放置，前端和 AIOps 目录名与下面一致。后端仓库可命名为 `AI-CloudOps-backend`。
+三个仓库需要同级放置，前端和 AIOps 目录名与下面一致。后端仓库使用 GitHub 原名 `AI-CloudOps`，也可改名。
 
 ```text
-AI-CloudOps/
-  AI-CloudOps-backend/
+project/
+  AI-CloudOps/
   AI-CloudOps-web/
-  Ai-CloudOps-aiops/
+  AI-CloudOps-aiops/
 ```
 
 在后端仓库执行：
@@ -56,6 +56,8 @@ python3 scripts/release-smoke.py
 发布模板将访问令牌有效期设为 30 分钟。沿用当前后端配置契约：`JWT_EXPIRATION` 的单位为分钟。
 
 ## 发布门槛
+
+发布工具回归使用 `python3 -m unittest discover -s scripts/tests -v`，无需运行容器，覆盖仓库路径、启动预检与私有密钥的防覆盖行为。CI 与标签发布均执行该检查。
 
 每次交付保存命令、退出码和日期，区分离线测试、隔离环境集成、真实外部依赖验收：
 

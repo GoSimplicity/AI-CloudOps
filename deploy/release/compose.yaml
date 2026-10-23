@@ -90,7 +90,7 @@ services:
     <<: *runtime
     image: cloudops-aiops:${RELEASE_VERSION:-local}
     build:
-      context: ../../../Ai-CloudOps-aiops
+      context: ../../../AI-CloudOps-aiops
     environment:
       ENV: production
       AIOPS_API_KEY: ${AIOPS_API_KEY:?Generate .env first}

@@ -56,3 +56,13 @@ MySQL 8.4.11 / Redis 7.4.11 升级后，通过同源 `http://localhost:18080` �
 OrbStack 已恢复原 2048 MiB 内存额度；临时 MySQL/Redis 调试端口已移除，最终仅发布回环地址 18080。8 个 Compose 服务全部 healthy，kind 中两个验收 Pod 均恢复 Running/Ready。
 
 恢复检查发现 Nginx 静态上游 IP 缓存导致 502，已按 Nginx 1.28 支持的 `resolver`、共享 `zone` 与 `server ... resolve` 修复。实测强制重建 backend/web 后，网关无需重启即可恢复；完整 smoke/分类持久化再次通过。依据：https://nginx.org/en/docs/http/ngx_http_upstream_module.html#server
+
+## 2026-10-23 新工作区基线
+
+以下为本轮 `~/project` 三仓克隆后的验证，前文为历史记录，不能代替本轮运行结果。
+
+- 修复发布 Compose、启动与备份脚本中的 AIOps 仓库大小写，统一为 GitHub 实际目录名 `AI-CloudOps-aiops`，避免 Linux 下路径失效
+- `codex-python -m unittest discover -s scripts/tests -v`：4 项通过，覆盖密钥权限/保密/防覆盖、缺失仓库拒绝和正确目录启动编排
+- Docker 启动编排使用命令替身；本项未启动全栈，不能据此宣称运行时验收通过
+- `bash -n scripts/release-start.sh`、`docker compose ... config --quiet` 及三个实际构建目录存在检查均通过
+- 发布工具测试纳入分支 CI 和标签发布门槛

@@ -29,7 +29,7 @@ def main():
             raise RuntimeError("Database dump is empty")
         shutil.copyfile(root / "deploy/release/.env", args.output / "deployment.env")
         revisions = {}
-        for name, path in (("backend", root), ("web", root.parent / "AI-CloudOps-web"), ("aiops", root.parent / "Ai-CloudOps-aiops")):
+        for name, path in (("backend", root), ("web", root.parent / "AI-CloudOps-web"), ("aiops", root.parent / "AI-CloudOps-aiops")):
             revisions[name] = subprocess.check_output(["git", "-C", str(path), "rev-parse", "HEAD"], text=True).strip()
         (args.output / "manifest.json").write_text(json.dumps({
             "created_at": datetime.now(timezone.utc).isoformat(),
