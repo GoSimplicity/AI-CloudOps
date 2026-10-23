@@ -46,7 +46,8 @@ var skipAuthPaths = map[string]bool{
 	"/favicon.ico":                     true,
 }
 
-// explicitGrantRoutes 敏感路由只接受按路由显式授予的权限，通配符（如 /api/k8s/*）不覆盖
+// explicitGrantRoutes 敏感路由只接受按路由显式授予的权限：授权路径必须与路由模板（gin FullPath）逐字相等且方法一致。
+// 通配符（/api/k8s/*、/*）、参数化路径（如 /api/k8s/secret/:a/:b/:c/:action）以及具体请求路径都不覆盖。
 var explicitGrantRoutes = map[string]bool{
 	model.K8sSecretRevealRoute: true,
 }
@@ -194,7 +195,12 @@ func (am *AuthMiddleware) CheckAuth() gin.HandlerFunc {
 
 			// 检查API权限
 			for _, api := range role.Apis {
-				if explicitGrantRoutes[c.FullPath()] && strings.Contains(api.Path, "*") {
+				if explicitGrantRoutes[c.FullPath()] {
+					// 敏感路由只认精确匹配，不走 matchWildcardPath 的通配/参数段匹配
+					if api.Path == c.FullPath() && api.Method == methodCode {
+						c.Next()
+						return
+					}
 					continue
 				}
 				if (api.Path == c.FullPath() && api.Method == methodCode) || matchWildcardPath(api.Path, path, methodCode, api.Method) {

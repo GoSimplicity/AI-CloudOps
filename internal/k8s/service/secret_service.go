@@ -28,7 +28,9 @@ package service
 import (
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -287,7 +289,7 @@ func (s *secretService) UpdateSecret(ctx context.Context, req *model.UpdateSecre
 	updatedSecret := existingSecret.DeepCopy()
 
 	updatedSecret.Data = preserveRedactedData(map[string][]byte(req.Data), existingSecret.Data)
-	updatedSecret.StringData = req.StringData
+	updatedSecret.Data, updatedSecret.StringData = preserveRedactedStringData(req.StringData, updatedSecret.Data, existingSecret)
 	updatedSecret.Labels = req.Labels
 	updatedSecret.Annotations = preserveLastApplied(req.Annotations, existingSecret.Annotations)
 
@@ -490,6 +492,44 @@ func preserveRedactedData(requested, existing map[string][]byte) map[string][]by
 	return out
 }
 
+// preserveRedactedStringData 与 data 相同按“空值保留原值”处理 stringData。
+// K8s 写入时 stringData 会覆盖 data 中的同名键，若把脱敏回填的空字符串原样提交，会把 data 中的真实值清空。
+// 因此：stringData 中值为空、而集群中该键已有非空值（data 优先，其次 stringData）时，
+// 从 stringData 中移除该键，并在 data 中保留原值（请求 data 对同名键给了非空新值时以请求为准）。
+// 集群中不存在或原值为空的键按原样写入。返回处理后的 data 与 stringData。
+func preserveRedactedStringData(requested map[string]string, data map[string][]byte, existing *corev1.Secret) (map[string][]byte, map[string]string) {
+	if requested == nil {
+		return data, nil
+	}
+	var existingData map[string][]byte
+	var existingStringData map[string]string
+	if existing != nil {
+		existingData, existingStringData = existing.Data, existing.StringData
+	}
+	out := make(map[string]string, len(requested))
+	for k, v := range requested {
+		if v == "" {
+			old, ok := existingData[k]
+			if !ok || len(old) == 0 {
+				if s, sok := existingStringData[k]; sok && s != "" {
+					old, ok = []byte(s), true
+				}
+			}
+			if ok && len(old) > 0 {
+				if data == nil {
+					data = map[string][]byte{}
+				}
+				if cur, set := data[k]; !set || len(cur) == 0 {
+					data[k] = old
+				}
+				continue
+			}
+		}
+		out[k] = v
+	}
+	return data, out
+}
+
 // preserveLastApplied 列表/详情不再返回 last-applied-configuration，更新时若请求未携带则保留集群中的原注解
 func preserveLastApplied(requested, existing map[string]string) map[string]string {
 	old, ok := existing[k8sutils.LastAppliedConfigAnnotation]
@@ -527,7 +567,7 @@ func (s *secretService) RevealSecret(ctx context.Context, req *model.RevealSecre
 				zap.String("name", req.Name))
 			userErr = fmt.Errorf("获取Secret失败: %w", err)
 		}
-		_ = s.writeRevealAudit(ctx, req, actor, normalizeKeys(req.Keys), start, userErr)
+		_ = s.writeRevealAudit(ctx, req, actor, normalizeKeys(req.Keys), start, k8sErrorStatusCode(err), userErr)
 		return nil, userErr
 	}
 
@@ -545,19 +585,24 @@ func (s *secretService) RevealSecret(ctx context.Context, req *model.RevealSecre
 	} else {
 		result.Data = model.BinaryDataMap{}
 		for _, k := range wanted {
+			found := false
 			if v, ok := secret.Data[k]; ok {
 				result.Data[k] = v
-				continue
+				found = true
 			}
+			// data 与 stringData 存在同名键时两者都返回，与不指定 keys 时的输出保持一致
 			if v, ok := secret.StringData[k]; ok {
 				if result.StringData == nil {
 					result.StringData = map[string]string{}
 				}
 				result.StringData[k] = v
+				found = true
+			}
+			if found {
 				continue
 			}
 			keyErr := fmt.Errorf("Secret %s/%s 中不存在键 %s", req.Namespace, req.Name, k)
-			_ = s.writeRevealAudit(ctx, req, actor, wanted, start, keyErr)
+			_ = s.writeRevealAudit(ctx, req, actor, wanted, start, http.StatusBadRequest, keyErr)
 			return nil, keyErr
 		}
 	}
@@ -575,12 +620,12 @@ func (s *secretService) RevealSecret(ctx context.Context, req *model.RevealSecre
 	}
 	sort.Strings(result.Keys)
 
-	if err := s.writeRevealAudit(ctx, req, actor, result.Keys, start, nil); err != nil {
+	if err := s.writeRevealAudit(ctx, req, actor, result.Keys, start, http.StatusOK, nil); err != nil {
 		s.logger.Error("写入Secret明文查看审计失败，拒绝返回明文", zap.Error(err),
 			zap.Int("cluster_id", req.ClusterID),
 			zap.String("namespace", req.Namespace),
 			zap.String("name", req.Name))
-		return nil, fmt.Errorf("写入审计失败，已拒绝返回Secret明文")
+		return nil, fmt.Errorf("%w，已拒绝返回Secret明文", ErrAuditWriteFailed)
 	}
 
 	s.logger.Info("Secret明文已查看",
@@ -614,8 +659,30 @@ func normalizeKeys(keys []string) []string {
 	return out
 }
 
-// writeRevealAudit 同步写入 reveal 审计；内容只含元数据与键名
-func (s *secretService) writeRevealAudit(ctx context.Context, req *model.RevealSecretReq, actor model.SecretRevealActor, keys []string, start time.Time, opErr error) error {
+// ErrAuditWriteFailed 敏感读取接口（Secret reveal 等）同步审计写入失败。
+// handler 据此返回 HTTP 500，且不返回任何明文。
+var ErrAuditWriteFailed = stderrors.New("写入审计失败")
+
+// k8sErrorStatusCode 将读取 K8s 资源的错误映射为审计记录中的 HTTP 状态码：
+// 优先使用 K8s API 返回的状态码（404/403 等），无法识别时记为 500。
+func k8sErrorStatusCode(err error) int {
+	if err == nil {
+		return http.StatusOK
+	}
+	var status errors.APIStatus
+	if stderrors.As(err, &status) {
+		if code := int(status.Status().Code); code >= 400 && code <= 599 {
+			return code
+		}
+	}
+	if errors.IsNotFound(err) {
+		return http.StatusNotFound
+	}
+	return http.StatusInternalServerError
+}
+
+// writeRevealAudit 同步写入 reveal 审计；内容只含元数据与键名。statusCode 为本次操作实际的结果码（成功 200，失败为 4xx/5xx）
+func (s *secretService) writeRevealAudit(ctx context.Context, req *model.RevealSecretReq, actor model.SecretRevealActor, keys []string, start time.Time, statusCode int, opErr error) error {
 	if s.auditService == nil {
 		return fmt.Errorf("审计服务未初始化")
 	}
@@ -650,7 +717,7 @@ func (s *secretService) writeRevealAudit(ctx context.Context, req *model.RevealS
 		OperationType: model.SecretRevealAuditOperation,
 		TargetType:    model.SecretRevealAuditTargetType,
 		TargetID:      fmt.Sprintf("%d/%s/%s", req.ClusterID, req.Namespace, req.Name),
-		StatusCode:    200,
+		StatusCode:    statusCode,
 		RequestBody:   body,
 		Duration:      time.Since(start).Microseconds(),
 		ErrorMsg:      errMsg,

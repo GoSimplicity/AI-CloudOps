@@ -26,6 +26,8 @@
 package api
 
 import (
+	"errors"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
@@ -298,7 +300,28 @@ func (h *K8sSecretHandler) RevealSecret(ctx *gin.Context) {
 	ctx.Header("Cache-Control", "no-store")
 	ctx.Header("Pragma", "no-cache")
 
-	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+	handleAuditedRequest(ctx, &req, func() (interface{}, error) {
 		return h.secretService.RevealSecret(ctx.Request.Context(), &req, actor)
 	})
+}
+
+// handleAuditedRequest 与 base.HandleRequest 相同，但同步审计写入失败（service.ErrAuditWriteFailed）时
+// 返回 HTTP 500 而不是 200+code=1，使网关/监控与审计告警能看到真实的失败状态。响应中不含任何明文。
+func handleAuditedRequest(ctx *gin.Context, req interface{}, action func() (interface{}, error)) {
+	if req != nil {
+		if err := base.BindRequest(ctx, req); err != nil {
+			base.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+			return
+		}
+	}
+	data, err := action()
+	if err != nil {
+		if errors.Is(err, service.ErrAuditWriteFailed) {
+			base.InternalServerErrorWithDetails(ctx, map[string]interface{}{}, err.Error())
+			return
+		}
+		base.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	base.SuccessWithData(ctx, data)
 }

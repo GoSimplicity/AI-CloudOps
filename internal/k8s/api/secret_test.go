@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http/httptest"
 	"strings"
 	"sync"
@@ -126,5 +127,35 @@ func TestRevealEndpointReturnsPlaintextAndAuditsWithoutValues(t *testing.T) {
 	var body model.SecretRevealAuditRecord
 	if err := json.Unmarshal(got.RequestBody, &body); err != nil || body.Username != "bob" || strings.Join(body.Keys, ",") != "alpha" {
 		t.Fatalf("审计内容不符: %s", got.RequestBody)
+	}
+}
+
+type failingAudit struct {
+	systemService.AuditService
+}
+
+func (failingAudit) CreateAuditLog(context.Context, *model.CreateAuditLogRequest) error {
+	return errors.New("audit db unavailable")
+}
+
+// 审计写入失败：HTTP 500、不返回明文、仍带 no-store
+func TestRevealEndpointAuditFailureReturns500WithoutPlaintext(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := service.NewSecretService(handlerSecretManager{}, failingAudit{}, zap.NewNop())
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) { c.Set("user", jwt.UserClaims{Uid: 9, Username: "bob"}); c.Next() })
+	NewK8sSecretHandler(svc).RegisterRouters(engine)
+
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest("GET", "/api/k8s/secret/3/ops/app/reveal", nil))
+	if rec.Code != 500 {
+		t.Fatalf("审计失败应返回 500, got %d", rec.Code)
+	}
+	if rec.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("失败响应也应禁止缓存")
+	}
+	body := rec.Body.String()
+	if strings.Contains(body, handlerFixtureValue) || strings.Contains(body, base64.StdEncoding.EncodeToString([]byte(handlerFixtureValue))) {
+		t.Fatal("审计失败时响应中出现了明文")
 	}
 }

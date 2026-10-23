@@ -15,7 +15,9 @@ import (
 	systemService "github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/yaml"
 )
 
@@ -339,4 +341,172 @@ func TestCreateSecretByYamlRejectsPlaceholder(t *testing.T) {
 	if err := svc.CreateSecretByYaml(context.Background(), &model.CreateSecretByYamlReq{ClusterID: 1, YAML: y}); err == nil || m.created != nil {
 		t.Fatal("含占位符的 YAML 不应被创建")
 	}
+}
+
+// JSON 更新：stringData 中值为空的键与 data 一样保留原值，不能借 K8s 的 stringData→data 合并把真实值清空
+func TestUpdateSecretKeepsValuesForEmptyStringData(t *testing.T) {
+	m := &secretManagerFixture{secret: newSecretFixture()}
+	svc := newTestSecretService(m, &auditFixture{})
+	err := svc.UpdateSecret(context.Background(), &model.UpdateSecretReq{
+		ClusterID: 1, Namespace: "ops", Name: "app",
+		// alpha 只在 stringData 中以空值出现；beta 在 data 中给新值、stringData 中为空；gamma 原本只在 stringData 中
+		Data:       model.BinaryDataMap{"beta": []byte("new-beta")},
+		StringData: map[string]string{"alpha": "", "beta": "", "gamma": "", "delta": "", "eps": "new-eps"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := m.updated
+	if string(u.Data["alpha"]) != fixtureAlpha {
+		t.Fatal("stringData 空值应保留 data 中的原值")
+	}
+	if string(u.Data["beta"]) != "new-beta" {
+		t.Fatal("data 中的新值不应被原值覆盖")
+	}
+	if string(u.Data["gamma"]) != fixtureBeta {
+		t.Fatal("stringData 空值应保留 stringData 中的原值")
+	}
+	for _, k := range []string{"alpha", "beta", "gamma"} {
+		if _, ok := u.StringData[k]; ok {
+			t.Fatalf("保留原值的键 %s 应从 stringData 中移除，否则写入时会覆盖 data", k)
+		}
+	}
+	if v, ok := u.StringData["delta"]; !ok || v != "" {
+		t.Fatal("集群中不存在的新键空值应原样写入")
+	}
+	if u.StringData["eps"] != "new-eps" {
+		t.Fatal("非空 stringData 应原样写入")
+	}
+}
+
+func TestUpdateSecretEmptyStringDataWithNilData(t *testing.T) {
+	m := &secretManagerFixture{secret: newSecretFixture()}
+	svc := newTestSecretService(m, &auditFixture{})
+	if err := svc.UpdateSecret(context.Background(), &model.UpdateSecretReq{
+		ClusterID: 1, Namespace: "ops", Name: "app",
+		StringData: map[string]string{"alpha": ""},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if string(m.updated.Data["alpha"]) != fixtureAlpha || len(m.updated.StringData) != 0 {
+		t.Fatal("data 为空时 stringData 空值也应保留原值")
+	}
+}
+
+// 审计记录中的 StatusCode 为实际结果：成功 200，失败为 4xx/5xx
+func TestRevealSecretAuditStatusCodes(t *testing.T) {
+	ctx := context.Background()
+	req := &model.RevealSecretReq{ClusterID: 1, Namespace: "ops", Name: "app"}
+	for _, tt := range []struct {
+		name   string
+		getErr error
+		keys   []string
+		want   int
+	}{
+		{"success", nil, nil, 200},
+		{"missing key", nil, []string{"missing"}, 400},
+		{"not found", apierrors.NewNotFound(schema.GroupResource{Resource: "secrets"}, "app"), nil, 404},
+		{"k8s forbidden", apierrors.NewForbidden(schema.GroupResource{Resource: "secrets"}, "app", errors.New("rbac")), nil, 403},
+		{"unknown error", errors.New("connection refused"), nil, 500},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &auditFixture{}
+			svc := newTestSecretService(&secretManagerFixture{secret: newSecretFixture(), getErr: tt.getErr}, a)
+			r := *req
+			r.Keys = tt.keys
+			_, _ = svc.RevealSecret(ctx, &r, model.SecretRevealActor{UserID: 1})
+			if len(a.logs) != 1 || a.logs[0].StatusCode != tt.want {
+				t.Fatalf("审计 StatusCode 不符: %+v", a.logs)
+			}
+		})
+	}
+}
+
+func TestRevealSecretAuditFailureIsTyped(t *testing.T) {
+	svc := newTestSecretService(&secretManagerFixture{secret: newSecretFixture()}, &auditFixture{err: errors.New("db down")})
+	_, err := svc.RevealSecret(context.Background(), &model.RevealSecretReq{ClusterID: 1, Namespace: "ops", Name: "app"}, model.SecretRevealActor{UserID: 1})
+	if !errors.Is(err, ErrAuditWriteFailed) {
+		t.Fatalf("审计失败应返回 ErrAuditWriteFailed, got %v", err)
+	}
+}
+
+// data 与 stringData 存在同名键：脱敏、回写与 reveal 都要正确
+func TestSecretSameKeyInDataAndStringData(t *testing.T) {
+	newSame := func() *corev1.Secret {
+		s := newSecretFixture()
+		s.Data = map[string][]byte{"shared": []byte(fixtureAlpha)}
+		s.StringData = map[string]string{"shared": fixtureBeta}
+		return s
+	}
+	ctx := context.Background()
+
+	t.Run("detail 脱敏", func(t *testing.T) {
+		svc := newTestSecretService(&secretManagerFixture{secret: newSame()}, &auditFixture{})
+		d, err := svc.GetSecret(ctx, &model.GetSecretDetailsReq{ClusterID: 1, Namespace: "ops", Name: "app"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := json.Marshal(d)
+		assertNoPlaintext(t, "detail", string(raw))
+		if v, ok := d.Data["shared"]; !ok || len(v) != 0 {
+			t.Fatal("data 同名键应保留且值为空")
+		}
+		if v, ok := d.StringData["shared"]; !ok || v != "" {
+			t.Fatal("stringData 同名键应保留且值为空")
+		}
+		if len(d.DataKeys) != 1 || d.DataKeys[0].Size != len(fixtureAlpha) || len(d.StringDataKeys) != 1 || d.StringDataKeys[0].Size != len(fixtureBeta) {
+			t.Fatal("同名键的 size 应各自统计")
+		}
+		y, err := svc.GetSecretYAML(ctx, &model.GetSecretYamlReq{ClusterID: 1, Namespace: "ops", Name: "app"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertNoPlaintext(t, "yaml", y.YAML)
+	})
+
+	t.Run("JSON 原样回填保留原值", func(t *testing.T) {
+		m := &secretManagerFixture{secret: newSame()}
+		svc := newTestSecretService(m, &auditFixture{})
+		if err := svc.UpdateSecret(ctx, &model.UpdateSecretReq{ClusterID: 1, Namespace: "ops", Name: "app",
+			Data: model.BinaryDataMap{"shared": []byte{}}, StringData: map[string]string{"shared": ""}}); err != nil {
+			t.Fatal(err)
+		}
+		if string(m.updated.Data["shared"]) != fixtureAlpha {
+			t.Fatal("同名键原样回填后 data 应保留原值")
+		}
+		if _, ok := m.updated.StringData["shared"]; ok {
+			t.Fatal("stringData 空值不应提交，否则会覆盖 data")
+		}
+	})
+
+	t.Run("YAML 原样回写保留原值", func(t *testing.T) {
+		m := &secretManagerFixture{secret: newSame()}
+		svc := newTestSecretService(m, &auditFixture{})
+		y, _ := svc.GetSecretYAML(ctx, &model.GetSecretYamlReq{ClusterID: 1, Namespace: "ops", Name: "app"})
+		if err := svc.UpdateSecretByYaml(ctx, &model.UpdateSecretByYamlReq{ClusterID: 1, Namespace: "ops", Name: "app", YAML: y.YAML}); err != nil {
+			t.Fatal(err)
+		}
+		if string(m.updated.Data["shared"]) != fixtureAlpha || m.updated.StringData["shared"] != fixtureBeta {
+			t.Fatal("同名键 YAML 回写后应各自恢复原值")
+		}
+	})
+
+	t.Run("reveal 全量与按键返回两处的值", func(t *testing.T) {
+		a := &auditFixture{}
+		svc := newTestSecretService(&secretManagerFixture{secret: newSame()}, a)
+		for _, keys := range [][]string{nil, {"shared"}} {
+			out, err := svc.RevealSecret(ctx, &model.RevealSecretReq{ClusterID: 1, Namespace: "ops", Name: "app", Keys: keys}, model.SecretRevealActor{UserID: 1})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(out.Data["shared"]) != fixtureAlpha || out.StringData["shared"] != fixtureBeta {
+				t.Fatalf("keys=%v 时应同时返回 data 与 stringData 的值", keys)
+			}
+			if strings.Join(out.Keys, ",") != "shared" {
+				t.Fatalf("同名键在 keys 中只应出现一次: %v", out.Keys)
+			}
+		}
+		raw, _ := json.Marshal(a.logs)
+		assertNoPlaintext(t, "audit", string(raw))
+	})
 }

@@ -73,10 +73,11 @@
 
 `GET /api/k8s/secret/:cluster_id/:namespace/:name/reveal[?keys=k1&keys=k2]`
 
-- `keys` 可选，可以重复传，也可以用逗号分隔。为空时返回全部键；指定的键不存在时报错，同样会写审计。
+- `keys` 可选，可以重复传，也可以用逗号分隔。为空时返回全部键；指定的键不存在时报错，同样会写审计。同一个键同时出现在 `data` 和 `stringData` 中时，两处的值都会返回，`keys` 中该键只出现一次。
 - `data` 的编码与改造前 detail 一致（base64），前端原有的解码逻辑可以直接复用。
 - 响应头带 `Cache-Control: no-store`、`Pragma: no-cache`。
-- 权限码：接口目录（`cl_system_apis`）中的名称为 `k8s:secret:reveal`，路径为 `/api/k8s/secret/:cluster_id/:namespace/:name/reveal`，方法为 GET。**只有显式授予这一条才生效**：`/api/k8s/*`、`/*` 这类通配符授权、以及 detail 权限都不覆盖 reveal。用户名为 `admin` 的账号与其他接口一样直接放行。
+- 同步审计写入失败时返回 **HTTP 500**（`code=1`，`message` 为“写入审计失败，已拒绝返回Secret明文”），不含任何值。其他失败（Secret 不存在、键不存在等）沿用项目惯例：HTTP 200、`code=1`。
+- 权限码：接口目录（`cl_system_apis`）中的名称为 `k8s:secret:reveal`，路径为 `/api/k8s/secret/:cluster_id/:namespace/:name/reveal`，方法为 GET。**只有显式授予这一条才生效**：授权记录的 `path` 必须与上面的路由模板逐字相等、方法为 GET。`/api/k8s/*`、`/*`、`/api/k8s/*/reveal` 这类通配符授权，`/api/k8s/secret/:cluster_id/:namespace/:name/:action`、`/api/k8s/secret/:a/:b/:c/reveal` 这类参数化授权（不含 `*`，参数名或段不同），具体请求路径（如 `/api/k8s/secret/1/ops/app/reveal`），以及 detail 权限，都不覆盖 reveal。用户名为 `admin` 的账号与其他接口一样直接放行。
 
 ```json
 {
@@ -103,6 +104,7 @@
 | `user_id` | 操作者 ID |
 | `ip_address` / `user_agent` / `trace_id` | 请求元数据（表结构要求 IP 非空） |
 | `http_method` / `endpoint` | `GET` / 实际请求路径 |
+| `status_code` | 本次 reveal 的实际结果：成功 `200`；指定的键不存在 `400`；读取 Secret 失败时取 K8s API 返回的状态码（如 `404`、`403`），无法识别时 `500` |
 | `operation_type` | `REVEAL`（已加入 `GetAuditTypes`） |
 | `target_type` / `target_id` | `k8s_secret` / `集群ID/命名空间/名称` |
 | `request_body` | 见下方 JSON，只含元数据和键名 |
@@ -126,7 +128,7 @@
 
 ## 4. 回写保护（保证前端改造前不丢数据）
 
-- `PUT .../update`：如果请求 `data` 中某个键的值为空，而集群中该键当前有非空值，就保留原值。这样前端把脱敏后的详情原样回填提交时，真实值不会被清空。要删除一个键，请在请求里去掉它。副作用是：通过表单无法把一个已有非空值的键改成空值，需要时请改用 YAML 更新，在 YAML 中写 `""`。请求没有携带 `last-applied-configuration` 注解时，保留集群中的原注解。
+- `PUT .../update`：如果请求 `data` 中某个键的值为空，而集群中该键当前有非空值，就保留原值。这样前端把脱敏后的详情原样回填提交时，真实值不会被清空。要删除一个键，请在请求里去掉它。`string_data` 按同样规则处理：某个键的值为空、而集群中该键当前有非空值时，这个键不会作为 `stringData` 提交（否则 K8s 合并 `stringData` 时会把 `data` 中的值覆盖成空），而是在 `data` 中保留原值；如果请求 `data` 对同名键给了非空新值，以请求的新值为准。集群中不存在的键按原样写入。副作用是：通过表单无法把一个已有非空值的键改成空值（`data` 和 `string_data` 都不行），需要时请改用 YAML 更新，在 YAML 中写 `""`。请求没有携带 `last-applied-configuration` 注解时，保留集群中的原注解。
 - `PUT .../update/yaml`：值仍为 `<redacted>` 的键保持集群中的原值，用户只需修改需要变更的键。占位符对应的键在集群中不存在时拒绝更新。
 - `POST .../create/yaml`：YAML 中含 `<redacted>` 时拒绝创建。
 
