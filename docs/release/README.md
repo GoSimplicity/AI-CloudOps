@@ -40,9 +40,11 @@ python3 scripts/release-smoke.py
 
 ## 告警 webhook 与可选 Alertmanager
 
-`webhook` 服务（`cmd/webhook`，镜像 `cloudops-webhook:${RELEASE_VERSION}`，由 `deploy/release/webhook.Dockerfile` 构建）默认随栈启动，只在 Compose 内网监听 `8889`（取自镜像内 `config/webhook.yaml` 的 `webhook.port`；当前代码中 `WEBHOOK_PORT` 环境变量对监听端口不生效），不发布端口；依赖 `mysql` 健康，且只读取 `WEBHOOK_MYSQL_ADDR`（缺失时 `compose config` 即报错）。代码没有专用健康端点，健康检查请求 `GET /api/v1/alerts/silence`：缺少 fingerprint 时不访问数据库和 Alertmanager，直接返回 HTTP 200；进程启动时会 Ping MySQL，连不上即退出，因此 HTTP 可响应即表示已连上 MySQL。
+`webhook` 服务（`cmd/webhook`，镜像 `cloudops-webhook:${RELEASE_VERSION}`，由 `deploy/release/webhook.Dockerfile` 构建）默认随栈启动，只在 Compose 内网监听 `8889`（取自镜像内 `config/webhook.yaml` 的 `webhook.port`。`WEBHOOK_PORT` 环境变量：合入 w1 前不起作用，w1 之后由配置生效，优先级 `WEBHOOK_PORT > 配置文件 > 默认 8889`；compose 没有传这个变量，所以发布栈合入前后都监听 `8889`），不发布端口；依赖 `mysql` 健康，且只读取 `WEBHOOK_MYSQL_ADDR`（缺失时 `compose config` 即报错）。代码没有专用健康端点，健康检查请求 `GET /api/v1/alerts/silence`：缺少 fingerprint 时不访问数据库和 Alertmanager，直接返回 HTTP 200；进程启动时会 Ping MySQL，连不上即退出，因此 HTTP 可响应即表示已连上 MySQL。
 
 Alertmanager 是可选 profile：默认 `docker compose up` 不启动；`docker compose -f deploy/release/compose.yaml --profile alerting up -d` 才启动，告警转发到 `http://webhook:8889/api/v1/alerts/receive`（配置 `deploy/release/alertmanager.yml`）。未启用时 webhook 的静默/取消静默接口会返回失败，告警接收不受影响。Prometheus 默认不推送告警，需要时在 `prometheus.yml` 自行增加 `alerting.alertmanagers`。
+
+backend 的告警推送地址 `PROMETHEUS_ALERT_WEBHOOK_ADDR`（backend 据此生成 Alertmanager 的 webhook 接收地址）在 `compose.yaml` 中写为 `${PROMETHEUS_ALERT_WEBHOOK_ADDR:-http://webhook:8889/api/v1/alerts/receive}`：未设置或设为空时指向 Compose 内的 `webhook` 服务。Alertmanager 部署在 Compose 网络外、解析不了服务名 `webhook` 时，在 `deploy/release/.env` 中设置 `PROMETHEUS_ALERT_WEBHOOK_ADDR=http(s)://<Alertmanager 可访问的主机>:<端口>/api/v1/alerts/receive` 覆盖（scheme 建议写小写 `http://` 或 `https://`，不区分大小写：合入 w1 后代码按不区分大小写的前缀判断，`HTTP://` 也按完整 URL 处理；合入前的旧代码区分大小写，所以统一写小写；也可只写 `host:port`，按 http 处理）。`webhook` 默认不发布端口，需要另用 override 文件或反向代理暴露，并自行限制来源。shell 中导出的同名变量优先于 `.env`（导出空串也一样：会压过 `.env` 里的值并回落到上面的默认值），发布前确认没有误带本机开发用的 `http://localhost:8889/...`（这个地址由 Alertmanager 用来推送告警，localhost 指向 Alertmanager 所在的容器或主机，到不了 `webhook` 服务）。核对时只取这一个字段：`docker compose -f deploy/release/compose.yaml config --format json | jq -r '.services.backend.environment.PROMETHEUS_ALERT_WEBHOOK_ADDR'`，不要输出完整配置。
 
 ## 真实依赖
 
@@ -67,7 +69,7 @@ AIOps 飞书自定义机器人可在服务端私有 `.env` 设置 `FEISHU_WEBHOO
 
 ## 发布门槛
 
-发布工具回归使用 `python3 -m unittest discover -s scripts/tests -v`，无需运行容器，覆盖仓库路径、启动预检与私有密钥的防覆盖行为。CI 与标签发布均执行该检查。
+发布工具回归使用 `python3 -m unittest discover -s scripts/tests -v`，无需运行容器，覆盖仓库路径、启动预检与私有密钥的防覆盖行为。CI 与标签发布均执行该检查。其中发布 compose 用例需要 `docker compose` 与 `jq`（只做 `compose config`，不连守护进程）：本地缺少时跳过；`CI=true`（或 `1`）或 `RELEASE_TESTS_REQUIRE_COMPOSE=1` 时缺少即判失败，不允许跳过。
 
 每次交付保存命令、退出码和日期，区分离线测试、隔离环境集成、真实外部依赖验收：
 
