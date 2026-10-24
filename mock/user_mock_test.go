@@ -139,7 +139,7 @@ func TestNewUserMockReadsProcessEnv(t *testing.T) {
 }
 
 func TestCreateUserAdminWarnsOnShortPasswordOutsideProduction(t *testing.T) {
-	for _, env := range []string{"development", "Dev", "test"} {
+	for _, env := range []string{"development", "Dev", " dev "} {
 		t.Run(env, func(t *testing.T) {
 			t.Setenv("ENV", env)
 			db := newUserMockDB(t)

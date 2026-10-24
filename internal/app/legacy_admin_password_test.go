@@ -85,7 +85,7 @@ func TestLegacyCandidateMatchesHistoricalValue(t *testing.T) {
 }
 
 func TestLegacyAdminPasswordRefusedInProduction(t *testing.T) {
-	for _, env := range []string{"production", "PROD", " prd ", ""} {
+	for _, env := range []string{"production", "PROD", " prd ", "", "test", "testing"} {
 		t.Run(env, func(t *testing.T) {
 			t.Setenv("ENV", env)
 			a, db, logs := newLegacyCheckApp(t, true)
@@ -105,7 +105,7 @@ func TestLegacyAdminPasswordRefusedInProduction(t *testing.T) {
 }
 
 func TestLegacyAdminPasswordWarnsOutsideProduction(t *testing.T) {
-	for _, env := range []string{"development", "dev", "test"} {
+	for _, env := range []string{"development", "dev", " DEV "} {
 		t.Run(env, func(t *testing.T) {
 			t.Setenv("ENV", env)
 			a, db, logs := newLegacyCheckApp(t, true)
