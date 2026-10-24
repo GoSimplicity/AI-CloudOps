@@ -159,6 +159,8 @@ GOTOOLCHAIN=auto go test ./...
 GOTOOLCHAIN=auto go build .
 ```
 
+提交前密钥扫描：运行 `bash scripts/setup-git-hooks.sh` 把 `core.hooksPath` 设为 `.githooks`，并检查本机依赖。需要 **gitleaks >= 8.25.0**（从 [官方发布页](https://github.com/gitleaks/gitleaks/releases) 下载并校验 sha256；版本过低或无法解析时脚本与 pre-commit 钩子都会失败），以及 **Python 3.11+**（提交 `.gitleaks.toml` 时钩子用 `tomllib` 检查配置，缺少时拒绝提交）。本地钩子只是第一道防线，CI 的 gitleaks 工作流是最终兜底。
+
 前端安装、开发端口、类型检查与构建以 [前端 README](https://github.com/GoSimplicity/AI-CloudOps-web#readme) 为准；AIOps 的环境与验证方式见 [生产配置说明](https://github.com/GoSimplicity/AI-CloudOps-aiops/blob/main/docs/production.md)。开发进程连接容器依赖时，可使用部署指南中的只绑定回环地址的 `local-ports.yaml`，不要直接公开数据库端口。
 
 ## 生产部署
@@ -295,16 +297,18 @@ AI-CloudOps-aiops/
 
 生产环境设置 `ENV=production`、`MOCK_ENABLED=false`，并分别注入独立的
 `JWT_KEY1`、`JWT_KEY2`（各至少32字节）、`TREE_PASSWORD_ENCRYPTION_KEY`（恰好32字节），均不能使用仓库示例值。
-`ENV` 去首尾空白、忽略大小写后等于 `production` 即视为生产环境（如 ` Production `、`PRODUCTION`）。
+`ENV` 必须显式设置；去首尾空白、忽略大小写后，`production`/`prod`/`prd` 为生产环境，`development`/`dev` 为开发环境。未设置、空值及其他取值（包括 `test`/`testing`）均拒绝启动。
 生产环境下 `TREE_PASSWORD_ENCRYPTION_KEY`、`JWT_ISSUER`、`AIOPS_API_KEY` 也不能有首尾空白、控制字符或不可见格式字符（不会自动去除）。
 `JWT_EXPIRATION` 小于等于 0 时记告警日志并使用默认值 30。
 其中 JWT 两把密钥的长度、熵（不同字符至少10个）、首尾空白/控制字符与不可见格式字符、互不相同和示例值（尽力而为，只匹配前缀片段和已登记哈希）检查在所有环境都执行，不仅限生产环境。
 首次空数据库启动使用 `BOOTSTRAP_ADMIN_PASSWORD`（至少12字符）创建管理员，成功后移除该变量；已有用户不会被重置。
+生产环境 `MOCK_ENABLED` 默认关闭，显式开启会拒绝启动；开发环境默认开启。mock 管理员口令只从 `MOCK_ADMIN_PASSWORD`（至少12字符）读取，未设置时不创建 mock 管理员。bootstrap 和 mock 口令过短时，生产环境拒绝启动，开发环境告警并跳过创建；读取后立即清除对应环境变量。
+启动时若检测到 `admin` 仍在使用历史 mock 内置口令，生产环境拒绝启动，开发环境告警，处置方式见 [安全基线](docs/security-baseline.md)。
 `SERVER_ALLOWED_ORIGINS` 是逗号分隔的精确 Origin 白名单，留空仅支持同源浏览器访问。
 `JWT_EXPIRATION` 是访问令牌有效期，单位是**分钟**（不是秒）；默认值和发布配置均为 `30`（30 分钟）。
-请勿按秒填写 `3600` 之类的值，否则令牌会有效 60 小时。上限为 1440 分钟（24 小时）：超过时 `ENV=production` 拒绝启动，其他环境记告警日志后继续启动。
+请勿按秒填写 `3600` 之类的值，否则令牌会有效 60 小时。上限为 1440 分钟（24 小时）：超过时生产模式（`production`/`prod`/`prd`）拒绝启动，开发模式（`development`/`dev`）记告警日志后继续启动；其他 `ENV` 取值在环境校验阶段即被拒绝。
 访问令牌过期后，前端会用刷新令牌（有效期 7 天）自动续期。
-`JWT_ISSUER` 可选：签发者在 `config/*.yaml` 的 `jwt.issuer` 中配置，只有需要覆盖时才设置该变量。该值不能为空，否则后端启动失败；
+`JWT_ISSUER` 可选：签发者在 `config/*.yaml` 的 `jwt.issuer` 中配置，发布 compose 会注入与 YAML 一致的默认值，其他无配置文件的部署必须注入该变量。该值不能为空，否则后端启动失败；
 **修改 issuer 会让所有已签发的令牌（访问令牌和刷新令牌）失效**，所有用户需要重新登录。
 **升级提示**：升级到要求签发者（iss）的版本后，之前签发的、不带 iss 的旧刷新令牌全部失效，所有用户需要重新登录一次；之后正常续期。
 

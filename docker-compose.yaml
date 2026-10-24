@@ -55,6 +55,8 @@ services:
   #    env_file:
   #      - .env
   #    environment:
+  #      # 本地开发栈显式 development；不依赖 .env 是否写了 ENV（未设置会拒绝启动，镜像默认是 production）
+  #      - ENV=development
   #      - GOPROXY=https://goproxy.cn,direct
   #      - TZ=Asia/Shanghai
   #    networks:
@@ -107,7 +109,7 @@ services:
       - ./data/mysql/data:/var/lib/mysql:rw
       - ./deploy/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     environment:
-      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env (see env.example)}
       - MYSQL_DATABASE=cloudops
       - MYSQL_CHARSET=utf8mb4
       - MYSQL_COLLATION=utf8mb4_general_ci
@@ -123,7 +125,7 @@ services:
       - cloudops_net
     restart: always
     healthcheck:
-      test: [ "CMD-SHELL", "mysqladmin ping -h localhost -u root -proot || exit 1" ]
+      test: [ "CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h localhost -u root || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -161,7 +163,7 @@ services:
     command:
       - redis-server
       - --requirepass
-      - v6SxhWHyZC7S
+      - "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env (see env.example)}"
     networks:
       - cloudops_net
     restart: always

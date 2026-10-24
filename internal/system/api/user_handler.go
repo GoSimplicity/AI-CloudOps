@@ -31,6 +31,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/permission"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	userutils "github.com/GoSimplicity/AI-CloudOps/internal/system/utils"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
@@ -41,6 +42,7 @@ import (
 type UserHandler struct {
 	service service.UserService
 	jwt     jwt2.Handler
+	routes  func() gin.RoutesInfo
 }
 
 func NewUserHandler(service service.UserService, jwt jwt2.Handler) *UserHandler {
@@ -51,6 +53,8 @@ func NewUserHandler(service service.UserService, jwt jwt2.Handler) *UserHandler 
 }
 
 func (h *UserHandler) RegisterRoutes(server *gin.Engine) {
+	// 权限目录在请求时按当前已注册路由构建：AIOps 代理等路由在本方法之后才注册
+	h.routes = server.Routes
 	userGroup := server.Group("/api/user")
 	{
 		userGroup.POST("/signup", h.SignUp)
@@ -59,6 +63,7 @@ func (h *UserHandler) RegisterRoutes(server *gin.Engine) {
 		userGroup.POST("/logout", h.Logout)
 		userGroup.GET("/profile", h.Profile)
 		userGroup.GET("/codes", h.GetPermCode)
+		userGroup.GET("/permissions", h.GetPermissions)
 		userGroup.GET("/detail/:id", h.GetUserDetail)
 		userGroup.GET("/list", h.GetUserList)
 		userGroup.POST("/change_password", h.ChangePassword)
@@ -168,6 +173,26 @@ func (h *UserHandler) GetPermCode(ctx *gin.Context) {
 	})
 }
 
+// GetPermissions 返回调用者本人的 v2 权限码（"METHOD /模板"），契约见 docs/api/user-permissions-v2.md。
+func (h *UserHandler) GetPermissions(ctx *gin.Context) {
+	uc, err := userutils.ExtractClaims(ctx)
+	if err != nil {
+		base.ErrorWithMessage(ctx, err.Error())
+		return
+	}
+	if uc.Uid <= 0 {
+		base.ErrorWithMessage(ctx, "用户信息缺失")
+		return
+	}
+	var routes gin.RoutesInfo
+	if h.routes != nil {
+		routes = h.routes()
+	}
+	base.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.service.GetPermissions(ctx.Request.Context(), uc.Uid, permission.BuildCatalog(routes))
+	})
+}
+
 func (h *UserHandler) GetUserList(ctx *gin.Context) {
 	var req model.GetUserListReq
 
@@ -188,6 +213,9 @@ func (h *UserHandler) ChangePassword(ctx *gin.Context) {
 	req.UserID = uc.Uid
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		// SEC-28: 以 token 中的 uid 为准，绑定之后再强制覆盖一次，
+		// 不依赖 BindRequest 的通用受保护字段机制。
+		req.UserID = uc.Uid
 		return nil, h.service.ChangePassword(ctx.Request.Context(), &req)
 	})
 }
@@ -223,13 +251,14 @@ func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
 	}
 	req.ID = id
 
-	if uc.Username != "admin" && uc.Uid != req.ID {
+	super := permission.IsSuperAdmin(ctx)
+	if !super && uc.Uid != req.ID {
 		base.ForbiddenError(ctx, "无权限修改该用户信息")
 		return
 	}
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.UpdateProfile(ctx.Request.Context(), &req, uc.Username == "admin")
+		return nil, h.service.UpdateProfile(ctx.Request.Context(), &req, super)
 	})
 }
 

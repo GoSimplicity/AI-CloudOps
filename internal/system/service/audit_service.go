@@ -207,6 +207,7 @@ func (s *auditService) GetAuditTypes(ctx context.Context) ([]model.AuditTypeInfo
 		{Type: "UPDATE", Description: "更新操作", Category: "数据操作"},
 		{Type: "DELETE", Description: "删除操作", Category: "数据操作"},
 		{Type: "VIEW", Description: "查看操作", Category: "数据访问"},
+		{Type: "REVEAL", Description: "查看敏感明文（如 Secret reveal）", Category: "数据访问"},
 		{Type: "LOGIN", Description: "登录操作", Category: "身份认证"},
 		{Type: "LOGOUT", Description: "登出操作", Category: "身份认证"},
 		{Type: "EXPORT", Description: "导出操作", Category: "数据导出"},

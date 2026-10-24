@@ -25,6 +25,11 @@
 
 package model
 
+import (
+	"encoding/json"
+	"strings"
+)
+
 type Env int8
 
 const (
@@ -56,11 +61,20 @@ type K8sCluster struct {
 	Env                  Env           `json:"env,omitempty" gorm:"comment:集群环境 (1:Prod, 2:Dev, 3:Stage, 4:Rc, 5:Press)"` // 集群环境
 	Version              string        `json:"version,omitempty" gorm:"comment:集群版本"`                                     // 集群版本
 	ApiServerAddr        string        `json:"api_server_addr,omitempty" gorm:"comment:API Server 地址"`                    // API Server 地址
-	KubeConfigContent    string        `json:"kube_config_content,omitempty" gorm:"type:text;comment:kubeConfig 内容"`      // kubeConfig 内容
+	KubeConfigContent    string        `json:"-" gorm:"type:text;comment:kubeConfig 内容"`                                  // kubeConfig 内容，含凭据，仅供服务端内部使用，不对外序列化
 	ActionTimeoutSeconds int           `json:"action_timeout_seconds,omitempty" gorm:"comment:操作超时时间（秒）"`                 // 操作超时时间（秒）
 	CreateUserName       string        `json:"create_user_name,omitempty" gorm:"comment:创建者用户名"`                          // 创建者用户名
 	CreateUserID         int           `json:"create_user_id,omitempty" gorm:"comment:创建者用户ID"`                           // 创建者用户ID
 	Tags                 KeyValueList  `json:"tags,omitempty" gorm:"type:text;serializer:json;comment:标签"`                // 标签
+}
+
+// MarshalJSON 读取接口仅暴露 kubeconfig 存在标志，数据库读写与内部连接仍使用原值
+func (k8sCluster K8sCluster) MarshalJSON() ([]byte, error) {
+	type publicCluster K8sCluster
+	return json.Marshal(struct {
+		publicCluster
+		HasKubeConfig bool `json:"has_kube_config"`
+	}{publicCluster: publicCluster(k8sCluster), HasKubeConfig: strings.TrimSpace(k8sCluster.KubeConfigContent) != ""})
 }
 
 func (k8sCluster *K8sCluster) TableName() string {
@@ -95,7 +109,7 @@ type UpdateClusterReq struct {
 	Env                  Env          `json:"env,omitempty"`                         // 集群环境
 	Version              string       `json:"version,omitempty"`                     // 集群版本
 	ApiServerAddr        string       `json:"api_server_addr,omitempty"`             // API Server 地址
-	KubeConfigContent    string       `json:"kube_config_content,omitempty"`         // kubeConfig 内容
+	KubeConfigContent    string       `json:"kube_config_content,omitempty"`         // kubeConfig 内容，选填：不传或空字符串保留原值，非空则整段替换并按创建规则校验
 	ActionTimeoutSeconds int          `json:"action_timeout_seconds,omitempty"`      // 操作超时时间（秒）
 	Tags                 KeyValueList `json:"tags,omitempty"`                        // 标签
 }

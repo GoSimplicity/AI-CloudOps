@@ -32,3 +32,23 @@ AI网关内部凭据隔离、生产默认密钥/Mock配置校验。
 历史 `mock/k8s_mock.go` 曾包含嵌入式客户端私钥和集群地址；当前文件已替换为
 无凭据、不可路由的 `example.invalid` 配置。删除当前内容不能撤销 Git 历史中的凭据，
 相关集群管理员必须轮换曾公开的客户端证书/密钥并审查访问记录；本次未改写历史或操作真实集群。
+
+运行环境由 `ENV` 统一判定（`pkg/envmode`，SEC-27）：取值去除首尾空白并忽略大小写，`production`/`prod`/`prd` 为生产，`development`/`dev`、`test`/`testing` 为非生产；未设置或无法识别时 `config.Load` 拒绝启动，其他调用方（如 `pkg/ssh` 主机密钥策略、mock 兜底）一律按生产处理。
+
+历史 `mock/user_mock.go` 曾内置 mock 管理员口令（SEC-27）。当前 mock 在生产环境默认关闭，口令只从 `MOCK_ADMIN_PASSWORD` 读取，未设置时不创建管理员。曾经开启过 mock 的环境中，`admin` 可能仍在使用旧的内置口令；删除代码不会修改已有账号，需要由负责人确认并另行修改口令。
+
+启动时会检测用户名为 `admin` 的所有账号是否仍在使用该旧内置口令（源码只保存遮蔽后的字节，运行时在内存中还原并用 bcrypt 比对，用完即清零）：生产环境命中或检查本身读库失败时拒绝启动，非生产环境打印 `[SECURITY]` 告警后继续；不存在 `admin` 时跳过。处置方式：升级前先在当前运行的版本中修改 `admin` 口令（至少12字符）；若已无法启动，由负责人在维护窗口用 bcrypt 生成新口令的哈希，更新用户表中该账号的 `password` 字段后再启动。提示与日志均不包含口令。
+
+### 运行环境与弱口令检测的非生产行为 / Non-production behaviour (SEC-27)
+
+**中文**
+
+- `ENV=test` 或 `ENV=testing`（去除首尾空白、忽略大小写）归为测试模式（`envmode.Test`），按非生产处理。仓库没有独立的测试配置文件，测试模式与开发模式一样复用 `config/config.development.yaml`（`internal/config/loader.go` `resolveConfigFile`）。
+- 旧内置弱口令检测（`internal/app/legacy_admin_password.go` `checkLegacyAdminPassword`）在非生产环境（development/dev、test/testing）下查库失败时，只打印一条 `[SECURITY]` Warn 并继续启动，不会拒绝启动；生产环境查库失败则拒绝启动（`internal/app/app.go` 中 `Run` 直接返回该错误）。
+- 非生产环境命中旧口令同样只告警；但该库一旦迁移到生产环境就会拒绝启动，应尽早修改 `admin` 口令。
+
+**English**
+
+- `ENV=test` or `ENV=testing` (trimmed, case-insensitive) selects test mode (`envmode.Test`), which is treated as non-production. There is no dedicated test config file: test mode reuses `config/config.development.yaml`, exactly like development (`resolveConfigFile` in `internal/config/loader.go`).
+- In non-production environments (development/dev, test/testing), if the legacy built-in weak password check (`checkLegacyAdminPassword` in `internal/app/legacy_admin_password.go`) cannot query the database, it only logs a single `[SECURITY]` warning and startup continues. In production the same query failure refuses startup (`Run` in `internal/app/app.go` returns the error).
+- A non-production match on the legacy password is also only a warning, but the same database will refuse to start once promoted to production, so change the `admin` password early.

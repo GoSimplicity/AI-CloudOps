@@ -108,26 +108,28 @@ AI-CloudOps/
 - Node.js 22 and pnpm 9 (for the [web console](https://github.com/GoSimplicity/AI-CloudOps-web))
 - Python 3.11 (optional, for the [AIOps service](https://github.com/GoSimplicity/AI-CloudOps-aiops))
 
-### 1. Start MySQL, Redis and Prometheus
+### 1. Create `.env`, then start MySQL, Redis and Prometheus
 
-The root `docker-compose.yaml` starts the development dependencies (the application services in it are commented out):
+The root `docker-compose.yaml` starts the development dependencies (the application services in it are commented out). It reads `MYSQL_ROOT_PASSWORD` and `REDIS_PASSWORD` from `.env` and refuses to start if either is unset or empty, so create and fill `.env` **before** running Compose:
 
 ```bash
 git clone https://github.com/GoSimplicity/AI-CloudOps.git
 cd AI-CloudOps
+cp env.example .env
+# Edit .env and fill in at least (generate secrets with e.g. `openssl rand -hex 24`; never commit .env):
+#   MYSQL_ROOT_PASSWORD=<random>     # root password of the Compose MySQL
+#   REDIS_PASSWORD=<random>          # Compose Redis runs with --requirepass
+#   REDIS_ADDR=localhost:36379       # Compose Redis is published on 36379
+#   MYSQL_ADDR=root:<MYSQL_ROOT_PASSWORD>@tcp(localhost:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local
+#   BOOTSTRAP_ADMIN_PASSWORD=<>= 12 chars>   # creates the `admin` user on first start
 docker compose up -d
 ```
 
-This exposes MySQL on `3306`, Redis on `36379` and Prometheus on `9090`. The credentials in this file are development defaults only.
+This exposes MySQL on `3306`, Redis on `36379` and Prometheus on `9090`, using the passwords from your `.env`.
 
-### 2. Configure and run the backend
+### 2. Run the backend
 
 ```bash
-cp env.example .env
-# Edit .env. With the dev Compose file, Redis listens on localhost:36379:
-#   REDIS_ADDR=localhost:36379
-# Set BOOTSTRAP_ADMIN_PASSWORD (>= 12 chars) to create the `admin` user on first start.
-# Replace JWT_KEY1 and JWT_KEY2 with two freshly generated keys (see below).
 go run main.go
 ```
 
@@ -144,7 +146,7 @@ If you prefer hex, use `openssl rand -hex 32` (once per key).
 
 The API listens on `http://localhost:8889` (`SERVER_PORT`). `GET /health` is a liveness probe only; it does not mean MySQL, Redis or external services are ready.
 
-Configuration precedence is **environment variables > config file > defaults**. `ENV=production` selects `config/config.production.yaml`; anything else uses `config/config.development.yaml`. You can also pass `--config <file>`.
+Configuration precedence is **environment variables > config file > defaults**. `ENV` is required: `ENV=production` (aliases `prod`, `prd`) selects `config/config.production.yaml`; `ENV=development` (alias `dev`) uses `config/config.development.yaml`. Values are trimmed and case-insensitive. If `ENV` is unset or unrecognised the backend refuses to start; set `ENV=development` in `.env` for local development. You can also pass `--config <file>` (ENV is still required).
 
 ### 3. Run the web console
 
@@ -199,19 +201,20 @@ All settings can be provided as environment variables (see [`env.example`](env.e
 
 | Variable | Description |
 | --- | --- |
-| `ENV` | `development` (default) or `production`. Production turns on the strict checks below. The value is trimmed and compared case-insensitively, so ` Production ` and `PRODUCTION` also count as production. |
+| `ENV` | Required: `development`/`dev` or `production`/`prod`/`prd`, trimmed and case-insensitive. Unset, empty and unknown values, including `test`/`testing`, are rejected. |
 | `SERVER_PORT` | HTTP port, default `8889`. |
 | `SERVER_ALLOWED_ORIGINS` | Comma-separated list of exact browser origins allowed for CORS and WebSocket. Empty means same-origin only. |
 | `MYSQL_ADDR`, `REDIS_ADDR`, `REDIS_PASSWORD` | Database and Redis connection. |
-| `JWT_KEY1`, `JWT_KEY2`, `JWT_EXPIRATION` | JWT signing keys and settings. `JWT_KEY1` and `JWT_KEY2` are required in every environment: at least 32 bytes each, distinct, and not a repository sample value (generate with `openssl rand -base64 48`, or `openssl rand -hex 32` for hex). `JWT_EXPIRATION` is the access-token lifetime in **minutes** (not seconds); the default and the release configuration are `30`. A value such as `3600` means 60 hours. The upper limit is 1440 minutes (24 hours): above it the backend refuses to start with `ENV=production` and logs a warning but keeps starting in other environments. A value of 0 or below logs a warning and falls back to the default of 30. Expired access tokens are renewed automatically by the frontend with the refresh token (valid for 7 days). |
+| `JWT_KEY1`, `JWT_KEY2`, `JWT_EXPIRATION` | JWT signing keys and settings. `JWT_KEY1` and `JWT_KEY2` are required in every environment: at least 32 bytes each, distinct, and not a repository sample value (generate with `openssl rand -base64 48`, or `openssl rand -hex 32` for hex). `JWT_EXPIRATION` is the access-token lifetime in **minutes** (not seconds); the default and the release configuration are `30`. A value such as `3600` means 60 hours. The upper limit is 1440 minutes (24 hours): above it production modes (`production`/`prod`/`prd`) refuse to start, while development modes (`development`/`dev`) log a warning and continue. Other `ENV` values are rejected before configuration loading. A value of 0 or below logs a warning and falls back to the default of 30. Expired access tokens are renewed automatically by the frontend with the refresh token (valid for 7 days). |
 | `CRON_ALLOW_LOCAL_EXEC` | `cron.allow_local_exec`, default `false`. Allows command (type 2) and script (type 4) jobs to run on the backend host. Read at startup; restart the backend after changing it. See the notes below. |
-| `JWT_ISSUER` | Optional. The token issuer is configured as `jwt.issuer` in `config/*.yaml`; set this variable only to override it. The value must not be empty (the backend fails to start otherwise), and changing it invalidates all tokens already issued. After upgrading to the release that requires an issuer (`iss`), all older refresh tokens without `iss` are invalid and every user has to log in again once. |
+| `JWT_ISSUER` | Optional. The token issuer is configured as `jwt.issuer` in `config/*.yaml`; the release Compose file supplies the same default, and other deployments without a config file must provide this variable. The value must not be empty (the backend fails to start otherwise), and changing it invalidates all tokens already issued. After upgrading to the release that requires an issuer (`iss`), all older refresh tokens without `iss` are invalid and every user has to log in again once. |
 | `TREE_PASSWORD_ENCRYPTION_KEY` | Key used to encrypt stored host passwords. Keep it safe: changing it breaks decryption of existing credentials. |
-| `BOOTSTRAP_ADMIN_PASSWORD` | Creates the `admin` account on the first start with an empty database (min. 12 characters). Remove it after the first successful start. Existing users are never reset. |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Creates the `admin` account on the first start with an empty database (min. 12 characters). Remove it after the first successful start. Existing users are never reset. Too short: startup fails in production; outside production a `[SECURITY]` warning is logged and creation is skipped. The variable is removed from the process environment right after it is read. |
 | `SSH_KNOWN_HOSTS` | Path to an operator-verified OpenSSH `known_hosts` file used for web terminal and SSH connections. |
 | `AIOPS_BASE_URL` | URL of the AIOps service, e.g. `http://aiops:8080`. Enables the `/api/v1/*` gateway. |
 | `AIOPS_API_KEY` | Shared service key sent to the AIOps service as `X-API-Key`. Must match the Python service. Never put it in frontend config. |
-| `MOCK_ENABLED` | Seed mock data for development. Must be `false` in production. |
+| `MOCK_ENABLED` | Seed mock data for development. Defaults to `true` in development and `false` in production; enabling it in production is rejected at startup. |
+| `MOCK_ADMIN_PASSWORD` | Password for the mock `admin` account (min. 12 characters), only used when mock is enabled and the user table is empty. If unset, no mock admin is created. There is no built-in password. Too short: error in production, warning and skip elsewhere. Removed from the process environment right after it is read. |
 | `LLM_API_KEY`, `LLM_BASE_URL`, `ALIYUN_ACCESS_KEY_ID`, `ALIYUN_ACCESS_KEY_SECRET`, `TAVILY_API_KEY` | External service credentials (environment variables only). |
 | `NOTIFICATION_EMAIL_*`, `NOTIFICATION_FEISHU_*` | Email (SMTP) and Feishu notification channels. |
 | `WEBHOOK_*` | Settings for the alert webhook service in `cmd/webhook`. `WEBHOOK_PORT` defaults to `8889` (previously `8888`), matching `config/webhook.yaml`, and must be a number between 1 and 65535. Integer fields accept decimal integers only (no `10.5`, `010`, `0x10`, `+3`) and are bounded: `WEBHOOK_FIXED_WORKERS` 1–1024, `WEBHOOK_DEFAULT_UPGRADE_MINUTES` 1–10080, `WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS` 1–86400, `WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS` 1–600 (0, i.e. no timeout, is rejected); leading/trailing ASCII spaces, tabs and CR/LF (only) are trimmed from integer variables and the port. `WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API` defaults to `https://open.feishu.cn/open-apis/bot/v2/hook` (trailing slashes are ignored). URL settings (`front_domain`, `backend_domain`, `alert_manager_api`, `im_feishu.group_message_api`, `im_feishu.tenant_access_token_api`) are trimmed of surrounding whitespace; all but the token API also drop trailing `/`. The config file must be YAML (`.yaml`/`.yml`; `.json` is parsed as YAML); other formats fail startup. Setting `WEBHOOK` or `WEBHOOK_IM_FEISHU` to a non-empty value fails startup. Scalar settings written as a map/list, `im_feishu` written as a scalar/list, alias keys, quoted or tagged `<<` (yaml.v3 treats quoted `"<<"` as a plain key but `!!merge "<<"` as a merge, so neither is supported), merge chains or nesting deeper than 64, keys tagged with anything other than `!!str` (e.g. `!!binary`), NUL characters, multiple YAML documents, dotted key names, case-duplicate keys and leaf tags other than `!!str`/`!!int`/`!!null` fail startup; parse errors only report a line number and a fixed reason; unknown keys under `webhook:` are ignored with a warning. In Kubernetes, a Service named `webhook` injects `WEBHOOK_PORT=tcp://…` and makes startup fail; set `enableServiceLinks: false` or rename the Service. Environment variables override `config/webhook.yaml`, which overrides defaults; `WEBHOOK_MYSQL_ADDR` (full DSN) is required. See [docs/release/w1-webhook-env.md](docs/release/w1-webhook-env.md). |
@@ -226,6 +229,7 @@ With `ENV=production` the backend additionally refuses to start unless:
 - `TREE_PASSWORD_ENCRYPTION_KEY`, `JWT_ISSUER` and `AIOPS_API_KEY` (when set) have no leading/trailing whitespace, control characters or invisible format characters (they are not trimmed automatically).
 - `MOCK_ENABLED=false`.
 - `AIOPS_API_KEY` is at least 32 characters whenever `AIOPS_BASE_URL` is set.
+- No `admin` account still uses the built-in mock password shipped before SEC-27 (outside production this is logged as a `[SECURITY]` warning instead). See [docs/security-baseline.md](docs/security-baseline.md) for remediation.
 
 Other security behaviour to be aware of:
 

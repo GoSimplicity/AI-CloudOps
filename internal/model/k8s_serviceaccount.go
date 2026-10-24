@@ -107,7 +107,7 @@ type CreateServiceAccountTokenReq struct {
 	ClusterID          int    `json:"cluster_id" binding:"required" comment:"集群ID"`
 	Namespace          string `json:"namespace" binding:"required" comment:"命名空间"`
 	ServiceAccountName string `json:"service_account_name" binding:"required" comment:"ServiceAccount名称"`
-	ExpirationSeconds  *int64 `json:"expiration_seconds" comment:"令牌过期时间（秒）"`
+	ExpirationSeconds  *int64 `json:"expiration_seconds" comment:"令牌过期时间（秒），不传或0为3600，允许600~3600"`
 }
 
 // K8sServiceAccount ServiceAccount主model
@@ -133,4 +133,48 @@ type ServiceAccountTokenInfo struct {
 	ExpirationSeconds *int64 `json:"expiration_seconds"`
 	CreatedAt         string `json:"created_at"`
 	ExpirationTime    string `json:"expiration_time"`
+}
+
+// POST /token（TokenRequest）的有效期约束（秒）。不传或传 0 使用默认值；
+// 下限为 K8s TokenRequest 允许的最小值 600，上限 3600，越界返回参数错误且不调用 K8s。
+const (
+	ServiceAccountTokenDefaultExpirationSeconds int64 = 3600
+	ServiceAccountTokenMinExpirationSeconds     int64 = 600
+	ServiceAccountTokenMaxExpirationSeconds     int64 = 3600
+)
+
+// K8sServiceAccountTokenRoute ServiceAccount token 接口的完整路由（权限码对应的 path）。
+// GET 读取 SA 名下的 token Secret，POST 通过 TokenRequest 签发新 token；两者都只允许按该路由 + 方法显式授权，
+// /api/k8s/*、/* 及带 :param 的通配授权都不生效。
+const K8sServiceAccountTokenRoute = "/api/k8s/serviceaccount/:cluster_id/:namespace/:name/token"
+
+const (
+	// K8sServiceAccountTokenPermissionName GET token 在接口目录（cl_system_apis.name）中的权限名
+	K8sServiceAccountTokenPermissionName = "k8s:serviceaccount:token"
+	// K8sServiceAccountTokenCreatePermissionName POST token（TokenRequest）在接口目录中的权限名；
+	// cl_system_apis.name 有唯一索引，GET/POST 不能共用同一个名字
+	K8sServiceAccountTokenCreatePermissionName = "k8s:serviceaccount:token:create"
+)
+
+const (
+	ServiceAccountTokenRevealAuditAction    = "k8s_serviceaccount_token_reveal"
+	ServiceAccountTokenCreateAuditAction    = "k8s_serviceaccount_token_create"
+	ServiceAccountTokenRevealAuditOperation = "TOKEN_REVEAL"
+	ServiceAccountTokenCreateAuditOperation = "TOKEN_CREATE"
+	ServiceAccountTokenAuditTargetType      = "k8s_serviceaccount_token"
+)
+
+// ServiceAccountTokenAuditRecord token 接口审计内容，写入 AuditLog.RequestBody。只含元数据，绝不含 token。
+type ServiceAccountTokenAuditRecord struct {
+	Action            string `json:"action"`
+	UserID            int    `json:"user_id"`
+	Username          string `json:"username"`
+	ClusterID         int    `json:"cluster_id"`
+	Namespace         string `json:"namespace"`
+	ServiceAccount    string `json:"service_account"`
+	ServiceAccountUID string `json:"service_account_uid,omitempty"`
+	SecretName        string `json:"secret_name,omitempty"`        // GET：返回的 token 所在 Secret 名称
+	ExpirationSeconds *int64 `json:"expiration_seconds,omitempty"` // POST：生效的有效期（越界被拒时为请求值）
+	Success           bool   `json:"success"`
+	IssuedAt          string `json:"issued_at"` // RFC3339 UTC
 }

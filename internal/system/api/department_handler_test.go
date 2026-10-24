@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/permission"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
@@ -33,7 +34,11 @@ func TestDepartmentHTTPPersistenceAndPermissions(t *testing.T) {
 	}
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
-		c.Set("user", jwt.UserClaims{Uid: user.ID, Username: c.GetHeader("X-Test-Identity")})
+		// 模拟鉴权中间件：只有 "super" 身份被标记为持有内置超管角色；
+		// "admin" 身份只有用户名叫 admin，没有超管角色。
+		identity := c.GetHeader("X-Test-Identity")
+		c.Set("user", jwt.UserClaims{Uid: user.ID, Username: identity})
+		permission.MarkSuperAdmin(c, identity == "super")
 		c.Next()
 	})
 	NewDepartmentHandler(service.NewDepartmentService(dao.NewDepartmentDAO(db))).RegisterRouters(router)
@@ -59,28 +64,31 @@ func TestDepartmentHTTPPersistenceAndPermissions(t *testing.T) {
 	if status, _ := call("POST", "/api/department/create", "member", map[string]any{"name": "Forbidden"}); status != 403 {
 		t.Fatalf("non-admin status %d", status)
 	}
-	_, created := call("POST", "/api/department/create", "admin", map[string]any{"name": "Engineering"})
+	if status, _ := call("POST", "/api/department/create", "admin", map[string]any{"name": "Forbidden"}); status != 403 {
+		t.Fatalf("username admin without super admin role status %d", status)
+	}
+	_, created := call("POST", "/api/department/create", "super", map[string]any{"name": "Engineering"})
 	if created["code"] != float64(0) {
 		t.Fatal(created)
 	}
 	id := int(created["data"].(map[string]any)["id"].(float64))
-	_, child := call("POST", "/api/department/create", "admin", map[string]any{"name": "Operations", "parent_id": id})
+	_, child := call("POST", "/api/department/create", "super", map[string]any{"name": "Operations", "parent_id": id})
 	if child["code"] != float64(0) {
 		t.Fatal(child)
 	}
 	childID := int(child["data"].(map[string]any)["id"].(float64))
-	_, cycle := call("PUT", fmt.Sprintf("/api/department/%d/update", id), "admin", map[string]any{"name": "Engineering", "parent_id": childID})
+	_, cycle := call("PUT", fmt.Sprintf("/api/department/%d/update", id), "super", map[string]any{"name": "Engineering", "parent_id": childID})
 	if cycle["code"] == float64(0) {
 		t.Fatal("cycle accepted")
 	}
-	_, nonempty := call("DELETE", fmt.Sprintf("/api/department/%d/delete", id), "admin", nil)
+	_, nonempty := call("DELETE", fmt.Sprintf("/api/department/%d/delete", id), "super", nil)
 	if nonempty["code"] == float64(0) {
 		t.Fatal("deleted parent with child")
 	}
 	if status, _ := call("PUT", fmt.Sprintf("/api/department/user/%d", user.ID), "member", map[string]int{"department_id": childID}); status != 403 {
 		t.Fatal("non-admin assigned department")
 	}
-	_, assigned := call("PUT", fmt.Sprintf("/api/department/user/%d", user.ID), "admin", map[string]int{"department_id": childID})
+	_, assigned := call("PUT", fmt.Sprintf("/api/department/user/%d", user.ID), "super", map[string]int{"department_id": childID})
 	if assigned["code"] != float64(0) {
 		t.Fatal(assigned)
 	}
@@ -89,32 +97,32 @@ func TestDepartmentHTTPPersistenceAndPermissions(t *testing.T) {
 	if persisted.DepartmentID != childID {
 		t.Fatal("assignment not persisted")
 	}
-	_, nonempty = call("DELETE", fmt.Sprintf("/api/department/%d/delete", childID), "admin", nil)
+	_, nonempty = call("DELETE", fmt.Sprintf("/api/department/%d/delete", childID), "super", nil)
 	if nonempty["code"] == float64(0) {
 		t.Fatal("deleted department with member")
 	}
-	_, cleared := call("PUT", fmt.Sprintf("/api/department/user/%d", user.ID), "admin", map[string]int{"department_id": 0})
+	_, cleared := call("PUT", fmt.Sprintf("/api/department/user/%d", user.ID), "super", map[string]int{"department_id": 0})
 	if cleared["code"] != float64(0) {
 		t.Fatal(cleared)
 	}
 	for _, n := range []int{childID, id} {
-		_, deleted := call("DELETE", fmt.Sprintf("/api/department/%d/delete", n), "admin", nil)
+		_, deleted := call("DELETE", fmt.Sprintf("/api/department/%d/delete", n), "super", nil)
 		if deleted["code"] != float64(0) {
 			t.Fatal(deleted)
 		}
 	}
 	for attempt := 0; attempt < 2; attempt++ {
-		_, again := call("POST", "/api/department/create", "admin", map[string]any{"name": "Reusable"})
+		_, again := call("POST", "/api/department/create", "super", map[string]any{"name": "Reusable"})
 		if again["code"] != float64(0) {
 			t.Fatal("deleted sibling name could not be reused")
 		}
 		n := int(again["data"].(map[string]any)["id"].(float64))
-		_, removed := call("DELETE", fmt.Sprintf("/api/department/%d/delete", n), "admin", nil)
+		_, removed := call("DELETE", fmt.Sprintf("/api/department/%d/delete", n), "super", nil)
 		if removed["code"] != float64(0) {
 			t.Fatal("repeated soft deletion collided")
 		}
 	}
-	_, listed := call("GET", "/api/department/list", "admin", nil)
+	_, listed := call("GET", "/api/department/list", "super", nil)
 	if listed["data"].(map[string]any)["total"] != float64(0) {
 		t.Fatal("deleted departments remain listed")
 	}

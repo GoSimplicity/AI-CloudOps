@@ -1,62 +1,79 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# 配置本仓库使用 .githooks/ 下的 Git 钩子，并检查 gitleaks 是否已安装。
+# 用法: scripts/setup-git-hooks.sh
+set -euo pipefail
 
-set -e
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+log_info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+log_error()   { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 
-# 颜色定义
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# 项目根目录
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-# 日志函数
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    log_error "当前目录不是 Git 仓库: $PROJECT_ROOT"
+    exit 1
+fi
 
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
+# 只给钩子脚本加可执行位（不改动 README 等文档的文件模式）
+find .githooks -maxdepth 1 -type f ! -name "*.md" -exec chmod +x {} + 2>/dev/null || true
 
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# 检查 git 仓库
-check_git_repo() {
-    if [ ! -d ".git" ]; then
-        log_error "当前目录不是 Git 仓库"
+# 在 linked worktree 中写入 worktree 级配置，避免修改主仓库/其他 worktree 共享的 .git/config。
+git_dir="$(cd "$(git rev-parse --git-dir)" && pwd)"
+common_dir="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
+if [ "$git_dir" != "$common_dir" ]; then
+    if [ "$(git config --type=bool --get extensions.worktreeConfig 2>/dev/null || echo false)" != "true" ]; then
+        log_error "当前是 linked worktree，且未启用 extensions.worktreeConfig。"
+        log_error "为避免改动共享配置，请先执行: git config extensions.worktreeConfig true  后重试。"
         exit 1
     fi
-}
+    git config --worktree core.hooksPath .githooks
+    log_info "已设置 (worktree 级) core.hooksPath=.githooks"
+else
+    git config core.hooksPath .githooks
+    log_info "已设置 core.hooksPath=.githooks"
+fi
 
-# 显示设置结果
-show_setup_result() {
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "🎉 Git Hooks 设置完成！"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    echo "你可以现在开始愉快地开发啦 🚀"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+# gitleaks 最低版本 8.25.0（review3g N6）：.gitleaks.toml 使用多个 [[allowlists]]（含 targetRules/condition），
+# 该写法自 8.25.0 起才支持；更低版本的策略语义不同，且 8.19 之前没有 `gitleaks git --staged`。
+# 只接受 gitleaks version 输出的严格形式 X.Y.Z（可带前缀 v；每段为不带前导零、最多 6 位的十进制数字），无法解析一律视为不满足。
+GITLEAKS_MIN_MAJOR=8
+GITLEAKS_MIN_MINOR=25
+gitleaks_version_check() {
+    gl_ver_raw="$(gitleaks version 2>/dev/null | head -n 1)"
+    gl_ver="${gl_ver_raw#v}"
+    case "$gl_ver" in *.*.*) ;; *) return 2 ;; esac
+    gl_major="${gl_ver%%.*}"; gl_rest="${gl_ver#*.}"
+    gl_minor="${gl_rest%%.*}"; gl_patch="${gl_rest#*.}"
+    # review3h P3-i：三段都只能是十进制数字，不允许前导零（单独的 0 除外），每段最多 6 位；
+    # 过长的数字直接视为无法解析，不交给 [ ] 做整数比较（溢出时 [ ] 报错，会被误判成“版本过低”）
+    for gl_c in "$gl_major" "$gl_minor" "$gl_patch"; do
+        case "$gl_c" in ''|*[!0-9]*|0?*|???????*) return 2 ;; esac
+    done
+    if [ "$gl_major" -gt "$GITLEAKS_MIN_MAJOR" ]; then return 0; fi
+    if [ "$gl_major" -eq "$GITLEAKS_MIN_MAJOR" ] && [ "$gl_minor" -ge "$GITLEAKS_MIN_MINOR" ]; then return 0; fi
+    return 1
 }
+if command -v gitleaks >/dev/null 2>&1; then
+    gl_vrc=0; gitleaks_version_check || gl_vrc=$?
+    if [ "$gl_vrc" -eq 2 ]; then
+        log_error "无法解析 gitleaks 版本（gitleaks version 输出: ${gl_ver_raw:-<空>}），需要 >= ${GITLEAKS_MIN_MAJOR}.${GITLEAKS_MIN_MINOR}.0；pre-commit 钩子会因此阻止提交。"
+        exit 1
+    elif [ "$gl_vrc" -ne 0 ]; then
+        log_error "gitleaks 版本 ${gl_ver_raw} 低于 ${GITLEAKS_MIN_MAJOR}.${GITLEAKS_MIN_MINOR}.0；pre-commit 钩子会因此阻止提交。请从 https://github.com/gitleaks/gitleaks/releases 升级。"
+        exit 1
+    fi
+    log_success "gitleaks 已安装: ${gl_ver_raw}（>= ${GITLEAKS_MIN_MAJOR}.${GITLEAKS_MIN_MINOR}.0）"
+else
+    log_error "未找到 gitleaks。pre-commit 钩子会因此阻止提交。"
+    log_error "请从 https://github.com/gitleaks/gitleaks/releases 下载官方二进制，校验 sha256 后放入 PATH（如 ~/.local/bin）。"
+    exit 1
+fi
 
-# 主函数
-main() {
-    log_info "🚀 设置 AI-CloudOps Git Hooks..."
-    
-    check_git_repo
-    
-    show_setup_result
-}
+if [ -f package.json ] && grep -q '"husky"' package.json; then
+    log_warning "本仓库依赖 husky：执行 pnpm install 时 husky 可能把 core.hooksPath 改回 .husky/_，之后请重新运行本脚本。"
+fi
 
-# 执行主函数
-main "$@"
+log_success "Git hooks 设置完成（提交前将运行 gitleaks 密钥扫描）。"

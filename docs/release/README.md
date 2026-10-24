@@ -32,9 +32,19 @@ python3 scripts/release-smoke.py
 
 本机运行 Go/Python 进程联调时，可叠加 `-f deploy/release/local-ports.yaml` 暴露回环地址上的 MySQL `13306` 与 Redis `16379`。对此环境后续所有 Compose 操作都应使用相同文件集合，否则 Compose 会重新创建服务并移除端口。测试直连 Go 使用 `release-smoke.py --api-only --url http://127.0.0.1:17889`。
 
-密钥生成器创建权限为 `0600` 的 `deploy/release/.env`，文件已被 Git 忽略；重复执行会拒绝覆盖。首次管理员为 `admin`，密码取该文件中的 `BOOTSTRAP_ADMIN_PASSWORD`。已有数据库的管理员不会被重置。检查日志时不要粘贴完整环境变量或展开后的 Compose 配置。
+后端镜像（根目录 `Dockerfile`）运行阶段默认 `ENV=production`，会启用严格的 SSH 主机密钥校验：按 `pkg/ssh/hostkey.go`，生产模式下未设置 `SSH_KNOWN_HOSTS` 时拒绝建立 SSH 连接，不会退回到跳过主机密钥校验（设置了 `SSH_KNOWN_HOSTS` 时任何 `ENV` 下都按该文件校验，不匹配即拒绝）；同时启动时按生产要求校验 JWT 与资产密码密钥（`internal/config/config.go`）。本地手动 `docker run` 该镜像做开发调试时要加 `-e ENV=development`。`ENV` 由 `pkg/envmode` 统一解析：忽略首尾空白和大小写，`production`/`prod`/`prd` 按生产处理，`development`/`dev` 按开发处理；未设置、空值和其他取值（包括 `test`/`testing`）拒绝启动。
+
+密钥生成器创建权限为 `0600` 的 `deploy/release/.env`，文件已被 Git 忽略；重复执行会拒绝覆盖。生成器同时用 `MYSQL_PASSWORD` 拼出告警 webhook 服务所需的完整 DSN `WEBHOOK_MYSQL_ADDR`（格式同 backend 的 `MYSQL_ADDR`，主机为 Compose 服务 `mysql:3306`），值不打印。升级已有部署时执行 `python3 scripts/release-env.py --add-missing`，只在缺少该项时追加，不覆盖任何已有值；`--env-file`、`--mysql-host` 仅供隔离验证改目标文件与 MySQL 地址。首次管理员为 `admin`，密码取该文件中的 `BOOTSTRAP_ADMIN_PASSWORD`。已有数据库的管理员不会被重置。检查日志时不要粘贴完整环境变量或展开后的 Compose 配置。
 
 默认访问地址为 `http://localhost:18080`，只绑定回环地址。对外服务应通过有 TLS 的反向代理，配置 `PUBLIC_ORIGIN` 为实际 HTTPS 源站。不要直接暴露 MySQL、Redis 或 AIOps。浏览器所有 `/api/v1/*` 请求经过 Go 的 JWT/RBAC 检查，再由 Go 注入内部密钥。
+
+## 告警 webhook 与可选 Alertmanager
+
+`webhook` 服务（`cmd/webhook`，镜像 `cloudops-webhook:${RELEASE_VERSION}`，由 `deploy/release/webhook.Dockerfile` 构建）默认随栈启动，只在 Compose 内网监听 `8889`（取自镜像内 `config/webhook.yaml` 的 `webhook.port`。`WEBHOOK_PORT` 的优先级是 `WEBHOOK_PORT > 配置文件 > 默认 8889`；compose 没有传这个变量，所以发布栈默认监听 `8889`），不发布端口；依赖 `mysql` 健康，且只读取 `WEBHOOK_MYSQL_ADDR`（缺失时 `compose config` 即报错）。代码没有专用健康端点，健康检查请求 `GET /api/v1/alerts/silence`：缺少 fingerprint 时不访问数据库和 Alertmanager，直接返回 HTTP 200；进程启动时会 Ping MySQL，连不上即退出，因此 HTTP 可响应即表示已连上 MySQL。
+
+Alertmanager 是可选 profile：默认 `docker compose up` 不启动；`docker compose -f deploy/release/compose.yaml --profile alerting up -d` 才启动，告警转发到 `http://webhook:8889/api/v1/alerts/receive`（配置 `deploy/release/alertmanager.yml`）。未启用时 webhook 的静默/取消静默接口会返回失败，告警接收不受影响。Prometheus 默认不推送告警，需要时在 `prometheus.yml` 自行增加 `alerting.alertmanagers`。
+
+backend 的告警推送地址 `PROMETHEUS_ALERT_WEBHOOK_ADDR`（backend 据此生成 Alertmanager 的 webhook 接收地址）在 `compose.yaml` 中写为 `${PROMETHEUS_ALERT_WEBHOOK_ADDR:-http://webhook:8889/api/v1/alerts/receive}`：未设置或设为空时指向 Compose 内的 `webhook` 服务。Alertmanager 部署在 Compose 网络外、解析不了服务名 `webhook` 时，在 `deploy/release/.env` 中设置 `PROMETHEUS_ALERT_WEBHOOK_ADDR=http(s)://<Alertmanager 可访问的主机>:<端口>/api/v1/alerts/receive` 覆盖（scheme 建议写小写 `http://` 或 `https://`，不区分大小写，`HTTP://` 也按完整 URL 处理；也可只写 `host:port`，按 http 处理）。`webhook` 默认不发布端口，需要另用 override 文件或反向代理暴露，并自行限制来源。shell 中导出的同名变量优先于 `.env`（导出空串也一样：会压过 `.env` 里的值并回落到上面的默认值），发布前确认没有误带本机开发用的 `http://localhost:8889/...`（这个地址由 Alertmanager 用来推送告警，localhost 指向 Alertmanager 所在的容器或主机，到不了 `webhook` 服务）。核对时只取这一个字段：`docker compose -f deploy/release/compose.yaml config --format json | jq -r '.services.backend.environment.PROMETHEUS_ALERT_WEBHOOK_ADDR'`，不要输出完整配置。
 
 ## 真实依赖
 
@@ -59,7 +69,7 @@ AIOps 飞书自定义机器人可在服务端私有 `.env` 设置 `FEISHU_WEBHOO
 
 ## 发布门槛
 
-发布工具回归使用 `python3 -m unittest discover -s scripts/tests -v`，无需运行容器，覆盖仓库路径、启动预检与私有密钥的防覆盖行为。CI 与标签发布均执行该检查。
+发布工具回归使用 `python3 -m unittest discover -s scripts/tests -v`，无需运行容器，覆盖仓库路径、启动预检与私有密钥的防覆盖行为。CI 与标签发布均执行该检查。其中发布 compose 用例需要 `docker compose` 与 `jq`（只做 `compose config`，不连守护进程）：本地缺少时跳过；`CI=true`（或 `1`）或 `RELEASE_TESTS_REQUIRE_COMPOSE=1` 时缺少即判失败，不允许跳过。
 
 每次交付保存命令、退出码和日期，区分离线测试、隔离环境集成、真实外部依赖验收：
 

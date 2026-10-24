@@ -40,18 +40,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func CleanClusterSensitiveInfo(cluster *model.K8sCluster) {
-	if cluster != nil {
-		cluster.KubeConfigContent = ""
-	}
-}
-
-func CleanClusterSensitiveInfoList(clusters []*model.K8sCluster) {
-	for _, cluster := range clusters {
-		CleanClusterSensitiveInfo(cluster)
-	}
-}
-
 func ValidateClusterExists(cluster *model.K8sCluster, clusterID int) error {
 	if cluster == nil {
 		return fmt.Errorf("集群不存在，ID: %d", clusterID)

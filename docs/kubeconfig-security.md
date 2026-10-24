@@ -23,3 +23,9 @@ kubectl config view --raw --flatten --minify > cloudops-kubeconfig.yaml
 安全解析的错误信息不回显配置内容。已有不安全配置不会继续加载或运行其中程序；可以用相同集群传输身份的内嵌凭据替换。配额的集群身份比较只检查 API 地址、TLS server name 与 CA 数据，允许凭据轮换或 YAML 格式变化，不读取旧凭据指向的文件或执行插件。
 
 依据：[Kubernetes kubeconfig 风险说明](https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/)、项目使用的 client-go `clientcmd` 与认证 transport 实现。
+
+## 接口返回与更新约定
+
+- 集群列表（`GET /api/k8s/cluster/list`）与详情（`GET /api/k8s/cluster/:cluster_id/detail`）不返回 `kube_config_content`，改为返回 `has_kube_config`（bool，数据库中是否存有非空 kubeconfig）。该屏蔽在 `model.K8sCluster` 的 JSON 序列化层统一完成，任何序列化集群对象的接口都不会输出 kubeconfig；数据库读写与服务端内部连接仍使用原值。
+- 更新集群（`PUT /api/k8s/cluster/:cluster_id/update`）时 `kube_config_content` 选填：不传或空字符串保留原值；非空则整段替换，并执行与创建相同的安全解析校验。
+- 创建集群时 `kube_config_content` 仍为必填。

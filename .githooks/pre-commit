@@ -40,6 +40,137 @@ if [ -n "$SKIP_GENERATE" ] || [ -n "$SKIP_VET" ] || [ -n "$SKIP_BUILD" ]; then
     [ "$SKIP_BUILD" = "1" ] && echo "  - SKIP_BUILD=1 (跳过编译检查)"
 fi
 
+# ---------------------------------------------------------------------------
+# gitleaks: block commits that stage secrets (SEC-01A)
+# ---------------------------------------------------------------------------
+# gitleaks 最低版本 8.25.0（review3g N6）：.gitleaks.toml 使用多个 [[allowlists]]（含 targetRules/condition），
+# 该写法自 8.25.0 起才支持；更低版本的策略语义不同，且 8.19 之前没有 `gitleaks git --staged`。
+# 只接受 gitleaks version 输出的严格形式 X.Y.Z（可带前缀 v；每段为不带前导零、最多 6 位的十进制数字），无法解析一律视为不满足。
+GITLEAKS_MIN_MAJOR=8
+GITLEAKS_MIN_MINOR=25
+gitleaks_version_check() {
+    gl_ver_raw="$(gitleaks version 2>/dev/null | head -n 1)"
+    gl_ver="${gl_ver_raw#v}"
+    case "$gl_ver" in *.*.*) ;; *) return 2 ;; esac
+    gl_major="${gl_ver%%.*}"; gl_rest="${gl_ver#*.}"
+    gl_minor="${gl_rest%%.*}"; gl_patch="${gl_rest#*.}"
+    # review3h P3-i：三段都只能是十进制数字，不允许前导零（单独的 0 除外），每段最多 6 位；
+    # 过长的数字直接视为无法解析，不交给 [ ] 做整数比较（溢出时 [ ] 报错，会被误判成“版本过低”）
+    for gl_c in "$gl_major" "$gl_minor" "$gl_patch"; do
+        case "$gl_c" in ''|*[!0-9]*|0?*|???????*) return 2 ;; esac
+    done
+    if [ "$gl_major" -gt "$GITLEAKS_MIN_MAJOR" ]; then return 0; fi
+    if [ "$gl_major" -eq "$GITLEAKS_MIN_MAJOR" ] && [ "$gl_minor" -ge "$GITLEAKS_MIN_MINOR" ]; then return 0; fi
+    return 1
+}
+run_gitleaks_staged() {
+    if ! command -v gitleaks >/dev/null 2>&1; then
+        echo "[PRE-COMMIT ERROR] 未找到 gitleaks，已阻止提交。" >&2
+        echo "  安装: https://github.com/gitleaks/gitleaks/releases (校验 sha256 后放入 PATH)" >&2
+        echo "  然后执行: scripts/setup-git-hooks.sh" >&2
+        exit 1
+    fi
+    gl_vrc=0; gitleaks_version_check || gl_vrc=$?
+    if [ "$gl_vrc" -ne 0 ]; then
+        if [ "$gl_vrc" -eq 2 ]; then
+            echo "[PRE-COMMIT ERROR] 无法解析 gitleaks 版本（gitleaks version 输出: ${gl_ver_raw:-<空>}），需要 >= ${GITLEAKS_MIN_MAJOR}.${GITLEAKS_MIN_MINOR}.0，已阻止提交。" >&2
+        else
+            echo "[PRE-COMMIT ERROR] gitleaks 版本 ${gl_ver_raw} 低于 ${GITLEAKS_MIN_MAJOR}.${GITLEAKS_MIN_MINOR}.0，已阻止提交。" >&2
+        fi
+        echo "  请升级: https://github.com/gitleaks/gitleaks/releases (校验 sha256 后放入 PATH)" >&2
+        exit 1
+    fi
+    local repo_root tmpd f
+    repo_root="$(git rev-parse --show-toplevel)" || { echo "[PRE-COMMIT ERROR] 无法确定仓库根目录" >&2; exit 1; }
+    # 策略文件只取暂存区（index）版本，与被扫描的暂存内容一致（review3g P3-1）。
+    # gitleaks 默认读取工作区的 .gitleaks.toml，且总会自动读取“源目录/.gitleaksignore”（工作区文件）：
+    # 未跟踪或与暂存区不一致的放行配置/指纹会在提交时生效却不进入提交。因此这两个文件只要是未跟踪、
+    # 或工作区与暂存区不一致（含工作区中删除、换成符号链接），一律拒绝提交，请先暂存（git add）或还原（git restore）。
+    # review3h P3-a：git diff 不比较被标记为 skip-worktree / assume-unchanged 的文件（会被绕过），这里改为：
+    #   1) git ls-files -v 的标记必须是 "H"（S=skip-worktree，小写=assume-unchanged，M=未合并，一律拒绝）；
+    #   2) 直接比对暂存区 blob 与工作区文件的字节（git show ":<f>" | cmp），不依赖 git 的索引状态缓存。
+    #   （启用 core.autocrlf / clean 过滤器时字节比对可能误拒，属于 fail-closed，按提示处理即可。）
+    tmpd="$(mktemp -d "${TMPDIR:-/tmp}/gitleaks-hook.XXXXXX")" || { echo "[PRE-COMMIT ERROR] mktemp 失败" >&2; exit 1; }
+    for f in .gitleaks.toml .gitleaksignore; do
+        if git -C "$repo_root" ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then
+            git -C "$repo_root" ls-files -v -- "$f" >"$tmpd/tag" 2>/dev/null || { rm -rf "$tmpd"; echo "[PRE-COMMIT ERROR] 无法读取 $f 的索引标记" >&2; exit 1; }
+            gl_tag="$(sed -n '1s/ .*//p' "$tmpd/tag")"
+            if [ "$gl_tag" != "H" ]; then
+                rm -rf "$tmpd"
+                echo "[PRE-COMMIT ERROR] $f 在索引中带有 skip-worktree / assume-unchanged / 未合并标记（git ls-files -v: ${gl_tag:-<空>}），工作区修改会被 git 忽略，已阻止提交。" >&2
+                echo "  请执行 git update-index --no-skip-worktree --no-assume-unchanged -- $f，确认工作区与暂存区一致后重新提交。" >&2
+                exit 1
+            fi
+            if [ -L "$repo_root/$f" ] || [ ! -f "$repo_root/$f" ]; then
+                rm -rf "$tmpd"
+                echo "[PRE-COMMIT ERROR] $f 有未暂存的修改（在工作区中被删除或不是普通文件），gitleaks 策略只认暂存区版本，已阻止提交。" >&2
+                echo "  请先 git add $f 或 git restore $f 后重新提交。" >&2
+                exit 1
+            fi
+            # 先写文件再 cmp（不用管道：pipefail 下 cmp 提前退出会让 git show 收到 SIGPIPE）
+            if ! git -C "$repo_root" show ":$f" >"$tmpd/index-copy" 2>/dev/null || ! cmp -s "$tmpd/index-copy" "$repo_root/$f"; then
+                rm -rf "$tmpd"
+                echo "[PRE-COMMIT ERROR] $f 有未暂存的修改（工作区与暂存区内容不一致），gitleaks 策略只认暂存区版本，已阻止提交。" >&2
+                echo "  请先 git add $f 或 git restore $f 后重新提交。" >&2
+                exit 1
+            fi
+        elif [ -e "$repo_root/$f" ] || [ -L "$repo_root/$f" ]; then
+            rm -rf "$tmpd"
+            echo "[PRE-COMMIT ERROR] $f 未跟踪（不在暂存区），会被 gitleaks 读取却不进入提交，已阻止提交。" >&2
+            echo "  请先 git add $f 或删除该文件后重新提交。" >&2
+            exit 1
+        fi
+    done
+    rm -f "$tmpd/tag" "$tmpd/index-copy"
+    if git -C "$repo_root" cat-file -e ":.gitleaks.toml" 2>/dev/null; then
+        git -C "$repo_root" show ":.gitleaks.toml" >"$tmpd/gitleaks.toml" || { rm -rf "$tmpd"; echo "[PRE-COMMIT ERROR] 无法读取暂存区的 .gitleaks.toml" >&2; exit 1; }
+        # review3h P3-a：与 CI 相同，用 gitleaks-config-check.py 检查暂存区配置（[extend] path 会读取工作区文件，拒绝）。
+        # 检查脚本同样取暂存区版本（工作区里未暂存的改动不能让检查放水）；缺脚本、缺 python3 / tomllib（3.11+）均拒绝。
+        if ! git -C "$repo_root" show ":.github/scripts/gitleaks-config-check.py" >"$tmpd/gitleaks-config-check.py" 2>/dev/null; then
+            rm -rf "$tmpd"
+            echo "[PRE-COMMIT ERROR] 暂存区缺少 .github/scripts/gitleaks-config-check.py，无法检查 .gitleaks.toml，已阻止提交。" >&2
+            exit 1
+        fi
+        if ! command -v python3 >/dev/null 2>&1; then
+            rm -rf "$tmpd"
+            echo "[PRE-COMMIT ERROR] 缺少 python3（需要 3.11+ 的 tomllib）检查 .gitleaks.toml，已阻止提交。" >&2
+            exit 1
+        fi
+        if ! python3 "$tmpd/gitleaks-config-check.py" "$tmpd/gitleaks.toml"; then
+            rm -rf "$tmpd"
+            echo "[PRE-COMMIT ERROR] 暂存区的 .gitleaks.toml 未通过 gitleaks-config-check.py 检查（见上一行），已阻止提交。" >&2
+            exit 1
+        fi
+    else
+        # 暂存区没有配置：显式使用默认规则（不受 GITLEAKS_CONFIG 等环境变量影响）
+        printf '[extend]\nuseDefault = true\n' >"$tmpd/gitleaks.toml"
+    fi
+    if git -C "$repo_root" cat-file -e ":.gitleaksignore" 2>/dev/null; then
+        git -C "$repo_root" show ":.gitleaksignore" >"$tmpd/gitleaksignore" || { rm -rf "$tmpd"; echo "[PRE-COMMIT ERROR] 无法读取暂存区的 .gitleaksignore" >&2; exit 1; }
+    else
+        : >"$tmpd/gitleaksignore"
+    fi
+    # [extend] path 已由上面的 gitleaks-config-check.py 拒绝（review3h P3-a；此前为残余风险）。
+    # --ignore-gitleaks-allow：源码里的 "gitleaks:allow" 行内注释不再豁免任何发现（任何人都能在密钥行后加这条注释）；
+    #   误报只能在 .gitleaks.toml 中按值精确放行（SEC-01A 第三轮 P3-1）。
+    # 已保证 >= 8.25.0，直接使用 `gitleaks git --staged`（不再回退到旧的 `gitleaks protect --staged`，review3g N6）。
+    gitleaks git --pre-commit --staged --redact --no-banner --verbose --ignore-gitleaks-allow \
+        --config "$tmpd/gitleaks.toml" --gitleaks-ignore-path "$tmpd/gitleaksignore" "$repo_root"
+    local rc=$?
+    rm -rf "$tmpd"
+    if [ $rc -ne 0 ]; then
+        echo "" >&2
+        echo "[PRE-COMMIT ERROR] gitleaks 在暂存内容中发现疑似密钥（以上输出已脱敏），提交已被阻止。" >&2
+        echo "  请移除密钥并改为环境变量/密钥管理；若确属误报，请在 .gitleaks.toml 中添加带注释的窄范围 allowlist。" >&2
+        exit 1
+    fi
+    echo "[PRE-COMMIT] gitleaks: 暂存内容未发现密钥"
+}
+run_gitleaks_staged
+
+# 记录 gitleaks 扫描时的暂存区快照。后续步骤不得修改暂存区（否则新暂存的内容未经扫描）。
+INDEX_TREE_SCANNED="$(git write-tree)" || error_exit "无法读取暂存区（git write-tree 失败）"
+
 # 检查是否有Go文件变更
 if git diff --cached --quiet -- '*.go'; then
     warning_msg "未检测到 Go 文件变更，跳过Go相关检查"
@@ -70,20 +201,24 @@ else
     success_msg "go generate 执行成功"
 fi
 
-# 2. 代码格式化检查和自动修复
-info_msg "步骤 2/4: 检查代码格式..."
-
-# 查找所有需要格式化的Go文件
-UNFORMATTED_FILES=$(go fmt ./...)
-if [ -n "$UNFORMATTED_FILES" ]; then
-    warning_msg "以下文件已自动格式化:"
-    echo "$UNFORMATTED_FILES"
-    
-    # 将格式化后的文件添加到暂存区
-    for file in $UNFORMATTED_FILES; do
-        git add "$file"
-    done
-    warning_msg "格式化后的文件已自动添加到暂存区"
+# 2. 代码格式检查（只检查，不修改、不暂存）
+# 只检查“暂存的” .go 文件的“暂存版本”内容（git cat-file blob :path），与 gitleaks 扫描的内容一致。
+# 旧实现在 gitleaks 之后执行 `go fmt ./...` 并 `git add`，会把工作区中未暂存的改动（甚至从未暂存过的
+# .go 文件）连同其中未经扫描的密钥一起加入提交（SEC-01A 审查 G1/G2），已移除。
+info_msg "步骤 2/4: 检查暂存的 Go 文件格式 (gofmt)..."
+command -v gofmt >/dev/null 2>&1 || error_exit "未找到 gofmt，无法检查代码格式"
+UNFORMATTED_FILES=()
+while IFS= read -r -d '' file; do
+    if [ -n "$(git cat-file blob ":$file" | gofmt -l 2>&1)" ]; then
+        UNFORMATTED_FILES+=("$file")
+    fi
+done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.go')
+if [ ${#UNFORMATTED_FILES[@]} -gt 0 ]; then
+    echo -e "${RED}[PRE-COMMIT ERROR]${NC} 以下暂存的 Go 文件未按 gofmt 格式化（检查的是暂存版本）:"
+    printf '  %s\n' "${UNFORMATTED_FILES[@]}"
+    echo "请自行格式化并重新暂存后再提交，例如:"
+    echo "  gofmt -w <文件> && git add -p <文件>   # 注意只暂存你确认要提交的内容"
+    exit 1
 fi
 success_msg "代码格式检查完成"
 
@@ -122,6 +257,11 @@ if [ -n "$GENERATED_FILES" ]; then
     warning_msg "发现新生成的Go文件:"
     echo "$GENERATED_FILES"
     warning_msg "请检查这些文件是否应该被提交，如需要请手动 git add"
+fi
+
+# 防御性检查：gitleaks 扫描之后暂存区不得被任何步骤修改（如 go generate 的副作用），否则拒绝提交。
+if [ "$(git write-tree)" != "$INDEX_TREE_SCANNED" ]; then
+    error_exit "gitleaks 扫描后暂存区发生了变化，新暂存的内容未经密钥扫描，已阻止提交。请检查后重新 git commit。"
 fi
 
 success_msg "所有检查通过，准备提交"

@@ -8,7 +8,7 @@ USE cloudops;
 SET time_zone = '+08:00';
 
 -- 创建用户（如果需要）
--- CREATE USER IF NOT EXISTS 'cloudops'@'%' IDENTIFIED BY 'cloudops123';
+-- CREATE USER IF NOT EXISTS 'cloudops'@'%' IDENTIFIED BY '<请替换为强口令，勿提交真实值>';
 -- GRANT ALL PRIVILEGES ON cloudops.* TO 'cloudops'@'%';
 -- FLUSH PRIVILEGES;
 

@@ -1,0 +1,99 @@
+name: gitleaks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+# PR 的新推送可以取消旧的扫描（PR 最终以最新 head 为准）；push 不取消，否则被取消的 push 中的提交永远不会被补扫。
+# push 的 group 带 run_id 使每次运行独立：GitHub 会取消同组中“排队中”的旧运行（与 cancel-in-progress 无关）。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # 官方发行版二进制（免费，不需要 gitleaks-action 的组织 license）
+  GITLEAKS_VERSION: 8.30.1
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+  # 同时扫描整个工作树。config/ 与 internal/ 下的硬编码默认密钥已在 sched/w1-mantou（SEC-22）中移除；
+  # 与该分支合并后的工作树经 gitleaks dir 扫描为 0 条。单独的 sched/w1-shaomai 未包含该修复，此步骤会失败。
+  GITLEAKS_SCAN_TREE: "true"
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      # 固定到完整 commit SHA（v4.4.0，git ls-remote https://github.com/actions/checkout refs/tags/v4.4.0 核对）
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # 范围计算需要完整历史与 origin/<默认分支>
+          persist-credentials: false # 不把 GITHUB_TOKEN 写入 .git/config（本 job 不需要推送）
+
+      # 固定到完整 commit SHA（v7.1.0，git ls-remote https://github.com/actions/setup-python refs/tags/v7.1.0 核对）
+      # gitleaks-config-check.py 需要 Python 3.11+ 的 tomllib，不依赖 runner 镜像自带的 python3 版本
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install gitleaks (pinned + sha256)
+        run: |
+          set -euo pipefail
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "/tmp/${tarball}" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${tarball}"
+          echo "${GITLEAKS_SHA256}  /tmp/${tarball}" | sha256sum -c -
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf "/tmp/${tarball}" -C "$HOME/.local/bin" gitleaks
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Scan new commits
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$PWD"
+          # 历史中已存在的密钥由 SEC-01B（轮换/是否重写历史）处理，CI 只扫描本次新增的提交，
+          # 避免存量历史阻塞所有流水线；新提交中出现任何密钥都会使 job 失败。
+          # 范围计算见 .github/scripts/gitleaks-range.sh：首推 / force-push 时按默认分支的 merge-base 确定范围，
+          # 推送默认分支本身且无可用 before 时全量扫描；无法确定完整范围则失败（不再退化成只扫 HEAD）。
+          range="$(bash .github/scripts/gitleaks-range.sh)"
+          # gitleaks 8.30.1 在 git log 报错（如无效范围）时仍以 0 退出，这里先校验范围可解析。
+          git rev-list ${range} >/dev/null
+          echo "gitleaks scan range: ${range}"
+          # --diff-merges=first-parent：merge 提交按相对第一父提交的差异输出，
+          # 冲突解决 / evil merge 中引入的内容也会被扫描（默认 git log -p 不输出 merge 提交的差异）。
+          # 配置与指纹忽略列表只取自默认分支上的提交，不信任本次提交中的版本：push 默认分支 / PR 进默认分支用范围起点，
+          # push 其他分支 / tag、PR 进其他分支一律用 origin/<默认分支>（扫描起点 before 可能是攻击者上一次推送的、
+          # 已经把 .gitleaks.toml 改成全部放行的提交，review3g N2）。策略提交上没有则用默认规则 / 空列表。
+          # 因此对这两个文件的修改要等合入默认分支后才对后续扫描生效（见 .github/scripts/gitleaks-base-config.sh）。
+          bash .github/scripts/gitleaks-base-config.sh "${range}" "${RUNNER_TEMP}/gitleaks-base"
+          # --ignore-gitleaks-allow：源码中的 "gitleaks:allow" 行内注释不豁免任何发现。
+          gitleaks git --redact --no-banner --verbose --exit-code 1 --ignore-gitleaks-allow \
+            --config "${RUNNER_TEMP}/gitleaks-base/gitleaks.toml" \
+            --gitleaks-ignore-path "${RUNNER_TEMP}/gitleaks-base/gitleaksignore" \
+            --report-format json --report-path "${RUNNER_TEMP}/gitleaks-commits.json" \
+            --log-opts="--diff-merges=first-parent ${range}" .
+
+      - name: Scan working tree (HEAD)
+        if: env.GITLEAKS_SCAN_TREE == 'true'
+        # 与上一步使用同一份基准配置（上一步失败时本步骤不会运行）
+        run: |
+          set -euo pipefail
+          cfg="${RUNNER_TEMP}/gitleaks-base/gitleaks.toml"
+          ign="${RUNNER_TEMP}/gitleaks-base/gitleaksignore"
+          if [ ! -f "$cfg" ] || [ ! -f "$ign" ]; then
+            echo "ERROR: 缺少基准 gitleaks 配置（应由 Scan new commits 步骤生成）" >&2
+            exit 1
+          fi
+          if [ -e .gitleaksignore ]; then mv .gitleaksignore "${RUNNER_TEMP}/gitleaks-base/head.gitleaksignore"; fi
+          gitleaks dir --redact --no-banner --verbose --exit-code 1 --ignore-gitleaks-allow \
+            --config "$cfg" --gitleaks-ignore-path "$ign" \
+            --report-format json --report-path "${RUNNER_TEMP}/gitleaks-tree.json" .

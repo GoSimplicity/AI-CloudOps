@@ -64,6 +64,14 @@ services:
       ENV: production
       SERVER_PORT: "8889"
       PROMETHEUS_HTTP_SD_API: ${PROMETHEUS_HTTP_SD_API:-http://backend:8889/api/not_auth/getTreeNodeBindIps}
+      # 告警推送地址：backend 按它生成 Alertmanager 的 webhook 接收地址，目标是 webhook 服务（不是 backend 自己），
+      # 与 alertmanager.yml 的 http://webhook:8889/api/v1/alerts/receive 一致。本模板用 Compose 默认网络，服务名 webhook 可解析；
+      # 端口 8889 来自 webhook 镜像内 config/webhook.yaml（compose 不给 webhook 传 WEBHOOK_PORT），两边改端口要同步。
+      # 不设时代码默认 http://localhost:8889/...：Alertmanager 按它推送，localhost 指向 Alertmanager 所在的容器或主机。完整 URL 和 host:port 两种写法代码都接受；
+      # 完整 URL 的 scheme 建议写小写 http:// 或 https://，不区分大小写（合入 w1 后 HTTP:// 也按完整 URL 处理；合入前的旧代码区分大小写）。
+      # Alertmanager 在 Compose 网络外（解析不了服务名 webhook）时，在 .env 或 shell 环境里设 PROMETHEUS_ALERT_WEBHOOK_ADDR
+      # 覆盖为它能访问到的 webhook 地址（webhook 默认不发布端口，需自行暴露）；未设或为空时用下面的默认值。
+      PROMETHEUS_ALERT_WEBHOOK_ADDR: ${PROMETHEUS_ALERT_WEBHOOK_ADDR:-http://webhook:8889/api/v1/alerts/receive}
       MYSQL_ADDR: cloudops:${MYSQL_PASSWORD:?Generate .env first}@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local
       MYSQL_MAX_OPEN_CONNS: ${MYSQL_MAX_OPEN_CONNS:-20}
       MYSQL_MAX_IDLE_CONNS: ${MYSQL_MAX_IDLE_CONNS:-5}
@@ -75,6 +83,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?Generate .env first}
       JWT_KEY1: ${JWT_KEY1:?Generate .env first}
       JWT_KEY2: ${JWT_KEY2:?Generate .env first}
+      # Match config/config.production.yaml; the runtime image contains no config files.
       JWT_ISSUER: ${JWT_ISSUER:-K5mBPBYNQeNWEBvCTE5msog3KSGTdhmx}
       JWT_EXPIRATION: "30"
       TREE_PASSWORD_ENCRYPTION_KEY: ${TREE_PASSWORD_ENCRYPTION_KEY:?Generate .env first}
@@ -145,6 +154,53 @@ services:
       retries: 5
       start_period: 30s
 
+  webhook:
+    <<: *runtime
+    # Prometheus Alertmanager 告警接收服务（cmd/webhook）；只在 Compose 内网监听 8889，不发布端口。
+    # 监听端口来自镜像内 config/webhook.yaml 的 webhook.port（8889）。WEBHOOK_PORT：合入 w1 前不起作用，w1 之后由配置生效
+    # （优先级 WEBHOOK_PORT > 配置文件 > 默认 8889）；compose 没有传这个变量，所以这里合入前后都是 8889。
+    # 改端口：w1 前挂载配置并加 --config，w1 后也可在 environment 里传 WEBHOOK_PORT；都要同步 alertmanager.yml 与 backend 的告警推送地址
+    image: cloudops-webhook:${RELEASE_VERSION:-local}
+    build:
+      context: ../..
+      dockerfile: deploy/release/webhook.Dockerfile
+      args:
+        GOPROXY: ${GO_MODULE_PROXY:-https://proxy.golang.org,direct}
+    environment:
+      # 完整 DSN（含口令），由 scripts/release-env.py 依据 MYSQL_PASSWORD 生成；webhook 不读取 backend 的 MYSQL_ADDR
+      WEBHOOK_MYSQL_ADDR: ${WEBHOOK_MYSQL_ADDR:?Run python3 scripts/release-env.py (or --add-missing for an existing .env)}
+      # 仅在 --profile alerting 启动 alertmanager 时可达；未启用时静默/取消静默接口返回失败，不影响告警接收
+      WEBHOOK_ALERT_MANAGER_API: http://alertmanager:9093
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      # 代码中没有专用健康端点：GET /api/v1/alerts/silence 缺 fingerprint 时不访问数据库/Alertmanager，直接返回 HTTP 200。
+      # 进程启动时 gorm.Open 会 Ping MySQL，连不上即退出，因此 HTTP 可响应即表示已连上 MySQL。
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8889/api/v1/alerts/silence]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  alertmanager:
+    <<: *runtime
+    # 可选：默认不启动，`docker compose --profile alerting up -d` 时才启动
+    profiles: [alerting]
+    image: prom/alertmanager:v0.28.1
+    command: [--config.file=/etc/alertmanager/alertmanager.yml, --storage.path=/alertmanager]
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager:/alertmanager
+    depends_on:
+      webhook:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:9093/-/ready]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
   web:
     <<: *runtime
     image: cloudops-web:${RELEASE_VERSION:-local}
@@ -184,3 +240,4 @@ volumes:
   redis_data:
   prometheus:
   aiops:
+  alertmanager:

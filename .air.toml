@@ -22,7 +22,7 @@ bin = "tmp/ai-cloudops"
 cmd = "go build -o ./tmp/ai-cloudops main.go"
 
 # 自定义二进制文件
-full_bin = "APP_ENV=development ./tmp/ai-cloudops"
+full_bin = "ENV=development ./tmp/ai-cloudops"  # SEC-27：后端只读 ENV，APP_ENV 不生效；未设置/未知取值拒绝启动
 
 # 监控的文件扩展名
 include_ext = ["go", "yaml", "yml", "json", "toml"]

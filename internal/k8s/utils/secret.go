@@ -27,6 +27,7 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	corev1 "k8s.io/api/core/v1"
@@ -104,19 +105,24 @@ func CleanSecretForYAML(secret *corev1.Secret) *corev1.Secret {
 	cleaned.ObjectMeta.ManagedFields = nil
 
 	if cleaned.Annotations != nil {
-		delete(cleaned.Annotations, "kubectl.kubernetes.io/last-applied-configuration")
+		delete(cleaned.Annotations, LastAppliedConfigAnnotation)
 	}
 
 	return cleaned
 }
 
-// SecretToYAML 将 Secret 转换为 YAML 字符串
+// SecretToYAML 将 Secret 转换为脱敏后的 YAML 字符串：
+// data/stringData 的值替换为 SecretRedactedPlaceholder，last-applied-configuration 注解被移除。
+// 明文只能通过 reveal 接口获取。
 func SecretToYAML(sec *corev1.Secret) (string, error) {
 	if sec == nil {
 		return "", fmt.Errorf("Secret 不能为空")
 	}
-	clean := CleanSecretForYAML(sec)
-	b, err := yaml.Marshal(clean)
+	obj, err := redactedSecretYAMLObject(sec)
+	if err != nil {
+		return "", fmt.Errorf("转换为YAML失败: %w", err)
+	}
+	b, err := yaml.Marshal(obj)
 	if err != nil {
 		return "", fmt.Errorf("转换为YAML失败: %w", err)
 	}
@@ -128,11 +134,18 @@ func YAMLToSecret(y string) (*corev1.Secret, error) {
 	if y == "" {
 		return nil, fmt.Errorf("YAML 字符串不能为空")
 	}
-	var sec corev1.Secret
-	if err := yaml.Unmarshal([]byte(y), &sec); err != nil {
-		return nil, fmt.Errorf("解析YAML失败: %w", err)
+	// 与占位符检查/恢复共用同一个类型化解析：单文档、无重复键、错误不回显值
+	sec, placeholders, err := parseSecretYAMLTyped(y)
+	if err != nil {
+		return nil, err
 	}
-	return &sec, nil
+	if len(placeholders) > 0 {
+		return nil, fmt.Errorf("data 中键 %s 仍为脱敏占位符 %s，请填写真实值", strings.Join(placeholders, ", "), SecretRedactedPlaceholder)
+	}
+	if err := checkNoSecretPlaceholder(sec); err != nil {
+		return nil, err
+	}
+	return sec, nil
 }
 
 func ValidateSecretData(secretType corev1.SecretType, data map[string][]byte, stringData map[string]string) error {
