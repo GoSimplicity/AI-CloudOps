@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/base64"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -119,3 +120,83 @@ func TestRedactAndRestoreSameKeyInDataAndStringData(t *testing.T) {
 		t.Fatalf("string_data_keys 不符: %+v", k)
 	}
 }
+
+// secretYAMLDocument 必须与 corev1.Secret 的字段一一对应（名称、JSON 标签、类型；仅 data 的值类型不同），
+// 否则 k8s 升级新增字段时会被静默丢弃。
+func TestSecretYAMLDocumentMatchesCoreV1Secret(t *testing.T) {
+	want := reflect.TypeOf(corev1.Secret{})
+	got := reflect.TypeOf(secretYAMLDocument{})
+	if want.NumField() != got.NumField() {
+		t.Fatalf("字段数不一致: corev1.Secret=%d secretYAMLDocument=%d", want.NumField(), got.NumField())
+	}
+	for i := 0; i < want.NumField(); i++ {
+		w, g := want.Field(i), got.Field(i)
+		if w.Name != g.Name || w.Anonymous != g.Anonymous || w.Tag.Get("json") != g.Tag.Get("json") {
+			t.Fatalf("第 %d 个字段不一致: %s %q vs %s %q", i, w.Name, w.Tag.Get("json"), g.Name, g.Tag.Get("json"))
+		}
+		if w.Name == "Data" {
+			continue
+		}
+		if w.Type != g.Type {
+			t.Fatalf("字段 %s 类型不一致: %s vs %s", w.Name, w.Type, g.Type)
+		}
+	}
+}
+
+// 对合法的单文档 YAML，类型化解析结果必须与直接 yaml.Unmarshal 到 corev1.Secret 完全一致。
+func TestYAMLToSecretMatchesDirectUnmarshal(t *testing.T) {
+	newB64 := base64.StdEncoding.EncodeToString([]byte(redactFixtureNew))
+	inputs := []string{
+		"apiVersion: v1\nkind: Secret\nmetadata:\n  name: app\n  namespace: ops\n  labels:\n    port: 8080\n    on: yes\n  annotations:\n    a: \"1\"\ntype: Opaque\nimmutable: true\ndata:\n  k: " + newB64 + "\n  n: null\n  e: \"\"\nstringData:\n  s: " + redactFixtureString + "\n  i: 12\n",
+		"apiVersion: v1\nkind: Secret\nmetadata:\n  name: app\nData:\n  k: |\n    " + newB64[:8] + "\n    " + newB64[8:] + "\nStringData:\n  s: x\n",
+		"---\nkind: Secret\nmetadata: {name: app, creationTimestamp: null}\ndata: {}\n",
+		"kind: Secret\n",
+	}
+	for i, y := range inputs {
+		var direct corev1.Secret
+		if err := yaml.Unmarshal([]byte(y), &direct); err != nil {
+			t.Fatalf("输入 %d 直接解析失败", i)
+		}
+		typed, err := YAMLToSecret(y)
+		if err != nil {
+			t.Fatalf("输入 %d 类型化解析失败: %v", i, err)
+		}
+		if !reflect.DeepEqual(&direct, typed) {
+			t.Fatalf("输入 %d 解析结果不一致", i)
+		}
+	}
+}
+
+// 恢复后重新生成的 YAML 必须能被 YAMLToSecret 解析，且不含占位符。
+func TestRestoreRedactedSecretYAMLOutputReparses(t *testing.T) {
+	existing := &corev1.Secret{Data: map[string][]byte{"k": []byte(redactFixtureData)}}
+	in := "apiVersion: v1\nkind: Secret\nmetadata:\n  name: app\nDATA:\n  k: " + SecretRedactedPlaceholder + "\n"
+	out, err := RestoreRedactedSecretYAML(in, existing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, SecretRedactedPlaceholder) {
+		t.Fatal("恢复结果仍含占位符")
+	}
+	sec, err := YAMLToSecret(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(sec.Data["k"]) != redactFixtureData || sec.Name != "app" {
+		t.Fatal("恢复结果不对")
+	}
+}
+
+func TestSanitizeSecretYAMLError(t *testing.T) {
+	err := sanitizeSecretYAMLError(errString("line 3: cannot decode !!str `" + redactFixtureNew + "` as a !!int; unsupported map key of type: <nil>, key: <nil>, value: \"" + redactFixtureNew + "\""))
+	if strings.Contains(err.Error(), redactFixtureNew) {
+		t.Fatal("未抹掉回显的值")
+	}
+	if !strings.Contains(err.Error(), "line 3") {
+		t.Fatal("应保留位置信息")
+	}
+}
+
+type errString string
+
+func (e errString) Error() string { return string(e) }

@@ -27,6 +27,7 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	corev1 "k8s.io/api/core/v1"
@@ -133,11 +134,18 @@ func YAMLToSecret(y string) (*corev1.Secret, error) {
 	if y == "" {
 		return nil, fmt.Errorf("YAML 字符串不能为空")
 	}
-	var sec corev1.Secret
-	if err := yaml.Unmarshal([]byte(y), &sec); err != nil {
-		return nil, fmt.Errorf("解析YAML失败: %w", err)
+	// 与占位符检查/恢复共用同一个类型化解析：单文档、无重复键、错误不回显值
+	sec, placeholders, err := parseSecretYAMLTyped(y)
+	if err != nil {
+		return nil, err
 	}
-	return &sec, nil
+	if len(placeholders) > 0 {
+		return nil, fmt.Errorf("data 中键 %s 仍为脱敏占位符 %s，请填写真实值", strings.Join(placeholders, ", "), SecretRedactedPlaceholder)
+	}
+	if err := checkNoSecretPlaceholder(sec); err != nil {
+		return nil, err
+	}
+	return sec, nil
 }
 
 func ValidateSecretData(secretType corev1.SecretType, data map[string][]byte, stringData map[string]string) error {
