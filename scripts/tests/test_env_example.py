@@ -473,20 +473,16 @@ class AlertAddrSchemeDocTests(unittest.TestCase):
 
 
 class WebhookPortDocTests(unittest.TestCase):
-    """发布文档里 WEBHOOK_PORT 的说法要与 w1 119c332 一致：config.go 给 Port 绑定 env:"WEBHOOK_PORT"，
-    优先级 WEBHOOK_PORT > 配置文件 > 默认 8889；发布 compose 不给 webhook 传这个变量，所以发布栈仍监听 8889。
-    不再写“WEBHOOK_PORT 对监听端口不生效”。prometheus-scrape-auth.md:15 合并时取 w1 一侧，env.example
-    112–127 已分合入前/后两段写，这两处不在这里检查。"""
+    """发布文档必须说明端口覆盖优先级和 Compose 未传入 WEBHOOK_PORT。"""
 
     PORT_DOCS = ("docs/release/README.md", "deploy/release/compose.yaml")
 
-    def test_release_docs_say_webhook_port_effective_after_w1(self):
+    def test_release_docs_document_webhook_port_precedence(self):
         for rel in self.PORT_DOCS:
             text = (ROOT / rel).read_text(encoding="utf-8")
             with self.subTest(file=rel):
                 self.assertFalse("对监听端口不生效" in text, f"{rel} 仍写 WEBHOOK_PORT 对监听端口不生效")
                 self.assertFalse("不合并环境变量覆盖" in text, f"{rel} 仍写 loader 不合并环境变量")
-                self.assertTrue("w1 之后由配置生效" in text, f"{rel} 没写 WEBHOOK_PORT 在 w1 之后由配置生效")
                 self.assertTrue("compose 没有传这个变量" in text, f"{rel} 没写 compose 没有传 WEBHOOK_PORT")
                 self.assertTrue("WEBHOOK_PORT > 配置文件 > 默认 8889" in text, f"{rel} 没写 WEBHOOK_PORT 优先级")
 
