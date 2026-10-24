@@ -1,0 +1,10 @@
+# gitleaks 配置（SEC-01A）：在官方默认规则基础上扩展。
+# 规则：只对“确定的误报”（公开样例值/测试夹具/占位符）做窄范围 allowlist，每条都必须写明原因；
+#       绝不对真实密钥做 allowlist —— 真实密钥必须移除并轮换（见 SEC-01B runbook）。
+title = "AI-CloudOps backend gitleaks config"
+
+[extend]
+useDefault = true
+
+# RFC 6455 示例 Sec-WebSocket-Key 的两处误报，改为在 .gitleaksignore 中按指纹精确忽略
+# （共 4 条：工作树 2 条 + 历史提交 24b8315 中 2 条）。原先按路径加正则的 allowlist 已删除，因为它的范围更宽。

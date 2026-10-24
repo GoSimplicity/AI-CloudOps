@@ -17,6 +17,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     
 FROM alpine:latest
 ENV TZ=Asia/Shanghai
+# SEC-27：镜像默认按生产启动（ENV 未设置会拒绝启动）；本地/开发运行请在 compose 或 docker run -e 显式覆盖为 development
+ENV ENV=production
 RUN apk --no-cache add ca-certificates tzdata wget curl bash python3 nodejs && \
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
     echo $TZ > /etc/timezone

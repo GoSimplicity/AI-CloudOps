@@ -12,11 +12,11 @@
 - 刷新令牌有效期不变（7 天）。前端（`AI-CloudOps-web`）已开启 `enableRefreshToken`：收到 401 后调用
   `POST /api/user/refresh_token` 换取新访问令牌并重放原请求，刷新失败才回到登录页。普通 HTTP 请求对用户无感。
 - 若部署环境显式设置了 `JWT_EXPIRATION`，以环境变量为准；请勿按秒填写。
-- **上限 1440 分钟（24 小时）**：`Config.Validate` 中超过 1440 时，`ENV=production` 拒绝启动并报错；
-  其他环境在启动时记一条告警日志（标准错误输出，`[配置告警]` 开头）后继续启动。
-  生产环境判断统一使用 `pkg/runenv.IsProduction()`：`ENV` 去首尾空白、忽略大小写后等于 `production`
-  （`production`、` Production `、`PRODUCTION` 均视为生产）。配置文件选择（`internal/config/loader.go`）、
-  `Config.Validate` 和 SSH `known_hosts` 要求（`pkg/ssh/hostkey.go`）使用同一判断。
+- **上限 1440 分钟（24 小时）**：`Config.Validate` 中超过 1440 时，生产环境拒绝启动并报错；
+  开发环境（`development`/`dev`）在启动时记一条告警日志（标准错误输出，`[配置告警]` 开头）后继续启动。
+  生产环境判断统一使用 `pkg/envmode`（失败即关闭）：`ENV` 去首尾空白、忽略大小写后为 `production`/`prod`/`prd`
+  视为生产；未设置、为空或无法识别（如 `test`、`production-x`）时启动入口直接拒绝，`Config.Validate` 也按生产校验。
+  配置文件选择（`internal/config/loader.go`）、`Config.Validate` 和 SSH `known_hosts` 要求（`pkg/ssh/hostkey.go`）使用同一判断。
 - `JWT_EXPIRATION` 小于等于 0 时不报错，但记一条告警日志，提示“将使用默认值 30”（`pkg/jwt` 对非正数回退到 30 分钟）。
   因此按旧习惯填 `3600` 的生产环境升级后会启动失败，需改为 `30`。
 
@@ -26,7 +26,8 @@
 需要**重新登录一次**；之后签发的令牌都带 iss，正常续期。建议在发布公告中提前告知。
 
 此外 `pkg/jwt.NewJWTHandler` 现在在 issuer 为空（或全是空白）时返回 `ErrEmptyIssuer`，后端启动失败，
-不再签发没有 iss 的令牌。`jwt.issuer` 取自 `config/*.yaml`，可用 `JWT_ISSUER` 覆盖；修改该值同样会使已签发令牌全部失效。
+不再签发没有 iss 的令牌。`jwt.issuer` 取自 `config/*.yaml`，可用 `JWT_ISSUER` 覆盖；发布镜像不含配置文件，
+因此发布 compose 显式注入与仓库 YAML 相同的签发者默认值。修改该值同样会使已签发令牌全部失效。
 
 ## 3. JWT 密钥校验（所有环境，含开发环境）
 

@@ -1,0 +1,67 @@
+name: gitleaks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # 官方发行版二进制（免费，不需要 gitleaks-action 的组织 license）
+  GITLEAKS_VERSION: 8.30.1
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+  # 同时扫描整个工作树。config/ 与 internal/ 下的硬编码默认密钥已在 sched/w1-mantou（SEC-22）中移除；
+  # 与该分支合并后的工作树经 gitleaks dir 扫描为 0 条。单独的 sched/w1-shaomai 未包含该修复，此步骤会失败。
+  GITLEAKS_SCAN_TREE: "true"
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks (pinned + sha256)
+        run: |
+          set -euo pipefail
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "/tmp/${tarball}" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${tarball}"
+          echo "${GITLEAKS_SHA256}  /tmp/${tarball}" | sha256sum -c -
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf "/tmp/${tarball}" -C "$HOME/.local/bin" gitleaks
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Scan new commits
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$PWD"
+          # 历史中已存在的密钥由 SEC-01B（轮换/是否重写历史）处理，CI 只扫描本次新增的提交，
+          # 避免存量历史阻塞所有流水线；新提交中出现任何密钥都会使 job 失败。
+          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_BASE_SHA" ]; then
+            range="${PR_BASE_SHA}..${HEAD_SHA}"
+          elif [ -n "${PUSH_BEFORE:-}" ] && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ] \
+               && git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
+            range="${PUSH_BEFORE}..${HEAD_SHA}"
+          else
+            # 新分支首推：扫描不在默认分支上的提交；无默认分支信息时只扫 HEAD 提交。
+            base="$(git merge-base "${HEAD_SHA}" origin/HEAD 2>/dev/null || true)"
+            if [ -n "$base" ] && [ "$base" != "$HEAD_SHA" ]; then range="${base}..${HEAD_SHA}"; else range="-1 ${HEAD_SHA}"; fi
+          fi
+          echo "gitleaks scan range: ${range}"
+          gitleaks git --redact --no-banner --verbose --exit-code 1 \
+            --config .gitleaks.toml --log-opts="${range}" .
+
+      - name: Scan working tree (HEAD)
+        if: env.GITLEAKS_SCAN_TREE == 'true'
+        run: gitleaks dir --redact --no-banner --verbose --exit-code 1 --config .gitleaks.toml .

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/permission"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
@@ -61,7 +62,7 @@ func TestServiceAccountTokenAdminBypass(t *testing.T) {
 	for _, method := range []string{"GET", "POST"} {
 		engine := gin.New()
 		engine.Use(func(c *gin.Context) { c.Set("user", jwt.UserClaims{Uid: 1, Username: "admin"}); c.Next() })
-		engine.Use(NewAuthMiddleware(aiProxyRoles{}).CheckAuth())
+		engine.Use(NewAuthMiddleware(fixedRoles{roles: []*model.Role{{Code: permission.SuperAdminRoleCode, IsSystem: 1, Status: 1}}}).CheckAuth())
 		engine.Handle(method, model.K8sServiceAccountTokenRoute, func(c *gin.Context) { c.Status(204) })
 		rec := httptest.NewRecorder()
 		engine.ServeHTTP(rec, httptest.NewRequest(method, "/api/k8s/serviceaccount/1/ops/app/token", nil))

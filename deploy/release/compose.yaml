@@ -75,6 +75,8 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?Generate .env first}
       JWT_KEY1: ${JWT_KEY1:?Generate .env first}
       JWT_KEY2: ${JWT_KEY2:?Generate .env first}
+      # Match config/config.production.yaml; the runtime image contains no config files.
+      JWT_ISSUER: ${JWT_ISSUER:-K5mBPBYNQeNWEBvCTE5msog3KSGTdhmx}
       JWT_EXPIRATION: "30"
       TREE_PASSWORD_ENCRYPTION_KEY: ${TREE_PASSWORD_ENCRYPTION_KEY:?Generate .env first}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Generate .env first}
@@ -144,6 +146,52 @@ services:
       retries: 5
       start_period: 30s
 
+  webhook:
+    <<: *runtime
+    # Prometheus Alertmanager 告警接收服务（cmd/webhook）；只在 Compose 内网监听 8889，不发布端口。
+    # 监听端口来自镜像内 config/webhook.yaml 的 webhook.port（8889）：WEBHOOK_PORT 环境变量对监听端口不生效
+    # （loader 用 viper.UnmarshalKey("webhook") 取 cfg.Port，不合并环境变量覆盖），改端口需挂载配置并加 --config
+    image: cloudops-webhook:${RELEASE_VERSION:-local}
+    build:
+      context: ../..
+      dockerfile: deploy/release/webhook.Dockerfile
+      args:
+        GOPROXY: ${GO_MODULE_PROXY:-https://proxy.golang.org,direct}
+    environment:
+      # 完整 DSN（含口令），由 scripts/release-env.py 依据 MYSQL_PASSWORD 生成；webhook 不读取 backend 的 MYSQL_ADDR
+      WEBHOOK_MYSQL_ADDR: ${WEBHOOK_MYSQL_ADDR:?Run python3 scripts/release-env.py (or --add-missing for an existing .env)}
+      # 仅在 --profile alerting 启动 alertmanager 时可达；未启用时静默/取消静默接口返回失败，不影响告警接收
+      WEBHOOK_ALERT_MANAGER_API: http://alertmanager:9093
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      # 代码中没有专用健康端点：GET /api/v1/alerts/silence 缺 fingerprint 时不访问数据库/Alertmanager，直接返回 HTTP 200。
+      # 进程启动时 gorm.Open 会 Ping MySQL，连不上即退出，因此 HTTP 可响应即表示已连上 MySQL。
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8889/api/v1/alerts/silence]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  alertmanager:
+    <<: *runtime
+    # 可选：默认不启动，`docker compose --profile alerting up -d` 时才启动
+    profiles: [alerting]
+    image: prom/alertmanager:v0.28.1
+    command: [--config.file=/etc/alertmanager/alertmanager.yml, --storage.path=/alertmanager]
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager:/alertmanager
+    depends_on:
+      webhook:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:9093/-/ready]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
   web:
     <<: *runtime
     image: cloudops-web:${RELEASE_VERSION:-local}
@@ -183,3 +231,4 @@ volumes:
   redis_data:
   prometheus:
   aiops:
+  alertmanager:

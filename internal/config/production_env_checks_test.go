@@ -11,24 +11,30 @@ func prodTestConfig() *Config {
 	return c
 }
 
-// ENV 去首尾空白、忽略大小写后等于 production 即按生产环境校验
+// 生产判定以 pkg/envmode 为准（失败即关闭）：production/prod/prd 去首尾空白、忽略大小写后按生产校验；
+// 空值、test、production-x 等无法识别的取值同样按生产校验（被拒）；只有 development/dev 不执行生产专属检查
 func TestProductionEnvDetectionTrimAndFold(t *testing.T) {
-	for _, env := range []string{"production", " Production ", "PRODUCTION", "\tproduction\n"} {
-		t.Run(env, func(t *testing.T) {
-			t.Setenv("ENV", env)
-			c := prodTestConfig()
-			c.Mock.Enabled = true // 仅生产环境拒绝
-			if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "MOCK_ENABLED") {
-				t.Fatalf("ENV=%q 应按生产环境校验, got %v", env, err)
-			}
-			c = prodTestConfig()
-			c.JWT.Expiration = MaxJWTExpirationMinutes + 1
-			if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "JWT_EXPIRATION") {
-				t.Fatalf("ENV=%q 下 1441 分钟应拒绝启动, got %v", env, err)
-			}
-		})
+	assertProdEnforced := func(t *testing.T, env string) {
+		t.Helper()
+		t.Setenv("ENV", env)
+		c := prodTestConfig()
+		c.Mock.Enabled = true // 仅生产环境拒绝
+		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "MOCK_ENABLED") {
+			t.Fatalf("ENV=%q 应按生产环境校验, got %v", env, err)
+		}
+		c = prodTestConfig()
+		c.JWT.Expiration = MaxJWTExpirationMinutes + 1
+		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "JWT_EXPIRATION") {
+			t.Fatalf("ENV=%q 下 1441 分钟应拒绝启动, got %v", env, err)
+		}
 	}
-	for _, env := range []string{"", "development", "prod", "production-x"} {
+	for _, env := range []string{"production", " Production ", "PRODUCTION", "\tproduction\n", "prod", " PRD "} {
+		t.Run("prod/"+env, func(t *testing.T) { assertProdEnforced(t, env) })
+	}
+	for _, env := range []string{"", "test", "production-x"} {
+		t.Run("fail-closed/"+env, func(t *testing.T) { assertProdEnforced(t, env) })
+	}
+	for _, env := range []string{"development", "dev", " Dev "} {
 		t.Run("non-prod/"+env, func(t *testing.T) {
 			t.Setenv("ENV", env)
 			c := validConfigForTest()
