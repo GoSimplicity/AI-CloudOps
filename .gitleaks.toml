@@ -1,0 +1,26 @@
+# gitleaks 配置（SEC-01A）：在官方默认规则基础上扩展。
+# 规则：只对“确定的误报”（公开样例值/测试夹具/占位符）做窄范围 allowlist，每条都必须写明原因；
+#       绝不对真实密钥做 allowlist —— 真实密钥必须移除并轮换（见 SEC-01B runbook）。
+# 本仓库的钩子与 CI 均带 --ignore-gitleaks-allow：源码中的 "gitleaks:allow" 行内注释不再豁免任何发现，
+# 误报只能在本文件按值精确放行（CI 使用 base 分支上的本文件，改动须经评审合入后才生效）。
+title = "AI-CloudOps backend gitleaks config"
+
+[extend]
+useDefault = true
+
+# RFC 6455 第 1.3 节公开示例 Sec-WebSocket-Key（"the sample nonce" 的 base64），不是凭据。
+# 按“值 + 文件 + 规则”同时满足才放行（condition = "AND"）：
+#   - 同一文件同一行换成其他任何值（如真实密钥）仍会被报；
+#   - 同一个值出现在其他文件也仍会被报。
+# 取代原先 .gitleaksignore 中按 path:rule:line / commit:path:rule:line 的指纹（行号一变就失效、且按行放行任意值）。
+# sched/w1-mantou（8bb2307）已改为运行时构造该值，HEAD 中不再出现该值；但历史仍含该值：
+#   gitleaks 8.30.1 + 默认规则 + --ignore-gitleaks-allow 实测，24b8315 两处（login_test.go 106/127 行）、
+#   125bc27 两处（w1-mantou 上，109/130 行），合计 4 处；用本文件扫描时为 0（2026-10-24 review3g）。
+# 因此只要还会用 HEAD 配置对包含这些提交的历史做全量扫描，本条就必须保留，不能删除。
+[[allowlists]]
+description = "RFC 6455 sample Sec-WebSocket-Key nonce in login_test.go"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^internal/middleware/login_test\.go$''']
+regexTarget = "secret"
+regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''']
