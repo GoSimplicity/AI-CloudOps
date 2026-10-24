@@ -75,6 +75,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?Generate .env first}
       JWT_KEY1: ${JWT_KEY1:?Generate .env first}
       JWT_KEY2: ${JWT_KEY2:?Generate .env first}
+      JWT_ISSUER: ${JWT_ISSUER:-K5mBPBYNQeNWEBvCTE5msog3KSGTdhmx}
       JWT_EXPIRATION: "30"
       TREE_PASSWORD_ENCRYPTION_KEY: ${TREE_PASSWORD_ENCRYPTION_KEY:?Generate .env first}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Generate .env first}
