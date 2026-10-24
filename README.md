@@ -159,6 +159,8 @@ GOTOOLCHAIN=auto go test ./...
 GOTOOLCHAIN=auto go build .
 ```
 
+提交前密钥扫描：运行 `bash scripts/setup-git-hooks.sh` 把 `core.hooksPath` 设为 `.githooks`，并检查本机依赖。需要 **gitleaks >= 8.25.0**（从 [官方发布页](https://github.com/gitleaks/gitleaks/releases) 下载并校验 sha256；版本过低或无法解析时脚本与 pre-commit 钩子都会失败），以及 **Python 3.11+**（提交 `.gitleaks.toml` 时钩子用 `tomllib` 检查配置，缺少时拒绝提交）。本地钩子只是第一道防线，CI 的 gitleaks 工作流是最终兜底。
+
 前端安装、开发端口、类型检查与构建以 [前端 README](https://github.com/GoSimplicity/AI-CloudOps-web#readme) 为准；AIOps 的环境与验证方式见 [生产配置说明](https://github.com/GoSimplicity/AI-CloudOps-aiops/blob/main/docs/production.md)。开发进程连接容器依赖时，可使用部署指南中的只绑定回环地址的 `local-ports.yaml`，不要直接公开数据库端口。
 
 ## 生产部署

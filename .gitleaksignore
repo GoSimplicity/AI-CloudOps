@@ -1,15 +1,18 @@
-# gitleaks 指纹忽略列表（SEC-01A）。gitleaks dir/git/pre-commit 会自动读取仓库根目录下的本文件。
+# gitleaks 指纹忽略列表（SEC-01A）。
 #
-# 只忽略 RFC 6455 第 1.3 节公开示例 Sec-WebSocket-Key（"the sample nonce" 的 base64）
-# 在 internal/middleware/login_test.go 中的两处 generic-api-key 误报，不是凭据。
+# 当前无条目，请保持为空。
 #
-# 注意：指纹带行号，比较脆弱。login_test.go 在这两行之前增删行后，指纹会失效，扫描会重新报出这两处。
-#       届时请用 `gitleaks dir . --redact --config .gitleaks.toml` 确认新行号并更新下面的条目；
-#       不要改成按整个文件忽略。
+# 2026-10-24（第三轮审查 P2-1）：原先 internal/middleware/login_test.go 中 RFC 6455 示例 nonce 的 4 条指纹
+# （工作树 path:rule:109/130；历史 24b8315:...:106/127）已删除。指纹按“文件+规则+行号”放行，
+# 同一行换成真实密钥也会被放行；现改为 .gitleaks.toml 中按值精确匹配的 [[allowlists]]。
+# 实测：删除指纹 + 加 allowlist 后，工作树扫描、以 HEAD 配置做的全量历史扫描均不再报出这两处（证据见 review3/p2-1-measure.log）。
 #
-# 工作树扫描（gitleaks dir / 预提交）：path:rule:line
-internal/middleware/login_test.go:generic-api-key:109
-internal/middleware/login_test.go:generic-api-key:130
-# 历史扫描（gitleaks git，CI 全量扫描）：commit:path:rule:line。这两行在 24b8315 中引入，当时行号为 106/127。
-24b8315ac139a68eceef744508ac3d873ae96bda:internal/middleware/login_test.go:generic-api-key:106
-24b8315ac139a68eceef744508ac3d873ae96bda:internal/middleware/login_test.go:generic-api-key:127
+# 已知限制（review3b）：CI 全量路径（push 默认分支且 before 全零/不可达，范围 = 全部历史）没有可信基准，
+# 工作流按设计使用 gitleaks 默认规则 + 空忽略列表，既不用 .gitleaks.toml 的 allowlist，也不加载本文件。
+# 因此历史提交 24b8315（login_test.go:106/127）、125bc27（:109/130，在 sched/w1-mantou）中的示例 nonce 在该路径下仍会报出，
+# 在这里加 commit:path:rule:line 指纹也不会生效（.github/tests/test-gitleaks-history-fullscan.sh 实测），故不加。
+# 增量路径（PR / 普通 push）用 base 上的配置，且这两个提交合入 main 后不会再落在增量范围内。
+#
+# 如确需新增条目：只允许 commit:path:rule:line 形式的单条历史指纹，写明原因并经评审；
+# 不要用 path:rule:line（会放行该行今后的任何值），也不要按整个文件忽略。
+# 注意：CI 使用 base 分支上的本文件（PR 中对本文件的修改在合入前不生效）。
