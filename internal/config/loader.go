@@ -1204,7 +1204,9 @@ func setDefaults() {
 	viper.SetDefault("prometheus.alert_webhook_file_dir", "/tmp/webhook_files")
 	viper.SetDefault("prometheus.httpSdAPI", "http://localhost:8889/api/not_auth/getTreeNodeBindIps")
 
-	viper.SetDefault("mock.enabled", true)
+	// mock 默认值随环境变化：生产环境（ENV 为 production/prod/prd，或未设置/无法识别）默认关闭，开发/测试环境保持开启。
+	// 显式配置（配置文件 mock.enabled 或环境变量 MOCK_ENABLED）仍然优先；生产环境开启会被 Validate 拒绝。
+	viper.SetDefault("mock.enabled", defaultMockEnabled())
 
 	viper.SetDefault(CronAllowLocalExecKey, false)
 
@@ -1244,6 +1246,19 @@ func setWebhookDefaults(v *viper.Viper) {
 	v.SetDefault("webhook.im_feishu.private_robot_app_id", "")
 	v.SetDefault("webhook.im_feishu.private_robot_app_secret", "")
 	v.SetDefault("webhook.im_feishu.tenant_access_token_api", "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal")
+}
+
+// IsProduction 判断当前进程是否应按生产环境处理，委托给 pkg/envmode，
+// 与 Load 选择配置文件、Validate 的生产校验、pkg/ssh 的主机密钥策略使用同一判定。
+// ENV 会先 TrimSpace、ToLower 再匹配别名（production/prod/prd）；未设置或未知取值按生产处理（fail closed），
+// 而 Load 会对这两种情况直接拒绝启动。
+func IsProduction() bool {
+	return envmode.IsProduction()
+}
+
+// defaultMockEnabled 仅在明确开发环境时开启 mock，其他环境关闭。
+func defaultMockEnabled() bool {
+	return !IsProduction()
 }
 
 func bindEnvVars() {

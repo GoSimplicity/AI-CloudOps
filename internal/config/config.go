@@ -326,7 +326,8 @@ type CronConfig struct {
 
 // MockConfig Mock配置
 type MockConfig struct {
-	Enabled bool `mapstructure:"enabled" env:"MOCK_ENABLED" default:"true"`
+	// 默认值由 setDefaults 决定：生产环境（ENV=production）为 false，其余环境为 true
+	Enabled bool `mapstructure:"enabled" env:"MOCK_ENABLED"`
 }
 
 type NotificationConfig struct {

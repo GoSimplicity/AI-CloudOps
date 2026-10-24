@@ -138,6 +138,10 @@ func (a *App) Run(ctx context.Context) error {
 	if err := a.bootstrapAdmin(ctx); err != nil {
 		return err
 	}
+	// SEC-27：在对外提供服务前检查 admin 是否仍在使用旧内置弱口令（生产拒绝启动，非生产告警）。
+	if err := a.checkLegacyAdminPassword(ctx); err != nil {
+		return err
+	}
 
 	a.server.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -155,6 +159,8 @@ func (a *App) Run(ctx context.Context) error {
 			a.logger.Warn("Mock数据初始化失败", zap.Error(err))
 		}
 	}
+	// 管理员口令只在启动阶段使用：无论是否读取过，都在启动 cron/asynq 等可能派生子进程的组件前清除。
+	a.scrubAdminPasswordEnv()
 
 	// 必须在管理员账号可能被创建（bootstrapAdmin / Mock）之后执行
 	if err := a.bootstrapSuperAdmin(ctx); err != nil {
@@ -283,6 +289,10 @@ func (a *App) initK8sClients(ctx context.Context) error {
 func (a *App) initMockData(ctx context.Context) error {
 	if a.db == nil {
 		return fmt.Errorf("数据库连接为空")
+	}
+	// 纵深防御：配置校验已拒绝生产环境开启 mock，这里再兜底一次，避免绕过 config.Load 的调用方写入 mock 数据。
+	if config.IsProduction() {
+		return fmt.Errorf("生产环境禁止初始化 Mock 数据")
 	}
 
 	startCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)

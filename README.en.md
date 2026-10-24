@@ -144,7 +144,7 @@ If you prefer hex, use `openssl rand -hex 32` (once per key).
 
 The API listens on `http://localhost:8889` (`SERVER_PORT`). `GET /health` is a liveness probe only; it does not mean MySQL, Redis or external services are ready.
 
-Configuration precedence is **environment variables > config file > defaults**. `ENV=production` selects `config/config.production.yaml`; anything else uses `config/config.development.yaml`. You can also pass `--config <file>`.
+Configuration precedence is **environment variables > config file > defaults**. `ENV` is required: `ENV=production` (aliases `prod`, `prd`) selects `config/config.production.yaml`; `ENV=development` (alias `dev`) uses `config/config.development.yaml`. Values are trimmed and case-insensitive. If `ENV` is unset or unrecognised the backend refuses to start; set `ENV=development` in `.env` for local development. You can also pass `--config <file>` (ENV is still required).
 
 ### 3. Run the web console
 
@@ -199,7 +199,7 @@ All settings can be provided as environment variables (see [`env.example`](env.e
 
 | Variable | Description |
 | --- | --- |
-| `ENV` | `development` (default) or `production`. Production turns on the strict checks below. The value is trimmed and compared case-insensitively, so ` Production ` and `PRODUCTION` also count as production. |
+| `ENV` | Required: `development`/`dev` or `production`/`prod`/`prd`, trimmed and case-insensitive. Unset, empty and unknown values, including `test`/`testing`, are rejected. |
 | `SERVER_PORT` | HTTP port, default `8889`. |
 | `SERVER_ALLOWED_ORIGINS` | Comma-separated list of exact browser origins allowed for CORS and WebSocket. Empty means same-origin only. |
 | `MYSQL_ADDR`, `REDIS_ADDR`, `REDIS_PASSWORD` | Database and Redis connection. |
@@ -207,11 +207,12 @@ All settings can be provided as environment variables (see [`env.example`](env.e
 | `CRON_ALLOW_LOCAL_EXEC` | `cron.allow_local_exec`, default `false`. Allows command (type 2) and script (type 4) jobs to run on the backend host. Read at startup; restart the backend after changing it. See the notes below. |
 | `JWT_ISSUER` | Optional. The token issuer is configured as `jwt.issuer` in `config/*.yaml`; set this variable only to override it. The value must not be empty (the backend fails to start otherwise), and changing it invalidates all tokens already issued. After upgrading to the release that requires an issuer (`iss`), all older refresh tokens without `iss` are invalid and every user has to log in again once. |
 | `TREE_PASSWORD_ENCRYPTION_KEY` | Key used to encrypt stored host passwords. Keep it safe: changing it breaks decryption of existing credentials. |
-| `BOOTSTRAP_ADMIN_PASSWORD` | Creates the `admin` account on the first start with an empty database (min. 12 characters). Remove it after the first successful start. Existing users are never reset. |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Creates the `admin` account on the first start with an empty database (min. 12 characters). Remove it after the first successful start. Existing users are never reset. Too short: startup fails in production; outside production a `[SECURITY]` warning is logged and creation is skipped. The variable is removed from the process environment right after it is read. |
 | `SSH_KNOWN_HOSTS` | Path to an operator-verified OpenSSH `known_hosts` file used for web terminal and SSH connections. |
 | `AIOPS_BASE_URL` | URL of the AIOps service, e.g. `http://aiops:8080`. Enables the `/api/v1/*` gateway. |
 | `AIOPS_API_KEY` | Shared service key sent to the AIOps service as `X-API-Key`. Must match the Python service. Never put it in frontend config. |
-| `MOCK_ENABLED` | Seed mock data for development. Must be `false` in production. |
+| `MOCK_ENABLED` | Seed mock data for development. Defaults to `true` in development and `false` in production; enabling it in production is rejected at startup. |
+| `MOCK_ADMIN_PASSWORD` | Password for the mock `admin` account (min. 12 characters), only used when mock is enabled and the user table is empty. If unset, no mock admin is created. There is no built-in password. Too short: error in production, warning and skip elsewhere. Removed from the process environment right after it is read. |
 | `LLM_API_KEY`, `LLM_BASE_URL`, `ALIYUN_ACCESS_KEY_ID`, `ALIYUN_ACCESS_KEY_SECRET`, `TAVILY_API_KEY` | External service credentials (environment variables only). |
 | `NOTIFICATION_EMAIL_*`, `NOTIFICATION_FEISHU_*` | Email (SMTP) and Feishu notification channels. |
 | `WEBHOOK_*` | Settings for the alert webhook service in `cmd/webhook`. `WEBHOOK_PORT` defaults to `8889` (previously `8888`), matching `config/webhook.yaml`, and must be a number between 1 and 65535. Integer fields accept decimal integers only (no `10.5`, `010`, `0x10`, `+3`) and are bounded: `WEBHOOK_FIXED_WORKERS` 1–1024, `WEBHOOK_DEFAULT_UPGRADE_MINUTES` 1–10080, `WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS` 1–86400, `WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS` 1–600 (0, i.e. no timeout, is rejected); leading/trailing ASCII spaces, tabs and CR/LF (only) are trimmed from integer variables and the port. `WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API` defaults to `https://open.feishu.cn/open-apis/bot/v2/hook` (trailing slashes are ignored). URL settings (`front_domain`, `backend_domain`, `alert_manager_api`, `im_feishu.group_message_api`, `im_feishu.tenant_access_token_api`) are trimmed of surrounding whitespace; all but the token API also drop trailing `/`. The config file must be YAML (`.yaml`/`.yml`; `.json` is parsed as YAML); other formats fail startup. Setting `WEBHOOK` or `WEBHOOK_IM_FEISHU` to a non-empty value fails startup. Scalar settings written as a map/list, `im_feishu` written as a scalar/list, alias keys, quoted or tagged `<<` (yaml.v3 treats quoted `"<<"` as a plain key but `!!merge "<<"` as a merge, so neither is supported), merge chains or nesting deeper than 64, keys tagged with anything other than `!!str` (e.g. `!!binary`), NUL characters, multiple YAML documents, dotted key names, case-duplicate keys and leaf tags other than `!!str`/`!!int`/`!!null` fail startup; parse errors only report a line number and a fixed reason; unknown keys under `webhook:` are ignored with a warning. In Kubernetes, a Service named `webhook` injects `WEBHOOK_PORT=tcp://…` and makes startup fail; set `enableServiceLinks: false` or rename the Service. Environment variables override `config/webhook.yaml`, which overrides defaults; `WEBHOOK_MYSQL_ADDR` (full DSN) is required. See [docs/release/w1-webhook-env.md](docs/release/w1-webhook-env.md). |
@@ -226,6 +227,7 @@ With `ENV=production` the backend additionally refuses to start unless:
 - `TREE_PASSWORD_ENCRYPTION_KEY`, `JWT_ISSUER` and `AIOPS_API_KEY` (when set) have no leading/trailing whitespace, control characters or invisible format characters (they are not trimmed automatically).
 - `MOCK_ENABLED=false`.
 - `AIOPS_API_KEY` is at least 32 characters whenever `AIOPS_BASE_URL` is set.
+- No `admin` account still uses the built-in mock password shipped before SEC-27 (outside production this is logged as a `[SECURITY]` warning instead). See [docs/security-baseline.md](docs/security-baseline.md) for remediation.
 
 Other security behaviour to be aware of:
 

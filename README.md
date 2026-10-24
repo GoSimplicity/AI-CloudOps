@@ -295,11 +295,13 @@ AI-CloudOps-aiops/
 
 生产环境设置 `ENV=production`、`MOCK_ENABLED=false`，并分别注入独立的
 `JWT_KEY1`、`JWT_KEY2`（各至少32字节）、`TREE_PASSWORD_ENCRYPTION_KEY`（恰好32字节），均不能使用仓库示例值。
-`ENV` 去首尾空白、忽略大小写后等于 `production` 即视为生产环境（如 ` Production `、`PRODUCTION`）。
+`ENV` 必须显式设置；去首尾空白、忽略大小写后，`production`/`prod`/`prd` 为生产环境，`development`/`dev` 为开发环境。未设置、空值及其他取值（包括 `test`/`testing`）均拒绝启动。
 生产环境下 `TREE_PASSWORD_ENCRYPTION_KEY`、`JWT_ISSUER`、`AIOPS_API_KEY` 也不能有首尾空白、控制字符或不可见格式字符（不会自动去除）。
 `JWT_EXPIRATION` 小于等于 0 时记告警日志并使用默认值 30。
 其中 JWT 两把密钥的长度、熵（不同字符至少10个）、首尾空白/控制字符与不可见格式字符、互不相同和示例值（尽力而为，只匹配前缀片段和已登记哈希）检查在所有环境都执行，不仅限生产环境。
 首次空数据库启动使用 `BOOTSTRAP_ADMIN_PASSWORD`（至少12字符）创建管理员，成功后移除该变量；已有用户不会被重置。
+生产环境 `MOCK_ENABLED` 默认关闭，显式开启会拒绝启动；开发环境默认开启。mock 管理员口令只从 `MOCK_ADMIN_PASSWORD`（至少12字符）读取，未设置时不创建 mock 管理员。bootstrap 和 mock 口令过短时，生产环境拒绝启动，开发环境告警并跳过创建；读取后立即清除对应环境变量。
+启动时若检测到 `admin` 仍在使用历史 mock 内置口令，生产环境拒绝启动，开发环境告警，处置方式见 [安全基线](docs/security-baseline.md)。
 `SERVER_ALLOWED_ORIGINS` 是逗号分隔的精确 Origin 白名单，留空仅支持同源浏览器访问。
 `JWT_EXPIRATION` 是访问令牌有效期，单位是**分钟**（不是秒）；默认值和发布配置均为 `30`（30 分钟）。
 请勿按秒填写 `3600` 之类的值，否则令牌会有效 60 小时。上限为 1440 分钟（24 小时）：超过时 `ENV=production` 拒绝启动，其他环境记告警日志后继续启动。

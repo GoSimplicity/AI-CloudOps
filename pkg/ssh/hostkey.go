@@ -10,6 +10,8 @@ import (
 )
 
 // HostKeyCallback uses a provisioned OpenSSH trust store, never trust-on-first-use.
+// Without SSH_KNOWN_HOSTS, host key checking is skipped only when ENV explicitly
+// resolves to development (see pkg/envmode).
 func HostKeyCallback() (ssh.HostKeyCallback, error) {
 	if file := os.Getenv("SSH_KNOWN_HOSTS"); file != "" {
 		return knownhosts.New(file)
