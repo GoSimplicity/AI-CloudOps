@@ -117,10 +117,15 @@ class ReleaseTests(unittest.TestCase):
 
         script = ROOT / "scripts/integration/cron_crash_smoke.py"
         # 空 PATH 下 Docker 不可执行，帮助及拒绝路径仍应正常退出
-        env = {**os.environ, "PATH": self.temp.name}
+        # 显式清除开关，避免继承调用方环境导致结果不确定
+        env = {k: v for k, v in os.environ.items() if k != "CRON_ALLOW_LOCAL_EXEC"}
+        env["PATH"] = self.temp.name
         for arguments, code, message in (
             ([], 2, "需要 --execute"),
             (["--execute", "--recovery-timeout", "0"], 2, "30至600秒"),
+            # 范围合法但未设置 CRON_ALLOW_LOCAL_EXEC=true 时必须被拒，且不调用 Docker
+            (["--execute"], 2, "CRON_ALLOW_LOCAL_EXEC=true"),
+            (["--execute", "--recovery-timeout", "60"], 2, "CRON_ALLOW_LOCAL_EXEC=true"),
             (["--help"], 0, "--execute"),
         ):
             with self.subTest(arguments=arguments):

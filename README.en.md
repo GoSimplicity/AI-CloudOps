@@ -127,8 +127,20 @@ cp env.example .env
 # Edit .env. With the dev Compose file, Redis listens on localhost:36379:
 #   REDIS_ADDR=localhost:36379
 # Set BOOTSTRAP_ADMIN_PASSWORD (>= 12 chars) to create the `admin` user on first start.
+# Replace JWT_KEY1 and JWT_KEY2 with two freshly generated keys (see below).
 go run main.go
 ```
+
+JWT signing keys are validated in **every** environment, including development; there is no switch to relax this. `JWT_KEY1` and `JWT_KEY2` must each be at least 32 bytes (UTF-8 byte length) with at least 10 distinct characters, must not have leading/trailing whitespace or contain control characters or invisible Unicode format characters such as zero-width space (U+200B), BOM (U+FEFF) or right-to-left override (U+202E) (nothing is trimmed silently), and must differ from each other (compared case-insensitively after trimming). The sample-value check is best effort: it only matches a prefix fragment shared by the repository's historical sample keys (in any letter case) plus the hashes of registered historical defaults; the short placeholders in `env.example` are rejected by the length check. Other sample or leaked values cannot be detected, so always use freshly generated keys. Error messages name the variable and the reason only; they never print the key.
+
+**Required before the first start:** generate two independent keys and put them in `.env`, otherwise the backend refuses to start:
+
+```bash
+openssl rand -base64 48   # use the output as JWT_KEY1
+openssl rand -base64 48   # run again for JWT_KEY2
+```
+
+If you prefer hex, use `openssl rand -hex 32` (once per key).
 
 The API listens on `http://localhost:8889` (`SERVER_PORT`). `GET /health` is a liveness probe only; it does not mean MySQL, Redis or external services are ready.
 
@@ -187,11 +199,13 @@ All settings can be provided as environment variables (see [`env.example`](env.e
 
 | Variable | Description |
 | --- | --- |
-| `ENV` | `development` (default) or `production`. Production turns on the strict checks below. |
+| `ENV` | `development` (default) or `production`. Production turns on the strict checks below. The value is trimmed and compared case-insensitively, so ` Production ` and `PRODUCTION` also count as production. |
 | `SERVER_PORT` | HTTP port, default `8889`. |
 | `SERVER_ALLOWED_ORIGINS` | Comma-separated list of exact browser origins allowed for CORS and WebSocket. Empty means same-origin only. |
 | `MYSQL_ADDR`, `REDIS_ADDR`, `REDIS_PASSWORD` | Database and Redis connection. |
-| `JWT_KEY1`, `JWT_KEY2`, `JWT_ISSUER`, `JWT_EXPIRATION` | JWT signing keys and settings. `JWT_EXPIRATION` is in minutes. |
+| `JWT_KEY1`, `JWT_KEY2`, `JWT_EXPIRATION` | JWT signing keys and settings. `JWT_KEY1` and `JWT_KEY2` are required in every environment: at least 32 bytes each, distinct, and not a repository sample value (generate with `openssl rand -base64 48`, or `openssl rand -hex 32` for hex). `JWT_EXPIRATION` is the access-token lifetime in **minutes** (not seconds); the default and the release configuration are `30`. A value such as `3600` means 60 hours. The upper limit is 1440 minutes (24 hours): above it the backend refuses to start with `ENV=production` and logs a warning but keeps starting in other environments. A value of 0 or below logs a warning and falls back to the default of 30. Expired access tokens are renewed automatically by the frontend with the refresh token (valid for 7 days). |
+| `CRON_ALLOW_LOCAL_EXEC` | `cron.allow_local_exec`, default `false`. Allows command (type 2) and script (type 4) jobs to run on the backend host. Read at startup; restart the backend after changing it. See the notes below. |
+| `JWT_ISSUER` | Optional. The token issuer is configured as `jwt.issuer` in `config/*.yaml`; set this variable only to override it. The value must not be empty (the backend fails to start otherwise), and changing it invalidates all tokens already issued. After upgrading to the release that requires an issuer (`iss`), all older refresh tokens without `iss` are invalid and every user has to log in again once. |
 | `TREE_PASSWORD_ENCRYPTION_KEY` | Key used to encrypt stored host passwords. Keep it safe: changing it breaks decryption of existing credentials. |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Creates the `admin` account on the first start with an empty database (min. 12 characters). Remove it after the first successful start. Existing users are never reset. |
 | `SSH_KNOWN_HOSTS` | Path to an operator-verified OpenSSH `known_hosts` file used for web terminal and SSH connections. |
@@ -200,14 +214,16 @@ All settings can be provided as environment variables (see [`env.example`](env.e
 | `MOCK_ENABLED` | Seed mock data for development. Must be `false` in production. |
 | `LLM_API_KEY`, `LLM_BASE_URL`, `ALIYUN_ACCESS_KEY_ID`, `ALIYUN_ACCESS_KEY_SECRET`, `TAVILY_API_KEY` | External service credentials (environment variables only). |
 | `NOTIFICATION_EMAIL_*`, `NOTIFICATION_FEISHU_*` | Email (SMTP) and Feishu notification channels. |
-| `WEBHOOK_*` | Settings for the alert webhook service in `cmd/webhook`. |
+| `WEBHOOK_*` | Settings for the alert webhook service in `cmd/webhook`. `WEBHOOK_PORT` defaults to `8889` (previously `8888`), matching `config/webhook.yaml`, and must be a number between 1 and 65535. Integer fields accept decimal integers only (no `10.5`, `010`, `0x10`, `+3`) and are bounded: `WEBHOOK_FIXED_WORKERS` 1–1024, `WEBHOOK_DEFAULT_UPGRADE_MINUTES` 1–10080, `WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS` 1–86400, `WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS` 1–600 (0, i.e. no timeout, is rejected); leading/trailing ASCII spaces, tabs and CR/LF (only) are trimmed from integer variables and the port. `WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API` defaults to `https://open.feishu.cn/open-apis/bot/v2/hook` (trailing slashes are ignored). URL settings (`front_domain`, `backend_domain`, `alert_manager_api`, `im_feishu.group_message_api`, `im_feishu.tenant_access_token_api`) are trimmed of surrounding whitespace; all but the token API also drop trailing `/`. The config file must be YAML (`.yaml`/`.yml`; `.json` is parsed as YAML); other formats fail startup. Setting `WEBHOOK` or `WEBHOOK_IM_FEISHU` to a non-empty value fails startup. Scalar settings written as a map/list, `im_feishu` written as a scalar/list, alias keys, quoted or tagged `<<` (yaml.v3 treats quoted `"<<"` as a plain key but `!!merge "<<"` as a merge, so neither is supported), merge chains or nesting deeper than 64, keys tagged with anything other than `!!str` (e.g. `!!binary`), NUL characters, multiple YAML documents, dotted key names, case-duplicate keys and leaf tags other than `!!str`/`!!int`/`!!null` fail startup; parse errors only report a line number and a fixed reason; unknown keys under `webhook:` are ignored with a warning. In Kubernetes, a Service named `webhook` injects `WEBHOOK_PORT=tcp://…` and makes startup fail; set `enableServiceLinks: false` or rename the Service. Environment variables override `config/webhook.yaml`, which overrides defaults; `WEBHOOK_MYSQL_ADDR` (full DSN) is required. See [docs/release/w1-webhook-env.md](docs/release/w1-webhook-env.md). |
 
 ### Production security requirements
 
-With `ENV=production` the backend refuses to start unless:
+In every environment (development included) the backend refuses to start unless `JWT_KEY1` and `JWT_KEY2` are distinct (case-insensitive), at least 32 bytes with at least 10 distinct characters, free of leading/trailing whitespace, control characters and invisible format characters, and not matching the repository sample values (best effort: prefix fragment and registered hashes only).
 
-- `JWT_KEY1` and `JWT_KEY2` are distinct, at least 32 characters, and not the repository sample values.
+With `ENV=production` the backend additionally refuses to start unless:
+
 - `TREE_PASSWORD_ENCRYPTION_KEY` is exactly 32 bytes and not the sample value.
+- `TREE_PASSWORD_ENCRYPTION_KEY`, `JWT_ISSUER` and `AIOPS_API_KEY` (when set) have no leading/trailing whitespace, control characters or invisible format characters (they are not trimmed automatically).
 - `MOCK_ENABLED=false`.
 - `AIOPS_API_KEY` is at least 32 characters whenever `AIOPS_BASE_URL` is set.
 
@@ -218,6 +234,17 @@ Other security behaviour to be aware of:
 - Every protected request and token refresh re-checks the current account. Frozen, deleted or renamed accounts are rejected immediately, and authentication fails closed if the database is unavailable.
 - `POST /api/user/signup` requires an `admin` session. New users are normal accounts by default.
 - Non-admin users need explicit role permissions for each `/api/v1/` path they call. Service accounts no longer bypass role checks.
+- Turning `CRON_ALLOW_LOCAL_EXEC` off only blocks creating, enabling, scheduling and running command/script jobs from then on. It does **not** stop command or script processes that are already running (or background processes they spawned); check the backend host and terminate leftovers manually.
+- Custom environment variables (the `environment` field) apply only to command jobs (type 2), and only command jobs are validated on save and before execution. HTTP, SSH and script jobs do not use this field and are never blocked by its content (SSH jobs use the separate `ssh_environment`). For command jobs:
+  - rows whose name and value are both empty (blank rows added in the UI) are dropped on save and skipped at execution;
+  - names are trimmed before saving (case is kept);
+  - a row with an empty name but a non-empty value is rejected;
+  - after trimming, the name must match `^[A-Za-z_][A-Za-z0-9_]*$`; names containing `=`, NUL, `%` (e.g. `BASH_FUNC_echo%%`), `-`, `.`, spaces, non-ASCII or zero-width characters are rejected;
+  - names that pass the format check are then matched against a deny list (case-insensitive): prefixes `LD_*`, `DYLD_*`, `BASH_FUNC_*`, `MALLOC_*`, and `BASH_ENV`, `ENV`, `PROMPT_COMMAND`, `IFS`, `SHELLOPTS`, `BASHOPTS`, `PS4`, `GCONV_PATH`, `GLIBC_TUNABLES`, `LOCPATH`;
+  - duplicate names after trimming (e.g. ` FOO` and `FOO`) are rejected. The check is case-sensitive: on Linux `FOO` and `foo` are two different variables;
+  - `PYTHONPATH`, `NODE_OPTIONS` and `PERL5OPT` have legitimate uses and are still allowed, but they can also make Python/Node/Perl load arbitrary modules or run code at startup; review them as carefully as the command itself;
+  - this is defense in depth: a command job can already run arbitrary commands on the backend host, so the check does not replace access control over who may create or edit jobs;
+  - errors name the variable only, never its value. Existing non-compliant command jobs are rejected at execution until they are edited and saved again.
 
 See [docs/security-baseline.md](docs/security-baseline.md) for the vulnerability scan baseline and the list of hardened boundaries.
 

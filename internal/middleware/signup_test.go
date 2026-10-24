@@ -22,7 +22,11 @@ func TestSignupRequiresAuthenticatedAdministrator(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			engine := gin.New()
 			if tt.claims == nil {
-				engine.Use(NewJWTMiddleware(ijwt.NewJWTHandler(nil, ijwt.Config{}), nil).CheckLogin())
+				jwtHandler, err := ijwt.NewJWTHandler(nil, ijwt.Config{Issuer: "test-issuer"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				engine.Use(NewJWTMiddleware(jwtHandler, nil).CheckLogin())
 			} else {
 				engine.Use(func(c *gin.Context) { c.Set("user", *tt.claims); c.Next() })
 			}

@@ -44,7 +44,7 @@ func main() {
 }
 
 func run() error {
-	cfg, err := config.LoadWebhook()
+	cfg, secrets, err := config.LoadWebhook()
 	if err != nil {
 		if config.IsNonFatal(err) {
 			_, _ = fmt.Fprintf(os.Stderr, "配置加载告警，将继续使用环境变量/默认值: %v\n", err)
@@ -59,7 +59,7 @@ func run() error {
 	}
 	defer func() { _ = logger.Sync() }()
 
-	cmd := di.InitWebServer()
+	cmd := di.InitWebServer(di.MySQLDSN(secrets.MySQLAddr))
 	cmd.Server.GET("/headers", printHeaders)
 	cmd.Start()
 

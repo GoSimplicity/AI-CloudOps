@@ -487,7 +487,8 @@ func (a *alertManagerConfigCache) buildWebhookURL(sendGroupID int) string {
 		return fmt.Sprintf("http://localhost:%s/api/v1/alerts/receive?send_group_id=%d", viper.GetString("server.port"), sendGroupID)
 	}
 
-	hasScheme := strings.HasPrefix(base, "http://") || strings.HasPrefix(base, "https://")
+	// scheme 大小写不敏感（RFC 3986），HTTPS://h/x 也视为完整 URL，不能拼成 http://HTTPS://…
+	hasScheme := hasPrefixFold(base, "http://") || hasPrefixFold(base, "https://")
 	// 如果是完整 URL，则在其后附加路径/参数；若已包含路径则只追加参数
 	if hasScheme {
 		u := strings.TrimRight(base, "/")
@@ -504,6 +505,11 @@ func (a *alertManagerConfigCache) buildWebhookURL(sendGroupID int) string {
 
 	// 否则视为 host:port
 	return fmt.Sprintf("http://%s/api/v1/alerts/receive?send_group_id=%d", base, sendGroupID)
+}
+
+// hasPrefixFold 不区分大小写的前缀判断
+func hasPrefixFold(s, prefix string) bool {
+	return len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix)
 }
 
 // generateWebhookFileContent 生成 webhook file 的内容（仅为 URL 字符串）

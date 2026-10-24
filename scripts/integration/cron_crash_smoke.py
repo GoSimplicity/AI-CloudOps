@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""仅在随机独立 Compose 项目中验证 Redis 重投递及任务租约崩溃恢复"""
+"""仅在随机独立 Compose 项目中验证 Redis 重投递及任务租约崩溃恢复
+
+前置条件：运行前必须先设置 CRON_ALLOW_LOCAL_EXEC=true（例如
+CRON_ALLOW_LOCAL_EXEC=true python3 scripts/integration/cron_crash_smoke.py --execute）。
+本脚本有意保留本地命令任务（job_type=2）：崩溃恢复判定依赖任务在后端容器内
+创建标记文件、首次执行挂起、重投递后输出 HA_RECOVERY_OK，HTTP 任务无法在后端被
+SIGKILL 后保留这种"首次/再次"状态。该开关只经由本工具生成的临时 override 注入随机
+独立项目的 backend 容器，不修改 deploy/ 下的任何文件。
+"""
 
 import argparse
 import json
@@ -26,6 +34,12 @@ if not args.execute:
     parser.exit(2, "需要 --execute；仅应在独立开发验收机器运行\n")
 if not 30 <= args.recovery_timeout <= 600:
     parser.error("recovery-timeout 必须为30至600秒")
+if os.environ.get("CRON_ALLOW_LOCAL_EXEC", "").strip().lower() != "true":
+    parser.exit(
+        2,
+        "需要先设置 CRON_ALLOW_LOCAL_EXEC=true：本脚本使用本地命令任务（job_type=2）"
+        "验证崩溃恢复，该开关仅注入本工具的临时独立 backend 容器\n",
+    )
 try:
     image = subprocess.check_output(
         ["docker", "image", "inspect", "--format", "{{.Id}}", args.image],
@@ -38,7 +52,19 @@ if not image.startswith("sha256:") or len(image) != 71:
     parser.exit(1, "无法固定本地镜像 ID\n")
 overlay = tempfile.TemporaryDirectory(prefix="cloudops-crash-")
 override = Path(overlay.name) / "compose.json"
-override.write_text(json.dumps({"services": {"backend": {"image": image}}}))
+override.write_text(
+    json.dumps(
+        {
+            "services": {
+                "backend": {
+                    "image": image,
+                    # 仅对本工具的临时独立项目开启本地命令任务（SEC-03A 默认关闭）
+                    "environment": {"CRON_ALLOW_LOCAL_EXEC": "true"},
+                }
+            }
+        }
+    )
+)
 project = "cloudops-crash-" + uuid.uuid4().hex[:10]
 env = dict(os.environ)
 compose = [
@@ -58,6 +84,7 @@ import json, os, sys
 from urllib.request import Request, urlopen
 
 payload = json.load(sys.stdin)
+LOCAL_EXEC_DISABLED = "CRON_LOCAL_EXEC_DISABLED"
 base = "http://127.0.0.1:8889"
 token = None
 
@@ -93,6 +120,10 @@ if payload["op"] == "prepare":
         + payload["marker"]
         + "; sleep 180; fi; printf HA_RECOVERY_OK"
     )
+    # CRON-A：列表响应的 allow_local_exec 反映后端开关，未开启时给出明确提示
+    if call("/api/cron/job/list?page=1&size=1").get("allow_local_exec") is not True:
+        print(LOCAL_EXEC_DISABLED, file=sys.stderr)
+        raise SystemExit(3)
     call(
         "/api/cron/job/create",
         {
@@ -145,13 +176,22 @@ def run(args, **kwargs):
 
 
 def api(container, data):
-    return json.loads(
-        run(
-            ["docker", "exec", "-i", container, "python3", "-c", runner],
-            input=json.dumps(data),
-            timeout=20,
-        )
+    result = subprocess.run(
+        ["docker", "exec", "-i", container, "python3", "-c", runner],
+        env=env,
+        capture_output=True,
+        text=True,
+        input=json.dumps(data),
+        timeout=20,
     )
+    if result.returncode:
+        if "CRON_LOCAL_EXEC_DISABLED" in result.stderr:
+            raise RuntimeError(
+                "临时 backend 未开启本地命令任务：需要 CRON_ALLOW_LOCAL_EXEC=true"
+                "（本脚本使用 job_type=2 任务验证崩溃恢复）"
+            )
+        raise RuntimeError("Isolated acceptance command failed; output withheld")
+    return json.loads(result.stdout)
 
 
 try:

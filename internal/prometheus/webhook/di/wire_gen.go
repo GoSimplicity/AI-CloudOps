@@ -17,10 +17,10 @@ import (
 
 // Injectors from wire.go:
 
-func InitWebServer() *Cmd {
+func InitWebServer(dsn MySQLDSN) *Cmd {
 	logger := InitLogger()
 	v := InitMiddlewares(logger)
-	db := InitDB(logger)
+	db := InitDB(logger, dsn)
 	webhookDao := dao.NewWebhookDao(logger, db)
 	v2 := CreateAlertChan()
 	webHookHandler := api.NewWebHookHandler(logger, webhookDao, v2)

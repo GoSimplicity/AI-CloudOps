@@ -27,16 +27,17 @@ package di
 
 import (
 	databaseLogger "github.com/GoSimplicity/AI-CloudOps/pkg/logger"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-func InitDB(log *zap.Logger) *gorm.DB {
-	addr := viper.GetString("mysql.addr")
-	db, err := gorm.Open(mysql.Open(addr), &gorm.Config{
+// MySQLDSN Webhook 数据库 DSN（来自 WEBHOOK_MYSQL_ADDR），由调用方显式传入，不经全局 viper
+type MySQLDSN string
+
+func InitDB(log *zap.Logger, dsn MySQLDSN) *gorm.DB {
+	db, err := gorm.Open(mysql.Open(string(dsn)), &gorm.Config{
 		Logger: databaseLogger.NewGORMLogger(log).LogMode(logger.Info),
 	})
 

@@ -91,7 +91,14 @@ type Config struct {
 	ExpirationMinutes int64
 }
 
-func NewJWTHandler(c redis.Cmdable, cfg Config) Handler {
+// ErrEmptyIssuer jwt.issuer 为空时拒绝创建 Handler：签发和校验都依赖 issuer，空值会让不同部署的令牌互通
+var ErrEmptyIssuer = errors.New("jwt.issuer 不能为空")
+
+// NewJWTHandler 创建 JWT Handler；issuer 为空（含仅空白）时返回 ErrEmptyIssuer
+func NewJWTHandler(c redis.Cmdable, cfg Config) (Handler, error) {
+	if strings.TrimSpace(cfg.Issuer) == "" {
+		return nil, ErrEmptyIssuer
+	}
 	expirationMinutes := cfg.ExpirationMinutes
 	if expirationMinutes <= 0 {
 		expirationMinutes = defaultJWTExpirationMinutes
@@ -105,7 +112,7 @@ func NewJWTHandler(c redis.Cmdable, cfg Config) Handler {
 		key1:          []byte(cfg.Key1),
 		key2:          []byte(cfg.Key2),
 		issuer:        cfg.Issuer,
-	}
+	}, nil
 }
 
 func (h *handler) ParseUserClaims(tokenStr string) (*UserClaims, error) {
@@ -132,7 +139,7 @@ func (h *handler) ParseRefreshClaims(tokenStr string) (*RefreshClaims, error) {
 	var rc RefreshClaims
 	token, err := jwt.ParseWithClaims(tokenStr, &rc, func(token *jwt.Token) (interface{}, error) {
 		return h.key2, nil
-	}, jwt.WithValidMethods([]string{"HS512"}), jwt.WithExpirationRequired())
+	}, jwt.WithValidMethods([]string{"HS512"}), jwt.WithExpirationRequired(), jwt.WithIssuer(h.issuer))
 	if err != nil {
 		return nil, fmt.Errorf("解析刷新令牌失败: %w", err)
 	}
@@ -186,6 +193,8 @@ func (h *handler) setRefreshToken(_ *gin.Context, uid int, username string, ssid
 		AccountType: accountType,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(h.rcExpiration)),
+			// 与访问令牌一致写入 issuer，解析时校验，防止旧 issuer 的刷新令牌换取新 issuer 的访问令牌
+			Issuer: h.issuer,
 		},
 	}
 

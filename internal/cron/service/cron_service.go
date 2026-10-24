@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/scheduler"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/task"
@@ -46,7 +47,7 @@ type CronService interface {
 	UpdateCronJob(ctx context.Context, req *model.UpdateCronJobReq) error
 	DeleteCronJob(ctx context.Context, id int) error
 	GetCronJob(ctx context.Context, id int) (*model.CronJob, error)
-	GetCronJobList(ctx context.Context, req *model.GetCronJobListReq) (model.ListResp[*model.CronJob], error)
+	GetCronJobList(ctx context.Context, req *model.GetCronJobListReq) (model.CronJobListResp, error)
 	EnableCronJob(ctx context.Context, id int) error
 	DisableCronJob(ctx context.Context, id int) error
 	TriggerCronJob(ctx context.Context, id int) error
@@ -63,6 +64,8 @@ type cronService struct {
 	userDAO       userDao.UserDAO
 	client        taskEnqueuer
 	cronScheduler *scheduler.CronScheduler
+	// localExecAllowed 读取 cron.allow_local_exec；为 nil 时读取全局配置（测试可替换）
+	localExecAllowed func() bool
 }
 
 func NewCronService(
@@ -81,11 +84,46 @@ func NewCronService(
 	}
 }
 
+// allowLocalExec 当前是否允许命令行/脚本任务
+func (s *cronService) allowLocalExec() bool {
+	if s.localExecAllowed != nil {
+		return s.localExecAllowed()
+	}
+	return config.CronLocalExecAllowed()
+}
+
+// validateJobTaskEnv 只有命令行任务（JobType==Command）会把 Environment 注入子进程，因此只校验这一类；
+// HTTP/SSH/脚本等任务不使用该字段，不因其中的历史数据拦截保存
+func validateJobTaskEnv(jobType model.CronJobType, env model.KeyValueList) error {
+	if jobType != model.CronJobTypeCommand {
+		return nil
+	}
+	return task.ValidateTaskEnv(env)
+}
+
+// checkLocalExecAllowed 开关关闭时拒绝命令行/脚本任务类型
+func (s *cronService) checkLocalExecAllowed(jobType model.CronJobType) error {
+	if task.IsLocalExecJobType(jobType) && !s.allowLocalExec() {
+		return task.ErrLocalExecDisabled
+	}
+	return nil
+}
+
 func (s *cronService) CreateCronJob(ctx context.Context, req *model.CreateCronJobReq) error {
 	s.logger.Info("创建任务", zap.String("name", req.Name))
 
+	if err := s.checkLocalExecAllowed(req.JobType); err != nil {
+		s.logger.Warn("拒绝创建本地执行任务", zap.String("name", req.Name), zap.Int8("jobType", int8(req.JobType)))
+		return err
+	}
+
 	if err := s.validateBasicJobConfig(req.JobType, req.Command, req.HTTPUrl, req.ScriptContent, req.SSHResourceID, req.SSHCommand); err != nil {
 		s.logger.Error("任务配置验证失败", zap.String("name", req.Name), zap.Error(err))
+		return err
+	}
+	req.Environment = task.NormalizeTaskEnv(req.Environment)
+	if err := validateJobTaskEnv(req.JobType, req.Environment); err != nil {
+		s.logger.Warn("拒绝危险的任务环境变量", zap.String("name", req.Name), zap.Error(err))
 		return err
 	}
 
@@ -130,8 +168,19 @@ func (s *cronService) CreateCronJob(ctx context.Context, req *model.CreateCronJo
 func (s *cronService) UpdateCronJob(ctx context.Context, req *model.UpdateCronJobReq) error {
 	s.logger.Info("更新任务", zap.Int("id", req.ID), zap.String("name", req.Name))
 
+	// 开关关闭时，更新后的类型不能是命令行/脚本（包括从其他类型改成这两种，以及继续编辑已有的这两类任务）
+	if err := s.checkLocalExecAllowed(req.JobType); err != nil {
+		s.logger.Warn("拒绝更新为本地执行任务", zap.Int("id", req.ID), zap.Int8("jobType", int8(req.JobType)))
+		return err
+	}
+
 	if err := s.validateBasicJobConfig(req.JobType, req.Command, req.HTTPUrl, req.ScriptContent, req.SSHResourceID, req.SSHCommand); err != nil {
 		s.logger.Error("任务配置验证失败", zap.Int("id", req.ID), zap.Error(err))
+		return err
+	}
+	req.Environment = task.NormalizeTaskEnv(req.Environment)
+	if err := validateJobTaskEnv(req.JobType, req.Environment); err != nil {
+		s.logger.Warn("拒绝危险的任务环境变量", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}
 
@@ -214,11 +263,11 @@ func (s *cronService) GetCronJob(ctx context.Context, id int) (*model.CronJob, e
 	return job, nil
 }
 
-func (s *cronService) GetCronJobList(ctx context.Context, req *model.GetCronJobListReq) (model.ListResp[*model.CronJob], error) {
+func (s *cronService) GetCronJobList(ctx context.Context, req *model.GetCronJobListReq) (model.CronJobListResp, error) {
 	jobs, total, err := s.cronDAO.GetCronJobList(ctx, req)
 	if err != nil {
 		s.logger.Error("获取任务列表失败", zap.Error(err))
-		return model.ListResp[*model.CronJob]{}, err
+		return model.CronJobListResp{}, err
 	}
 
 	for _, job := range jobs {
@@ -229,14 +278,27 @@ func (s *cronService) GetCronJobList(ctx context.Context, req *model.GetCronJobL
 		s.fillCreatedByName(ctx, job)
 	}
 
-	return model.ListResp[*model.CronJob]{
-		Items: jobs,
-		Total: total,
+	return model.CronJobListResp{
+		ListResp: model.ListResp[*model.CronJob]{
+			Items: jobs,
+			Total: total,
+		},
+		AllowLocalExec: s.allowLocalExec(),
 	}, nil
 }
 
 func (s *cronService) EnableCronJob(ctx context.Context, id int) error {
 	s.logger.Info("启用任务", zap.Int("id", id))
+
+	job, err := s.cronDAO.GetCronJob(ctx, id)
+	if err != nil {
+		s.logger.Error("获取任务详情失败", zap.Int("id", id), zap.Error(err))
+		return err
+	}
+	if err := s.checkLocalExecAllowed(job.JobType); err != nil {
+		s.logger.Warn("拒绝启用本地执行任务", zap.Int("id", id), zap.Int8("jobType", int8(job.JobType)))
+		return err
+	}
 
 	if err := s.cronDAO.UpdateCronJobStatus(ctx, id, model.CronJobStatusEnabled); err != nil {
 		s.logger.Error("启用任务失败", zap.Int("id", id), zap.Error(err))
@@ -270,6 +332,11 @@ func (s *cronService) TriggerCronJob(ctx context.Context, id int) error {
 
 	if job.Status != model.CronJobStatusEnabled {
 		return fmt.Errorf("任务未启用，无法手动触发")
+	}
+
+	if err := s.checkLocalExecAllowed(job.JobType); err != nil {
+		s.logger.Warn("拒绝手动触发本地执行任务", zap.Int("id", id), zap.Int8("jobType", int8(job.JobType)))
+		return err
 	}
 
 	// 记录系统内置任务的手动触发

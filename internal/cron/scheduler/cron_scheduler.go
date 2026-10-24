@@ -32,6 +32,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/task"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -56,6 +57,25 @@ type CronScheduler struct {
 	cronDAO   dao.CronJobDAO
 	scheduler taskScheduler
 	client    *asynq.Client
+	// localExecAllowed 读取 cron.allow_local_exec；为 nil 时读取全局配置（测试可替换）
+	localExecAllowed func() bool
+}
+
+// allowLocalExec 当前是否允许调度命令行(2)/脚本(4)任务
+func (cs *CronScheduler) allowLocalExec() bool {
+	if cs.localExecAllowed != nil {
+		return cs.localExecAllowed()
+	}
+	return config.CronLocalExecAllowed()
+}
+
+// shouldSchedule 是否由本调度器登记该任务：系统任务由统一 Cron 管理器负责；
+// 开关关闭时命令行/脚本任务不入队（而不是入队后再在执行阶段报失败）
+func (cs *CronScheduler) shouldSchedule(job *model.CronJob, allowLocalExec bool) bool {
+	if job.JobType == model.CronJobTypeSystem {
+		return false
+	}
+	return allowLocalExec || !task.IsLocalExecJobType(job.JobType)
 }
 
 func NewCronScheduler(
@@ -111,9 +131,11 @@ func (cs *CronScheduler) loadAndScheduleJobs(ctx context.Context) error {
 	}
 
 	// 仅移除本管理器登记且已停用/删除的任务，不影响共享调度器其他条目
+	// 开关关闭后，已登记的命令行/脚本任务也会在本轮被移除
+	allowLocalExec := cs.allowLocalExec()
 	desired := make(map[int]bool, len(jobs))
 	for _, job := range jobs {
-		if job.JobType != model.CronJobTypeSystem {
+		if cs.shouldSchedule(job, allowLocalExec) {
 			desired[job.ID] = true
 		}
 	}
@@ -136,6 +158,14 @@ func (cs *CronScheduler) loadAndScheduleJobs(ctx context.Context) error {
 			cs.logger.Debug("跳过系统内置任务",
 				zap.Int("jobID", job.ID),
 				zap.String("jobName", job.Name))
+			skippedCount++
+			continue
+		}
+		if !cs.shouldSchedule(job, allowLocalExec) {
+			cs.logger.Debug("本地执行开关关闭，跳过命令行/脚本任务",
+				zap.Int("jobID", job.ID),
+				zap.String("jobName", job.Name),
+				zap.Int8("jobType", int8(job.JobType)))
 			skippedCount++
 			continue
 		}

@@ -12,7 +12,7 @@
 
 ## 部署地址
 
-本机开发默认 `http://localhost:8889/api/not_auth/getTreeNodeBindIps`，指向主后端而非 8888 的告警 webhook 服务。发布编排默认 `http://backend:8889/api/not_auth/getTreeNodeBindIps`，通过 `PROMETHEUS_HTTP_SD_API` 注入后端配置生成器。该 URL 必须能从真正运行 Prometheus 的网络访问；外置 Prometheus 应显式配置可达地址。原有 `getBindIps` 与 `getTreeNodeBindIps` 路由都保留。
+本机开发默认 `http://localhost:8889/api/not_auth/getTreeNodeBindIps`，指向主后端而非告警 webhook 服务。主后端（`main.go`，`SERVER_PORT`）和告警 webhook（`cmd/webhook`，`WEBHOOK_PORT`）是两个不同的进程，默认端口都是 8889；在同一台机器上部署时必须用 `WEBHOOK_PORT` 把 webhook 端口错开，HTTP-SD 地址始终指向主后端端口。发布编排默认 `http://backend:8889/api/not_auth/getTreeNodeBindIps`，通过 `PROMETHEUS_HTTP_SD_API` 注入后端配置生成器。该 URL 必须能从真正运行 Prometheus 的网络访问；外置 Prometheus 应显式配置可达地址。原有 `getBindIps` 与 `getTreeNodeBindIps` 路由都保留。
 
 发布目录当前挂载的 `prometheus.yml` 仍是自身指标采集配置。生成的业务采集配置需要按运维配置分发流程提供给对应 Prometheus，本修复不会将所有数据库作业自动安装到该发布实例。
 
