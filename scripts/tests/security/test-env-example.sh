@@ -78,44 +78,31 @@ if grep -q '^WEBHOOK_PORT=' "$TMP/env"; then
     if [ -z "$wp" ] || [ "$wp" = "$yaml_wh" ]; then ok "WEBHOOK_PORT='${wp}'（留空或与 config/webhook.yaml 一致）"
     else bad "WEBHOOK_PORT=${wp}，config/webhook.yaml webhook.port=${yaml_wh}（合入前不生效、合入后会改变监听端口）"; wh_eff="$wp"; fi
     block WEBHOOK_PORT >"$TMP/wp.txt"
-    for kw in '合入 sched/w1-mantou 前' '合入 sched/w1-mantou 后' 'config/webhook.yaml' '--config' '根节点' '同一台机器' '优先级' 'PROMETHEUS_ALERT_WEBHOOK_ADDR'; do
+    for kw in 'config/webhook.yaml' '--config' '根节点' '同一台机器' '优先级' 'PROMETHEUS_ALERT_WEBHOOK_ADDR' '拒绝启动' '[配置告警]' '继续启动' '前导零' '重复键' '多文档'; do
         if grep -F -q -e "$kw" "$TMP/wp.txt"; then ok "WEBHOOK_PORT 注释含「${kw}」"
-        else bad "WEBHOOK_PORT 注释缺「${kw}」（需分别说明合入前/后、同机冲突、改端口方法与告警地址联动）"; fi
-    done
-    # 合入前那一段必须写明“不生效”（实测），合入后那一段不得再写“不生效/不改变”（bb410eb 已修复）
-    awk '/合入 sched\/w1-mantou 前/{f=1} /合入 sched\/w1-mantou 后/{f=0} f' "$TMP/wp.txt" >"$TMP/wp-pre.txt"
-    awk '/合入 sched\/w1-mantou 后/{f=1} /^# 主后端/{f=0} f' "$TMP/wp.txt" >"$TMP/wp-post.txt"
-    grep -F -q '不生效' "$TMP/wp-pre.txt" && ok "WEBHOOK_PORT 合入前一段写明不生效" || bad "WEBHOOK_PORT 合入前一段未写明不生效"
-    if grep -E -q '不生效|不改变|不受' "$TMP/wp-post.txt"; then bad "WEBHOOK_PORT 合入后一段仍写不生效（与 bb410eb 实测不符）"
-    else ok "WEBHOOK_PORT 合入后一段与 bb410eb 行为一致（未写不生效）"; fi
-    # review3f（0146077 实测）：根节点分两种情况——平铺的 webhook 字段拒绝启动；没有根节点也没有 webhook 字段只告警继续启动
-    for kw in '拒绝启动' '[配置告警]' '继续启动' '前导零' '未定义'; do
-        if grep -F -q -e "$kw" "$TMP/wp-post.txt"; then ok "WEBHOOK_PORT 合入后一段含「${kw}」"
-        else bad "WEBHOOK_PORT 合入后一段缺「${kw}」（根节点两种情况、前导零、port/PORT 同写须写清）"; fi
+        else bad "WEBHOOK_PORT 注释缺「${kw}」"; fi
     done
 else
     ok "env.example 未设置 WEBHOOK_PORT"
 fi
 if grep -q '^WEBHOOK_MYSQL_ADDR=' "$TMP/env"; then
     block WEBHOOK_MYSQL_ADDR >"$TMP/wm.txt"
-    if grep -F -q '合入 sched/w1-mantou 前' "$TMP/wm.txt" && grep -F -q '合入 sched/w1-mantou 后' "$TMP/wm.txt" && grep -F -q '不读此变量' "$TMP/wm.txt"; then
-        ok "WEBHOOK_MYSQL_ADDR 注释分别说明合入前（不读）/合入后（必填）"
-    else bad "WEBHOOK_MYSQL_ADDR 注释未区分合入前（webhook 不读此变量）与合入后（必填）"; fi
+    if grep -F -q '必填' "$TMP/wm.txt" && grep -F -q '不读 MYSQL_ADDR' "$TMP/wm.txt" && grep -F -q 'scripts/release-env.py' "$TMP/wm.txt"; then
+        ok "WEBHOOK_MYSQL_ADDR 说明完整 DSN 必填、独立读取与发布生成方式"
+    else bad "WEBHOOK_MYSQL_ADDR 缺少必填、独立读取或生成器说明"; fi
 fi
-# 整数字段（sched/w1-mantou 0146077）：注释写明负数拒绝、>= 1 / >= 0、0 表示不设超时、非整数写法启动失败；取值本身合规
+# 当前 Go loader 的范围；测试真实边界，避免过时的分支说明代替有效规则。
 if grep -q '^WEBHOOK_FIXED_WORKERS=' "$TMP/env"; then
     block WEBHOOK_FIXED_WORKERS >"$TMP/wi.txt"
-    for kw in '0146077' '拒绝负数' '>= 1' '>= 0' '不设超时' '10.0' '前导零'; do
-        if grep -F -q -e "$kw" "$TMP/wi.txt"; then ok "整数字段注释含「${kw}」"
-        else bad "整数字段注释缺「${kw}」"; fi
+    for kw in '十进制整数' '1-1024' '1-10080' '1-86400' '1-600' '0 不允许' '拒绝启动'; do
+        grep -F -q -e "$kw" "$TMP/wi.txt" && ok "整数字段注释含「${kw}」" || bad "整数字段注释缺「${kw}」"
     done
-    for k in WEBHOOK_FIXED_WORKERS:1 WEBHOOK_DEFAULT_UPGRADE_MINUTES:1 WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS:1 WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS:0; do
-        n="${k%%:*}"; lo="${k#*:}"; v="$(val "$n")"
+    for k in WEBHOOK_FIXED_WORKERS:1024 WEBHOOK_DEFAULT_UPGRADE_MINUTES:10080 WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS:86400 WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS:600; do
+        n="${k%%:*}"; hi="${k#*:}"; v="$(val "$n")"
         case "$v" in
             '') ok "${n} 留空（取配置文件/默认值）" ;;
-            0) [ "$lo" -eq 0 ] && ok "${n}=0 合规（>= 0）" || bad "${n}=0 不合规（要求 >= ${lo}）" ;;
-            *[!0-9]*|0*) bad "${n}='${v}' 不是不带前导零的十进制整数" ;;
-            *) ok "${n}=${v} 合规（>= ${lo}）" ;;
+            0|*[!0-9]*|0*) bad "${n} 不是正十进制整数" ;;
+            *) if [ "${#v}" -le 9 ] && [ "$v" -le "$hi" ]; then ok "${n} 位于 1-${hi}"; else bad "${n} 超出 1-${hi}"; fi ;;
         esac
     done
 fi

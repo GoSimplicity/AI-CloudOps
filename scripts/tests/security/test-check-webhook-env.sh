@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# review3f/review3g/review3h：scripts/check-webhook-env.sh 的回归测试（规则对应 sched/w1-mantou 0146077 的 loader 校验）。
+# review3f/review3g/review3h：scripts/check-webhook-env.sh 的回归测试（规则对应当前 Go loader 校验）。
 # 每个用例分别用 sh、bash、bash --posix 运行被测脚本（机器上没有的解释器跳过），断言退出码与指定字段的结论；
 # 另断言输出里不出现任何取值（合成的哨兵数字 / 合成密钥）。只读：样本写在 mktemp 目录；config/ 只读取。
 # 用法: scripts/tests/security/test-check-webhook-env.sh      兼容 macOS（bash 3.2 / BSD grep、sed、awk）。
@@ -16,7 +16,7 @@ SHELLS=""
 for s in sh bash; do command -v "$s" >/dev/null 2>&1 && SHELLS="$SHELLS $s"; done
 # 合成哨兵：运行时生成，断言不出现在输出里（不是真实密钥）
 SEC="sk$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
-NUM=7$(od -An -N2 -tu2 /dev/urandom | tr -d ' \n')3
+NUM=$((700 + $(od -An -N2 -tu2 /dev/urandom | tr -d ' \n') % 300))
 
 y() { printf '%s\n' "$2" >"$TMP/$1.yaml"; }   # y <名字> <内容>
 y repo "webhook:
@@ -195,14 +195,19 @@ case_ "WEBHOOK_FIXED_WORKERS=010" 1 "webhook.fixed_workers: 不合规（环境�
 case_ "WEBHOOK_FIXED_WORKERS=0" 1 "webhook.fixed_workers: 不合规（环境变量 WEBHOOK_FIXED_WORKERS：小于 1" -- WEBHOOK_FIXED_WORKERS=0 --
 case_ "WEBHOOK_DEFAULT_UPGRADE_MINUTES=0" 1 "webhook.default_upgrade_minutes: 不合规（环境变量 WEBHOOK_DEFAULT_UPGRADE_MINUTES：小于 1" -- WEBHOOK_DEFAULT_UPGRADE_MINUTES=0 --
 case_ "WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS=0" 1 "webhook.common_map_renew_interval_seconds: 不合规" -- WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS=0 --
-case_ "WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS=0" 0 "webhook.im_feishu.request_timeout_seconds: 告警（环境变量" -- WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS=0 --
+case_ "WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS=0" 1 "webhook.im_feishu.request_timeout_seconds: 不合规（环境变量" -- WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS=0 --
+for bound in WEBHOOK_FIXED_WORKERS:fixed_workers:1024 WEBHOOK_DEFAULT_UPGRADE_MINUTES:default_upgrade_minutes:10080 WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS:common_map_renew_interval_seconds:86400 WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS:im_feishu.request_timeout_seconds:600; do
+    ev="${bound%%:*}"; rest="${bound#*:}"; field="${rest%:*}"; upper="${rest##*:}"
+    case_ "${ev}=upper boundary" 0 "webhook.${field}: 合规（环境变量" -- "${ev}=${upper}" --
+    case_ "${ev}=above upper boundary" 1 "webhook.${field}: 不合规（环境变量" -- "${ev}=$((upper+1))" --
+done
 case_ "WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS=-1" 1 "webhook.im_feishu.request_timeout_seconds: 不合规" -- WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS=-1 --
 case_ "yaml 加引号 10.0" 1 "webhook.default_upgrade_minutes: 不合规（配置文件：不是十进制整数" -- -- $C "$TMP/q100.yaml"
 case_ "yaml 不加引号 10.0" 1 "webhook.default_upgrade_minutes: 不合规（配置文件：不是十进制整数" -- -- $C "$TMP/uq100.yaml"
 case_ "yaml 加引号带空格" 1 "webhook.fixed_workers: 不合规（配置文件" -- -- $C "$TMP/qsp.yaml"
 case_ "yaml 负数" 1 "webhook.common_map_renew_interval_seconds: 不合规（配置文件" -- -- $C "$TMP/neg.yaml"
 case_ "yaml 0" 1 "webhook.common_map_renew_interval_seconds: 不合规（配置文件：小于 1" -- -- $C "$TMP/zero.yaml"
-case_ "yaml timeout 0" 0 "webhook.im_feishu.request_timeout_seconds: 告警（配置文件" -- -- $C "$TMP/tmo0.yaml"
+case_ "yaml timeout 0" 1 "webhook.im_feishu.request_timeout_seconds: 不合规（配置文件" -- -- $C "$TMP/tmo0.yaml"
 case_ "yaml port 0080" 1 "webhook.port: 不合规（配置文件：有前导零" -- -- $C "$TMP/p0080.yaml"
 for v in 0080 0 65536 abc " 9998 "; do
     case_ "WEBHOOK_PORT='$v'" 1 "webhook.port: 不合规（环境变量 WEBHOOK_PORT" -- "WEBHOOK_PORT=$v" --
@@ -227,7 +232,7 @@ case_ "--config 文件不存在" 2 "配置文件不可读" -- -- $C "$TMP/nope.y
 # review3h P3-d
 case_ "webhook:<TAB># 注释" 0 "配置文件根节点: 合规|配置文件写法: 合规|webhook.port: 合规（配置文件）" -- -- $C "$TMP/tabc.yaml"
 case_ "webhook: # 注释 与行尾注释" 0 "配置文件根节点: 合规|webhook.port: 合规（配置文件）|webhook.im_feishu.request_timeout_seconds: 合规（配置文件）" -- -- $C "$TMP/spc.yaml"
-case_ "多文档 --- 只看第一个文档（loader 同）" 0 "配置文件根节点: 合规|配置文件重复键: 合规|webhook.port: 合规（配置文件）|配置文件写法: 告警（多文档" -- -- $C "$TMP/multidoc.yaml"
+case_ "多文档 --- 拒绝启动" 1 "配置文件根节点: 合规|配置文件重复键: 合规|webhook.port: 合规（配置文件）|配置文件写法: 不合规（多文档" -- -- $C "$TMP/multidoc.yaml"
 case_ "开头的 --- 不算多文档" 0 "配置文件根节点: 合规|配置文件写法: 合规|webhook.port: 合规（配置文件）|结果: 合规（告警 0 项）" -- -- $C "$TMP/leaddoc.yaml"
 case_ "块标量里的 port/webhook 不算键" 0 "配置文件根节点: 合规|配置文件重复键: 合规|配置文件写法: 合规|webhook.port: 合规（配置文件）|webhook.fixed_workers: 合规（配置文件）" -- -- $C "$TMP/blockscalar.yaml"
 case_ "引号内与非空白后的 # 不算注释（对照）" 0 "配置文件写法: 合规|配置文件重复键: 合规|webhook.port: 合规（配置文件）|结果: 合规（告警 0 项）" -- -- $C "$TMP/qhash.yaml"

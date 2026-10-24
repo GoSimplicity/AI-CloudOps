@@ -7,15 +7,15 @@
 #   --config    要检查的 webhook 配置文件（与 cmd/webhook --config 相同）；不给则只检查环境变量 + 内置默认值。
 #   --env-file  从 env 文件读取 WEBHOOK_* 的 5 个非密钥变量（不 source、不执行）；不给则读当前进程环境变量。
 # 取值优先级与 loader 相同：环境变量（空串视为未设置）> 配置文件 webhook.* > 内置默认值。
-# 检查项（比 loader 严格：loader 会静默改写的写法也算不合规）：
+# 检查项（仅检查下列字段与块状 YAML 写法；不能替代 Go loader 的完整校验）：
 #   根节点        根节点下出现 webhook 字段（平铺，含大写 PORT）→ 不合规（loader 拒绝启动）；
 #                 没有 webhook 根节点或其值为空 → 告警（loader 只告警、webhook.* 全取环境变量/默认值）
 #   webhook.port  不带符号、不带前导零的十进制整数，1-65535（loader 会把 0080 当 80，这里算不合规）
-#   fixed_workers / default_upgrade_minutes / common_map_renew_interval_seconds  十进制整数 >= 1
-#   im_feishu.request_timeout_seconds  十进制整数 >= 0（0 = 不设超时，合规但生产不推荐，输出“告警”）
+#   fixed_workers / default_upgrade_minutes / common_map_renew_interval_seconds  十进制整数：fixed_workers 1-1024、default_upgrade_minutes 1-10080、common_map_renew_interval_seconds 1-86400
+#   im_feishu.request_timeout_seconds  十进制整数 1-600（0 和负数均拒绝）
 #   同一层重复的键（port 和 PORT 同写，或任意仅大小写不同 / 完全相同的同名键，如 front_domain 与 FRONT_DOMAIN、
-#                 im_feishu 下的 app_id 与 APP_ID；loader 键名不区分大小写，结果未定义）→ 不合规（review3g）
-#   写法（review3h）  内联表/数组、锚点/别名/<<、转义键、? 复杂键、制表符缩进 → 不合规（请人工检查）；多文档 → 告警（只检查第一个文档）
+#                 im_feishu 下的 app_id 与 APP_ID；loader 键名不区分大小写，重复键拒绝启动）→ 不合规（review3g）
+#   写法（review3h）  内联表/数组、锚点/别名/<<、转义键、? 复杂键、制表符缩进 → 不合规（请人工检查）；多文档 → 不合规（loader 拒绝启动）
 # 退出码: 0 = 无不合规（可能有告警），1 = 有不合规，2 = 用法错误或文件不可读。
 # 兼容 POSIX sh / bash --posix / macOS（bash 3.2、BSD awk）。
 set -u
@@ -57,7 +57,7 @@ envval() {
 # 只有 5 个检查字段输出值，其余键（含 mysql.addr、app_secret）只输出键名；UNSUP / MULTI 只输出类别和行号。
 # review3h P3-d：
 #   - 先去注释再分类：引号外、行首或前面是空格/制表符的 # 起到行尾都是注释（webhook:<TAB># 注释 不再被当成单行值）；
-#   - 多文档：第一个文档之后的 ---（或 ...）起不再解析（loader 只读第一个文档），输出 MULTI 由调用方报告警；
+#   - 多文档：第一个文档之后的 ---（或 ...）起不再解析，输出 MULTI 由调用方判不合规；
 #   - 块标量（| / > 及其修饰符）的内容行不当键解析（里面写 port: / webhook: 不误报）；
 #   - 本脚本不支持、可能让结论失真的写法输出 UNSUP，调用方判“不合规/请人工检查”：内联表/数组（{...} / [...]，空 {} [] 除外）、
 #     锚点/别名（&x / *x）、合并键 <<、带转义的引号键（"po\x72t"）、复杂键 ?、制表符缩进。
@@ -183,10 +183,10 @@ if [ -n "$CFG" ]; then
     uns="$(grep "^UNSUP${TAB}" "$P" | awk -F "$TAB" '{ printf "%s%s 第 %s 行", (NR > 1 ? ", " : ""), $2, $3 }')"
     if [ -n "$uns" ]; then say "配置文件写法" "不合规（含本脚本不支持的 YAML 写法：${uns}；请人工检查）"; NG=$((NG+1))
     elif grep -q "^MULTI${TAB}" "$P"; then
-        say "配置文件写法" "告警（多文档：第 $(grep "^MULTI${TAB}" "$P" | cut -f2) 行起的后续文档未检查，loader 只读第一个文档）"; WARN=$((WARN+1))
+        say "配置文件写法" "不合规（多文档：第 $(grep "^MULTI${TAB}" "$P" | cut -f2) 行起有后续文档，loader 拒绝启动）"; NG=$((NG+1))
     else say "配置文件写法" "合规"; fi
     dups="$(grep "^DUP${TAB}" "$P" | cut -f2 | tr '\n' ' ' | sed 's/ $//; s/ /, /g')"
-    if [ -n "$dups" ]; then say "配置文件重复键" "不合规（同一层有仅大小写不同或完全相同的键：${dups}；loader 键名不区分大小写，结果未定义）"; NG=$((NG+1))
+    if [ -n "$dups" ]; then say "配置文件重复键" "不合规（同一层有仅大小写不同或完全相同的键：${dups}；loader 键名不区分大小写，重复键拒绝启动）"; NG=$((NG+1))
     else say "配置文件重复键" "合规"; fi
 fi
 
@@ -195,7 +195,7 @@ fi
 check() {
     name="$1"; ev="$2"; kind="$3"; yk="$4"; lo="$5"; hi="$6"; def="$7"
     n="$(grep -E -c "^${kind}${TAB}${yk}(${TAB}|\$)" "$P")"
-    if [ "$n" -gt 1 ]; then say "$name" "不合规（配置文件同一层重复写了 ${yk}，键名不区分大小写，结果未定义）"; NG=$((NG+1)); return; fi
+    if [ "$n" -gt 1 ]; then say "$name" "不合规（配置文件同一层重复写了 ${yk}，键名不区分大小写，重复键拒绝启动）"; NG=$((NG+1)); return; fi
     v="$(envval "$ev")"; src="环境变量 ${ev}"
     if [ -z "$v" ]; then
         if [ "$n" -eq 1 ]; then
@@ -214,14 +214,13 @@ check() {
     if [ "${#v}" -gt 9 ]; then say "$name" "不合规（${src}：数值过大）"; NG=$((NG+1)); return; fi
     if [ "$v" -lt "$lo" ]; then say "$name" "不合规（${src}：小于 ${lo}）"; NG=$((NG+1)); return; fi
     if [ "$hi" != "-" ] && [ "$v" -gt "$hi" ]; then say "$name" "不合规（${src}：大于 ${hi}）"; NG=$((NG+1)); return; fi
-    if [ "$yk" = request_timeout_seconds ] && [ "$v" -eq 0 ]; then say "$name" "告警（${src}：0 表示不设超时，生产不推荐）"; WARN=$((WARN+1)); return; fi
     say "$name" "合规（${src}）"
 }
 check webhook.port WEBHOOK_PORT WH port 1 65535 8889
-check webhook.fixed_workers WEBHOOK_FIXED_WORKERS WH fixed_workers 1 - 10
-check webhook.default_upgrade_minutes WEBHOOK_DEFAULT_UPGRADE_MINUTES WH default_upgrade_minutes 1 - 60
-check webhook.common_map_renew_interval_seconds WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS WH common_map_renew_interval_seconds 1 - 300
-check webhook.im_feishu.request_timeout_seconds WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS IM request_timeout_seconds 0 - 10
+check webhook.fixed_workers WEBHOOK_FIXED_WORKERS WH fixed_workers 1 1024 10
+check webhook.default_upgrade_minutes WEBHOOK_DEFAULT_UPGRADE_MINUTES WH default_upgrade_minutes 1 10080 60
+check webhook.common_map_renew_interval_seconds WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS WH common_map_renew_interval_seconds 1 86400 300
+check webhook.im_feishu.request_timeout_seconds WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS IM request_timeout_seconds 1 600 10
 
 if [ "$NG" -gt 0 ]; then echo "结果: 不合规 ${NG} 项，告警 ${WARN} 项"; exit 1; fi
 echo "结果: 合规（告警 ${WARN} 项）"
