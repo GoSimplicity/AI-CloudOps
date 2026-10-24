@@ -165,6 +165,10 @@ func (us *userService) GetUserList(ctx context.Context, req *model.GetUserListRe
 
 // ChangePassword 修改密码
 func (us *userService) ChangePassword(ctx context.Context, req *model.ChangePasswordReq) error {
+	if req == nil || req.UserID <= 0 {
+		us.logger.Error("修改密码缺少有效的用户ID")
+		return errors.New("无效的用户ID")
+	}
 	if req.Password == req.NewPassword {
 		us.logger.Error("新密码不能与旧密码相同")
 		return errors.New("新密码不能与旧密码相同")

@@ -89,8 +89,8 @@ type GetPermCodeReq struct {
 }
 
 type ChangePasswordReq struct {
-	UserID          int    `json:"user_id" form:"user_id" binding:"required"`                                       // 用户ID
-	Username        string `json:"username" form:"username" binding:"required"`                                     // 用户名
+	UserID          int    `json:"user_id" form:"user_id"`                                                          // 可选，已忽略：服务端以 token 中的 uid 为准（SEC-28）
+	Username        string `json:"username" form:"username"`                                                        // 可选，已忽略：服务端以 token 为准，不参与改密（SEC-28）
 	Password        string `json:"password" form:"password" binding:"required"`                                     // 原密码
 	NewPassword     string `json:"new_password" form:"new_password" binding:"required,min=6"`                       // 新密码，至少6位
 	ConfirmPassword string `json:"confirm_password" form:"confirm_password" binding:"required,eqfield=NewPassword"` // 确认密码，必须与新密码相同
