@@ -16,6 +16,20 @@ import (
 //go:embed aiops_permissions.json
 var aiopsPermissionCatalog []byte
 
+// namedPermission 需要稳定权限名和说明的接口（敏感接口），其余接口按路由自动生成名称
+type namedPermission struct {
+	Name        string
+	Description string
+}
+
+// namedPermissions 以 "METHOD 路由" 为键登记的权限码
+var namedPermissions = map[string]namedPermission{
+	"GET " + model.K8sSecretRevealRoute: {
+		Name:        model.K8sSecretRevealPermissionName,
+		Description: "查看 K8s Secret 明文（SEC-25，每次调用写审计；仅显式授权生效，通配符授权不覆盖）",
+	},
+}
+
 // bootstrapPermissionCatalog 补充可发现接口，不授予角色或覆盖管理员维护的元数据
 func (a *App) bootstrapPermissionCatalog(ctx context.Context) error {
 	methods := map[string]int8{"GET": 1, "POST": 2, "PUT": 3, "DELETE": 4}
@@ -56,7 +70,11 @@ func (a *App) bootstrapPermissionCatalog(ctx context.Context) error {
 		if len(handler) > 25 {
 			handler = handler[:25]
 		}
-		pending = append(pending, model.Api{Name: fmt.Sprintf("%s %s %x", route.Method, handler, digest[:4]), Path: route.Path, Method: method, Description: route.Method + " " + route.Path, Version: "v1", Category: 2, IsPublic: 0})
+		entry := model.Api{Name: fmt.Sprintf("%s %s %x", route.Method, handler, digest[:4]), Path: route.Path, Method: method, Description: route.Method + " " + route.Path, Version: "v1", Category: 2, IsPublic: 0}
+		if named, ok := namedPermissions[route.Method+" "+route.Path]; ok {
+			entry.Name, entry.Description = named.Name, named.Description
+		}
+		pending = append(pending, entry)
 		seen[key(method, route.Path)] = true
 	}
 	if len(pending) == 0 {

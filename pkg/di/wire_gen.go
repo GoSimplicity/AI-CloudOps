@@ -146,7 +146,7 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	configMapService := service3.NewConfigMapService(k8sClient, configMapManager, logger)
 	k8sConfigMapHandler := api3.NewK8sConfigMapHandler(configMapService)
 	secretManager := manager.NewSecretManager(k8sClient, logger)
-	secretService := service3.NewSecretService(secretManager, logger)
+	secretService := service3.NewSecretService(secretManager, auditService, logger)
 	k8sSecretHandler := api3.NewK8sSecretHandler(secretService)
 	alertManagerEventDAO := alert.NewAlertManagerEventDAO(db, logger, userDAO)
 	scrapePoolDAO := scrape.NewScrapePoolDAO(db, logger, userDAO)

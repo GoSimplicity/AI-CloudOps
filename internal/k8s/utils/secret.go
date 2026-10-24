@@ -104,19 +104,24 @@ func CleanSecretForYAML(secret *corev1.Secret) *corev1.Secret {
 	cleaned.ObjectMeta.ManagedFields = nil
 
 	if cleaned.Annotations != nil {
-		delete(cleaned.Annotations, "kubectl.kubernetes.io/last-applied-configuration")
+		delete(cleaned.Annotations, LastAppliedConfigAnnotation)
 	}
 
 	return cleaned
 }
 
-// SecretToYAML 将 Secret 转换为 YAML 字符串
+// SecretToYAML 将 Secret 转换为脱敏后的 YAML 字符串：
+// data/stringData 的值替换为 SecretRedactedPlaceholder，last-applied-configuration 注解被移除。
+// 明文只能通过 reveal 接口获取。
 func SecretToYAML(sec *corev1.Secret) (string, error) {
 	if sec == nil {
 		return "", fmt.Errorf("Secret 不能为空")
 	}
-	clean := CleanSecretForYAML(sec)
-	b, err := yaml.Marshal(clean)
+	obj, err := redactedSecretYAMLObject(sec)
+	if err != nil {
+		return "", fmt.Errorf("转换为YAML失败: %w", err)
+	}
+	b, err := yaml.Marshal(obj)
 	if err != nil {
 		return "", fmt.Errorf("转换为YAML失败: %w", err)
 	}
