@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/permission"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
@@ -30,7 +31,7 @@ func TestSecretRevealRequiresExplicitGrant(t *testing.T) {
 		{"middle wildcard does not cover reveal", []*model.Api{{Path: "/api/k8s/*/reveal", Method: 1}}, "/api/k8s/secret/1/ops/app/reveal", 403},
 		{"reveal route with wrong method does not cover reveal", []*model.Api{{Path: model.K8sSecretRevealRoute, Method: 2}}, "/api/k8s/secret/1/ops/app/reveal", 403},
 		{"exact grant among wildcard grants", []*model.Api{{Path: "/*", Method: 1}, {Path: model.K8sSecretRevealRoute, Method: 1}}, "/api/k8s/secret/1/ops/app/reveal", 204},
-		{"parameterized grant still covers detail", []*model.Api{{Path: "/api/k8s/secret/:a/:b/:c/detail", Method: 1}}, "/api/k8s/secret/1/ops/app/detail", 204},
+		{"renamed parameter grant does not cover detail", []*model.Api{{Path: "/api/k8s/secret/:a/:b/:c/detail", Method: 1}}, "/api/k8s/secret/1/ops/app/detail", 403},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			engine := gin.New()
@@ -50,7 +51,7 @@ func TestSecretRevealRequiresExplicitGrant(t *testing.T) {
 func TestSecretRevealAdminBypass(t *testing.T) {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) { c.Set("user", jwt.UserClaims{Uid: 1, Username: "admin"}); c.Next() })
-	engine.Use(NewAuthMiddleware(aiProxyRoles{}).CheckAuth())
+	engine.Use(NewAuthMiddleware(fixedRoles{roles: []*model.Role{{Code: permission.SuperAdminRoleCode, IsSystem: 1, Status: 1}}}).CheckAuth())
 	engine.GET(model.K8sSecretRevealRoute, func(c *gin.Context) { c.Status(204) })
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, httptest.NewRequest("GET", "/api/k8s/secret/1/ops/app/reveal", nil))

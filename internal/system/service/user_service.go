@@ -33,6 +33,7 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/permission"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	userutils "github.com/GoSimplicity/AI-CloudOps/internal/system/utils"
 	"go.uber.org/zap"
@@ -44,6 +45,7 @@ type UserService interface {
 	Login(ctx context.Context, user *model.UserLoginReq) (*model.User, error)
 	GetProfile(ctx context.Context, uid int) (*model.User, error)
 	GetPermCode(ctx context.Context, uid int) ([]string, error)
+	GetPermissions(ctx context.Context, uid int, catalog []permission.CatalogEntry) (*model.UserPermissionsResp, error)
 	GetUserDetail(ctx context.Context, uid int) (*model.User, error)
 	GetUserList(ctx context.Context, req *model.GetUserListReq) (model.ListResp[*model.User], error)
 	ChangePassword(ctx context.Context, req *model.ChangePasswordReq) error
@@ -123,6 +125,23 @@ func (us *userService) GetPermCode(ctx context.Context, uid int) ([]string, erro
 	}
 
 	return codes, nil
+}
+
+// GetPermissions 把用户角色授予按与鉴权中间件相同的规则展开为 "METHOD /模板" 权限码。
+// 超管只返回超管码 "*"。
+func (us *userService) GetPermissions(ctx context.Context, uid int, catalog []permission.CatalogEntry) (*model.UserPermissionsResp, error) {
+	roles, err := us.roleDao.GetRoles(ctx, uid)
+	if err != nil {
+		us.logger.Error("获取用户角色失败", zap.Int("uid", uid), zap.Error(err))
+		return nil, err
+	}
+	if permission.HasSuperAdminRole(roles) {
+		return &model.UserPermissionsResp{Version: model.UserPermissionsVersion, SuperAdmin: true, Permissions: []string{permission.SuperCode}}, nil
+	}
+	return &model.UserPermissionsResp{
+		Version:     model.UserPermissionsVersion,
+		Permissions: permission.Expand(permission.GrantsFromRoles(roles), catalog),
+	}, nil
 }
 
 func (us *userService) GetUserList(ctx context.Context, req *model.GetUserListReq) (model.ListResp[*model.User], error) {

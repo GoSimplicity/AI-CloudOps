@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/permission"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
@@ -44,6 +45,13 @@ func (r aiProxyRoles) GetUserRoles(context.Context, int) (*model.ListResp[*model
 	return &model.ListResp[*model.Role]{Items: []*model.Role{{Status: 1, Apis: r.apis}}}, nil
 }
 func TestAssistantProxyPermissionsDoNotGrantInfrastructureActions(t *testing.T) {
+	// 代理入口只有通配模板，鉴权依赖启动时登记的 AIOps 接口目录（真实目录见 internal/app 的测试）
+	useProxyCatalog(t, []permission.Route{
+		{Method: "POST", Path: "/api/v1/assistant/query"},
+		{Method: "GET", Path: "/api/v1/assistant/session/:session_id"},
+		{Method: "POST", Path: "/api/v1/autofix/workflow/confirm"},
+		{Method: "POST", Path: "/api/v1/autofix/notify"},
+	})
 	grants := []*model.Api{{Path: "/api/v1/assistant/query", Method: 2}, {Path: "/api/v1/assistant/session/:session_id", Method: 1}}
 	for _, test := range []struct {
 		method, path string
@@ -71,6 +79,13 @@ func TestAssistantProxyPermissionsDoNotGrantInfrastructureActions(t *testing.T) 
 			}
 		})
 	}
+}
+
+func useProxyCatalog(t *testing.T, routes []permission.Route) {
+	t.Helper()
+	previous := permission.ProxyCatalog(permission.AIOpsProxyTemplate)
+	permission.SetProxyCatalog(permission.AIOpsProxyTemplate, routes)
+	t.Cleanup(func() { permission.SetProxyCatalog(permission.AIOpsProxyTemplate, previous) })
 }
 
 func TestLegacyModuleGrantRemainsExplicitlyBroad(t *testing.T) {

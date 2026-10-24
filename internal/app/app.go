@@ -156,6 +156,11 @@ func (a *App) Run(ctx context.Context) error {
 		}
 	}
 
+	// 必须在管理员账号可能被创建（bootstrapAdmin / Mock）之后执行
+	if err := a.bootstrapSuperAdmin(ctx); err != nil {
+		return fmt.Errorf("初始化超级管理员角色失败: %w", err)
+	}
+
 	if err := a.initK8sClients(ctx); err != nil {
 		a.logger.Warn("K8s客户端初始化失败", zap.Error(err))
 	}

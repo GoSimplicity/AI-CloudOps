@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/permission"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm/clause"
 )
@@ -30,6 +31,22 @@ var namedPermissions = map[string]namedPermission{
 	},
 }
 
+// parseAIOpsCatalog 解析内嵌的 AI 接口目录。该目录既用于补充接口元数据，
+// 也登记为 /api/v1/*path 代理的鉴权目录（见 permission.ResolveProxyTemplate）。
+func parseAIOpsCatalog() ([]permission.Route, error) {
+	var routes []permission.Route
+	if err := json.Unmarshal(aiopsPermissionCatalog, &routes); err != nil {
+		return nil, fmt.Errorf("解析AI接口权限目录: %w", err)
+	}
+	prefix := strings.TrimSuffix(permission.AIOpsProxyTemplate, "*path")
+	for _, route := range routes {
+		if _, ok := permission.MethodCode(route.Method); !ok || !strings.HasPrefix(route.Path, prefix) {
+			return nil, fmt.Errorf("AI接口权限目录包含非法条目: %s %s", route.Method, route.Path)
+		}
+	}
+	return routes, nil
+}
+
 // bootstrapPermissionCatalog 补充可发现接口，不授予角色或覆盖管理员维护的元数据
 func (a *App) bootstrapPermissionCatalog(ctx context.Context) error {
 	methods := map[string]int8{"GET": 1, "POST": 2, "PUT": 3, "DELETE": 4}
@@ -45,13 +62,10 @@ func (a *App) bootstrapPermissionCatalog(ctx context.Context) error {
 	}
 	routes := a.server.Routes()
 	for _, route := range routes {
-		if route.Path == "/api/v1/*path" {
-			var aiRoutes []struct {
-				Method string `json:"method"`
-				Path   string `json:"path"`
-			}
-			if err := json.Unmarshal(aiopsPermissionCatalog, &aiRoutes); err != nil {
-				return fmt.Errorf("解析AI接口权限目录: %w", err)
+		if route.Path == permission.AIOpsProxyTemplate {
+			aiRoutes, err := parseAIOpsCatalog()
+			if err != nil {
+				return err
 			}
 			for _, aiRoute := range aiRoutes {
 				routes = append(routes, gin.RouteInfo{Method: aiRoute.Method, Path: aiRoute.Path, Handler: "AIOpsProxy"})

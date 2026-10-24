@@ -26,11 +26,15 @@
 package api
 
 import (
+	"errors"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/permission"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type RoleHandler struct {
@@ -166,7 +170,15 @@ func (h *RoleHandler) AssignRolesToUser(ctx *gin.Context) {
 
 	user := ctx.MustGet("user").(jwt.UserClaims)
 
-	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+	if err := base.BindRequest(ctx, &req); err != nil {
+		base.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+	if !h.guardSuperAdminRoles(ctx, req.UserID, req.RoleIds) {
+		return
+	}
+
+	base.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, h.svc.AssignRolesToUser(ctx.Request.Context(), req.UserID, req.RoleIds, user.Uid)
 	})
 }
@@ -175,9 +187,55 @@ func (h *RoleHandler) AssignRolesToUser(ctx *gin.Context) {
 func (h *RoleHandler) RevokeRolesFromUser(ctx *gin.Context) {
 	var req model.RevokeRolesFromUserRequest
 
-	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+	if err := base.BindRequest(ctx, &req); err != nil {
+		base.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
+	if !h.guardSuperAdminRoles(ctx, req.UserID, req.RoleIds) {
+		return
+	}
+
+	base.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return nil, h.svc.RevokeRolesFromUser(ctx.Request.Context(), req.UserID, req.RoleIds)
 	})
+}
+
+// guardSuperAdminRoles 授予或撤销内置超管角色只能由超管操作，防止持有角色分配
+// 权限的普通用户把自己（或他人）提升为超管、或撤销超管。roleIds 为空时 DAO 会撤销
+// 目标用户的全部角色，因此按目标用户当前角色判断。返回 false 时已写出响应。
+func (h *RoleHandler) guardSuperAdminRoles(ctx *gin.Context, userID int, roleIds []int) bool {
+	if permission.IsSuperAdmin(ctx) {
+		return true
+	}
+	touches := false
+	if len(roleIds) == 0 {
+		roles, err := h.svc.GetUserRoles(ctx.Request.Context(), userID)
+		if err != nil {
+			base.ErrorWithMessage(ctx, "获取用户角色失败")
+			return false
+		}
+		if roles != nil {
+			for _, role := range roles.Items {
+				touches = touches || permission.IsSuperAdminIdentity(role)
+			}
+		}
+	}
+	for _, id := range roleIds {
+		role, err := h.svc.GetRoleByID(ctx.Request.Context(), id)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			continue
+		}
+		if err != nil {
+			base.ErrorWithMessage(ctx, "获取角色失败")
+			return false
+		}
+		touches = touches || permission.IsSuperAdminIdentity(role)
+	}
+	if touches {
+		base.ForbiddenError(ctx, "仅超级管理员可授予或撤销超级管理员角色")
+		return false
+	}
+	return true
 }
 
 func (h *RoleHandler) GetRoleUsers(ctx *gin.Context) {
