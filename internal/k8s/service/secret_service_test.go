@@ -349,7 +349,7 @@ func TestUpdateSecretKeepsValuesForEmptyStringData(t *testing.T) {
 	svc := newTestSecretService(m, &auditFixture{})
 	err := svc.UpdateSecret(context.Background(), &model.UpdateSecretReq{
 		ClusterID: 1, Namespace: "ops", Name: "app",
-		// alpha 只在 stringData 中以空值出现；beta 在 data 中给新值、stringData 中为空；gamma 原本只在 stringData 中
+		// alpha 只在 stringData 中以空值出现（请求 data 不含）；beta 在 data 中给新值、stringData 中为空；gamma 原本只在 stringData 中
 		Data:       model.BinaryDataMap{"beta": []byte("new-beta")},
 		StringData: map[string]string{"alpha": "", "beta": "", "gamma": "", "delta": "", "eps": "new-eps"},
 	})
@@ -357,14 +357,14 @@ func TestUpdateSecretKeepsValuesForEmptyStringData(t *testing.T) {
 		t.Fatal(err)
 	}
 	u := m.updated
-	if string(u.Data["alpha"]) != fixtureAlpha {
-		t.Fatal("stringData 空值应保留 data 中的原值")
+	// SEC-25 P3-1：alpha/gamma 不在请求 data 中，视为已删除，不因 stringData 空串被恢复
+	for _, k := range []string{"alpha", "gamma"} {
+		if _, ok := u.Data[k]; ok {
+			t.Fatalf("请求 data 不含 %s 时不应恢复原值", k)
+		}
 	}
 	if string(u.Data["beta"]) != "new-beta" {
 		t.Fatal("data 中的新值不应被原值覆盖")
-	}
-	if string(u.Data["gamma"]) != fixtureBeta {
-		t.Fatal("stringData 空值应保留 stringData 中的原值")
 	}
 	for _, k := range []string{"alpha", "beta", "gamma"} {
 		if _, ok := u.StringData[k]; ok {
@@ -509,4 +509,76 @@ func TestSecretSameKeyInDataAndStringData(t *testing.T) {
 		raw, _ := json.Marshal(a.logs)
 		assertNoPlaintext(t, "audit", string(raw))
 	})
+}
+
+// SEC-25 P3-1：stringData 空串只在请求 data 同样包含该键时恢复原值；data 不含该键时该键被删除
+func TestUpdateSecretEmptyStringDataRestoresOnlyKeysInRequestData(t *testing.T) {
+	m := &secretManagerFixture{secret: newSecretFixture()}
+	svc := newTestSecretService(m, &auditFixture{})
+	if err := svc.UpdateSecret(context.Background(), &model.UpdateSecretReq{
+		ClusterID: 1, Namespace: "ops", Name: "app",
+		// alpha 在 data 中（脱敏回填的空值）→ 恢复；beta 不在 data 中 → 删除
+		Data:       model.BinaryDataMap{"alpha": []byte{}},
+		StringData: map[string]string{"alpha": "", "beta": ""},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	u := m.updated
+	if string(u.Data["alpha"]) != fixtureAlpha {
+		t.Fatal("请求 data 含该键时 stringData 空串应恢复原值")
+	}
+	if _, ok := u.Data["beta"]; ok {
+		t.Fatal("请求 data 不含该键时应删除，不应恢复原值")
+	}
+	if len(u.StringData) != 0 {
+		t.Fatalf("恢复或删除的键都不应留在 stringData 中（否则写入时会覆盖/写空 data）: %v", u.StringData)
+	}
+}
+
+// SEC-25 P3-2：请求未携带 data（nil）时保留集群现有 data；携带空对象 {} 时删除全部 data 键
+func TestUpdateSecretNilDataKeepsExistingEmptyDataClears(t *testing.T) {
+	m := &secretManagerFixture{secret: newSecretFixture()}
+	svc := newTestSecretService(m, &auditFixture{})
+	if err := svc.UpdateSecret(context.Background(), &model.UpdateSecretReq{
+		ClusterID: 1, Namespace: "ops", Name: "app", Labels: map[string]string{"app": "demo2"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if string(m.updated.Data["alpha"]) != fixtureAlpha || string(m.updated.Data["beta"]) != fixtureBeta || len(m.updated.Data) != 2 {
+		t.Fatalf("data 为 nil 时应保留集群现有 data: %v", keysOf(m.updated.Data))
+	}
+	if m.updated.Labels["app"] != "demo2" {
+		t.Fatal("其他字段应正常更新")
+	}
+
+	// JSON 层面：缺省 data 与 "data": null 均为 nil，"data": {} 为非 nil 空 map
+	for _, body := range []string{`{}`, `{"data":null}`} {
+		var req model.UpdateSecretReq
+		if err := json.Unmarshal([]byte(body), &req); err != nil || req.Data != nil {
+			t.Fatalf("%s 应解析为 nil data: %v %v", body, req.Data, err)
+		}
+	}
+	var empty model.UpdateSecretReq
+	if err := json.Unmarshal([]byte(`{"data":{}}`), &empty); err != nil || empty.Data == nil || len(empty.Data) != 0 {
+		t.Fatalf(`{"data":{}} 应解析为非 nil 空 map: %v %v`, empty.Data, err)
+	}
+
+	m = &secretManagerFixture{secret: newSecretFixture()}
+	svc = newTestSecretService(m, &auditFixture{})
+	if err := svc.UpdateSecret(context.Background(), &model.UpdateSecretReq{
+		ClusterID: 1, Namespace: "ops", Name: "app", Data: empty.Data,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if m.updated.Data == nil || len(m.updated.Data) != 0 {
+		t.Fatalf("data 为 {} 时应删除全部 data 键: %v", keysOf(m.updated.Data))
+	}
+}
+
+func keysOf(m map[string][]byte) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }

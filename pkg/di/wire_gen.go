@@ -128,7 +128,7 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	statefulSetService := service3.NewStatefulSetService(statefulSetManager, logger)
 	k8sStatefulSetHandler := api3.NewK8sStatefulSetHandler(statefulSetService)
 	serviceAccountManager := manager.NewServiceAccountManager(logger, k8sClient)
-	serviceAccountService := service3.NewServiceAccountService(serviceAccountManager, logger)
+	serviceAccountService := service3.NewServiceAccountService(serviceAccountManager, auditService, logger)
 	k8sServiceAccountHandler := api3.NewK8sServiceAccountHandler(serviceAccountService)
 	roleManager := manager.NewRoleManager(k8sClient, logger)
 	serviceRoleService := service3.NewRoleService(roleManager, logger)

@@ -98,6 +98,20 @@ func BadRequest(c *gin.Context, code int, data interface{}, message string) {
 	})
 }
 
+// Conflict 资源版本冲突的返回，使用HTTP 409状态码
+func Conflict(c *gin.Context, code int, data interface{}, message string) {
+	c.JSON(http.StatusConflict, ApiResponse{
+		Code:    code,
+		Data:    data,
+		Message: message,
+	})
+}
+
+// ConflictError 资源版本冲突（乐观锁失败）的返回：HTTP 409 + code=1
+func ConflictError(c *gin.Context, message string) {
+	Conflict(c, StatusError, map[string]interface{}{}, message)
+}
+
 // Forbidden 无权限的返回，使用HTTP 403状态码
 func Forbidden(c *gin.Context, data interface{}, message string) {
 	c.JSON(http.StatusForbidden, ApiResponse{

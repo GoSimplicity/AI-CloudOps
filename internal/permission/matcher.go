@@ -60,8 +60,8 @@ func Covers(granted, template string) bool {
 	if granted == template {
 		return true
 	}
-	// Secret 明文读取必须显式授予，模块或全局通配权限不覆盖。
-	if template == model.K8sSecretRevealRoute {
+	// Secret 明文读取和 ServiceAccount 令牌操作必须显式授予。
+	if template == model.K8sSecretRevealRoute || template == model.K8sServiceAccountTokenRoute {
 		return false
 	}
 	if strings.Count(granted, "*") == 1 && strings.HasSuffix(granted, "*") {
