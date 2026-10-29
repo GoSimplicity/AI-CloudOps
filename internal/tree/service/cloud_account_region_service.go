@@ -305,7 +305,7 @@ func (s *cloudAccountRegionService) UpdateCloudAccountRegionStatus(ctx context.C
 
 // GetAvailableRegions 获取指定云厂商的可用区域列表
 func (s *cloudAccountRegionService) GetAvailableRegions(ctx context.Context, req *model.GetAvailableRegionsReq) (*model.GetAvailableRegionsResp, error) {
-	if req.AccessKey != "" || req.SecretKey != "" {
+	if req.AccessKey != "" || req.SecretKey != "" || req.SessionToken != "" {
 		return nil, fmt.Errorf("禁止在URL中传递云密钥；请保存账号后使用cloud_account_id查询")
 	}
 	if req.CloudAccountID > 0 {

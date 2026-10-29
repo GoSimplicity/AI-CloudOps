@@ -37,17 +37,22 @@ const (
 // CloudAccount 云账户管理
 type CloudAccount struct {
 	Model
-	Name           string             `json:"name" gorm:"type:varchar(100);not null;uniqueIndex:idx_name_provider;comment:账户名称"`
-	Provider       CloudProvider      `json:"provider" gorm:"type:tinyint(1);not null;uniqueIndex:idx_name_provider;comment:云厂商类型;default:1"`
-	AccessKey      string             `json:"-" gorm:"type:varchar(500);not null;comment:访问密钥ID,加密存储"`
-	SecretKey      string             `json:"-" gorm:"type:varchar(500);not null;comment:访问密钥Secret,加密存储"`
-	AccountID      string             `json:"account_id" gorm:"type:varchar(100);index;comment:云账号ID"`
-	AccountName    string             `json:"account_name" gorm:"type:varchar(100);comment:云账号名称"`
-	AccountAlias   string             `json:"account_alias" gorm:"type:varchar(100);comment:账号别名"`
-	Description    string             `json:"description" gorm:"type:varchar(500);comment:账户描述"`
-	Status         CloudAccountStatus `json:"status" gorm:"type:tinyint(1);not null;index;comment:账户状态,1:启用,2:禁用;default:1"`
-	CreateUserID   int                `json:"create_user_id" gorm:"not null;comment:创建者ID;default:0"`
-	CreateUserName string             `json:"create_user_name" gorm:"type:varchar(100);not null;comment:创建者姓名"`
+	Name                      string             `json:"name" gorm:"type:varchar(100);not null;uniqueIndex:idx_name_provider;comment:账户名称"`
+	Provider                  CloudProvider      `json:"provider" gorm:"type:tinyint(1);not null;uniqueIndex:idx_name_provider;comment:云厂商类型;default:1"`
+	AccessKey                 string             `json:"-" gorm:"type:varchar(500);not null;comment:访问密钥ID,加密存储"`
+	SecretKey                 string             `json:"-" gorm:"type:varchar(500);not null;comment:访问密钥Secret,加密存储"`
+	CredentialType            string             `json:"credential_type" gorm:"type:varchar(20);not null;default:long_term"`
+	SessionToken              string             `json:"-" gorm:"type:text"`
+	CredentialExpiresAt       *time.Time         `json:"credential_expires_at,omitempty" gorm:"column:credential_expires_at"`
+	CredentialVersion         uint64             `json:"-" gorm:"not null;default:0"`
+	ExpectedCredentialVersion *uint64            `json:"-" gorm:"-"`
+	AccountID                 string             `json:"account_id" gorm:"type:varchar(100);index;comment:云账号ID"`
+	AccountName               string             `json:"account_name" gorm:"type:varchar(100);comment:云账号名称"`
+	AccountAlias              string             `json:"account_alias" gorm:"type:varchar(100);comment:账号别名"`
+	Description               string             `json:"description" gorm:"type:varchar(500);comment:账户描述"`
+	Status                    CloudAccountStatus `json:"status" gorm:"type:tinyint(1);not null;index;comment:账户状态,1:启用,2:禁用;default:1"`
+	CreateUserID              int                `json:"create_user_id" gorm:"not null;comment:创建者ID;default:0"`
+	CreateUserName            string             `json:"create_user_name" gorm:"type:varchar(100);not null;comment:创建者姓名"`
 	// 关联关系
 	CloudResources []*TreeCloudResource  `json:"cloud_resources,omitempty" gorm:"foreignKey:CloudAccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;comment:云账户资源"`
 	Regions        []*CloudAccountRegion `json:"regions,omitempty" gorm:"foreignKey:CloudAccountID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;comment:云账户区域"`
@@ -71,6 +76,7 @@ type CloudAccountRegion struct {
 	CloudAccount   *CloudAccount            `json:"cloud_account,omitempty" gorm:"foreignKey:CloudAccountID"`
 	Region         string                   `json:"region" gorm:"type:varchar(50);not null;comment:区域,如cn-hangzhou;index:idx_account_region,unique"`
 	RegionName     string                   `json:"region_name" gorm:"type:varchar(100);comment:区域名称,如华东1(杭州)"`
+	ProjectID      *string                  `json:"project_id,omitempty" gorm:"type:varchar(64);comment:该地域对应的项目ID"`
 	Status         CloudAccountRegionStatus `json:"status" gorm:"type:tinyint(1);not null;comment:区域状态,1:启用,2:禁用;default:1"`
 	IsDefault      bool                     `json:"is_default" gorm:"comment:是否为默认区域;default:false"`
 	Description    string                   `json:"description" gorm:"type:text;comment:区域描述"`
@@ -96,27 +102,33 @@ type GetCloudAccountDetailReq struct {
 }
 
 type CreateCloudAccountReq struct {
-	Name         string                         `json:"name" binding:"required,min=2,max=100"`         // 账户名称
-	Provider     CloudProvider                  `json:"provider" binding:"required,oneof=1 2 3 4 5 6"` // 云厂商类型
-	AccessKey    string                         `json:"access_key" binding:"required,min=10,max=500"`  // 访问密钥ID
-	SecretKey    string                         `json:"secret_key" binding:"required,min=10,max=500"`  // 访问密钥Secret
-	AccountID    string                         `json:"account_id" binding:"omitempty,max=100"`        // 云账号ID
-	AccountName  string                         `json:"account_name" binding:"omitempty,max=100"`      // 云账号名称
-	AccountAlias string                         `json:"account_alias" binding:"omitempty,max=100"`     // 账号别名
-	Description  string                         `json:"description" binding:"omitempty,max=500"`       // 账户描述
-	Regions      []CreateCloudAccountRegionItem `json:"regions" binding:"required,min=1,dive"`         // 区域配置（至少一个）
+	Name                string                         `json:"name" binding:"required,min=2,max=100"`         // 账户名称
+	Provider            CloudProvider                  `json:"provider" binding:"required,oneof=1 2 3 4 5 6"` // 云厂商类型
+	AccessKey           string                         `json:"access_key" binding:"required,min=10,max=500"`  // 访问密钥ID
+	SecretKey           string                         `json:"secret_key" binding:"required,min=10,max=500"`  // 访问密钥Secret
+	CredentialType      string                         `json:"credential_type" binding:"omitempty,oneof=long_term temporary"`
+	SessionToken        string                         `json:"session_token" binding:"omitempty,max=8192"`
+	CredentialExpiresAt *time.Time                     `json:"credential_expires_at"`
+	AccountID           string                         `json:"account_id" binding:"omitempty,max=100"`    // 云账号ID
+	AccountName         string                         `json:"account_name" binding:"omitempty,max=100"`  // 云账号名称
+	AccountAlias        string                         `json:"account_alias" binding:"omitempty,max=100"` // 账号别名
+	Description         string                         `json:"description" binding:"omitempty,max=500"`   // 账户描述
+	Regions             []CreateCloudAccountRegionItem `json:"regions" binding:"required,min=1,dive"`     // 区域配置（至少一个）
 }
 
 type UpdateCloudAccountReq struct {
-	ID           int                            `json:"id" binding:"required,gt=0"`                    // 账户ID
-	Name         string                         `json:"name" binding:"omitempty,min=2,max=100"`        // 账户名称
-	AccessKey    string                         `json:"access_key" binding:"omitempty,min=10,max=500"` // 访问密钥ID
-	SecretKey    string                         `json:"secret_key" binding:"omitempty,min=10,max=500"` // 访问密钥Secret
-	AccountID    string                         `json:"account_id" binding:"omitempty,max=100"`        // 云账号ID
-	AccountName  string                         `json:"account_name" binding:"omitempty,max=100"`      // 云账号名称
-	AccountAlias string                         `json:"account_alias" binding:"omitempty,max=100"`     // 账号别名
-	Description  string                         `json:"description" binding:"omitempty,max=500"`       // 账户描述
-	Regions      []CreateCloudAccountRegionItem `json:"regions" binding:"omitempty,min=1,dive"`        // 区域配置（可选，如果提供则至少一个）
+	ID                  int                            `json:"id" binding:"required,gt=0"`                    // 账户ID
+	Name                string                         `json:"name" binding:"omitempty,min=2,max=100"`        // 账户名称
+	AccessKey           string                         `json:"access_key" binding:"omitempty,min=10,max=500"` // 访问密钥ID
+	SecretKey           string                         `json:"secret_key" binding:"omitempty,min=10,max=500"` // 访问密钥Secret
+	CredentialType      string                         `json:"credential_type" binding:"omitempty,oneof=long_term temporary"`
+	SessionToken        string                         `json:"session_token" binding:"omitempty,max=8192"`
+	CredentialExpiresAt *time.Time                     `json:"credential_expires_at"`
+	AccountID           string                         `json:"account_id" binding:"omitempty,max=100"`    // 云账号ID
+	AccountName         string                         `json:"account_name" binding:"omitempty,max=100"`  // 云账号名称
+	AccountAlias        string                         `json:"account_alias" binding:"omitempty,max=100"` // 账号别名
+	Description         string                         `json:"description" binding:"omitempty,max=500"`   // 账户描述
+	Regions             []CreateCloudAccountRegionItem `json:"regions" binding:"omitempty,min=1,dive"`    // 区域配置（可选，如果提供则至少一个）
 }
 
 type DeleteCloudAccountReq struct {
@@ -222,10 +234,11 @@ type BatchCreateCloudAccountRegionReq struct {
 }
 
 type CreateCloudAccountRegionItem struct {
-	Region      string `json:"region" binding:"required"` // 区域,如cn-hangzhou
-	RegionName  string `json:"region_name"`               // 区域名称,如华东1(杭州)
-	IsDefault   bool   `json:"is_default"`                // 是否为默认区域
-	Description string `json:"description"`               // 区域描述
+	Region      string  `json:"region" binding:"required"` // 区域,如cn-hangzhou
+	RegionName  string  `json:"region_name"`               // 区域名称,如华东1(杭州)
+	IsDefault   bool    `json:"is_default"`                // 是否为默认区域
+	Description string  `json:"description"`               // 区域描述
+	ProjectID   *string `json:"project_id,omitempty" binding:"omitempty,max=64"`
 }
 
 type GetAvailableRegionsReq struct {
@@ -233,6 +246,7 @@ type GetAvailableRegionsReq struct {
 	Provider       CloudProvider `json:"provider" form:"provider" binding:"omitempty,oneof=1 2 3 4 5 6"`
 	AccessKey      string        `json:"access_key" form:"access_key"`
 	SecretKey      string        `json:"secret_key" form:"secret_key"`
+	SessionToken   string        `json:"-" form:"session_token"`
 }
 
 type AvailableRegion struct {

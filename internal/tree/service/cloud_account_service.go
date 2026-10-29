@@ -29,6 +29,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
@@ -53,9 +55,10 @@ type CloudAccountService interface {
 }
 
 type cloudAccountService struct {
-	clientFactory treeUtils.CloudClientFactory
-	logger        *zap.Logger
-	dao           dao.CloudAccountDAO
+	clientFactory     treeUtils.CloudClientFactory
+	credentialFactory treeUtils.CloudCredentialClientFactory
+	logger            *zap.Logger
+	dao               dao.CloudAccountDAO
 }
 
 func NewCloudAccountService(logger *zap.Logger, dao dao.CloudAccountDAO) CloudAccountService {
@@ -142,9 +145,23 @@ func (s *cloudAccountService) GetCloudAccountDetail(ctx context.Context, req *mo
 }
 
 func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model.CreateCloudAccountReq, createUserID int, createUserName string) error {
+	credentials := treeUtils.CloudCredentials{AccessKey: req.AccessKey, SecretKey: req.SecretKey, CredentialType: req.CredentialType, SessionToken: req.SessionToken, ExpiresAt: req.CredentialExpiresAt}
+	if err := treeUtils.ValidateCloudCredentials(req.Provider, credentials, time.Now().UTC()); err != nil {
+		return err
+	}
+	if credentials.CredentialType == "" {
+		credentials.CredentialType = "long_term"
+	}
 	normalizedRegions, err := treeUtils.ValidateAndNormalizeRegions(req.Regions)
 	if err != nil {
 		return fmt.Errorf("区域验证失败: %w", err)
+	}
+	if req.Provider == model.ProviderHuawei {
+		for _, region := range normalizedRegions {
+			if region.ProjectID == nil || !treeUtils.ValidHuaweiProjectID(*region.ProjectID) {
+				return errors.New("华为云地域必须指定项目ID")
+			}
+		}
 	}
 
 	// 检查账户名称是否已存在（同一云厂商下）
@@ -170,21 +187,31 @@ func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model
 		s.logger.Error("加密SecretKey失败", zap.Error(err))
 		return fmt.Errorf("加密SecretKey失败: %w", err)
 	}
+	var encryptedToken string
+	if req.SessionToken != "" {
+		encryptedToken, err = treeUtils.EncryptPassword(req.SessionToken)
+		if err != nil || len(encryptedToken) > 16000 {
+			return errors.New("无法保存云账户令牌")
+		}
+	}
 
 	// 使用事务创建云账户和区域关联
 	if err := s.dao.CreateWithTransaction(ctx, func(tx interface{}) error {
 		account := &model.CloudAccount{
-			Name:           req.Name,
-			Provider:       req.Provider,
-			AccessKey:      encryptedAccessKey,
-			SecretKey:      encryptedSecretKey,
-			AccountID:      req.AccountID,
-			AccountName:    req.AccountName,
-			AccountAlias:   req.AccountAlias,
-			Description:    req.Description,
-			Status:         model.CloudAccountEnabled, // 默认启用
-			CreateUserID:   createUserID,
-			CreateUserName: createUserName,
+			Name:                req.Name,
+			Provider:            req.Provider,
+			AccessKey:           encryptedAccessKey,
+			SecretKey:           encryptedSecretKey,
+			CredentialType:      credentials.CredentialType,
+			SessionToken:        encryptedToken,
+			CredentialExpiresAt: credentials.ExpiresAt,
+			AccountID:           req.AccountID,
+			AccountName:         req.AccountName,
+			AccountAlias:        req.AccountAlias,
+			Description:         req.Description,
+			Status:              model.CloudAccountEnabled, // 默认启用
+			CreateUserID:        createUserID,
+			CreateUserName:      createUserName,
 		}
 
 		if err := s.dao.CreateInTransaction(ctx, account, tx); err != nil {
@@ -202,6 +229,7 @@ func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model
 				RegionName:     regionItem.RegionName,
 				IsDefault:      regionItem.IsDefault,
 				Description:    regionItem.Description,
+				ProjectID:      regionItem.ProjectID,
 				Status:         model.CloudAccountRegionEnabled,
 				CreateUserID:   createUserID,
 				CreateUserName: createUserName,
@@ -270,6 +298,43 @@ func (s *cloudAccountService) UpdateCloudAccount(ctx context.Context, req *model
 		Model: model.Model{ID: req.ID},
 	}
 	updateFields := make([]string, 0)
+	oldType := account.CredentialType
+	if oldType == "" {
+		oldType = "long_term"
+	}
+	newType := req.CredentialType
+	if newType == "" {
+		newType = oldType
+	}
+	credentialChange := req.AccessKey != "" || req.SecretKey != "" || req.SessionToken != "" || req.CredentialExpiresAt != nil || newType != oldType
+	if credentialChange {
+		if oldType == "temporary" || newType == "temporary" || newType != oldType {
+			if req.AccessKey == "" || req.SecretKey == "" {
+				return errors.New("临时凭据轮换或类型切换必须完整提供访问凭据")
+			}
+			input := treeUtils.CloudCredentials{AccessKey: req.AccessKey, SecretKey: req.SecretKey, SessionToken: req.SessionToken, ExpiresAt: req.CredentialExpiresAt, CredentialType: newType}
+			if err := treeUtils.ValidateCloudCredentials(account.Provider, input, time.Now().UTC()); err != nil {
+				return err
+			}
+		} else {
+			if req.SessionToken != "" || req.CredentialExpiresAt != nil || (account.Provider == model.ProviderAWS && strings.HasPrefix(req.AccessKey, "ASIA")) {
+				return errors.New("长期凭据不能包含临时令牌或到期时间")
+			}
+		}
+		version := account.CredentialVersion
+		updateAccount.ExpectedCredentialVersion = &version
+		if oldType == "temporary" || newType == "temporary" || newType != oldType {
+			updateAccount.CredentialType = newType
+			updateAccount.CredentialExpiresAt = req.CredentialExpiresAt
+			if req.SessionToken != "" {
+				updateAccount.SessionToken, err = treeUtils.EncryptPassword(req.SessionToken)
+				if err != nil || len(updateAccount.SessionToken) > 16000 {
+					return errors.New("无法保存云账户令牌")
+				}
+			}
+			updateFields = append(updateFields, "credential_type", "credential_expires_at", "session_token")
+		}
+	}
 
 	if req.Name != "" {
 		updateAccount.Name = req.Name
@@ -375,71 +440,27 @@ func (s *cloudAccountService) VerifyCloudAccount(ctx context.Context, req *model
 		return errors.New("云账号已禁用")
 	}
 
-	// 解密密钥
-	accessKey, err := treeUtils.DecryptPassword(account.AccessKey)
+	credentials, err := treeUtils.LoadCloudAccountCredentials(account)
 	if err != nil {
-		s.logger.Error("解密AccessKey失败", zap.Error(err))
-		return fmt.Errorf("解密AccessKey失败: %w", err)
+		return err
 	}
-
-	secretKey, err := treeUtils.DecryptPassword(account.SecretKey)
+	region, err := defaultAccountRegion(account.Regions)
 	if err != nil {
-		s.logger.Error("解密SecretKey失败", zap.Error(err))
-		return fmt.Errorf("解密SecretKey失败: %w", err)
+		return err
 	}
-
-	defaultRegion, err := treeUtils.GetDefaultRegion(account.Regions)
+	client, err := cloudClient(account.Provider, credentials, region, s.logger, s.credentialFactory, s.clientFactory)
 	if err != nil {
-		return fmt.Errorf("获取默认区域失败: %w", err)
+		return err
 	}
-
-	// 根据 Provider 调用相应的云厂商 SDK 验证凭证
-	verifyReq := &model.VerifyCloudCredentialsReq{
-		Provider:  account.Provider,
-		Region:    defaultRegion,
-		AccessKey: accessKey,
-		SecretKey: secretKey,
+	operationCtx, cancel := treeUtils.CredentialContext(ctx, credentials)
+	defer cancel()
+	if err := client.VerifyCredentials(operationCtx); err != nil {
+		if operationCtx.Err() != nil {
+			return operationCtx.Err()
+		}
+		s.logger.Warn("云账户凭证验证失败", zap.Int("id", req.ID), zap.String("error_type", fmt.Sprintf("%T", err)))
+		return errors.New("云账户凭证验证失败")
 	}
-
-	switch account.Provider {
-	case model.ProviderAliyun:
-		if err := treeUtils.VerifyAliyunCredentials(ctx, verifyReq, s.logger); err != nil {
-			s.logger.Error("阿里云凭证验证失败", zap.Int("id", req.ID), zap.Error(err))
-			return fmt.Errorf("阿里云凭证验证失败: %w", err)
-		}
-	case model.ProviderTencent:
-		if err := treeUtils.VerifyTencentCredentials(ctx, verifyReq, s.logger); err != nil {
-			s.logger.Error("腾讯云凭证验证失败", zap.Int("id", req.ID), zap.Error(err))
-			return fmt.Errorf("腾讯云凭证验证失败: %w", err)
-		}
-	case model.ProviderAWS:
-		if err := treeUtils.VerifyAWSCredentials(ctx, verifyReq, s.logger); err != nil {
-			s.logger.Error("AWS凭证验证失败", zap.Int("id", req.ID), zap.Error(err))
-			return fmt.Errorf("AWS凭证验证失败: %w", err)
-		}
-	case model.ProviderHuawei:
-		if err := treeUtils.VerifyHuaweiCredentials(ctx, verifyReq, s.logger); err != nil {
-			s.logger.Error("华为云凭证验证失败", zap.Int("id", req.ID), zap.Error(err))
-			return fmt.Errorf("华为云凭证验证失败: %w", err)
-		}
-	case model.ProviderAzure:
-		if err := treeUtils.VerifyAzureCredentials(ctx, verifyReq, s.logger); err != nil {
-			s.logger.Error("Azure凭证验证失败", zap.Int("id", req.ID), zap.Error(err))
-			return fmt.Errorf("Azure凭证验证失败: %w", err)
-		}
-	case model.ProviderGCP:
-		if err := treeUtils.VerifyGCPCredentials(ctx, verifyReq, s.logger); err != nil {
-			s.logger.Error("GCP凭证验证失败", zap.Int("id", req.ID), zap.Error(err))
-			return fmt.Errorf("GCP凭证验证失败: %w", err)
-		}
-	default:
-		return fmt.Errorf("不支持的云厂商: %d", account.Provider)
-	}
-
-	s.logger.Info("云账户凭证验证成功",
-		zap.Int("id", req.ID),
-		zap.Int8("provider", int8(account.Provider)),
-		zap.String("region", defaultRegion))
 
 	return nil
 }
@@ -602,25 +623,62 @@ func (s *cloudAccountService) GetAvailableRegionsForAccount(ctx context.Context,
 	if account.Status != model.CloudAccountEnabled {
 		return nil, fmt.Errorf("云账号已禁用")
 	}
-	accessKey, err := treeUtils.DecryptPassword(account.AccessKey)
-	if err != nil {
-		return nil, fmt.Errorf("解密访问密钥失败")
-	}
-	secretKey, err := treeUtils.DecryptPassword(account.SecretKey)
-	if err != nil {
-		return nil, fmt.Errorf("解密访问凭据失败")
-	}
-	region, err := treeUtils.GetDefaultRegion(account.Regions)
+	credentials, err := treeUtils.LoadCloudAccountCredentials(account)
 	if err != nil {
 		return nil, err
 	}
-	factory := s.clientFactory
-	if factory == nil {
-		factory = treeUtils.NewCloudComputeClient
+	if account.Provider == model.ProviderHuawei {
+		var configured []*model.CloudAccountRegion
+		for _, region := range account.Regions {
+			if region == nil || region.Status != model.CloudAccountRegionEnabled {
+				continue
+			}
+			if region.ProjectID == nil || !treeUtils.ValidHuaweiProjectID(*region.ProjectID) {
+				return nil, errors.New("华为云地域缺少项目ID")
+			}
+			configured = append(configured, region)
+		}
+		if len(configured) == 0 {
+			return nil, errors.New("云账户没有启用的地域")
+		}
+		operationCtx, cancel := treeUtils.CredentialContext(ctx, credentials)
+		defer cancel()
+		all := make([]model.AvailableRegion, 0, len(configured))
+		for _, region := range configured {
+			client, err := cloudClient(account.Provider, credentials, region, s.logger, s.credentialFactory, s.clientFactory)
+			if err != nil {
+				return nil, err
+			}
+			part, err := client.GetAvailableRegions(operationCtx)
+			if err != nil {
+				if operationCtx.Err() != nil {
+					return nil, operationCtx.Err()
+				}
+				return nil, errors.New("云地域查询失败")
+			}
+			if len(part) != 1 || part[0].Region != region.Region {
+				return nil, errors.New("华为云地域响应与项目配置不一致")
+			}
+			all = append(all, part...)
+		}
+		return all, nil
 	}
-	client, err := factory(account.Provider, accessKey, secretKey, region, s.logger)
+	region, err := defaultAccountRegion(account.Regions)
 	if err != nil {
 		return nil, err
 	}
-	return client.GetAvailableRegions(ctx)
+	client, err := cloudClient(account.Provider, credentials, region, s.logger, s.credentialFactory, s.clientFactory)
+	if err != nil {
+		return nil, err
+	}
+	operationCtx, cancel := treeUtils.CredentialContext(ctx, credentials)
+	defer cancel()
+	regions, err := client.GetAvailableRegions(operationCtx)
+	if err != nil {
+		if operationCtx.Err() != nil {
+			return nil, operationCtx.Err()
+		}
+		return nil, errors.New("云地域查询失败")
+	}
+	return regions, nil
 }

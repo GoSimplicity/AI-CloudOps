@@ -57,10 +57,11 @@ type TreeCloudService interface {
 }
 
 type treeCloudService struct {
-	clientFactory   treeUtils.CloudClientFactory
-	logger          *zap.Logger
-	dao             dao.TreeCloudDAO
-	cloudAccountDAO dao.CloudAccountDAO
+	clientFactory     treeUtils.CloudClientFactory
+	credentialFactory treeUtils.CloudCredentialClientFactory
+	logger            *zap.Logger
+	dao               dao.TreeCloudDAO
+	cloudAccountDAO   dao.CloudAccountDAO
 }
 
 func NewTreeCloudService(logger *zap.Logger, dao dao.TreeCloudDAO, cloudAccountDAO dao.CloudAccountDAO) TreeCloudService {
@@ -347,6 +348,12 @@ func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model
 	if account.Status != model.CloudAccountEnabled {
 		return nil, errors.New("云账户已禁用，无法同步资源")
 	}
+	if account.CredentialType == "temporary" && req.SyncMode == model.SyncModeFull {
+		return nil, errors.New("临时凭据全量同步暂不可用：本地地域更新尚未支持事务回滚")
+	}
+	if account.Provider == model.ProviderHuawei && (req.SyncMode == model.SyncModeFull || len(req.InstanceIDs) == 0) {
+		return nil, errors.New("华为云仅支持指定实例ID的增量同步：无法证明跨企业项目资源列表完整")
+	}
 
 	// 校验整个地域集合后再解密或访问云端，避免部分有效输入触发部分同步。
 	var regionsToSync []*model.CloudAccountRegion
@@ -377,24 +384,12 @@ func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model
 		return nil, errors.New("没有可用的区域进行同步")
 	}
 
-	// 解密密钥
-	accessKey, err := treeUtils.DecryptPassword(account.AccessKey)
+	credentials, err := treeUtils.LoadCloudAccountCredentials(account)
 	if err != nil {
-		s.logger.Error("解密AccessKey失败", zap.Error(err))
-		syncHistory.SyncStatus = "failed"
-		syncHistory.ErrorMessage = fmt.Sprintf("解密AccessKey失败: %v", err)
-		s.saveSyncHistory(ctx, syncHistory)
-		return nil, fmt.Errorf("解密AccessKey失败: %w", err)
+		return nil, err
 	}
-
-	secretKey, err := treeUtils.DecryptPassword(account.SecretKey)
-	if err != nil {
-		s.logger.Error("解密SecretKey失败", zap.Error(err))
-		syncHistory.SyncStatus = "failed"
-		syncHistory.ErrorMessage = fmt.Sprintf("解密SecretKey失败: %v", err)
-		s.saveSyncHistory(ctx, syncHistory)
-		return nil, fmt.Errorf("解密SecretKey失败: %w", err)
-	}
+	operationCtx, cancel := treeUtils.CredentialContext(ctx, credentials)
+	defer cancel()
 
 	s.logger.Info("开始同步云资源",
 		zap.Int("cloudAccountID", req.CloudAccountID),
@@ -405,10 +400,8 @@ func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model
 	// 根据不同的云厂商调用对应的同步逻辑，遍历所有区域
 	var syncErr error
 	switch account.Provider {
-	case model.ProviderAliyun, model.ProviderTencent, model.ProviderAWS:
-		syncErr = s.syncCloudResourcesForMultipleRegions(ctx, account, accessKey, secretKey, regionsToSync, req, resp)
-	case model.ProviderHuawei:
-		syncErr = errors.New("华为云资源同步功能暂未实现")
+	case model.ProviderAliyun, model.ProviderTencent, model.ProviderAWS, model.ProviderHuawei:
+		syncErr = s.syncCloudResourcesWithCredentials(operationCtx, account, credentials, regionsToSync, req, resp)
 	case model.ProviderAzure:
 		syncErr = errors.New("Azure资源同步功能暂未实现")
 	case model.ProviderGCP:
@@ -460,6 +453,10 @@ func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model
 
 // syncAliyunResourcesWithStats 同步阿里云资源并返回统计信息
 func (s *treeCloudService) syncCloudResourcesForMultipleRegions(ctx context.Context, account *model.CloudAccount, accessKey, secretKey string, regions []*model.CloudAccountRegion, req *model.SyncTreeCloudResourceReq, resp *model.SyncCloudResourceResp) error {
+	return s.syncCloudResourcesWithCredentials(ctx, account, treeUtils.CloudCredentials{AccessKey: accessKey, SecretKey: secretKey}, regions, req, resp)
+}
+
+func (s *treeCloudService) syncCloudResourcesWithCredentials(ctx context.Context, account *model.CloudAccount, credentials treeUtils.CloudCredentials, regions []*model.CloudAccountRegion, req *model.SyncTreeCloudResourceReq, resp *model.SyncCloudResourceResp) error {
 	var regionErrors []error
 	// 遍历每个区域进行同步
 	for _, region := range regions {
@@ -470,23 +467,22 @@ func (s *treeCloudService) syncCloudResourcesForMultipleRegions(ctx context.Cont
 			zap.String("region", region.Region),
 			zap.String("regionName", region.RegionName))
 
-		factory := s.clientFactory
-		if factory == nil {
-			factory = treeUtils.NewCloudComputeClient
-		}
-		provider := account.Provider
-		client, err := factory(provider, accessKey, secretKey, region.Region, s.logger)
+		client, err := cloudClient(account.Provider, credentials, region, s.logger, s.credentialFactory, s.clientFactory)
 		var resources []*model.TreeCloudResource
 		if err == nil {
 			resources, err = client.ListInstances(ctx, req.InstanceIDs)
 		}
 
 		if err != nil {
-			s.logger.Error("同步区域资源失败",
-				zap.String("region", region.Region),
-				zap.Error(err))
-			regionErrors = append(regionErrors, fmt.Errorf("区域 %s 查询失败: %w", region.Region, err))
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			s.logger.Error("同步区域资源失败", zap.String("region", region.Region), zap.String("error_type", fmt.Sprintf("%T", err)))
+			regionErrors = append(regionErrors, fmt.Errorf("区域 %s 查询失败", region.Region))
 			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 
 		for _, resource := range resources {
@@ -587,6 +583,9 @@ func (s *treeCloudService) fullSyncResources(ctx context.Context, cloudAccountID
 	}
 
 	for _, existingResource := range existingResources {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if !newInstanceIDSet[existingResource.InstanceID] {
 			if err := s.dao.Delete(ctx, existingResource.ID); err != nil {
 				s.logger.Error("删除资源失败", zap.Int("id", existingResource.ID), zap.Error(err))
@@ -613,10 +612,16 @@ func (s *treeCloudService) fullSyncResourcesForRegion(ctx context.Context, regio
 	// 删除不在新资源列表中的资源
 	newInstanceIDSet := make(map[string]bool)
 	for _, resource := range resources {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		newInstanceIDSet[resource.InstanceID] = true
 	}
 
 	for _, existingResource := range existingResources {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if !newInstanceIDSet[existingResource.InstanceID] {
 			if err := s.dao.Delete(ctx, existingResource.ID); err != nil {
 				s.logger.Error("删除资源失败", zap.Int("id", existingResource.ID), zap.Error(err))
@@ -634,6 +639,9 @@ func (s *treeCloudService) fullSyncResourcesForRegion(ctx context.Context, regio
 
 func (s *treeCloudService) incrementalSyncResourcesForRegion(ctx context.Context, regionID int, resources []*model.TreeCloudResource, resp *model.SyncCloudResourceResp, autoBind bool, bindNodeID int, operatorID int, operatorName string) error {
 	for _, resource := range resources {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		resp.TotalCount++
 		syncedAt := time.Now()
 		resource.LastSyncTime = &syncedAt

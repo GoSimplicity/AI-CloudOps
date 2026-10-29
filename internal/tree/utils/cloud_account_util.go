@@ -29,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
@@ -110,6 +111,14 @@ func SanitizeCloudAccount(account *model.CloudAccount) {
 	}
 	account.AccessKey = ""
 	account.SecretKey = ""
+	account.SessionToken = ""
+	if account.CredentialExpiresAt != nil {
+		expires := account.CredentialExpiresAt.UTC()
+		account.CredentialExpiresAt = &expires
+	}
+	if account.CredentialType == "" {
+		account.CredentialType = "long_term"
+	}
 }
 
 func SanitizeCloudAccounts(accounts []*model.CloudAccount) {
@@ -117,6 +126,8 @@ func SanitizeCloudAccounts(accounts []*model.CloudAccount) {
 		SanitizeCloudAccount(account)
 	}
 }
+
+func ValidHuaweiProjectID(value string) bool { return huaweiProjectPattern.MatchString(value) }
 
 // 检查区域是否为空、是否重复、默认区域是否唯一
 // 如果没有指定默认区域，会将第一个区域设置为默认
@@ -133,6 +144,12 @@ func ValidateAndNormalizeRegions(regions []model.CreateCloudAccountRegionItem) (
 	regionMap := make(map[string]bool)
 	var defaultCount int
 	for i := range normalized {
+		if normalized[i].ProjectID != nil {
+			value := *normalized[i].ProjectID
+			if len(value) > 64 || strings.TrimSpace(value) != value || strings.ContainsAny(value, "\r\n\t") {
+				return nil, errors.New("项目ID格式无效")
+			}
+		}
 		if regionMap[normalized[i].Region] {
 			return nil, fmt.Errorf("区域 %s 重复", normalized[i].Region)
 		}

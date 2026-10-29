@@ -26,10 +26,17 @@ type TencentClient struct {
 }
 
 func NewTencentClient(accessKey, secretKey, region string) (*TencentClient, error) {
-	if strings.TrimSpace(accessKey) == "" || strings.TrimSpace(secretKey) == "" || strings.TrimSpace(region) == "" {
+	return NewTencentClientWithCredentials(CloudCredentials{AccessKey: accessKey, SecretKey: secretKey}, region)
+}
+
+func NewTencentClientWithCredentials(credentials CloudCredentials, region string) (*TencentClient, error) {
+	if strings.TrimSpace(region) == "" {
 		return nil, fmt.Errorf("腾讯云访问密钥和地域不能为空")
 	}
-	credential := common.NewCredential(accessKey, secretKey)
+	if err := ValidateCloudCredentials(model.ProviderTencent, credentials, time.Now().UTC()); err != nil {
+		return nil, err
+	}
+	credential := common.NewTokenCredential(credentials.AccessKey, credentials.SecretKey, credentials.SessionToken)
 	cp := profile.NewClientProfile()
 	cp.HttpProfile.ReqTimeout = 30
 	cp.HttpProfile.Scheme = "HTTPS"

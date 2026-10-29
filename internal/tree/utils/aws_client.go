@@ -24,15 +24,24 @@ type AWSClient struct {
 }
 
 func NewAWSClient(accessKey, secretKey, region string) (*AWSClient, error) {
-	if strings.TrimSpace(accessKey) == "" || strings.TrimSpace(secretKey) == "" || strings.TrimSpace(region) == "" {
+	return NewAWSClientWithCredentials(CloudCredentials{AccessKey: accessKey, SecretKey: secretKey}, region)
+}
+
+func NewAWSClientWithCredentials(credential CloudCredentials, region string) (*AWSClient, error) {
+	if strings.TrimSpace(region) == "" {
 		return nil, fmt.Errorf("AWS访问密钥和地域不能为空")
 	}
-	if strings.HasPrefix(accessKey, "ASIA") {
-		return nil, fmt.Errorf("AWS临时凭据需要session_token；当前账户仅支持长期AccessKey")
+	if err := ValidateCloudCredentials(model.ProviderAWS, credential, time.Now().UTC()); err != nil {
+		return nil, err
 	}
 	// Explicit credentials prevent ambient profiles/instance metadata credentials
 	// from silently substituting a different cloud account.
-	cfg := aws.Config{Region: region, Credentials: aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")), HTTPClient: &http.Client{Timeout: 30 * time.Second}}
+	provider := credentials.NewStaticCredentialsProvider(credential.AccessKey, credential.SecretKey, credential.SessionToken)
+	if credential.ExpiresAt != nil {
+		provider.Value.CanExpire = true
+		provider.Value.Expires = *credential.ExpiresAt
+	}
+	cfg := aws.Config{Region: region, Credentials: aws.NewCredentialsCache(provider), HTTPClient: &http.Client{Timeout: 30 * time.Second}}
 	return &AWSClient{client: ec2.NewFromConfig(cfg), region: region}, nil
 }
 func (c *AWSClient) VerifyCredentials(ctx context.Context) error {
