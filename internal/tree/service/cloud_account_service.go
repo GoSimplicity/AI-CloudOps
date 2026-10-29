@@ -371,6 +371,9 @@ func (s *cloudAccountService) VerifyCloudAccount(ctx context.Context, req *model
 		}
 		return err
 	}
+	if account.Status != model.CloudAccountEnabled {
+		return errors.New("云账号已禁用")
+	}
 
 	// 解密密钥
 	accessKey, err := treeUtils.DecryptPassword(account.AccessKey)
