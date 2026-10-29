@@ -127,6 +127,7 @@ def main():
     database.add_argument("--mysql-instance-source", action="store_true")
     database.add_argument("--mysql-notification-idempotent", action="store_true")
     database.add_argument("--mysql-notification-outbox", action="store_true")
+    database.add_argument("--mysql-notification-inbox", action="store_true")
     database.add_argument("--mysql-cloud-temporary", action="store_true")
     database.add_argument("--mysql-cloud-provider-credentials", action="store_true")
     database.add_argument("--mysql-cloud-region-sync", action="store_true")
@@ -148,6 +149,8 @@ def main():
             isolated_mysql(args.container, "./internal/workorder/dao", "TestMySQLNotificationIdempotentUpdate")
         elif args.mysql_notification_outbox:
             isolated_mysql(args.container, "./internal/workorder/service", "TestMySQLOutboxAtomicAndDelivery")
+        elif args.mysql_notification_inbox:
+            isolated_mysql(args.container, "./internal/workorder/dao", "TestMySQLInboxConcurrentDelivery")
         elif args.mysql_cloud_temporary:
             isolated_mysql(args.container, "./internal/tree/service", "TestMySQLTemporaryCloudCredentials")
         elif args.mysql_cloud_provider_credentials:

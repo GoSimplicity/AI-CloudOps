@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -89,9 +90,17 @@ func maskedPlanRecipients(raw []byte) map[recipientMaskKey]string {
 			continue
 		}
 		for _, recipient := range entry.Recipients {
-			address, err := notification.NormalizeAddress(entry.Channel, recipient.Address)
-			if err != nil || address != recipient.Address {
-				continue
+			address := recipient.Address
+			if entry.Channel == "in_app" {
+				userID, err := strconv.Atoi(address)
+				if err != nil || userID <= 0 || strconv.Itoa(userID) != address {
+					continue
+				}
+			} else {
+				normalized, err := notification.NormalizeAddress(entry.Channel, address)
+				if err != nil || normalized != address {
+					continue
+				}
 			}
 			value := maskNotificationRecipient(entry.Channel, address)
 			if value == "" {
@@ -127,6 +136,11 @@ func maskNotificationRecipient(channel, address string) string {
 			return address[:3] + "***"
 		}
 		return address[:3] + "***" + address[len(address)-4:]
+	case "in_app":
+		if len(address) <= 4 {
+			return "用户***"
+		}
+		return "用户***" + address[len(address)-4:]
 	default:
 		return ""
 	}
@@ -197,10 +211,16 @@ func (d *workorderInstanceDAO) RetryNotificationEvent(ctx context.Context, event
 			if err := tx.Model(&model.WorkorderNotificationDelivery{}).Where("event_id = ? AND status <> ?", eventID, "success").Count(&notSuccessful).Error; err != nil {
 				return err
 			}
-			if event.ParentEventID == nil || notSuccessful != 0 || len(event.Plan) == 0 || event.LastError != "事件结果或后续排期持久化失败，需人工核对" {
+			retrySchedule := event.ParentEventID != nil && event.LastError == "事件结果或后续排期持久化失败，需人工核对"
+			retryInbox := planIncludesInbox(event.Plan)
+			if notSuccessful != 0 || len(event.Plan) == 0 || (!retrySchedule && !retryInbox) {
 				return errors.New("事件已有投递记录，请逐个核对处置")
 			}
-			action = "retry_schedule"
+			if retrySchedule {
+				action = "retry_schedule"
+			} else {
+				action = "retry_inbox"
+			}
 		}
 		if err := tx.Create(&model.WorkorderNotificationResolution{EventID: eventID, DeliveryID: 0, Action: action, OperatorID: operatorID, Reason: reason}).Error; err != nil {
 			return err
@@ -214,4 +234,22 @@ func (d *workorderInstanceDAO) RetryNotificationEvent(ctx context.Context, event
 		}
 		return nil
 	})
+}
+
+func planIncludesInbox(raw []byte) bool {
+	if len(raw) == 0 || len(raw) > 1048576 {
+		return false
+	}
+	var plan []struct {
+		Channel string `json:"channel"`
+	}
+	if json.Unmarshal(raw, &plan) != nil || len(plan) > 1024 {
+		return false
+	}
+	for _, item := range plan {
+		if item.Channel == "in_app" {
+			return true
+		}
+	}
+	return false
 }

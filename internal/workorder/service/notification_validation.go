@@ -124,7 +124,7 @@ func validateNotificationDestinations(channels, types, users, roles, depts model
 	}
 	allowed := map[string]bool{}
 	for _, channel := range channels {
-		if channel != "email" && channel != "feishu" {
+		if channel != "email" && channel != "feishu" && channel != "in_app" {
 			return fmt.Errorf("不支持的通知渠道: %s", channel)
 		}
 		if allowed[channel] {
@@ -133,16 +133,21 @@ func validateNotificationDestinations(channels, types, users, roles, depts model
 		allowed[channel] = true
 	}
 	custom := false
+	inAppRecipient := false
 	for _, kind := range types {
 		var ids []string
 		switch kind {
 		case "creator", "assignee":
+			inAppRecipient = true
 			continue
 		case "user":
+			inAppRecipient = true
 			ids = users
 		case "role":
+			inAppRecipient = true
 			ids = roles
 		case "dept":
+			inAppRecipient = true
 			ids = depts
 		case "custom":
 			custom = true
@@ -153,6 +158,9 @@ func validateNotificationDestinations(channels, types, users, roles, depts model
 		if _, err := recipientIDs(ids); err != nil {
 			return err
 		}
+	}
+	if allowed["in_app"] && !inAppRecipient {
+		return fmt.Errorf("站内通知必须配置系统用户、创建人、处理人、角色或部门")
 	}
 	if custom && len(addresses) == 0 {
 		return fmt.Errorf("自定义接收人必须提供recipient_addresses")
@@ -188,6 +196,27 @@ func (s *workorderNotificationService) resolveChannelRecipients(ctx context.Cont
 	seen := map[string]bool{}
 	for _, recipient := range recipients {
 		if recipient.Channel != "" && recipient.Channel != channel {
+			continue
+		}
+		if channel == "in_app" {
+			id, err := strconv.Atoi(recipient.ID)
+			if err != nil || id <= 0 || s.userDAO == nil {
+				return nil, fmt.Errorf("站内通知用户身份无效")
+			}
+			user, err := s.userDAO.GetByID(ctx, id)
+			if err != nil || user == nil || user.Enable != 1 {
+				return nil, fmt.Errorf("站内通知用户不存在或已禁用")
+			}
+			address := strconv.Itoa(id)
+			if seen[address] {
+				continue
+			}
+			seen[address] = true
+			recipient.ID, recipient.Address, recipient.Channel = address, address, channel
+			result = append(result, recipient)
+			if len(result) > 1000 {
+				return nil, fmt.Errorf("站内通知接收人数量超限")
+			}
 			continue
 		}
 		address := s.getRecipientAddress(ctx, recipient, channel)

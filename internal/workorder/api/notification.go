@@ -61,6 +61,11 @@ func (h *NotificationHandler) RegisterRouters(server *gin.Engine) {
 		notificationGroup.POST("/test/send", h.TestSendNotification)
 		notificationGroup.GET("/channels", h.GetAvailableChannels)
 		notificationGroup.POST("/send", h.SendNotificationManually)
+		notificationGroup.GET("/inbox", h.ListInbox)
+		notificationGroup.GET("/inbox/unread", h.CountUnreadInbox)
+		notificationGroup.POST("/inbox/read-all", h.ReadAllInbox)
+		notificationGroup.POST("/inbox/:id/read", h.ReadInbox)
+		notificationGroup.DELETE("/inbox/:id", h.DeleteInbox)
 	}
 }
 

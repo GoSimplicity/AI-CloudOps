@@ -76,6 +76,8 @@ jobs:
         run: python scripts/integration/schema_smoke.py --mysql-notification-idempotent
       - name: Isolated MySQL notification outbox and delivery
         run: python scripts/integration/schema_smoke.py --mysql-notification-outbox
+      - name: Isolated MySQL concurrent inbox delivery
+        run: python scripts/integration/schema_smoke.py --mysql-notification-inbox
       - name: Isolated MySQL scheduled notifications
         run: python scripts/integration/schema_smoke.py --mysql-notification-schedule
       - name: Isolated MySQL notification timezone guard

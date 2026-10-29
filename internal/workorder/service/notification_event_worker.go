@@ -244,6 +244,12 @@ func (w *NotificationEventWorker) deliverPlan(ctx context.Context, event *model.
 	var failures []error
 	for i := range plan {
 		channel := &plan[i]
+		if channel.Channel == "in_app" {
+			if err := w.service.deliverInboxPlan(ctx, event, channel); err != nil {
+				failures = append(failures, err)
+			}
+			continue
+		}
 		channelCtx := context.WithValue(ctx, eventPlanChannelKey{}, channel)
 		if err := w.service.sendChannelNotification(channelCtx, &channel.Config, instance, channel.Channel, channel.Recipients, event.EventType, event.SenderID, event.Content); err != nil {
 			failures = append(failures, err)

@@ -63,6 +63,9 @@ func (h *InstanceCommentHandler) CreateInstanceComment(ctx *gin.Context) {
 	req.OperatorName = user.Username
 
 	base.HandleRequest(ctx, &req, func() (any, error) {
+		// 外部请求不能伪造系统评论，内部调用仍可显式创建系统评论。
+		req.IsSystem = 2
+		req.Type = model.CommentTypeNormal
 		return nil, h.commentService.CreateInstanceComment(ctx.Request.Context(), &req)
 	})
 }

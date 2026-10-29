@@ -56,6 +56,11 @@ type WorkorderNotificationService interface {
 	ResolveNotificationDelivery(ctx context.Context, eventID uint64, req *model.ResolveWorkorderNotificationDeliveryReq, operatorID int) error
 	ListNotificationEventResolutions(ctx context.Context, eventID uint64) ([]*model.WorkorderNotificationResolution, error)
 	RetryNotificationEvent(ctx context.Context, eventID uint64, reason string, operatorID int) error
+	ListInbox(context.Context, int, *model.ListWorkorderInboxReq) (*model.ListResp[*model.WorkorderInboxMessage], error)
+	CountUnreadInbox(context.Context, int) (int64, error)
+	ReadInbox(context.Context, int, uint64) error
+	ReadAllInbox(context.Context, int) error
+	DeleteInbox(context.Context, int, uint64) error
 	TestSendNotification(ctx context.Context, req *model.TestSendWorkorderNotificationReq) error
 	SendWorkorderNotification(ctx context.Context, instanceID int, eventType string, customContent ...string) error
 	SendNotificationByChannels(ctx context.Context, channels []string, recipient, subject, content string) error
@@ -226,6 +231,9 @@ func (s *workorderNotificationService) TestSendNotification(ctx context.Context,
 	}
 	if !found {
 		return fmt.Errorf("测试channel不在通知配置中")
+	}
+	if selected == "in_app" {
+		return errors.New("站内通知通过工单事件持久投递，暂不支持此处试发")
 	}
 	if _, err := notification.NormalizeAddress(selected, req.Recipient); err != nil {
 		return err
@@ -922,14 +930,13 @@ func (s *workorderNotificationService) SendNotificationByChannels(ctx context.Co
 
 // GetAvailableChannels 获取当前可用的通知渠道列表
 func (s *workorderNotificationService) GetAvailableChannels() *model.ListResp[*model.WorkorderNotificationChannel] {
-	if s.notificationMgr == nil {
-		return &model.ListResp[*model.WorkorderNotificationChannel]{
-			Items: []*model.WorkorderNotificationChannel{},
-			Total: 0,
-		}
+	availableChannels := []string{}
+	if s.notificationMgr != nil {
+		availableChannels = s.notificationMgr.GetAvailableChannels()
 	}
-
-	availableChannels := s.notificationMgr.GetAvailableChannels()
+	if _, err := s.inboxStore(); err == nil {
+		availableChannels = append(availableChannels, "in_app")
+	}
 	channels := make([]*model.WorkorderNotificationChannel, 0, len(availableChannels))
 
 	for _, channel := range availableChannels {

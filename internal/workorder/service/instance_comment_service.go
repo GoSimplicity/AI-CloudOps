@@ -66,7 +66,17 @@ func NewInstanceCommentService(
 }
 
 func (s *instanceCommentService) CreateInstanceComment(ctx context.Context, req *model.CreateWorkorderInstanceCommentReq) error {
-	_, err := s.instanceDao.GetInstanceByID(ctx, req.InstanceID)
+	if req == nil {
+		return fmt.Errorf("评论请求不能为空")
+	}
+	if s.notificationService != nil && req.IsSystem != 1 && !dao.InTransaction(ctx) {
+		store, ok := s.instanceDao.(instanceEventStore)
+		if !ok {
+			return fmt.Errorf("工单通知事务存储不可用")
+		}
+		return store.InTransaction(ctx, func(txCtx context.Context) error { return s.CreateInstanceComment(txCtx, req) })
+	}
+	instance, err := s.instanceDao.GetInstanceByID(ctx, req.InstanceID)
 	if err != nil {
 		s.logger.Error("工单不存在", zap.Error(err), zap.Int("instanceID", req.InstanceID))
 		return fmt.Errorf("工单不存在: %w", err)
@@ -105,16 +115,12 @@ func (s *instanceCommentService) CreateInstanceComment(ctx context.Context, req 
 		return fmt.Errorf("创建工单评论失败: %w", err)
 	}
 
-	// 发送评论通知（仅对非系统评论发送通知）
+	// 普通评论与通知事件同事务提交；系统内部评论不生成重复通知。
 	if s.notificationService != nil && comment.IsSystem != 1 {
-		go func() {
-			// 异步发送通知，避免阻塞主流程
-			if err := s.notificationService.SendWorkorderNotification(ctx, comment.InstanceID, model.EventTypeInstanceCommented, comment.Content); err != nil {
-				s.logger.Error("发送工单评论通知失败",
-					zap.Error(err),
-					zap.Int("instance_id", comment.InstanceID))
-			}
-		}()
+		outbox := &instanceService{dao: s.instanceDao, logger: s.logger}
+		if err := outbox.recordNotificationEvent(ctx, comment.InstanceID, model.EventTypeInstanceCommented, comment.OperatorID, comment.Content, instance); err != nil {
+			return err
+		}
 	}
 
 	return nil
