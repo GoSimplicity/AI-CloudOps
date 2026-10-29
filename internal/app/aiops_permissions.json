@@ -157,6 +157,10 @@
   },
   {
     "method": "POST",
+    "path": "/api/v1/predict/backtest"
+  },
+  {
+    "method": "POST",
     "path": "/api/v1/predict/cpu"
   },
   {
