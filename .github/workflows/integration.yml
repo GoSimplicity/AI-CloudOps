@@ -50,6 +50,8 @@ jobs:
           git rev-parse HEAD
           git -C ../AI-CloudOps-web rev-parse HEAD
           git -C ../AI-CloudOps-aiops rev-parse HEAD
+      - name: Cross-repository cloud provider contract
+        run: go run scripts/integration/cloud_provider_contract.go ../AI-CloudOps-web
       - name: Generate private isolated configuration
         run: python scripts/release-env.py
       - name: Build and start isolated stack
