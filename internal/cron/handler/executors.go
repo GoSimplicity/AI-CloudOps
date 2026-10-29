@@ -135,9 +135,7 @@ type HTTPExecutor struct {
 func NewHTTPExecutor(logger *zap.Logger) *HTTPExecutor {
 	return &HTTPExecutor{
 		logger: logger,
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
+		client: &http.Client{},
 	}
 }
 
@@ -167,27 +165,31 @@ func (h *HTTPExecutor) Execute(ctx context.Context, task *HTTPTask) (string, err
 
 	req, err := http.NewRequestWithContext(ctx, task.Method, task.URL, bodyReader)
 	if err != nil {
-		return "", fmt.Errorf("创建HTTP请求失败: %w", err)
+		return "", fmt.Errorf("创建HTTP请求失败 (%T)", err)
 	}
 
 	for _, header := range task.Headers {
 		req.Header.Set(header.Key, header.Value)
 	}
 
-	h.logger.Info("执行HTTP请求",
-		zap.String("method", task.Method),
-		zap.String("url", task.URL))
+	h.logger.Info("执行HTTP请求", zap.String("method", task.Method))
 
 	resp, err := h.client.Do(req)
 	if err != nil {
-		h.logger.Error("HTTP请求失败", zap.Error(err))
-		return "", fmt.Errorf("HTTP请求失败: %w", err)
+		h.logger.Error("HTTP请求失败", zap.String("error_type", fmt.Sprintf("%T", err)))
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("HTTP请求失败: %w", ctx.Err())
+		}
+		return "", fmt.Errorf("HTTP请求失败 (%T)", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxTaskOutputBytes+1))
 	if err != nil {
-		return "", fmt.Errorf("读取响应失败: %w", err)
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("读取响应失败: %w", ctx.Err())
+		}
+		return "", fmt.Errorf("读取响应失败 (%T)", err)
 	}
 
 	if len(body) > maxTaskOutputBytes {
@@ -196,9 +198,7 @@ func (h *HTTPExecutor) Execute(ctx context.Context, task *HTTPTask) (string, err
 
 	response := string(body)
 
-	h.logger.Info("HTTP请求完成",
-		zap.String("url", task.URL),
-		zap.Int("statusCode", resp.StatusCode))
+	h.logger.Info("HTTP请求完成", zap.Int("statusCode", resp.StatusCode))
 
 	if resp.StatusCode >= 400 {
 		return response, fmt.Errorf("HTTP请求失败，状态码: %d", resp.StatusCode)
