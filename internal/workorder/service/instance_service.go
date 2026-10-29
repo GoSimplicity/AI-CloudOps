@@ -1108,15 +1108,7 @@ func (s *instanceService) GetCurrentStep(ctx context.Context, instanceID int) (*
 			return nil, fmt.Errorf("未找到匹配状态的流程步骤")
 		}
 
-		if instance.CurrentStepID == nil || *instance.CurrentStepID == "" {
-			s.logger.Info("更新工单CurrentStepID",
-				zap.Int("instanceID", instanceID),
-				zap.String("stepID", currentStep.ID))
-			instance.CurrentStepID = &currentStep.ID
-			if updateErr := s.dao.UpdateInstance(ctx, instance); updateErr != nil {
-				s.logger.Error("更新CurrentStepID失败", zap.Error(updateErr))
-			}
-		}
+		// 只读查询不能回写工单；状态流转时由对应事务保存步骤。
 	}
 
 	s.logger.Debug("找到当前步骤", zap.String("stepID", currentStep.ID),
