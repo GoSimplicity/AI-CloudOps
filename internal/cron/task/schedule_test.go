@@ -1,6 +1,7 @@
 package task
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hibiken/asynq"
@@ -22,6 +23,7 @@ func TestParseScheduleMatchesAsynqRegistration(t *testing.T) {
 		{"empty", "", false},
 		{"malformed timezone", "CRON_TZ=Asia/Shanghai", false},
 		{"malformed tz", "TZ=UTC", false},
+		{"database length limit", strings.Repeat(" ", 101) + "* * * * *", false},
 	}
 	scheduler := asynq.NewScheduler(asynq.RedisClientOpt{Addr: "127.0.0.1:0"}, nil)
 	for _, test := range tests {
@@ -30,8 +32,8 @@ func TestParseScheduleMatchesAsynqRegistration(t *testing.T) {
 			if (err == nil) != test.valid {
 				t.Fatalf("ParseSchedule(%q): err=%v", test.expression, err)
 			}
-			// 此两项会触发上游解析器panic，不能直接传入SDK
-			if test.name == "malformed timezone" || test.name == "malformed tz" {
+			// 时区缺表达式会触发上游panic；长度限制来自数据库字段
+			if test.name == "malformed timezone" || test.name == "malformed tz" || test.name == "database length limit" {
 				return
 			}
 			entryID, err := scheduler.Register(test.expression, asynq.NewTask("test", nil))
