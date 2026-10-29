@@ -131,6 +131,7 @@ def main():
     database.add_argument("--mysql-cloud-temporary", action="store_true")
     database.add_argument("--mysql-cloud-provider-credentials", action="store_true")
     database.add_argument("--mysql-cloud-region-sync", action="store_true")
+    database.add_argument("--mysql-cloud-managed", action="store_true")
     database.add_argument("--mysql-cloud-temporary-full", action="store_true")
     database.add_argument("--mysql-notification-schedule", action="store_true")
     database.add_argument("--mysql-notification-timezone", action="store_true")
@@ -157,6 +158,8 @@ def main():
             isolated_mysql(args.container, "./internal/tree/service", "TestMySQLProviderCredentialMigration")
         elif args.mysql_cloud_region_sync:
             isolated_mysql(args.container, "./internal/tree/service", "TestMySQLCloudRegionSyncFencingAndAtomicRollback")
+        elif args.mysql_cloud_managed:
+            isolated_mysql(args.container, "./internal/tree/service", "TestMySQLManagedResourceAtomicAndFencing")
         elif args.mysql_cloud_temporary_full:
             isolated_mysql(args.container, "./internal/tree/service", "TestMySQLTemporaryFullSyncAtomic")
         elif args.mysql_notification_schedule:

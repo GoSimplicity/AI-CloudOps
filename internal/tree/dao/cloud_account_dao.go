@@ -86,12 +86,7 @@ func (d *cloudAccountDAO) Update(ctx context.Context, account *model.CloudAccoun
 }
 
 func (d *cloudAccountDAO) Delete(ctx context.Context, id int) error {
-	if err := d.db.WithContext(ctx).Delete(&model.CloudAccount{}, id).Error; err != nil {
-		d.logger.Error("删除云账户失败", zap.Error(err), zap.Int("id", id))
-		return err
-	}
-
-	return nil
+	return d.deleteAccountsSafely(ctx, []int{id})
 }
 
 // GetByID 根据ID获取云账户详情
@@ -286,16 +281,7 @@ func (d *cloudAccountDAO) UpdateWithFields(ctx context.Context, account *model.C
 }
 
 func (d *cloudAccountDAO) BatchDelete(ctx context.Context, ids []int) error {
-	if len(ids) == 0 {
-		return errors.New("批量删除ID列表不能为空")
-	}
-
-	if err := d.db.WithContext(ctx).Where("id IN ?", ids).Delete(&model.CloudAccount{}).Error; err != nil {
-		d.logger.Error("批量删除云账户失败", zap.Error(err), zap.Ints("ids", ids))
-		return err
-	}
-
-	return nil
+	return d.deleteAccountsSafely(ctx, ids)
 }
 
 func (d *cloudAccountDAO) BatchUpdateStatus(ctx context.Context, ids []int, status model.CloudAccountStatus) error {

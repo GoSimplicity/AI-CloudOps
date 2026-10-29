@@ -41,6 +41,7 @@ type TreeCloudDAO interface {
 	ReleaseRegionSyncLease(context.Context, *RegionSyncLease) error
 	ApplyRegionSync(context.Context, *model.CloudAccount, *model.CloudAccountRegion, *RegionSyncLease, func(TreeCloudDAO) error) error
 	EnsureTreeNode(context.Context, int) error
+	ManagedResourceStore() ManagedCloudDAO
 	CompleteRegionSyncHistory(context.Context, int, string, model.CloudRegionSyncResult) error
 	FinishRegionSyncHistory(context.Context, int, string, string, string) error
 	GetAnyByRegionAndInstanceID(context.Context, int, string) (*model.TreeCloudResource, error)

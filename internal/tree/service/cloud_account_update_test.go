@@ -34,7 +34,7 @@ func assertCloudAccountRegionDelta(t *testing.T, db *gorm.DB) {
 	originalKey := viper.Get("tree.password_encryption_key")
 	viper.Set("tree.password_encryption_key", strings.Repeat("k", 32))
 	t.Cleanup(func() { viper.Set("tree.password_encryption_key", originalKey) })
-	if err := db.AutoMigrate(&model.CloudAccount{}, &model.CloudAccountRegion{}, &model.TreeCloudResource{}); err != nil {
+	if err := db.AutoMigrate(&model.CloudAccount{}, &model.CloudAccountRegion{}, &model.TreeCloudResource{}, &model.CloudManagedResource{}); err != nil {
 		t.Fatal("region fixture schema failed")
 	}
 	store := dao.NewCloudAccountDAO(db, zap.NewNop())

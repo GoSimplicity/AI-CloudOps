@@ -145,6 +145,8 @@ func (d *treeCloudDAO) EnsureTreeNode(ctx context.Context, id int) error {
 	return nil
 }
 
+func (d *treeCloudDAO) ManagedResourceStore() ManagedCloudDAO { return &managedCloudDAO{db: d.db} }
+
 func (d *treeCloudDAO) GetAnyByRegionAndInstanceID(ctx context.Context, regionID int, instanceID string) (*model.TreeCloudResource, error) {
 	var resource model.TreeCloudResource
 	err := d.db.WithContext(ctx).Unscoped().Where("cloud_account_region_id = ? AND instance_id = ?", regionID, instanceID).First(&resource).Error

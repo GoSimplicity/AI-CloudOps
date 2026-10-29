@@ -60,6 +60,8 @@ func InitTables(db *gorm.DB) error {
 		&model.CloudResourceSyncHistory{},
 		&model.CloudResourceChangeLog{},
 		&model.CloudRegionSyncLease{},
+		&model.CloudManagedResource{},
+		&model.CloudManagedSyncHistory{},
 
 		// prometheus
 		&model.MonitorScrapePool{},

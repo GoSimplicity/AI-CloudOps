@@ -60,21 +60,11 @@ func NewCloudAccountRegionDAO(db *gorm.DB, logger *zap.Logger) CloudAccountRegio
 }
 
 func (d *cloudAccountRegionDAO) Create(ctx context.Context, region *model.CloudAccountRegion) error {
-	if err := d.db.WithContext(ctx).Create(region).Error; err != nil {
-		d.logger.Error("创建云账号区域关联失败", zap.Error(err))
-		return err
-	}
-
-	return nil
+	return d.createRegionsSafely(ctx, []*model.CloudAccountRegion{region})
 }
 
 func (d *cloudAccountRegionDAO) BatchCreate(ctx context.Context, regions []*model.CloudAccountRegion) error {
-	if err := d.db.WithContext(ctx).Create(regions).Error; err != nil {
-		d.logger.Error("批量创建云账号区域关联失败", zap.Error(err))
-		return err
-	}
-
-	return nil
+	return d.createRegionsSafely(ctx, regions)
 }
 
 func (d *cloudAccountRegionDAO) Update(ctx context.Context, region *model.CloudAccountRegion) error {
@@ -87,12 +77,7 @@ func (d *cloudAccountRegionDAO) Update(ctx context.Context, region *model.CloudA
 }
 
 func (d *cloudAccountRegionDAO) Delete(ctx context.Context, id int) error {
-	if err := d.db.WithContext(ctx).Delete(&model.CloudAccountRegion{}, id).Error; err != nil {
-		d.logger.Error("删除云账号区域关联失败", zap.Error(err), zap.Int("id", id))
-		return err
-	}
-
-	return nil
+	return d.deleteRegionSafely(ctx, id)
 }
 
 // GetByID 根据ID获取云账号区域关联详情
@@ -211,12 +196,7 @@ func (d *cloudAccountRegionDAO) ClearDefaultRegion(ctx context.Context, cloudAcc
 }
 
 func (d *cloudAccountRegionDAO) GetResourceCountByRegion(ctx context.Context, regionID int) (int64, error) {
-	var count int64
-
-	err := d.db.WithContext(ctx).
-		Model(&model.TreeCloudResource{}).
-		Where("cloud_account_region_id = ?", regionID).
-		Count(&count).Error
+	count, err := countCloudResources(d.db.WithContext(ctx), "cloud_account_region_id", regionID)
 	if err != nil {
 		d.logger.Error("获取区域资源数量失败", zap.Error(err), zap.Int("regionID", regionID))
 		return 0, err

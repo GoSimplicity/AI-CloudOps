@@ -59,8 +59,8 @@ func (d *cloudAccountDAO) UpdateAccountAndRegions(ctx context.Context, update *m
 			if _, keep := selected[region.Region]; keep || region.DeletedAt != 0 {
 				continue
 			}
-			var references int64
-			if err := tx.Model(&model.TreeCloudResource{}).Where("cloud_account_region_id = ?", region.ID).Count(&references).Error; err != nil {
+			references, err := countCloudResources(tx, "cloud_account_region_id", region.ID)
+			if err != nil {
 				return err
 			}
 			if references > 0 {
