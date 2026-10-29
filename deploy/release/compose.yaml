@@ -29,7 +29,7 @@ services:
   redis:
     <<: *runtime
     image: redis:7.4.11-alpine
-    command: [redis-server, --requirepass, "${REDIS_PASSWORD:?Generate .env first}", --appendonly, "yes"]
+    command: [redis-server, --requirepass, "${REDIS_PASSWORD:?Generate .env first}", --appendonly, "yes", --maxmemory-policy, noeviction]
     environment:
       REDISCLI_AUTH: ${REDIS_PASSWORD:?Generate .env first}
     volumes:

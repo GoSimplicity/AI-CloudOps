@@ -88,6 +88,18 @@
     "path": "/api/v1/autofix/stats/reset"
   },
   {
+    "method": "GET",
+    "path": "/api/v1/autofix/workflow/history"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/autofix/workflow/operations/:operation_id"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/autofix/workflow/plans/:plan_id"
+  },
+  {
     "method": "POST",
     "path": "/api/v1/autofix/workflow"
   },
