@@ -106,7 +106,7 @@ class ReleaseEnvTests(unittest.TestCase):
         self.assertEqual(match["addr"], "mysql:3306")
         self.assertEqual(match["db"], database)
         self.assertEqual(dict(p.split("=", 1) for p in match["params"].split("&")),
-                         {"charset": "utf8mb4", "parseTime": "True", "loc": "Local"})
+                         {"charset": "utf8mb4", "parseTime": "True", "loc": "UTC"})
         # 与 compose 中 backend 的 MYSQL_ADDR（用同一 MYSQL_PASSWORD 插值）逐字一致
         expanded = re.sub(r"\$\{MYSQL_PASSWORD:\?[^}]*\}", settings["MYSQL_PASSWORD"], backend_template)
         self.assertEqual(dsn, expanded)
@@ -135,7 +135,7 @@ class ReleaseEnvTests(unittest.TestCase):
         user, database, _ = compose_mysql_settings()
         self.assertEqual(parsed, {"user": user, "passwd": settings["MYSQL_PASSWORD"], "net": "tcp",
                                   "addr": "mysql:3306", "db": database, "parseTime": True,
-                                  "loc": "Local", "charset": "utf8mb4"})
+                                  "loc": "UTC", "charset": "utf8mb4"})
 
     def test_env_file_and_mysql_host_parameters(self):
         destination, result = self.generate("--mysql-host", "127.0.0.1:13306")
@@ -175,7 +175,7 @@ class ReleaseEnvTests(unittest.TestCase):
         settings = read_env(destination)
         self.assertEqual(settings["OTHER"], "keep")
         self.assertEqual(settings["MYSQL_PASSWORD"], FIXTURE_PASSWORD)
-        expected = f"cloudops:{FIXTURE_PASSWORD}@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local"
+        expected = f"cloudops:{FIXTURE_PASSWORD}@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=UTC"
         self.assertEqual(settings["WEBHOOK_MYSQL_ADDR"], expected)
         self.assertEqual(after.count("WEBHOOK_MYSQL_ADDR="), 1)
         self.assert_no_value_leak(result, FIXTURE_PASSWORD, expected)

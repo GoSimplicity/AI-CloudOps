@@ -13,7 +13,7 @@ MYSQL_USER = "cloudops"
 MYSQL_DATABASE = "cloudops"
 DEFAULT_MYSQL_HOST = "mysql:3306"
 # webhook（cmd/webhook）经 gorm.io/driver/mysql 解析 go-sql-driver DSN，参数与 backend 的 MYSQL_ADDR 相同
-DSN_PARAMS = "charset=utf8mb4&parseTime=True&loc=Local"
+DSN_PARAMS = "charset=utf8mb4&parseTime=True&loc=UTC"
 # 口令直接拼进 DSN 且 .env 不加引号：只接受不含 DSN 分隔符和 Compose 插值字符的值
 SAFE_VALUE = re.compile(r"^[A-Za-z0-9._~-]+$")
 SAFE_HOST = re.compile(r"^[A-Za-z0-9.-]+:[0-9]{1,5}$")

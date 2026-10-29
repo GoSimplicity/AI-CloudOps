@@ -128,6 +128,8 @@ def main():
     database.add_argument("--mysql-notification-idempotent", action="store_true")
     database.add_argument("--mysql-notification-outbox", action="store_true")
     database.add_argument("--mysql-cloud-temporary", action="store_true")
+    database.add_argument("--mysql-notification-schedule", action="store_true")
+    database.add_argument("--mysql-notification-timezone", action="store_true")
     parser.add_argument("--container")
     args = parser.parse_args()
     try:
@@ -145,6 +147,10 @@ def main():
             isolated_mysql(args.container, "./internal/workorder/service", "TestMySQLOutboxAtomicAndDelivery")
         elif args.mysql_cloud_temporary:
             isolated_mysql(args.container, "./internal/tree/service", "TestMySQLTemporaryCloudCredentials")
+        elif args.mysql_notification_schedule:
+            isolated_mysql(args.container, "./internal/workorder/service", "TestMySQLScheduleAtomicConcurrentRestart")
+        elif args.mysql_notification_timezone:
+            isolated_mysql(args.container, "./pkg/di", "TestMySQLNotificationTimeZoneGuard")
         else:
             api_check(args.url)
     except (SchemaError, KeyError, ValueError):

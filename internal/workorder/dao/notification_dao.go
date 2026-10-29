@@ -75,6 +75,7 @@ func (d *notificationDAO) CreateNotification(ctx context.Context, req *model.Cre
 		CategoryID:         req.CategoryID,
 		EventTypes:         req.EventTypes,
 		TriggerType:        req.TriggerType,
+		TriggerVersion:     1,
 		TriggerCondition:   req.TriggerCondition,
 		Channels:           req.Channels,
 		RecipientTypes:     req.RecipientTypes,
@@ -85,7 +86,9 @@ func (d *notificationDAO) CreateNotification(ctx context.Context, req *model.Cre
 		MessageTemplate:    req.MessageTemplate,
 		SubjectTemplate:    req.SubjectTemplate,
 		ScheduledTime:      req.ScheduledTime,
+		DelayMinutes:       req.DelayMinutes,
 		RepeatInterval:     req.RepeatInterval,
+		RepeatCount:        req.RepeatCount,
 		MaxRetries:         maxRetries,
 		RetryInterval:      req.RetryInterval,
 		Status:             req.Status,
@@ -114,6 +117,16 @@ func (d *notificationDAO) CreateNotification(ctx context.Context, req *model.Cre
 
 func (d *notificationDAO) UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error {
 	updateData := map[string]any{}
+	if req.MarkTriggerVersion {
+		updateData["trigger_version"] = 1
+	}
+	if req.ClearTrigger {
+		updateData["scheduled_time"] = nil
+		updateData["delay_minutes"] = nil
+		updateData["repeat_interval"] = nil
+		updateData["repeat_count"] = nil
+		updateData["trigger_condition"] = model.JSONMap{}
+	}
 
 	if req.Name != "" {
 		updateData["name"] = req.Name
@@ -166,8 +179,14 @@ func (d *notificationDAO) UpdateNotification(ctx context.Context, req *model.Upd
 	if req.ScheduledTime != nil {
 		updateData["scheduled_time"] = req.ScheduledTime
 	}
+	if req.DelayMinutes != nil {
+		updateData["delay_minutes"] = req.DelayMinutes
+	}
 	if req.RepeatInterval != nil {
 		updateData["repeat_interval"] = req.RepeatInterval
+	}
+	if req.RepeatCount != nil {
+		updateData["repeat_count"] = req.RepeatCount
 	}
 	if req.MaxRetries != nil {
 		updateData["max_retries"] = *req.MaxRetries
@@ -188,9 +207,12 @@ func (d *notificationDAO) UpdateNotification(ctx context.Context, req *model.Upd
 		updateData["settings"] = req.Settings
 	}
 
-	result := DBWithContext(ctx, d.db).Model(&model.WorkorderNotification{}).
-		Where("id = ?", req.ID).
-		Updates(updateData)
+	updateData["version"] = gorm.Expr("version + 1")
+	query := DBWithContext(ctx, d.db).Model(&model.WorkorderNotification{}).Where("id = ?", req.ID)
+	if req.ExpectedVersion != nil {
+		query = query.Where("version = ?", *req.ExpectedVersion)
+	}
+	result := query.Updates(updateData)
 
 	if result.Error != nil {
 		d.logger.Error("更新通知配置失败", zap.Error(result.Error), zap.Int("id", req.ID))
@@ -198,6 +220,9 @@ func (d *notificationDAO) UpdateNotification(ctx context.Context, req *model.Upd
 	}
 
 	if result.RowsAffected == 0 {
+		if req.ExpectedVersion != nil {
+			return errors.New("通知配置已变更，请刷新后重试")
+		}
 		// MySQL同值写可返回零变更行，必须单独区分幂等更新和不存在
 		var count int64
 		if err := DBWithContext(ctx, d.db).Model(&model.WorkorderNotification{}).Where("id = ?", req.ID).Count(&count).Error; err != nil {

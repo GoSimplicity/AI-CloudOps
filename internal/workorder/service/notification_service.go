@@ -91,8 +91,13 @@ func NewWorkorderNotificationService(dao workorderDao.WorkorderNotificationDAO, 
 }
 
 func (s *workorderNotificationService) CreateNotification(ctx context.Context, req *model.CreateWorkorderNotificationReq) error {
-	if err := validateImmediateNotification(req.TriggerType, req.ScheduledTime, req.RepeatInterval, req.TriggerCondition, false); err != nil {
+	if err := validateNotificationTrigger(req.TriggerType, req.ScheduledTime, req.DelayMinutes, req.RepeatInterval, req.RepeatCount, req.TriggerCondition); err != nil {
 		return err
+	}
+	if req.TriggerType == model.TriggerTypeScheduled {
+		if err := validateInputScheduleTime(req.ScheduledTime); err != nil {
+			return err
+		}
 	}
 	if err := validateNotificationDestinations(req.Channels, req.RecipientTypes, req.RecipientUsers, req.RecipientRoles, req.RecipientDepts, req.RecipientAddresses); err != nil {
 		return err
@@ -101,9 +106,6 @@ func (s *workorderNotificationService) CreateNotification(ctx context.Context, r
 }
 
 func (s *workorderNotificationService) UpdateNotification(ctx context.Context, req *model.UpdateWorkorderNotificationReq) error {
-	if err := validateImmediateNotification(req.TriggerType, req.ScheduledTime, req.RepeatInterval, req.TriggerCondition, true); err != nil {
-		return err
-	}
 	existing, err := s.dao.GetNotificationByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -112,6 +114,19 @@ func (s *workorderNotificationService) UpdateNotification(ctx context.Context, r
 		return fmt.Errorf("查询通知配置失败: %w", err)
 	}
 
+	if req.ScheduledTime != nil {
+		if err := validateInputScheduleTime(req.ScheduledTime); err != nil {
+			return err
+		}
+	}
+	triggerChanged := req.TriggerType != "" || req.ScheduledTime != nil || req.DelayMinutes != nil || req.RepeatInterval != nil || req.RepeatCount != nil || req.TriggerCondition != nil || req.ClearTrigger
+	if (existing.Status == model.NotificationStatusEnabled && req.Status != model.NotificationStatusDisabled) || triggerChanged {
+		copyReq := *req
+		copyReq.Status = model.NotificationStatusEnabled
+		if err := validateNotificationActivation(existing, &copyReq); err != nil {
+			return err
+		}
+	}
 	if err := validateNotificationActivation(existing, req); err != nil {
 		return err
 	}
@@ -137,6 +152,8 @@ func (s *workorderNotificationService) UpdateNotification(ctx context.Context, r
 	if err := validateNotificationDestinations(channels, types, users, roles, depts, addresses); err != nil {
 		return err
 	}
+	req.ExpectedVersion = &existing.Version
+	req.MarkTriggerVersion = triggerChanged || (req.Status == model.NotificationStatusEnabled && existing.Status != model.NotificationStatusEnabled)
 	return s.dao.UpdateNotification(ctx, req)
 }
 
@@ -368,7 +385,10 @@ func (s *workorderNotificationService) processNotification(ctx context.Context, 
 	if !notificationMatchesInstanceScope(notification, instance) {
 		return nil
 	}
-	if err := validateAutomaticNotification(notification); err != nil {
+	if notification.DelayMinutes != nil || notification.RepeatCount != nil {
+		return errors.New("高级触发只能由持久调度器处理")
+	}
+	if err := validateImmediateNotification(notification.TriggerType, notification.ScheduledTime, notification.RepeatInterval, notification.TriggerCondition, false); err != nil {
 		return err
 	}
 

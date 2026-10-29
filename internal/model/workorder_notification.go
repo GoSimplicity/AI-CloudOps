@@ -157,6 +157,8 @@ const (
 
 type WorkorderNotification struct {
 	Model
+	Version            int64                 `json:"version" gorm:"not null;default:0"`
+	TriggerVersion     int8                  `json:"trigger_version" gorm:"not null;default:0"`
 	Name               string                `json:"name" gorm:"column:name;type:varchar(200);not null;index;comment:通知配置名称"`
 	Description        string                `json:"description" gorm:"column:description;type:varchar(1000);comment:通知配置描述"`
 	ProcessID          *int                  `json:"process_id" gorm:"column:process_id;index;comment:关联流程ID"`
@@ -174,7 +176,9 @@ type WorkorderNotification struct {
 	MessageTemplate    string                `json:"message_template" gorm:"column:message_template;type:text;not null;comment:消息模板"`
 	SubjectTemplate    string                `json:"subject_template" gorm:"column:subject_template;type:varchar(500);comment:主题模板"`
 	ScheduledTime      *time.Time            `json:"scheduled_time" gorm:"column:scheduled_time;comment:定时发送时间"`
+	DelayMinutes       *int                  `json:"delay_minutes" gorm:"column:delay_minutes;comment:延迟分钟"`
 	RepeatInterval     *int                  `json:"repeat_interval" gorm:"column:repeat_interval;comment:重复间隔(分钟)"`
+	RepeatCount        *int                  `json:"repeat_count" gorm:"column:repeat_count;comment:总发送次数"`
 	MaxRetries         int                   `json:"max_retries" gorm:"column:max_retries;not null;default:3;comment:最大重试次数"`
 	RetryInterval      int                   `json:"retry_interval" gorm:"column:retry_interval;not null;default:5;comment:重试间隔(分钟)"`
 	Status             int8                  `json:"status" gorm:"column:status;not null;default:1;index;comment:状态：1-启用，2-禁用"`
@@ -199,7 +203,7 @@ type CreateWorkorderNotificationReq struct {
 	TemplateID         *int                  `json:"template_id"`
 	CategoryID         *int                  `json:"category_id"`
 	EventTypes         StringList            `json:"event_types" binding:"required"`
-	TriggerType        string                `json:"trigger_type" binding:"required,oneof=immediate"`
+	TriggerType        string                `json:"trigger_type" binding:"required,oneof=immediate delayed scheduled conditional"`
 	TriggerCondition   JSONMap               `json:"trigger_condition"`
 	Channels           StringList            `json:"channels" binding:"required"`
 	RecipientTypes     StringList            `json:"recipient_types" binding:"required"`
@@ -210,7 +214,9 @@ type CreateWorkorderNotificationReq struct {
 	MessageTemplate    string                `json:"message_template" binding:"required"`
 	SubjectTemplate    string                `json:"subject_template"`
 	ScheduledTime      *time.Time            `json:"scheduled_time"`
+	DelayMinutes       *int                  `json:"delay_minutes"`
 	RepeatInterval     *int                  `json:"repeat_interval"`
+	RepeatCount        *int                  `json:"repeat_count"`
 	MaxRetries         *int                  `json:"max_retries" binding:"omitempty,min=0,max=100"`
 	RetryInterval      int                   `json:"retry_interval"`
 	Status             int8                  `json:"status"`
@@ -222,13 +228,16 @@ type CreateWorkorderNotificationReq struct {
 
 type UpdateWorkorderNotificationReq struct {
 	ID                 int                   `json:"id" binding:"required"`
+	ClearTrigger       bool                  `json:"clear_trigger"`
+	ExpectedVersion    *int64                `json:"-"`
+	MarkTriggerVersion bool                  `json:"-"`
 	Name               string                `json:"name"`
 	Description        *string               `json:"description"`
 	ProcessID          *int                  `json:"process_id"`
 	TemplateID         *int                  `json:"template_id"`
 	CategoryID         *int                  `json:"category_id"`
 	EventTypes         StringList            `json:"event_types"`
-	TriggerType        string                `json:"trigger_type" binding:"omitempty,oneof=immediate"`
+	TriggerType        string                `json:"trigger_type" binding:"omitempty,oneof=immediate delayed scheduled conditional"`
 	TriggerCondition   JSONMap               `json:"trigger_condition"`
 	Channels           StringList            `json:"channels"`
 	RecipientTypes     StringList            `json:"recipient_types"`
@@ -239,7 +248,9 @@ type UpdateWorkorderNotificationReq struct {
 	MessageTemplate    *string               `json:"message_template" binding:"omitempty,min=1"`
 	SubjectTemplate    *string               `json:"subject_template"`
 	ScheduledTime      *time.Time            `json:"scheduled_time"`
+	DelayMinutes       *int                  `json:"delay_minutes"`
 	RepeatInterval     *int                  `json:"repeat_interval"`
+	RepeatCount        *int                  `json:"repeat_count"`
 	MaxRetries         *int                  `json:"max_retries" binding:"omitempty,min=0,max=100"`
 	RetryInterval      int                   `json:"retry_interval"`
 	Status             int8                  `json:"status"`

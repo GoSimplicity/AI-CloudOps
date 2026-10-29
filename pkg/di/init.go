@@ -85,6 +85,7 @@ func InitTables(db *gorm.DB) error {
 		&model.WorkorderNotificationLog{},
 		&model.WorkorderNotificationQueue{},
 		&model.WorkorderNotificationEvent{},
+		&model.WorkorderNotificationClock{},
 		&model.WorkorderNotificationDelivery{},
 		&model.WorkorderNotificationResolution{},
 		&model.WorkorderInstanceTimeline{},

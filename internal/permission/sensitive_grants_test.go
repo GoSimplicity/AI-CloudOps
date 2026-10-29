@@ -13,12 +13,13 @@ func TestSensitivePermissionsRequireExactMethodAndTemplate(t *testing.T) {
 		{Method: 1, Path: model.K8sSecretRevealRoute},
 		{Method: 1, Path: model.K8sServiceAccountTokenRoute},
 		{Method: 2, Path: model.K8sServiceAccountTokenRoute},
+		{Method: 2, Path: model.WorkorderNotificationCancelScheduledRoute},
 	} {
 		t.Run(endpoint.Code(), func(t *testing.T) {
 			if !Allowed([]Grant{{Method: endpoint.Method, Path: endpoint.Path}}, endpoint.Method, endpoint.Path) {
 				t.Fatal("exact method and template must authorize the sensitive endpoint")
 			}
-			for _, path := range []string{"*", "/*", "/api/*", "/api/k8s/*"} {
+			for _, path := range []string{"*", "/*", "/api/*", "/api/k8s/*", "/api/workorder/*", "/api/workorder/notification/*"} {
 				if Covers(path, endpoint.Path) || Allowed([]Grant{{Method: endpoint.Method, Path: path}}, endpoint.Method, endpoint.Path) {
 					t.Errorf("wildcard %q authorized sensitive endpoint", path)
 				}

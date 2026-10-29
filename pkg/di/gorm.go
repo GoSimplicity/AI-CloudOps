@@ -53,6 +53,10 @@ func InitDB(cfg *config.Config, logger *zap.Logger) (*gorm.DB, error) {
 	if err := settings.Validate(); err != nil {
 		return nil, err
 	}
+	zone, err := notificationTimeZone(settings.Addr)
+	if err != nil {
+		return nil, err
+	}
 	connector, err := mysqlConnector(settings)
 	if err != nil {
 		return nil, err
@@ -70,6 +74,9 @@ func InitDB(cfg *config.Config, logger *zap.Logger) (*gorm.DB, error) {
 		}
 		db.ConnPool = pool
 		db.Statement.ConnPool = pool
+		if err := CheckNotificationTimeZone(db.WithContext(ctx), zone); err != nil {
+			return nil, err
+		}
 		// 保持迁移逻辑，使用同一启动期限限制查询
 		if err := InitTables(db.WithContext(ctx)); err != nil {
 			logger.Error("数据库表初始化失败", zap.String("error_type", databaseLogger.DatabaseErrorType(err)))

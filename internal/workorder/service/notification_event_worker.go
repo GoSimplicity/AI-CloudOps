@@ -109,35 +109,136 @@ type eventPlanChannel struct {
 	Content    string                      `json:"content"`
 }
 
+type scheduledEventDraft struct {
+	notificationID int
+	plan           []eventPlanChannel
+	due            time.Time
+	repeatCount    int
+	repeatMinutes  int
+	skipped        bool
+	skipReason     string
+}
+
+func conditionMatches(config *model.WorkorderNotification, instance *model.WorkorderInstance) bool {
+	if config.TriggerType != model.TriggerTypeConditional {
+		return true
+	}
+	for key, raw := range config.TriggerCondition {
+		n, ok := conditionNumber(raw)
+		if !ok || (key == "status" && n != int(instance.Status)) || (key == "priority" && n != int(instance.Priority)) {
+			return false
+		}
+	}
+	return true
+}
+
 // preparePlan 先解析全部配置和接收人；任何读取失败都不会发送
-func (w *NotificationEventWorker) preparePlan(ctx context.Context, event *model.WorkorderNotificationEvent, instance *model.WorkorderInstance) ([]eventPlanChannel, error) {
+func (w *NotificationEventWorker) preparePlan(ctx context.Context, event *model.WorkorderNotificationEvent, instance *model.WorkorderInstance) ([]eventPlanChannel, []scheduledEventDraft, error) {
 	configs, err := w.service.dao.GetActiveNotificationsByEventType(ctx, event.EventType, instance.ProcessID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	plan := make([]eventPlanChannel, 0)
+	drafts := make([]scheduledEventDraft, 0)
 	for _, config := range configs {
 		if !notificationMatchesInstanceScope(config, instance) {
 			continue
 		}
+		legacyAdvanced := config.TriggerType != model.TriggerTypeImmediate || config.DelayMinutes != nil || config.ScheduledTime != nil || config.RepeatInterval != nil || config.RepeatCount != nil || len(config.TriggerCondition) != 0
+		if config.ID > 0 && legacyAdvanced && config.TriggerVersion != 1 {
+			drafts = append(drafts, scheduledEventDraft{notificationID: config.ID, due: event.CreatedAt.UTC(), skipped: true, skipReason: "历史高级触发需重新验证并显式启用"})
+			if len(drafts) > 100 {
+				return nil, nil, errors.New("单事件排期数量超限")
+			}
+			continue
+		}
 		if err = validateAutomaticNotification(config); err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		isScheduled := config.TriggerType != model.TriggerTypeImmediate || config.RepeatCount != nil
+		if isScheduled && config.ID <= 0 {
+			return nil, nil, errors.New("排期配置ID无效")
+		}
+		due := event.CreatedAt.UTC()
+		if config.DelayMinutes != nil {
+			due = due.Add(time.Duration(*config.DelayMinutes) * time.Minute)
+		}
+		if config.ScheduledTime != nil {
+			due = config.ScheduledTime.UTC()
+		}
+		skipped := !conditionMatches(config, instance) || (config.TriggerType == model.TriggerTypeScheduled && due.Before(event.CreatedAt.UTC()))
+		if skipped {
+			drafts = append(drafts, scheduledEventDraft{notificationID: config.ID, due: due, skipped: true, skipReason: "条件不匹配或排期早于事件"})
+			if len(drafts) > 100 {
+				return nil, nil, errors.New("单事件排期数量超限")
+			}
+			continue
 		}
 		recipients, err := w.service.getRecipients(ctx, config, instance)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		subject, content := w.service.buildMessageContent(ctx, config, instance, event.EventType, event.Content)
 		reduced := model.WorkorderNotification{Model: model.Model{ID: config.ID}, Priority: config.Priority, MaxRetries: config.MaxRetries, RetryInterval: config.RetryInterval}
+		configPlan := make([]eventPlanChannel, 0, len(config.Channels))
 		for _, channel := range config.Channels {
 			addresses, err := w.service.resolveChannelRecipients(ctx, channel, recipients)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			plan = append(plan, eventPlanChannel{Config: reduced, Channel: channel, Recipients: addresses, Subject: subject, Content: content})
+			configPlan = append(configPlan, eventPlanChannel{Config: reduced, Channel: channel, Recipients: addresses, Subject: subject, Content: content})
+		}
+		if !isScheduled {
+			plan = append(plan, configPlan...)
+			continue
+		}
+		draft := scheduledEventDraft{notificationID: config.ID, plan: configPlan, due: due, repeatCount: 1}
+		if config.RepeatCount != nil {
+			draft.repeatCount = *config.RepeatCount
+			draft.repeatMinutes = *config.RepeatInterval
+		}
+		drafts = append(drafts, draft)
+		if len(drafts) > 100 {
+			return nil, nil, errors.New("单事件排期数量超限")
 		}
 	}
-	return plan, nil
+	return plan, drafts, nil
+}
+
+// Persist the parent plan and each first scheduled occurrence atomically.
+func (w *NotificationEventWorker) persistPlan(ctx context.Context, event *model.WorkorderNotificationEvent, token string, plan []eventPlanChannel, drafts []scheduledEventDraft) error {
+	encoded, err := json.Marshal(plan)
+	if err != nil {
+		return err
+	}
+	return w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		update := tx.Model(&model.WorkorderNotificationEvent{}).Where("id = ? AND status = ? AND lease_token = ? AND lease_until > ? AND plan IS NULL", event.ID, "processing", token, time.Now().UTC()).Update("plan", encoded)
+		if update.Error != nil {
+			return update.Error
+		}
+		if update.RowsAffected != 1 {
+			return errors.New("事件计划保存失败或租约已失效")
+		}
+		for _, draft := range drafts {
+			parent, configID, occurrence := event.ID, draft.notificationID, 1
+			child := model.WorkorderNotificationEvent{ParentEventID: &parent, NotificationID: &configID, Occurrence: &occurrence, RepeatCount: draft.repeatCount, RepeatMinutes: draft.repeatMinutes, InstanceID: event.InstanceID, EventType: event.EventType, SenderID: event.SenderID, Status: "pending", NextAttemptAt: draft.due, Snapshot: event.Snapshot, Content: event.Content}
+			if draft.skipped {
+				child.Status = "skipped"
+				child.Snapshot = []byte("{}")
+				child.Content = ""
+				child.LastError = draft.skipReason
+			} else {
+				child.Plan, err = json.Marshal(draft.plan)
+				if err != nil {
+					return err
+				}
+			}
+			if err := tx.Create(&child).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 func (w *NotificationEventWorker) deliverPlan(ctx context.Context, event *model.WorkorderNotificationEvent, instance *model.WorkorderInstance, plan []eventPlanChannel) error {
 	var failures []error
@@ -190,7 +291,7 @@ func (w *NotificationEventWorker) cleanupCompleted(ctx context.Context, now time
 	deleted := 0
 	err := w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var events []model.WorkorderNotificationEvent
-		query := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").Where("status IN ? AND updated_at < ?", []string{"success", "skipped"}, cutoff).Where("NOT EXISTS (SELECT 1 FROM cl_workorder_notification_resolution r WHERE r.event_id = cl_workorder_notification_event.id)").Order("id").Limit(100).Find(&events)
+		query := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").Where("status IN ? AND updated_at < ?", []string{"success", "skipped", "planned"}, cutoff).Where("NOT EXISTS (SELECT 1 FROM cl_workorder_notification_resolution r WHERE r.event_id = cl_workorder_notification_event.id)").Where("NOT EXISTS (SELECT 1 FROM cl_workorder_notification_event c WHERE c.parent_event_id = cl_workorder_notification_event.id)").Order("id").Limit(100).Find(&events)
 		if query.Error != nil {
 			return query.Error
 		}
@@ -204,7 +305,7 @@ func (w *NotificationEventWorker) cleanupCompleted(ctx context.Context, now time
 		if err := tx.Where("event_id IN ?", ids).Delete(&model.WorkorderNotificationDelivery{}).Error; err != nil {
 			return err
 		}
-		result := tx.Where("id IN ? AND status IN ? AND updated_at < ?", ids, []string{"success", "skipped"}, cutoff).Delete(&model.WorkorderNotificationEvent{})
+		result := tx.Where("id IN ? AND status IN ? AND updated_at < ?", ids, []string{"success", "skipped", "planned"}, cutoff).Delete(&model.WorkorderNotificationEvent{})
 		if result.Error != nil {
 			return result.Error
 		}
@@ -278,18 +379,10 @@ func (w *NotificationEventWorker) processOne(ctx context.Context) error {
 		}
 		var plan []eventPlanChannel
 		if err == nil && len(event.Plan) == 0 {
-			plan, err = w.preparePlan(workCtx, &event, &instance)
+			var drafts []scheduledEventDraft
+			plan, drafts, err = w.preparePlan(workCtx, &event, &instance)
 			if err == nil {
-				var encoded []byte
-				encoded, err = json.Marshal(plan)
-				if err == nil {
-					update := w.db.WithContext(workCtx).Model(&model.WorkorderNotificationEvent{}).Where("id = ? AND status = ? AND lease_token = ? AND lease_until > ? AND plan IS NULL", event.ID, "processing", token, time.Now().UTC()).Update("plan", encoded)
-					if update.Error != nil {
-						err = update.Error
-					} else if update.RowsAffected != 1 {
-						err = errors.New("事件计划保存失败或租约已失效")
-					}
-				}
+				err = w.persistPlan(workCtx, &event, token, plan, drafts)
 			}
 		} else if err == nil {
 			err = json.Unmarshal(event.Plan, &plan)
@@ -301,8 +394,13 @@ func (w *NotificationEventWorker) processOne(ctx context.Context) error {
 		finishCtx, finishCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		updates := map[string]interface{}{"lease_token": "", "lease_until": nil}
 		var successful int64
+		var scheduledCount int64
 		if err == nil {
 			if queryErr := w.db.WithContext(finishCtx).Model(&model.WorkorderNotificationDelivery{}).Where("event_id = ? AND status = ?", event.ID, "success").Count(&successful).Error; queryErr != nil {
+				finishCancel()
+				return queryErr
+			}
+			if queryErr := w.db.WithContext(finishCtx).Model(&model.WorkorderNotificationEvent{}).Where("parent_event_id = ?", event.ID).Count(&scheduledCount).Error; queryErr != nil {
 				finishCancel()
 				return queryErr
 			}
@@ -333,6 +431,12 @@ func (w *NotificationEventWorker) processOne(ctx context.Context) error {
 		case err == nil && len(failed) > 0:
 			updates["status"] = "failed"
 			updates["last_error"] = "已有未成功投递，配置或收件人不再匹配，需人工核对"
+		case err == nil && successful == 0 && scheduledCount > 0:
+			updates["snapshot"] = []byte("{}")
+			updates["plan"] = nil
+			updates["content"] = ""
+			updates["status"] = "planned"
+			updates["last_error"] = "通知排期已创建，投递状态见子事件"
 		case err == nil && successful == 0:
 			updates["snapshot"] = []byte("{}")
 			updates["plan"] = nil
@@ -360,13 +464,38 @@ func (w *NotificationEventWorker) processOne(ctx context.Context) error {
 			updates["last_error"] = "通知处理失败，等待重试"
 			updates["next_attempt_at"] = time.Now().UTC().Add(time.Duration(event.Attempts) * time.Minute)
 		}
-		finish := w.db.WithContext(finishCtx).Model(&model.WorkorderNotificationEvent{}).Where("id = ? AND status = ? AND lease_token = ? AND lease_until > ?", event.ID, "processing", token, time.Now().UTC()).Updates(updates)
+		finishErr := w.db.WithContext(finishCtx).Transaction(func(tx *gorm.DB) error {
+			finish := tx.Model(&model.WorkorderNotificationEvent{}).Where("id = ? AND status = ? AND lease_token = ? AND lease_until > ?", event.ID, "processing", token, time.Now().UTC()).Updates(updates)
+			if finish.Error != nil {
+				return finish.Error
+			}
+			if finish.RowsAffected != 1 {
+				return errors.New("通知事件租约已失效")
+			}
+			if updates["status"] == "success" && event.ParentEventID != nil && event.NotificationID != nil && event.Occurrence != nil && *event.Occurrence < event.RepeatCount {
+				if event.RepeatCount > 100 || event.RepeatMinutes < 1 || event.RepeatMinutes > 10080 || len(event.Plan) == 0 {
+					return errors.New("重复排期参数无效")
+				}
+				next := *event.Occurrence + 1
+				child := model.WorkorderNotificationEvent{ParentEventID: event.ParentEventID, NotificationID: event.NotificationID, Occurrence: &next, RepeatCount: event.RepeatCount, RepeatMinutes: event.RepeatMinutes, InstanceID: event.InstanceID, EventType: event.EventType, SenderID: event.SenderID, Status: "pending", NextAttemptAt: time.Now().UTC().Add(time.Duration(event.RepeatMinutes) * time.Minute), Snapshot: event.Snapshot, Plan: event.Plan, Content: event.Content}
+				if err := tx.Create(&child).Error; err != nil {
+					return err
+				}
+			}
+			return nil
+		})
 		finishCancel()
-		if finish.Error != nil {
-			return finish.Error
-		}
-		if finish.RowsAffected != 1 {
-			return errors.New("通知事件租约已失效")
+		if finishErr != nil {
+			w.logger.Error("通知事件结果或后续排期持久化失败", zap.Uint64("event_id", event.ID), zap.String("error_type", fmt.Sprintf("%T", finishErr)))
+			if event.Attempts >= eventMaxAttempts {
+				failureCtx, failureCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				failed := w.db.WithContext(failureCtx).Model(&model.WorkorderNotificationEvent{}).Where("id = ? AND status = ? AND lease_token = ? AND lease_until > ?", event.ID, "processing", token, time.Now().UTC()).Updates(map[string]interface{}{"status": "failed", "last_error": "事件结果或后续排期持久化失败，需人工核对", "lease_token": "", "lease_until": nil})
+				failureCancel()
+				if failed.Error != nil {
+					return failed.Error
+				}
+			}
+			return finishErr
 		}
 		return nil
 	}

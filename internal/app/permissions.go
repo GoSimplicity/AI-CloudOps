@@ -27,11 +27,12 @@ type namedPermission struct {
 
 // namedPermissions 以 "METHOD 路由" 为键登记的权限码
 var namedPermissions = map[string]namedPermission{
-	"GET /api/workorder/notification/events":                 {Name: "查看工单通知事件", Description: "查看工单通知事件状态，不返回快照正文"},
-	"GET /api/workorder/notification/events/:id/deliveries":  {Name: "查看工单通知投递状态", Description: "查看按地址哈希标识的投递状态"},
-	"GET /api/workorder/notification/events/:id/resolutions": {Name: "查看工单通知人工处置记录", Description: "查看人工核对与处置审计"},
-	"POST " + model.WorkorderNotificationRetryEventRoute:     {Name: "人工重试工单通知事件", Description: "对无投递记录的失败事件重试，需单独授权并记录操作者"},
-	"POST " + model.WorkorderNotificationResolveRoute:        {Name: "人工处置工单通知投递", Description: "确认送达或明确重投，需单独授权并记录操作者"},
+	"GET /api/workorder/notification/events":                  {Name: "查看工单通知事件", Description: "查看工单通知事件状态，不返回快照正文"},
+	"GET /api/workorder/notification/events/:id/deliveries":   {Name: "查看工单通知投递状态", Description: "查看按地址哈希标识的投递状态"},
+	"GET /api/workorder/notification/events/:id/resolutions":  {Name: "查看工单通知人工处置记录", Description: "查看人工核对与处置审计"},
+	"POST " + model.WorkorderNotificationRetryEventRoute:      {Name: "人工重试工单通知事件", Description: "对无投递记录的失败事件重试，需单独授权并记录操作者"},
+	"POST " + model.WorkorderNotificationResolveRoute:         {Name: "人工处置工单通知投递", Description: "确认送达或明确重投，需单独授权并记录操作者"},
+	"POST " + model.WorkorderNotificationCancelScheduledRoute: {Name: "取消工单通知排期", Description: "取消尚未执行的排期，需单独授权并记录操作者"},
 	"GET " + model.K8sSecretRevealRoute: {
 		Name:        model.K8sSecretRevealPermissionName,
 		Description: "查看 K8s Secret 明文（SEC-25，每次调用写审计；仅显式授权生效，通配符授权不覆盖）",

@@ -36,7 +36,10 @@ func validateAutomaticNotification(config *model.WorkorderNotification) error {
 	if config == nil {
 		return errors.New("通知配置不存在")
 	}
-	return validateImmediateNotification(config.TriggerType, config.ScheduledTime, config.RepeatInterval, config.TriggerCondition, false)
+	if (config.TriggerType != model.TriggerTypeImmediate || config.RepeatCount != nil) && config.TriggerVersion != 1 {
+		return errors.New("历史高级触发需重新验证并显式启用")
+	}
+	return validateNotificationTrigger(config.TriggerType, config.ScheduledTime, config.DelayMinutes, config.RepeatInterval, config.RepeatCount, config.TriggerCondition)
 }
 
 // 只在显式启用时验证最终配置；禁用及历史普通元数据编辑仍可执行
@@ -50,7 +53,10 @@ func validateNotificationActivation(existing *model.WorkorderNotification, req *
 	if existing == nil {
 		return errors.New("通知配置不存在")
 	}
-	trigger, scheduled, repeat, condition := existing.TriggerType, existing.ScheduledTime, existing.RepeatInterval, existing.TriggerCondition
+	trigger, scheduled, delay, repeat, count, condition := existing.TriggerType, existing.ScheduledTime, existing.DelayMinutes, existing.RepeatInterval, existing.RepeatCount, existing.TriggerCondition
+	if req.ClearTrigger {
+		scheduled, delay, repeat, count, condition = nil, nil, nil, nil, nil
+	}
 	if req.TriggerType != "" {
 		trigger = req.TriggerType
 	}
@@ -60,8 +66,20 @@ func validateNotificationActivation(existing *model.WorkorderNotification, req *
 	if req.RepeatInterval != nil {
 		repeat = req.RepeatInterval
 	}
+	if req.DelayMinutes != nil {
+		delay = req.DelayMinutes
+	}
+	if req.RepeatCount != nil {
+		count = req.RepeatCount
+	}
 	if req.TriggerCondition != nil {
 		condition = req.TriggerCondition
 	}
-	return validateImmediateNotification(trigger, scheduled, repeat, condition, false)
+	if err := validateNotificationTrigger(trigger, scheduled, delay, repeat, count, condition); err != nil {
+		return err
+	}
+	if trigger == model.TriggerTypeScheduled {
+		return validateNewScheduleTime(scheduled)
+	}
+	return nil
 }

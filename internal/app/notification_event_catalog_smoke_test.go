@@ -31,7 +31,7 @@ func TestNotificationEventRoutesAreRegisteredInPermissionCatalog(t *testing.T) {
 	for _, item := range []struct {
 		path   string
 		method int
-	}{{"/api/workorder/notification/events", 1}, {"/api/workorder/notification/events/:id/deliveries", 1}, {"/api/workorder/notification/events/:id/resolutions", 1}, {"/api/workorder/notification/events/:id/resolve", 2}, {"/api/workorder/notification/events/:id/retry", 2}} {
+	}{{"/api/workorder/notification/events", 1}, {"/api/workorder/notification/events/:id/deliveries", 1}, {"/api/workorder/notification/events/:id/resolutions", 1}, {"/api/workorder/notification/events/:id/resolve", 2}, {"/api/workorder/notification/events/:id/retry", 2}, {model.WorkorderNotificationCancelScheduledRoute, 2}} {
 		var count int64
 		db.Model(&model.Api{}).Where("path = ? AND method = ?", item.path, item.method).Count(&count)
 		if count != 1 {

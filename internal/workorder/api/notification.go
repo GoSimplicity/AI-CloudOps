@@ -57,6 +57,7 @@ func (h *NotificationHandler) RegisterRouters(server *gin.Engine) {
 		notificationGroup.GET("/events/:id/resolutions", h.ListNotificationEventResolutions)
 		notificationGroup.POST("/events/:id/resolve", h.ResolveNotificationDelivery)
 		notificationGroup.POST("/events/:id/retry", h.RetryNotificationEvent)
+		notificationGroup.POST("/events/:id/cancel", h.CancelScheduledNotification)
 		notificationGroup.POST("/test/send", h.TestSendNotification)
 		notificationGroup.GET("/channels", h.GetAvailableChannels)
 		notificationGroup.POST("/send", h.SendNotificationManually)
