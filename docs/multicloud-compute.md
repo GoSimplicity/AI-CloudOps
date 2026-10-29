@@ -21,7 +21,7 @@ AWS `ASIA` 临时凭据需要 session token，目前明确拒绝；腾讯云 STS
 本版没有声明只有两个字段即可兼容临时凭据，也没有偷偷丢弃 token。
 
 账户创建：`POST /api/tree/cloud/account/create`，包含 `provider`、`access_key`、`secret_key`、
-`regions: [{region, region_name, is_default}]`。厂商枚举保持阿里云1、腾讯云2、AWS4。
+`regions: [{region, region_name, is_default}]`。厂商枚举保持阿里云1、腾讯云2、AWS3、华为云4。
 账户更新接受可选的同形 `regions` 数组；不能通过更新切换厂商。
 
 实时地域列表使用：
