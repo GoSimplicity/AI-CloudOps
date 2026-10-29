@@ -348,6 +348,35 @@ func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model
 		return nil, errors.New("云账户已禁用，无法同步资源")
 	}
 
+	// 校验整个地域集合后再解密或访问云端，避免部分有效输入触发部分同步。
+	var regionsToSync []*model.CloudAccountRegion
+	if len(req.CloudAccountRegionIDs) > 0 {
+		regionsByID := make(map[int]*model.CloudAccountRegion, len(account.Regions))
+		for _, region := range account.Regions {
+			if region != nil && region.CloudAccountID == req.CloudAccountID {
+				regionsByID[region.ID] = region
+			}
+		}
+		seen := make(map[int]bool, len(req.CloudAccountRegionIDs))
+		for _, regionID := range req.CloudAccountRegionIDs {
+			region := regionsByID[regionID]
+			if regionID <= 0 || region == nil || region.Status != model.CloudAccountRegionEnabled || seen[regionID] {
+				return nil, fmt.Errorf("指定的地域 %d 不存在、不属于该账户、已禁用或重复", regionID)
+			}
+			seen[regionID] = true
+			regionsToSync = append(regionsToSync, region)
+		}
+	} else {
+		for _, region := range account.Regions {
+			if region != nil && region.CloudAccountID == req.CloudAccountID && region.Status == model.CloudAccountRegionEnabled {
+				regionsToSync = append(regionsToSync, region)
+			}
+		}
+	}
+	if len(regionsToSync) == 0 {
+		return nil, errors.New("没有可用的区域进行同步")
+	}
+
 	// 解密密钥
 	accessKey, err := treeUtils.DecryptPassword(account.AccessKey)
 	if err != nil {
@@ -365,30 +394,6 @@ func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model
 		syncHistory.ErrorMessage = fmt.Sprintf("解密SecretKey失败: %v", err)
 		s.saveSyncHistory(ctx, syncHistory)
 		return nil, fmt.Errorf("解密SecretKey失败: %w", err)
-	}
-
-	var regionsToSync []*model.CloudAccountRegion
-	if len(req.CloudAccountRegionIDs) > 0 {
-		// 同步指定的区域
-		for _, regionID := range req.CloudAccountRegionIDs {
-			for _, region := range account.Regions {
-				if region.ID == regionID {
-					regionsToSync = append(regionsToSync, region)
-					break
-				}
-			}
-		}
-	} else {
-		// 同步账号下的所有启用区域
-		for _, region := range account.Regions {
-			if region.Status == model.CloudAccountRegionEnabled {
-				regionsToSync = append(regionsToSync, region)
-			}
-		}
-	}
-
-	if len(regionsToSync) == 0 {
-		return nil, errors.New("没有可用的区域进行同步")
 	}
 
 	s.logger.Info("开始同步云资源",
