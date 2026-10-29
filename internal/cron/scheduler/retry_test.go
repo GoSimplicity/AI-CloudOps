@@ -30,6 +30,9 @@ func TestScheduledRetriesReachSDKAndReloadOnChange(t *testing.T) {
 			}
 			found := false
 			for _, option := range target.options[0] {
+				if option.Type() == asynq.TaskIDOpt {
+					t.Fatal("每个周期必须由 Asynq 生成新的任务 ID")
+				}
 				if option.Type() == asynq.MaxRetryOpt {
 					found = true
 					if option.Value().(int) != count {

@@ -66,6 +66,8 @@ jobs:
         run: python scripts/integration/schema_smoke.py --mysql-notification-idempotent
       - name: Real notification worker with an isolated Redis and local inbox
         run: CLOUDOPS_TEST_NOTIFICATION_ASYNC=true go test -race -tags=integration ./pkg/di -run '^TestNotificationAsyncIsolatedRedis$' -count=1
+      - name: Periodic tasks continue after failure is archived
+        run: CLOUDOPS_TEST_CRON_ASYNC=true go test -race -tags=integration ./internal/cron/scheduler -run '^TestPeriodicTaskContinuesAfterArchive$' -count=1
       - name: Gateway and session acceptance
         run: python scripts/release-smoke.py --crud
       - name: Real RBAC and workorder lifecycle

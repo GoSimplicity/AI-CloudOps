@@ -224,8 +224,9 @@ func (cs *CronScheduler) scheduleJob(job *model.CronJob) error {
 		}
 		delete(cs.entries, job.ID)
 	}
-	// TaskID 是入队任务标识，注销必须使用 Register 返回的独立条目 ID
-	entryID, err := cs.scheduler.Register(job.Schedule, task, asynq.TaskID(generateEntryID(job.ID)), asynq.MaxRetry(job.MaxRetry))
+	// 每次入队由 Asynq 生成独立任务 ID，避免已归档任务阻塞后续周期
+	// 调度条目的注销仍使用 Register 返回的条目 ID
+	entryID, err := cs.scheduler.Register(job.Schedule, task, asynq.MaxRetry(job.MaxRetry))
 	if err != nil {
 		return err
 	}
@@ -259,9 +260,4 @@ func (cs *CronScheduler) RemoveScheduledJob(jobID int) error {
 		zap.Int("jobID", jobID),
 		zap.String("entryID", entryID))
 	return nil
-}
-
-// generateEntryID 生成调度条目ID
-func generateEntryID(jobID int) string {
-	return "cron_job_" + fmt.Sprintf("%d", jobID)
 }
