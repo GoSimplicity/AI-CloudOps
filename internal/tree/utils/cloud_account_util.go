@@ -112,6 +112,8 @@ func SanitizeCloudAccount(account *model.CloudAccount) {
 	account.AccessKey = ""
 	account.SecretKey = ""
 	account.SessionToken = ""
+	account.ProviderCredentials = ""
+	account.SessionToken = ""
 	if account.CredentialExpiresAt != nil {
 		expires := account.CredentialExpiresAt.UTC()
 		account.CredentialExpiresAt = &expires

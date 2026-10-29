@@ -48,6 +48,9 @@ func (d *cloudAccountDAO) UpdateAccountAndRegions(ctx context.Context, update *m
 		}
 		selected := make(map[string]model.CreateCloudAccountRegionItem, len(regions))
 		for _, region := range regions {
+			if err := treeUtils.ValidateCloudRegion(account.Provider, region.Region); err != nil {
+				return err
+			}
 			selected[region.Region] = region
 		}
 		byCode := make(map[string]model.CloudAccountRegion, len(existing))

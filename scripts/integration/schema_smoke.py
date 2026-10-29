@@ -128,6 +128,7 @@ def main():
     database.add_argument("--mysql-notification-idempotent", action="store_true")
     database.add_argument("--mysql-notification-outbox", action="store_true")
     database.add_argument("--mysql-cloud-temporary", action="store_true")
+    database.add_argument("--mysql-cloud-provider-credentials", action="store_true")
     database.add_argument("--mysql-notification-schedule", action="store_true")
     database.add_argument("--mysql-notification-timezone", action="store_true")
     parser.add_argument("--container")
@@ -147,6 +148,8 @@ def main():
             isolated_mysql(args.container, "./internal/workorder/service", "TestMySQLOutboxAtomicAndDelivery")
         elif args.mysql_cloud_temporary:
             isolated_mysql(args.container, "./internal/tree/service", "TestMySQLTemporaryCloudCredentials")
+        elif args.mysql_cloud_provider_credentials:
+            isolated_mysql(args.container, "./internal/tree/service", "TestMySQLProviderCredentialMigration")
         elif args.mysql_notification_schedule:
             isolated_mysql(args.container, "./internal/workorder/service", "TestMySQLScheduleAtomicConcurrentRestart")
         elif args.mysql_notification_timezone:

@@ -146,6 +146,15 @@ func (s *cloudAccountService) GetCloudAccountDetail(ctx context.Context, req *mo
 
 func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model.CreateCloudAccountReq, createUserID int, createUserName string) error {
 	credentials := treeUtils.CloudCredentials{AccessKey: req.AccessKey, SecretKey: req.SecretKey, CredentialType: req.CredentialType, SessionToken: req.SessionToken, ExpiresAt: req.CredentialExpiresAt}
+	isStructured := req.Provider == model.ProviderAzure || req.Provider == model.ProviderGCP
+	if isStructured {
+		if req.ProviderCredentials == nil || req.AccessKey != "" || req.SecretKey != "" || req.SessionToken != "" || req.CredentialExpiresAt != nil || (req.CredentialType != "" && req.CredentialType != "long_term") {
+			return errors.New("该云厂商必须提供完整的专用凭据")
+		}
+		credentials = treeUtils.ProviderCredentialsFromInput(req.ProviderCredentials)
+	} else if req.ProviderCredentials != nil {
+		return errors.New("该云厂商不支持专用凭据")
+	}
 	if err := treeUtils.ValidateCloudCredentials(req.Provider, credentials, time.Now().UTC()); err != nil {
 		return err
 	}
@@ -155,6 +164,11 @@ func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model
 	normalizedRegions, err := treeUtils.ValidateAndNormalizeRegions(req.Regions)
 	if err != nil {
 		return fmt.Errorf("区域验证失败: %w", err)
+	}
+	for _, region := range normalizedRegions {
+		if err := treeUtils.ValidateCloudRegion(req.Provider, region.Region); err != nil {
+			return err
+		}
 	}
 	if req.Provider == model.ProviderHuawei {
 		for _, region := range normalizedRegions {
@@ -187,6 +201,16 @@ func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model
 		s.logger.Error("加密SecretKey失败", zap.Error(err))
 		return fmt.Errorf("加密SecretKey失败: %w", err)
 	}
+	if len(encryptedAccessKey) > 500 || len(encryptedSecretKey) > 500 {
+		return errors.New("云账户密钥超出存储限制")
+	}
+	var encryptedProviderCredentials string
+	if isStructured {
+		encryptedProviderCredentials, err = treeUtils.EncryptProviderCredentials(req.Provider, req.ProviderCredentials)
+		if err != nil {
+			return err
+		}
+	}
 	var encryptedToken string
 	if req.SessionToken != "" {
 		encryptedToken, err = treeUtils.EncryptPassword(req.SessionToken)
@@ -204,6 +228,7 @@ func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model
 			SecretKey:           encryptedSecretKey,
 			CredentialType:      credentials.CredentialType,
 			SessionToken:        encryptedToken,
+			ProviderCredentials: encryptedProviderCredentials,
 			CredentialExpiresAt: credentials.ExpiresAt,
 			AccountID:           req.AccountID,
 			AccountName:         req.AccountName,
@@ -292,6 +317,11 @@ func (s *cloudAccountService) UpdateCloudAccount(ctx context.Context, req *model
 		if err != nil {
 			return fmt.Errorf("区域验证失败: %w", err)
 		}
+		for _, region := range normalizedRegions {
+			if err := treeUtils.ValidateCloudRegion(account.Provider, region.Region); err != nil {
+				return err
+			}
+		}
 	}
 
 	updateAccount := &model.CloudAccount{
@@ -306,7 +336,30 @@ func (s *cloudAccountService) UpdateCloudAccount(ctx context.Context, req *model
 	if newType == "" {
 		newType = oldType
 	}
-	credentialChange := req.AccessKey != "" || req.SecretKey != "" || req.SessionToken != "" || req.CredentialExpiresAt != nil || newType != oldType
+	isStructured := account.Provider == model.ProviderAzure || account.Provider == model.ProviderGCP
+	if isStructured {
+		if req.AccessKey != "" || req.SecretKey != "" || req.SessionToken != "" || req.CredentialExpiresAt != nil || (req.CredentialType != "" && req.CredentialType != "long_term") {
+			return errors.New("该云厂商必须完整替换专用凭据")
+		}
+		if req.ProviderCredentials != nil {
+			encrypted, err := treeUtils.EncryptProviderCredentials(account.Provider, req.ProviderCredentials)
+			if err != nil {
+				return err
+			}
+			version := account.CredentialVersion
+			updateAccount.ExpectedCredentialVersion = &version
+			updateAccount.ProviderCredentials = encrypted
+			updateAccount.CredentialType = "long_term"
+			updateAccount.SessionToken = ""
+			updateAccount.AccessKey = ""
+			updateAccount.SecretKey = ""
+			updateAccount.CredentialExpiresAt = nil
+			updateFields = append(updateFields, "provider_credentials", "credential_type", "session_token", "credential_expires_at", "access_key", "secret_key")
+		}
+	} else if req.ProviderCredentials != nil {
+		return errors.New("该云厂商不支持专用凭据")
+	}
+	credentialChange := !isStructured && (req.AccessKey != "" || req.SecretKey != "" || req.SessionToken != "" || req.CredentialExpiresAt != nil || newType != oldType)
 	if credentialChange {
 		if oldType == "temporary" || newType == "temporary" || newType != oldType {
 			if req.AccessKey == "" || req.SecretKey == "" {
@@ -364,6 +417,9 @@ func (s *cloudAccountService) UpdateCloudAccount(ctx context.Context, req *model
 			s.logger.Error("加密AccessKey失败", zap.Error(err))
 			return fmt.Errorf("加密AccessKey失败: %w", err)
 		}
+		if len(encryptedAccessKey) > 500 {
+			return errors.New("云账户密钥超出存储限制")
+		}
 		updateAccount.AccessKey = encryptedAccessKey
 		updateFields = append(updateFields, "access_key")
 	}
@@ -374,6 +430,9 @@ func (s *cloudAccountService) UpdateCloudAccount(ctx context.Context, req *model
 		if err != nil {
 			s.logger.Error("加密SecretKey失败", zap.Error(err))
 			return fmt.Errorf("加密SecretKey失败: %w", err)
+		}
+		if len(encryptedSecretKey) > 500 {
+			return errors.New("云账户密钥超出存储限制")
 		}
 		updateAccount.SecretKey = encryptedSecretKey
 		updateFields = append(updateFields, "secret_key")
@@ -627,14 +686,17 @@ func (s *cloudAccountService) GetAvailableRegionsForAccount(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	if account.Provider == model.ProviderHuawei {
+	if account.Provider == model.ProviderHuawei || account.Provider == model.ProviderAzure || account.Provider == model.ProviderGCP {
 		var configured []*model.CloudAccountRegion
 		for _, region := range account.Regions {
 			if region == nil || region.Status != model.CloudAccountRegionEnabled {
 				continue
 			}
-			if region.ProjectID == nil || !treeUtils.ValidHuaweiProjectID(*region.ProjectID) {
+			if account.Provider == model.ProviderHuawei && (region.ProjectID == nil || !treeUtils.ValidHuaweiProjectID(*region.ProjectID)) {
 				return nil, errors.New("华为云地域缺少项目ID")
+			}
+			if err := treeUtils.ValidateCloudRegion(account.Provider, region.Region); err != nil {
+				return nil, err
 			}
 			configured = append(configured, region)
 		}
@@ -657,7 +719,7 @@ func (s *cloudAccountService) GetAvailableRegionsForAccount(ctx context.Context,
 				return nil, errors.New("云地域查询失败")
 			}
 			if len(part) != 1 || part[0].Region != region.Region {
-				return nil, errors.New("华为云地域响应与项目配置不一致")
+				return nil, errors.New("云地域响应与账户配置不一致")
 			}
 			all = append(all, part...)
 		}

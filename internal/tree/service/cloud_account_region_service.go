@@ -96,9 +96,18 @@ func (s *cloudAccountRegionService) GetCloudAccountRegionDetail(ctx context.Cont
 }
 
 func (s *cloudAccountRegionService) CreateCloudAccountRegion(ctx context.Context, req *model.CreateCloudAccountRegionReq) error {
-	_, err := s.cloudAccountService.GetCloudAccountDetail(ctx, &model.GetCloudAccountDetailReq{ID: req.CloudAccountID})
+	account, err := s.cloudAccountService.GetCloudAccountDetail(ctx, &model.GetCloudAccountDetailReq{ID: req.CloudAccountID})
 	if err != nil {
 		return fmt.Errorf("云账号不存在: %w", err)
+	}
+	if account == nil {
+		return errors.New("云账号不存在")
+	}
+	if err := treeUtils.ValidateCloudRegion(account.Provider, req.Region); err != nil {
+		return err
+	}
+	if account.Provider == model.ProviderHuawei && (req.ProjectID == nil || !treeUtils.ValidHuaweiProjectID(*req.ProjectID)) {
+		return errors.New("华为云地域必须指定项目ID")
 	}
 
 	// 检查同一账号下区域是否已存在
@@ -123,6 +132,7 @@ func (s *cloudAccountRegionService) CreateCloudAccountRegion(ctx context.Context
 		CloudAccountID: req.CloudAccountID,
 		Region:         req.Region,
 		RegionName:     req.RegionName,
+		ProjectID:      req.ProjectID,
 		IsDefault:      req.IsDefault,
 		Description:    req.Description,
 		Status:         model.CloudAccountRegionEnabled, // 默认启用
@@ -139,14 +149,23 @@ func (s *cloudAccountRegionService) CreateCloudAccountRegion(ctx context.Context
 }
 
 func (s *cloudAccountRegionService) BatchCreateCloudAccountRegion(ctx context.Context, req *model.BatchCreateCloudAccountRegionReq) error {
-	_, err := s.cloudAccountService.GetCloudAccountDetail(ctx, &model.GetCloudAccountDetailReq{ID: req.CloudAccountID})
+	account, err := s.cloudAccountService.GetCloudAccountDetail(ctx, &model.GetCloudAccountDetailReq{ID: req.CloudAccountID})
 	if err != nil {
 		return fmt.Errorf("云账号不存在: %w", err)
+	}
+	if account == nil {
+		return errors.New("云账号不存在")
 	}
 
 	regionMap := make(map[string]bool)
 	var defaultCount int
 	for _, regionItem := range req.Regions {
+		if err := treeUtils.ValidateCloudRegion(account.Provider, regionItem.Region); err != nil {
+			return err
+		}
+		if account.Provider == model.ProviderHuawei && (regionItem.ProjectID == nil || !treeUtils.ValidHuaweiProjectID(*regionItem.ProjectID)) {
+			return errors.New("华为云地域必须指定项目ID")
+		}
 		if regionMap[regionItem.Region] {
 			return fmt.Errorf("区域 %s 重复", regionItem.Region)
 		}
@@ -187,6 +206,7 @@ func (s *cloudAccountRegionService) BatchCreateCloudAccountRegion(ctx context.Co
 			CloudAccountID: req.CloudAccountID,
 			Region:         regionItem.Region,
 			RegionName:     regionItem.RegionName,
+			ProjectID:      regionItem.ProjectID,
 			IsDefault:      regionItem.IsDefault,
 			Description:    regionItem.Description,
 			Status:         model.CloudAccountRegionEnabled, // 默认启用

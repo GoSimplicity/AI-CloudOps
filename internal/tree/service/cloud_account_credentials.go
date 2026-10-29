@@ -17,6 +17,9 @@ func cloudClient(provider model.CloudProvider, credentials treeUtils.CloudCreden
 	if region == nil || strings.TrimSpace(region.Region) == "" {
 		return nil, errors.New("云地域无效")
 	}
+	if err := treeUtils.ValidateCloudRegion(provider, region.Region); err != nil {
+		return nil, err
+	}
 	if region.ProjectID != nil {
 		credentials.ProjectID = *region.ProjectID
 	}
@@ -28,7 +31,7 @@ func cloudClient(provider model.CloudProvider, credentials treeUtils.CloudCreden
 	if modern != nil {
 		client, err = modern(provider, credentials, region.Region, logger)
 	} else if legacy != nil {
-		if credentials.CredentialType == "temporary" || provider == model.ProviderHuawei {
+		if credentials.CredentialType == "temporary" || provider == model.ProviderHuawei || provider == model.ProviderAzure || provider == model.ProviderGCP {
 			return nil, errors.New("旧版云客户端不支持该凭据")
 		}
 		client, err = legacy(provider, credentials.AccessKey, credentials.SecretKey, region.Region, logger)

@@ -43,6 +43,7 @@ type CloudAccount struct {
 	SecretKey                 string             `json:"-" gorm:"type:varchar(500);not null;comment:访问密钥Secret,加密存储"`
 	CredentialType            string             `json:"credential_type" gorm:"type:varchar(20);not null;default:long_term"`
 	SessionToken              string             `json:"-" gorm:"type:text"`
+	ProviderCredentials       string             `json:"-" gorm:"type:text"`
 	CredentialExpiresAt       *time.Time         `json:"credential_expires_at,omitempty" gorm:"column:credential_expires_at"`
 	CredentialVersion         uint64             `json:"-" gorm:"not null;default:0"`
 	ExpectedCredentialVersion *uint64            `json:"-" gorm:"-"`
@@ -101,11 +102,25 @@ type GetCloudAccountDetailReq struct {
 	ID int `json:"id" form:"id" binding:"required,gt=0"`
 }
 
+// ProviderCredentialInput is a write-only, complete provider credential tuple.
+type ProviderCredentialInput struct {
+	TenantID           string `json:"tenant_id,omitempty"`
+	ClientID           string `json:"client_id,omitempty"`
+	ClientSecret       string `json:"client_secret,omitempty"`
+	SubscriptionID     string `json:"subscription_id,omitempty"`
+	ProjectID          string `json:"project_id,omitempty"`
+	ServiceAccountJSON string `json:"service_account_json,omitempty"`
+}
+
+func (ProviderCredentialInput) String() string   { return "[REDACTED]" }
+func (ProviderCredentialInput) GoString() string { return "[REDACTED]" }
+
 type CreateCloudAccountReq struct {
+	ProviderCredentials *ProviderCredentialInput       `json:"provider_credentials,omitempty"`
 	Name                string                         `json:"name" binding:"required,min=2,max=100"`         // 账户名称
 	Provider            CloudProvider                  `json:"provider" binding:"required,oneof=1 2 3 4 5 6"` // 云厂商类型
-	AccessKey           string                         `json:"access_key" binding:"required,min=10,max=500"`  // 访问密钥ID
-	SecretKey           string                         `json:"secret_key" binding:"required,min=10,max=500"`  // 访问密钥Secret
+	AccessKey           string                         `json:"access_key" binding:"omitempty,min=10,max=500"` // 访问密钥ID
+	SecretKey           string                         `json:"secret_key" binding:"omitempty,min=10,max=500"` // 访问密钥Secret
 	CredentialType      string                         `json:"credential_type" binding:"omitempty,oneof=long_term temporary"`
 	SessionToken        string                         `json:"session_token" binding:"omitempty,max=8192"`
 	CredentialExpiresAt *time.Time                     `json:"credential_expires_at"`
@@ -117,6 +132,7 @@ type CreateCloudAccountReq struct {
 }
 
 type UpdateCloudAccountReq struct {
+	ProviderCredentials *ProviderCredentialInput       `json:"provider_credentials,omitempty"`
 	ID                  int                            `json:"id" binding:"required,gt=0"`                    // 账户ID
 	Name                string                         `json:"name" binding:"omitempty,min=2,max=100"`        // 账户名称
 	AccessKey           string                         `json:"access_key" binding:"omitempty,min=10,max=500"` // 访问密钥ID
@@ -200,13 +216,14 @@ type GetCloudAccountRegionListReq struct {
 }
 
 type CreateCloudAccountRegionReq struct {
-	CloudAccountID int    `json:"cloud_account_id" binding:"required,gt=0"`
-	Region         string `json:"region" binding:"required"`
-	RegionName     string `json:"region_name"`
-	IsDefault      bool   `json:"is_default"`
-	Description    string `json:"description"`
-	CreateUserID   int    `json:"create_user_id"`
-	CreateUserName string `json:"create_user_name"`
+	ProjectID      *string `json:"project_id,omitempty" binding:"omitempty,max=64"`
+	CloudAccountID int     `json:"cloud_account_id" binding:"required,gt=0"`
+	Region         string  `json:"region" binding:"required"`
+	RegionName     string  `json:"region_name"`
+	IsDefault      bool    `json:"is_default"`
+	Description    string  `json:"description"`
+	CreateUserID   int     `json:"create_user_id"`
+	CreateUserName string  `json:"create_user_name"`
 }
 
 type UpdateCloudAccountRegionReq struct {
