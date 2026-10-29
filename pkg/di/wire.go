@@ -259,6 +259,7 @@ var JobSet = wire.NewSet(
 )
 
 var CronSet = wire.NewSet(
+	wire.Bind(new(cron.BuiltinRunner), new(*cronHandler.CronHandlers)),
 	cron.NewUnifiedCronManager,
 	cron.NewBuiltinTaskManager,
 	cronHandler.NewCronHandlers,

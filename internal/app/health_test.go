@@ -74,3 +74,23 @@ func TestReadinessRecoversWithoutRestart(t *testing.T) {
 		}
 	}
 }
+
+func TestReadinessTracksSchedulerRecovery(t *testing.T) {
+	ready := false
+	probe := func(context.Context) error { return nil }
+	engine := gin.New()
+	engine.GET("/ready", readinessHandler(probe, probe, func(context.Context) error {
+		if !ready {
+			return errors.New("调度器未就绪")
+		}
+		return nil
+	}))
+	for _, want := range []int{http.StatusServiceUnavailable, http.StatusOK, http.StatusServiceUnavailable} {
+		ready = want == http.StatusOK
+		response := httptest.NewRecorder()
+		engine.ServeHTTP(response, httptest.NewRequest("GET", "/ready", nil))
+		if response.Code != want {
+			t.Fatalf("status = %d, want %d", response.Code, want)
+		}
+	}
+}

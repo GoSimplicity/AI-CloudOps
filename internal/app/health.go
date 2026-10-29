@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
@@ -21,17 +22,27 @@ func (a *App) registerHealthRoutes() {
 		return db.PingContext(ctx)
 	}, func(ctx context.Context) error {
 		return a.redis.Ping(ctx).Err()
+	}, func(context.Context) error {
+		checker, ok := a.cronManager.(interface{ SchedulerReady() bool })
+		if !ok || !checker.SchedulerReady() {
+			return errors.New("任务调度器尚未就绪")
+		}
+		return nil
 	}))
 }
 
 // readinessHandler 使用同一请求期限并发检查依赖，响应不暴露连接信息
-func readinessHandler(databasePing, cachePing func(context.Context) error) gin.HandlerFunc {
+func readinessHandler(databasePing, cachePing func(context.Context) error, checks ...func(context.Context) error) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), readinessTimeout)
 		defer cancel()
 		group, probeCtx := errgroup.WithContext(ctx)
 		group.Go(func() error { return databasePing(probeCtx) })
 		group.Go(func() error { return cachePing(probeCtx) })
+		for _, check := range checks {
+			check := check
+			group.Go(func() error { return check(probeCtx) })
+		}
 		if err := group.Wait(); err != nil || ctx.Err() != nil {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "not_ready"})
 			return

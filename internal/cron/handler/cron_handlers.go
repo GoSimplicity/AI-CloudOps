@@ -28,10 +28,12 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/config"
+	croncore "github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/executor"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/task"
@@ -104,6 +106,9 @@ func NewCronHandlers(
 	}
 }
 
+// IsTaskFailure 供内置调度器识别租约协调失败，避免已有执行完成后重复执行
+func (h *CronHandlers) IsTaskFailure(err error) bool { return IsTaskFailure(err) }
+
 func (h *CronHandlers) ProcessTask(ctx context.Context, t *asynq.Task) error {
 	var payload task.CronTaskPayload
 	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
@@ -129,6 +134,11 @@ func (h *CronHandlers) ProcessTask(ctx context.Context, t *asynq.Task) error {
 		return fmt.Errorf("获取任务详情失败: %w", err)
 	}
 
+	if payload.TriggerBy == "builtin_scheduled" {
+		if job.IsBuiltIn != 1 || job.JobType != model.CronJobTypeSystem || payload.Data["schedule"] != job.Schedule || payload.Data["command"] != job.Command {
+			return nil
+		}
+	}
 	if job.Status != model.CronJobStatusEnabled && job.Status != model.CronJobStatusRunning {
 		h.logger.Warn("任务已禁用，跳过执行", zap.Int("jobID", payload.JobID))
 		return nil
@@ -319,86 +329,10 @@ func (h *CronHandlers) ProcessTask(ctx context.Context, t *asynq.Task) error {
 }
 
 func (h *CronHandlers) executeSystemTask(ctx context.Context, job *model.CronJob) (string, error) {
-	taskType := job.Command // 任务类型存储在Command字段中
-
-	h.logger.Info("手动执行系统内置任务",
-		zap.Int("jobID", job.ID),
-		zap.String("jobName", job.Name),
-		zap.String("taskType", taskType))
-
-	switch taskType {
-	case "on_duty_history":
-		h.logger.Info("执行值班历史记录管理任务")
-		return h.executeOnDutyHistoryTask(ctx)
-
-	case "k8s_status_check":
-		h.logger.Info("执行K8s集群状态检查任务")
-		return h.executeK8sStatusCheckTask(ctx)
-
-	case "prometheus_config_refresh":
-		h.logger.Info("执行Prometheus配置刷新任务")
-		return h.executePrometheusConfigRefreshTask(ctx)
-
-	default:
-		h.logger.Warn("未知的系统任务类型", zap.String("taskType", taskType))
-		return fmt.Sprintf("未知的系统任务类型: %s", taskType), fmt.Errorf("未知的系统任务类型: %s", taskType)
+	if job == nil || job.IsBuiltIn != 1 {
+		return "", errors.New("拒绝执行非内置系统任务")
 	}
-}
-
-func (h *CronHandlers) executeOnDutyHistoryTask(ctx context.Context) (string, error) {
-	h.logger.Info("开始执行值班历史记录管理任务")
-	// 这里可以实现值班历史记录的核心逻辑
-	// 为了简化，目前只返回成功消息
-	return "值班历史记录管理任务执行成功", nil
-}
-
-// executeK8sStatusCheckTask 执行K8s集群状态检查任务
-func (h *CronHandlers) executeK8sStatusCheckTask(ctx context.Context) (string, error) {
-	h.logger.Info("开始执行K8s集群状态检查任务")
-
-	clusters, _, err := h.k8sDAO.GetClusterList(ctx, &model.ListClustersReq{
-		ListReq: model.ListReq{
-			Page: 1,
-			Size: 100, // 获取前100个集群
-		},
-	})
-	if err != nil {
-		h.logger.Error("获取集群列表失败", zap.Error(err))
-		return "", fmt.Errorf("获取集群列表失败: %w", err)
-	}
-
-	if len(clusters) == 0 {
-		return "没有找到K8s集群", nil
-	}
-
-	checkedCount := 0
-	errorCount := 0
-
-	for _, cluster := range clusters {
-		if err := h.clusterMgr.CheckClusterStatus(ctx, cluster.ID); err != nil {
-			h.logger.Warn("集群状态检查失败",
-				zap.String("cluster", cluster.Name),
-				zap.Error(err))
-			errorCount++
-		} else {
-			checkedCount++
-		}
-	}
-
-	return fmt.Sprintf("K8s集群状态检查完成: 总计%d个集群，成功检查%d个，失败%d个",
-		len(clusters), checkedCount, errorCount), nil
-}
-
-// executePrometheusConfigRefreshTask 执行Prometheus配置刷新任务
-func (h *CronHandlers) executePrometheusConfigRefreshTask(ctx context.Context) (string, error) {
-	h.logger.Info("开始执行Prometheus配置刷新任务")
-
-	if err := h.promConfigCache.MonitorCacheManager(ctx); err != nil {
-		h.logger.Error("Prometheus配置刷新失败", zap.Error(err))
-		return "", fmt.Errorf("Prometheus配置刷新失败: %w", err)
-	}
-
-	return "Prometheus配置刷新成功", nil
+	return croncore.ExecuteBuiltinOnce(ctx, job.Command, h.logger, h.onDutyDAO, h.k8sDAO, h.clusterMgr, h.promConfigCache)
 }
 
 type ExecutionResult struct {

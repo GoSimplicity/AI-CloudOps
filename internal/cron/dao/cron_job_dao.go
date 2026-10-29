@@ -161,7 +161,7 @@ func (d *cronJobDAO) GetCronJobList(ctx context.Context, req *model.GetCronJobLi
 	}
 
 	offset := (req.Page - 1) * req.Size
-	if err := query.Order("created_at DESC").
+	if err := query.Order("created_at DESC, id DESC").
 		Offset(offset).
 		Limit(req.Size).
 		Find(&jobs).Error; err != nil {

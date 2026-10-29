@@ -27,23 +27,27 @@ package cron
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/scheduler"
+	crontask "github.com/GoSimplicity/AI-CloudOps/internal/cron/task"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
+	"github.com/hibiken/asynq"
+	robcron "github.com/robfig/cron/v3"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 var (
@@ -59,6 +63,16 @@ const (
 	MaxRetries                             = 3
 	RetryDelay                             = 5 * time.Second
 )
+
+// BuiltinRunner 使用与手动执行同一处理器和数据库执行租约
+type BuiltinRunner interface {
+	ProcessTask(context.Context, *asynq.Task) error
+	IsTaskFailure(error) bool
+}
+type builtinEntry struct {
+	id                robcron.EntryID
+	schedule, command string
+}
 
 // CronManager 统一的 Cron 管理器接口 - 整合系统内置任务和用户自定义任务
 type CronManager interface {
@@ -81,9 +95,16 @@ type unifiedCronManager struct {
 	cronScheduler *scheduler.CronScheduler
 
 	builtinTaskMgr *BuiltinTaskManager
+	builtinRunner  BuiltinRunner
+	builtinCron    *robcron.Cron
+	builtinMu      sync.Mutex
+	builtinEntries map[int]builtinEntry
+	builtinReady   atomic.Bool
 
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	lifecycleMu sync.Mutex
+	cancel      context.CancelFunc
+	stopping    chan struct{}
+	wg          sync.WaitGroup
 }
 
 // NewUnifiedCronManager 创建统一的 Cron 管理器
@@ -96,6 +117,7 @@ func NewUnifiedCronManager(
 	promConfigCache cache.MonitorCache,
 	cronScheduler *scheduler.CronScheduler,
 	builtinTaskMgr *BuiltinTaskManager,
+	builtinRunner BuiltinRunner,
 ) CronManager {
 	return &unifiedCronManager{
 		logger:          logger,
@@ -106,24 +128,35 @@ func NewUnifiedCronManager(
 		promConfigCache: promConfigCache,
 		cronScheduler:   cronScheduler,
 		builtinTaskMgr:  builtinTaskMgr,
+		builtinRunner:   builtinRunner,
+		builtinCron:     robcron.New(robcron.WithLocation(time.UTC)),
+		builtinEntries:  make(map[int]builtinEntry),
 	}
 }
 
 // === 统一管理方法 ===
 
 func (cm *unifiedCronManager) Start(ctx context.Context) error {
+	cm.lifecycleMu.Lock()
+	defer cm.lifecycleMu.Unlock()
+	if cm.cancel != nil {
+		return errors.New("统一Cron管理器已启动或尚未停止")
+	}
 	cm.logger.Info("启动统一Cron管理器")
 
 	ctx, cancel := context.WithCancel(ctx)
 	cm.cancel = cancel
+	started := false
+	defer func() {
+		if !started {
+			cancel()
+			cm.cancel = nil
+		}
+	}()
 
 	if err := cm.builtinTaskMgr.InitializeBuiltinTasks(ctx); err != nil {
-		cm.logger.Error("初始化内置任务失败，尝试强制初始化", zap.Error(err))
-		// 如果正常初始化失败，尝试强制初始化
-		if forceErr := cm.builtinTaskMgr.ForceInitializeBuiltinTasks(ctx); forceErr != nil {
-			cm.logger.Error("强制初始化内置任务也失败", zap.Error(forceErr))
-			return forceErr
-		}
+		cancel()
+		return fmt.Errorf("初始化内置任务失败: %w", err)
 	}
 
 	// 启动系统内置任务（根据数据库状态）
@@ -138,58 +171,148 @@ func (cm *unifiedCronManager) Start(ctx context.Context) error {
 	}
 
 	cm.logger.Info("统一Cron管理器启动成功")
+	started = true
 	return nil
 }
 
-// StartSystemTasks 启动系统内置任务（根据数据库状态）
-func (cm *unifiedCronManager) StartSystemTasks(ctx context.Context) error {
-	cm.logger.Info("启动系统内置任务")
-
-	enabledTasks, err := cm.builtinTaskMgr.GetEnabledBuiltinTasks(ctx)
-	if err != nil {
-		cm.logger.Error("获取启用的内置任务失败", zap.Error(err))
-		return err
+// SchedulerReady 同时反映用户任务和内置任务是否完成有效配置加载
+func (cm *unifiedCronManager) SchedulerReady() bool {
+	if cm.cronScheduler == nil {
+		return false
 	}
-
-	// 根据数据库状态启动对应的任务
-	for _, task := range enabledTasks {
-		taskType := task.Command // 任务类型存储在Command字段中
-		cm.logger.Info("启动内置任务", zap.String("taskName", task.Name), zap.String("taskType", taskType))
-
-		switch taskType {
-		case "on_duty_history":
-			cm.wg.Add(1)
-			go func(taskName string) {
-				defer cm.wg.Done()
-				if err := cm.startOnDutyHistoryManager(ctx); err != nil {
-					cm.logger.Error("值班历史记录管理任务异常退出", zap.String("taskName", taskName), zap.Error(err))
-				}
-			}(task.Name)
-
-		case "k8s_status_check":
-			cm.wg.Add(1)
-			go func(taskName string) {
-				defer cm.wg.Done()
-				if err := cm.startCheckK8sStatusManager(ctx); err != nil {
-					cm.logger.Error("K8s状态检查任务异常退出", zap.String("taskName", taskName), zap.Error(err))
-				}
-			}(task.Name)
-
-		case "prometheus_config_refresh":
-			cm.wg.Add(1)
-			go func(taskName string) {
-				defer cm.wg.Done()
-				if err := cm.startPrometheusConfigRefreshManager(ctx); err != nil {
-					cm.logger.Error("Prometheus配置刷新任务异常退出", zap.String("taskName", taskName), zap.Error(err))
-				}
-			}(task.Name)
-
-		default:
-			cm.logger.Warn("未知的内置任务类型", zap.String("taskName", task.Name), zap.String("taskType", taskType))
+	status := cm.cronScheduler.Status()
+	return status.Running && status.Ready && cm.builtinReady.Load()
+}
+func supportedBuiltin(command string) bool {
+	for _, definition := range GetBuiltinTasks() {
+		if definition.TaskType == command {
+			return true
 		}
 	}
+	return false
+}
 
+// StartSystemTasks 注册内置调度并周期对账；数据库暂时失败不覆盖已有条目
+func (cm *unifiedCronManager) StartSystemTasks(ctx context.Context) error {
+	if cm.builtinCron == nil || cm.builtinRunner == nil || cm.builtinTaskMgr == nil {
+		return errors.New("内置任务调度依赖不能为空")
+	}
+	if err := cm.reconcileBuiltinTasks(ctx); err != nil {
+		cm.logger.Error("初次加载内置任务失败", zap.String("error_type", fmt.Sprintf("%T", err)))
+	}
+	cm.builtinCron.Start()
+	// 旧版启动后会立即执行启用的内置任务，保留这一行为
+	cm.builtinMu.Lock()
+	for id, entry := range cm.builtinEntries {
+		id, entry := id, entry
+		cm.wg.Add(1)
+		go func() { defer cm.wg.Done(); cm.runScheduledBuiltin(ctx, id, entry.schedule, entry.command) }()
+	}
+	cm.builtinMu.Unlock()
+	cm.wg.Add(1)
+	go func() {
+		defer cm.wg.Done()
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := cm.reconcileBuiltinTasks(ctx); err != nil {
+					cm.logger.Error("重载内置任务失败", zap.String("error_type", fmt.Sprintf("%T", err)))
+				}
+			}
+		}
+	}()
 	return nil
+}
+
+func (cm *unifiedCronManager) reconcileBuiltinTasks(ctx context.Context) error {
+	jobs, err := cm.builtinTaskMgr.GetEnabledBuiltinTasks(ctx)
+	if err != nil {
+		cm.builtinReady.Store(false)
+		return err
+	}
+	cm.builtinMu.Lock()
+	defer cm.builtinMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		cm.builtinReady.Store(false)
+		return err
+	}
+	if cm.builtinEntries == nil {
+		cm.builtinEntries = make(map[int]builtinEntry)
+	}
+	desired := make(map[int]bool, len(jobs))
+	var failures []error
+	for _, job := range jobs {
+		desired[job.ID] = true
+		if !supportedBuiltin(job.Command) {
+			failures = append(failures, fmt.Errorf("未知内置任务类型 %s", job.Command))
+			continue
+		}
+		if current, ok := cm.builtinEntries[job.ID]; ok && current.schedule == job.Schedule && current.command == job.Command {
+			continue
+		}
+		id, schedule, command := job.ID, job.Schedule, job.Command
+		parsed, err := crontask.ParseSchedule(schedule)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("内置任务 %d 表达式无效: %w", job.ID, err))
+			continue
+		}
+		entry := cm.builtinCron.Schedule(parsed, robcron.FuncJob(func() { cm.runScheduledBuiltin(ctx, id, schedule, command) }))
+		if old, ok := cm.builtinEntries[id]; ok {
+			cm.builtinCron.Remove(old.id)
+		}
+		cm.builtinEntries[id] = builtinEntry{id: entry, schedule: schedule, command: command}
+	}
+	for id, entry := range cm.builtinEntries {
+		if !desired[id] {
+			cm.builtinCron.Remove(entry.id)
+			delete(cm.builtinEntries, id)
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		cm.builtinReady.Store(false)
+		return err
+	}
+	cm.builtinReady.Store(len(failures) == 0)
+	return errors.Join(failures...)
+}
+func (cm *unifiedCronManager) runScheduledBuiltin(ctx context.Context, id int, schedule, command string) {
+	defer func() {
+		if r := recover(); r != nil {
+			cm.logger.Error("内置任务异常", zap.Int("job_id", id), zap.String("panic_type", fmt.Sprintf("%T", r)))
+		}
+	}()
+	for attempt := 0; ; attempt++ {
+		if ctx.Err() != nil {
+			return
+		}
+		job, err := cm.builtinTaskMgr.cronDAO.GetCronJob(ctx, id)
+		if err != nil {
+			cm.logger.Warn("无法确认内置任务状态", zap.Int("job_id", id))
+			return
+		}
+		if job == nil || job.IsBuiltIn != 1 || job.JobType != model.CronJobTypeSystem || !supportedBuiltin(job.Command) || job.Schedule != schedule || job.Command != command || (job.Status != model.CronJobStatusEnabled && job.Status != model.CronJobStatusRunning) {
+			return
+		}
+		payload, err := json.Marshal(crontask.CronTaskPayload{JobID: id, JobName: job.Name, TaskType: job.JobType, TriggerBy: "builtin_scheduled", Data: map[string]interface{}{"schedule": schedule, "command": command}})
+		if err != nil {
+			return
+		}
+		err = cm.builtinRunner.ProcessTask(ctx, asynq.NewTask("cron:task", payload))
+		if err == nil || !cm.builtinRunner.IsTaskFailure(err) || attempt >= job.MaxRetry {
+			return
+		}
+		timer := time.NewTimer(RetryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
 }
 
 func (cm *unifiedCronManager) StartUserTaskScheduler(ctx context.Context) error {
@@ -209,16 +332,35 @@ func (cm *unifiedCronManager) StartUserTaskScheduler(ctx context.Context) error 
 func (cm *unifiedCronManager) Stop(ctx context.Context) error {
 	cm.logger.Info("停止统一Cron管理器")
 
-	if cm.cancel != nil {
-		cm.cancel()
+	cm.lifecycleMu.Lock()
+	if cm.cancel == nil {
+		cm.lifecycleMu.Unlock()
+		return nil
 	}
-
-	// 等待所有goroutine结束
-	done := make(chan struct{})
-	go func() {
-		cm.wg.Wait()
-		close(done)
-	}()
+	if cm.stopping == nil {
+		cm.cancel()
+		cm.builtinReady.Store(false)
+		var stopped context.Context
+		if cm.builtinCron != nil {
+			stopped = cm.builtinCron.Stop()
+		}
+		done := make(chan struct{})
+		cm.stopping = done
+		go func() {
+			if stopped != nil {
+				<-stopped.Done()
+			}
+			cm.wg.Wait()
+			cm.lifecycleMu.Lock()
+			cm.cancel = nil
+			cm.stopping = nil
+			cm.builtinReady.Store(false)
+			close(done)
+			cm.lifecycleMu.Unlock()
+		}()
+	}
+	done := cm.stopping
+	cm.lifecycleMu.Unlock()
 
 	// 等待停止或超时
 	select {
@@ -231,176 +373,46 @@ func (cm *unifiedCronManager) Stop(ctx context.Context) error {
 	}
 }
 
-// === 以下是从原 cron.go 迁移的系统内置任务实现 ===
-
-func (cm *unifiedCronManager) startOnDutyHistoryManager(ctx context.Context) error {
-	cm.logger.Info("启动值班历史记录填充任务")
-
-	// 使用 wait.UntilWithContext 确保周期性执行，并添加 panic 恢复
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				cm.logger.Error("值班历史记录填充任务发生 panic，正在重启", zap.Any("panic", r))
-				time.Sleep(RetryDelay)
-				go cm.startOnDutyHistoryManager(ctx)
-			}
-		}()
-
-		wait.UntilWithContext(ctx, func(ctx context.Context) {
-			defer func() {
-				if r := recover(); r != nil {
-					cm.logger.Error("值班历史记录填充任务执行时发生 panic", zap.Any("panic", r))
-				}
-			}()
-
-			// 添加重试机制
-			var lastErr error
-			for attempt := 1; attempt <= MaxRetries; attempt++ {
-				if err := cm.fillOnDutyHistoryWithRetry(ctx); err != nil {
-					lastErr = err
-					if attempt < MaxRetries {
-						cm.logger.Warn("值班历史记录填充任务执行失败，准备重试",
-							zap.Int("attempt", attempt),
-							zap.Int("maxRetries", MaxRetries),
-							zap.Error(err))
-						time.Sleep(RetryDelay)
-						continue
-					}
-				} else {
-					if attempt > 1 {
-						cm.logger.Info("值班历史记录填充任务重试成功",
-							zap.Int("attempt", attempt))
-					}
-					return
-				}
-			}
-
-			if lastErr != nil {
-				cm.logger.Error("值班历史记录填充任务重试失败，已达到最大重试次数",
-					zap.Int("maxRetries", MaxRetries),
-					zap.Error(lastErr))
-			}
-		}, OnDutyCheckInterval)
-	}()
-
-	<-ctx.Done()
-	cm.logger.Info("值班历史记录填充任务已停止")
-	return nil
-}
-
-// startCheckK8sStatusManager 启动k8s状态检查任务
-func (cm *unifiedCronManager) startCheckK8sStatusManager(ctx context.Context) error {
-	cm.logger.Info("启动k8s状态检查任务")
-
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				cm.logger.Error("k8s状态检查任务发生 panic，正在重启", zap.Any("panic", r))
-				time.Sleep(RetryDelay)
-				go cm.startCheckK8sStatusManager(ctx)
-			}
-		}()
-
-		wait.UntilWithContext(ctx, func(ctx context.Context) {
-			defer func() {
-				if r := recover(); r != nil {
-					cm.logger.Error("k8s状态检查任务执行时发生 panic", zap.Any("panic", r))
-				}
-			}()
-
-			// 添加重试机制
-			var lastErr error
-			for attempt := 1; attempt <= MaxRetries; attempt++ {
-				if err := cm.checkK8sStatusWithRetry(ctx); err != nil {
-					lastErr = err
-					if attempt < MaxRetries {
-						cm.logger.Warn("k8s状态检查任务执行失败，准备重试",
-							zap.Int("attempt", attempt),
-							zap.Int("maxRetries", MaxRetries),
-							zap.Error(err))
-						time.Sleep(RetryDelay)
-						continue
-					}
-				} else {
-					if attempt > 1 {
-						cm.logger.Info("k8s状态检查任务重试成功",
-							zap.Int("attempt", attempt))
-					}
-					return
-				}
-			}
-
-			if lastErr != nil {
-				cm.logger.Error("k8s状态检查任务重试失败，已达到最大重试次数",
-					zap.Int("maxRetries", MaxRetries),
-					zap.Error(lastErr))
-			}
-		}, K8sCheckInterval)
-	}()
-
-	<-ctx.Done()
-	cm.logger.Info("k8s状态检查任务已停止")
-	return nil
-}
-
-// startPrometheusConfigRefreshManager 启动Prometheus配置刷新任务
-func (cm *unifiedCronManager) startPrometheusConfigRefreshManager(ctx context.Context) error {
-	cm.logger.Info("启动Prometheus配置刷新任务")
-
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				cm.logger.Error("Prometheus配置刷新任务发生 panic，正在重启", zap.Any("panic", r))
-				time.Sleep(RetryDelay)
-				go cm.startPrometheusConfigRefreshManager(ctx)
-			}
-		}()
-
-		wait.UntilWithContext(ctx, func(ctx context.Context) {
-			defer func() {
-				if r := recover(); r != nil {
-					cm.logger.Error("Prometheus配置刷新任务执行时发生 panic", zap.Any("panic", r))
-				}
-			}()
-
-			// 添加重试机制
-			var lastErr error
-			for attempt := 1; attempt <= MaxRetries; attempt++ {
-				if err := cm.promConfigCache.MonitorCacheManager(ctx); err != nil {
-					lastErr = err
-					if attempt < MaxRetries {
-						cm.logger.Warn("Prometheus配置定时刷新失败，准备重试",
-							zap.Int("attempt", attempt),
-							zap.Int("maxRetries", MaxRetries),
-							zap.Error(err))
-						time.Sleep(RetryDelay)
-						continue
-					}
-				} else {
-					if attempt > 1 {
-						cm.logger.Info("Prometheus配置定时刷新重试成功",
-							zap.Int("attempt", attempt))
-					} else {
-						cm.logger.Info("Prometheus配置定时刷新成功")
-					}
-					return
-				}
-			}
-
-			if lastErr != nil {
-				cm.logger.Error("Prometheus配置定时刷新重试失败，已达到最大重试次数",
-					zap.Int("maxRetries", MaxRetries),
-					zap.Error(lastErr))
-			}
-		}, cm.getPrometheusRefreshInterval())
-	}()
-
-	<-ctx.Done()
-	cm.logger.Info("Prometheus配置定时刷新任务已停止")
-	return nil
-}
-
 // === 以下是从原 cron.go 迁移的辅助方法实现 ===
+
+// ExecuteBuiltinOnce 是定时和手动触发共用的单次真实业务执行入口
+func ExecuteBuiltinOnce(ctx context.Context, command string, logger *zap.Logger, onDutyDao alert.AlertManagerOnDutyDAO, k8sDao dao.ClusterDAO, clusterMgr manager.ClusterManager, promConfigCache cache.MonitorCache) (string, error) {
+	if ctx == nil || logger == nil {
+		return "", errors.New("内置任务缺少上下文或日志")
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	cm := &unifiedCronManager{logger: logger, onDutyDao: onDutyDao, k8sDao: k8sDao, clusterMgr: clusterMgr, promConfigCache: promConfigCache}
+	switch command {
+	case "on_duty_history":
+		if onDutyDao == nil {
+			return "", errors.New("值班任务依赖不可用")
+		}
+		if err := cm.fillOnDutyHistoryWithRetry(ctx); err != nil {
+			return "", err
+		}
+		return "值班历史处理完成", nil
+	case "k8s_status_check":
+		if k8sDao == nil || clusterMgr == nil {
+			return "", errors.New("集群检查依赖不可用")
+		}
+		if err := cm.checkK8sStatusWithRetry(ctx); err != nil {
+			return "", err
+		}
+		return "集群状态检查完成", nil
+	case "prometheus_config_refresh":
+		if promConfigCache == nil {
+			return "", errors.New("监控配置刷新依赖不可用")
+		}
+		if err := promConfigCache.MonitorCacheManager(ctx); err != nil {
+			return "", fmt.Errorf("监控配置刷新失败: %w", err)
+		}
+		return "监控配置刷新完成", nil
+	default:
+		return "", fmt.Errorf("未知的系统任务类型: %s", command)
+	}
+}
 
 // fillOnDutyHistoryWithRetry 带重试机制的值班历史记录填充
 func (cm *unifiedCronManager) fillOnDutyHistoryWithRetry(ctx context.Context) error {
@@ -408,14 +420,16 @@ func (cm *unifiedCronManager) fillOnDutyHistoryWithRetry(ctx context.Context) er
 	if err != nil {
 		return fmt.Errorf("获取启用的值班组失败: %w", err)
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	if len(allGroups) == 0 {
 		cm.logger.Debug("没有找到需要处理的值班组")
 		return nil
 	}
 
-	cm.processGroupsInParallel(ctx, allGroups)
-	return nil
+	return cm.processGroupsInParallel(ctx, allGroups)
 }
 
 func (cm *unifiedCronManager) fetchAllEnabledGroups(ctx context.Context) ([]*model.MonitorOnDutyGroup, error) {
@@ -470,53 +484,46 @@ func (cm *unifiedCronManager) filterValidGroups(groups []*model.MonitorOnDutyGro
 	return validGroups
 }
 
-func (cm *unifiedCronManager) processGroupsInParallel(ctx context.Context, groups []*model.MonitorOnDutyGroup) {
-	errChan := make(chan error, len(groups))
+// 并发有界，取消后仍等待已启动的任务退出，任何组失败均不伪装成整体成功
+func (cm *unifiedCronManager) processGroupsInParallel(ctx context.Context, groups []*model.MonitorOnDutyGroup) error {
+	errChan := make(chan error, len(groups)+1)
+	sem := make(chan struct{}, 10)
 	var wg sync.WaitGroup
-
+loop:
 	for _, group := range groups {
 		select {
+		case sem <- struct{}{}:
 		case <-ctx.Done():
-			return
-		default:
+			errChan <- ctx.Err()
+			break loop
 		}
-
 		wg.Add(1)
 		go func(g *model.MonitorOnDutyGroup) {
 			defer wg.Done()
+			defer func() { <-sem }()
 			defer func() {
 				if r := recover(); r != nil {
-					cm.logger.Error("处理值班组时发生 panic", zap.Any("panic", r), zap.String("group", g.Name))
-					errChan <- fmt.Errorf("处理值班组 %s 时发生 panic: %v", g.Name, r)
+					errChan <- fmt.Errorf("处理值班组异常: %T", r)
 				}
 			}()
-
 			if err := cm.processOnDutyHistoryForGroup(ctx, g); err != nil {
-				errChan <- fmt.Errorf("处理值班组 %s(ID:%d) 失败: %w", g.Name, g.ID, err)
+				errChan <- fmt.Errorf("处理值班组 %d 失败: %w", g.ID, err)
 			}
 		}(group)
 	}
-
 	wg.Wait()
 	close(errChan)
-
-	cm.logProcessResults(errChan, len(groups))
-}
-
-func (cm *unifiedCronManager) logProcessResults(errChan <-chan error, totalGroups int) {
-	errCount := 0
+	var failures []error
 	for err := range errChan {
-		errCount++
-		cm.logger.Error("处理值班历史记录时发生错误", zap.Error(err))
+		failures = append(failures, err)
 	}
-
-	if errCount > 0 {
-		cm.logger.Warn("值班历史记录填充任务完成，但有错误",
-			zap.Int("errorCount", errCount),
-			zap.Int("totalGroups", totalGroups))
-	} else {
-		cm.logger.Info("值班历史记录填充任务成功完成", zap.Int("totalGroups", totalGroups))
+	if err := ctx.Err(); err != nil {
+		failures = append(failures, err)
 	}
+	if len(failures) > 0 {
+		return errors.Join(failures...)
+	}
+	return nil
 }
 
 func (cm *unifiedCronManager) processOnDutyHistoryForGroup(ctx context.Context, group *model.MonitorOnDutyGroup) error {
@@ -723,79 +730,64 @@ func (cm *unifiedCronManager) getMemberIndex(group *model.MonitorOnDutyGroup, us
 
 // checkK8sStatusWithRetry 带重试机制的k8s状态检查
 func (cm *unifiedCronManager) checkK8sStatusWithRetry(ctx context.Context) error {
-	cm.logger.Info("开始检查k8s状态")
-
-	// 使用GetClusterList获取所有集群，设置一个大的page size来获取所有集群
-	req := &model.ListClustersReq{
-		ListReq: model.ListReq{
-			Page: 1,
-			Size: 1000, // 设置一个足够大的值来获取所有集群
-		},
+	const pageSize = 100
+	var clusters []*model.K8sCluster
+	for page := 1; ; page++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		batch, total, err := cm.k8sDao.GetClusterList(ctx, &model.ListClustersReq{ListReq: model.ListReq{Page: page, Size: pageSize}})
+		if err != nil {
+			return fmt.Errorf("获取集群列表失败: %w", err)
+		}
+		clusters = append(clusters, batch...)
+		if len(batch) == 0 || len(batch) < pageSize || int64(len(clusters)) >= total {
+			break
+		}
 	}
-	clusters, _, err := cm.k8sDao.GetClusterList(ctx, req)
-	if err != nil {
-		cm.logger.Error("获取k8s集群列表失败", zap.Error(err))
-		return fmt.Errorf("获取k8s集群列表失败: %w", err)
-	}
-
-	if len(clusters) == 0 {
-		cm.logger.Debug("没有找到k8s集群")
-		return nil
-	}
-
+	errChan := make(chan error, len(clusters)+1)
+	sem := make(chan struct{}, K8sMaxConcurrency)
 	var wg sync.WaitGroup
-	errChan := make(chan error, len(clusters))
-	semaphore := make(chan struct{}, K8sMaxConcurrency)
-
+loop:
 	for _, cluster := range clusters {
 		select {
+		case sem <- struct{}{}:
 		case <-ctx.Done():
-			return ctx.Err()
-		default:
+			errChan <- ctx.Err()
+			break loop
 		}
-
 		wg.Add(1)
 		go func(cluster *model.K8sCluster) {
 			defer wg.Done()
+			defer func() { <-sem }()
 			defer func() {
 				if r := recover(); r != nil {
-					cm.logger.Error("检查集群状态时发生 panic",
-						zap.Any("panic", r),
-						zap.String("cluster", cluster.Name))
-					errChan <- fmt.Errorf("检查集群状态时发生 panic: %v", r)
+					errChan <- fmt.Errorf("集群状态检查异常: %T", r)
 				}
 			}()
-
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
-
 			if err := cm.checkClusterStatus(ctx, cluster); err != nil {
 				errChan <- err
 			}
 		}(cluster)
 	}
-
 	wg.Wait()
 	close(errChan)
-
-	var errs []error
+	var failures []error
 	for err := range errChan {
-		errs = append(errs, err)
+		failures = append(failures, err)
 	}
-	if len(errs) > 0 {
-		cm.logger.Error("k8s集群状态检查失败", zap.Errors("errors", errs))
-		return fmt.Errorf("k8s集群状态检查失败: %v", errs)
-	} else {
-		cm.logger.Info("完成k8s集群状态检查")
+	if err := ctx.Err(); err != nil {
+		failures = append(failures, err)
 	}
-	return nil
+	return errors.Join(failures...)
 }
 
 func (cm *unifiedCronManager) checkClusterStatus(ctx context.Context, cluster *model.K8sCluster) error {
 	startTime := time.Now()
 	var newStatus model.ClusterStatus
 
-	if err := cm.clusterMgr.CheckClusterStatus(ctx, cluster.ID); err != nil {
+	checkErr := cm.clusterMgr.CheckClusterStatus(ctx, cluster.ID)
+	if err := checkErr; err != nil {
 		// 分类处理不同类型的连接错误
 		if strings.Contains(err.Error(), "connection refused") {
 			cm.logger.Debug("集群连接被拒绝（可能是正常的离线状态）",
@@ -834,6 +826,9 @@ func (cm *unifiedCronManager) checkClusterStatus(ctx context.Context, cluster *m
 			zap.Int8("newStatus", int8(newStatus)))
 	}
 
+	if checkErr != nil {
+		return fmt.Errorf("集群 %d 状态检查失败", cluster.ID)
+	}
 	return nil
 }
 
