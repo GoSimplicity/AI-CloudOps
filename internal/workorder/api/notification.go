@@ -52,6 +52,11 @@ func (h *NotificationHandler) RegisterRouters(server *gin.Engine) {
 		notificationGroup.GET("/list", h.ListNotification)
 		notificationGroup.GET("/detail/:id", h.DetailNotification)
 		notificationGroup.GET("/logs", h.GetSendLogs)
+		notificationGroup.GET("/events", h.ListNotificationEvents)
+		notificationGroup.GET("/events/:id/deliveries", h.ListNotificationEventDeliveries)
+		notificationGroup.GET("/events/:id/resolutions", h.ListNotificationEventResolutions)
+		notificationGroup.POST("/events/:id/resolve", h.ResolveNotificationDelivery)
+		notificationGroup.POST("/events/:id/retry", h.RetryNotificationEvent)
 		notificationGroup.POST("/test/send", h.TestSendNotification)
 		notificationGroup.GET("/channels", h.GetAvailableChannels)
 		notificationGroup.POST("/send", h.SendNotificationManually)
@@ -154,5 +159,58 @@ func (h *NotificationHandler) SendNotificationManually(ctx *gin.Context) {
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		return nil, h.service.SendNotificationByChannels(ctx.Request.Context(), req.Channels, req.Recipient, req.Subject, req.Content)
+	})
+}
+
+// ListNotificationEvents 和 ListNotificationEventDeliveries 由全局JWT及API角色权限控制
+func (h *NotificationHandler) ListNotificationEvents(ctx *gin.Context) {
+	var req model.ListWorkorderNotificationEventsReq
+	base.HandleRequest(ctx, &req, func() (interface{}, error) { return h.service.ListNotificationEvents(ctx.Request.Context(), &req) })
+}
+func (h *NotificationHandler) ListNotificationEventDeliveries(ctx *gin.Context) {
+	id, err := base.GetParamID(ctx)
+	if err != nil || id <= 0 {
+		base.ErrorWithMessage(ctx, "无效的事件ID")
+		return
+	}
+	base.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.service.ListNotificationEventDeliveries(ctx.Request.Context(), uint64(id))
+	})
+}
+
+// ResolveNotificationDelivery 使用独立API权限并记录经过鉴权的操作者
+func (h *NotificationHandler) ResolveNotificationDelivery(ctx *gin.Context) {
+	id, err := base.GetParamID(ctx)
+	if err != nil || id <= 0 {
+		base.ErrorWithMessage(ctx, "无效的事件ID")
+		return
+	}
+	user := ctx.MustGet("user").(jwt.UserClaims)
+	var req model.ResolveWorkorderNotificationDeliveryReq
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.ResolveNotificationDelivery(ctx.Request.Context(), uint64(id), &req, user.Uid)
+	})
+}
+func (h *NotificationHandler) ListNotificationEventResolutions(ctx *gin.Context) {
+	id, err := base.GetParamID(ctx)
+	if err != nil || id <= 0 {
+		base.ErrorWithMessage(ctx, "无效的事件ID")
+		return
+	}
+	base.HandleRequest(ctx, nil, func() (interface{}, error) {
+		return h.service.ListNotificationEventResolutions(ctx.Request.Context(), uint64(id))
+	})
+}
+
+func (h *NotificationHandler) RetryNotificationEvent(ctx *gin.Context) {
+	id, err := base.GetParamID(ctx)
+	if err != nil || id <= 0 {
+		base.ErrorWithMessage(ctx, "无效的事件ID")
+		return
+	}
+	user := ctx.MustGet("user").(jwt.UserClaims)
+	var req model.RetryWorkorderNotificationEventReq
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		return nil, h.service.RetryNotificationEvent(ctx.Request.Context(), uint64(id), req.Reason, user.Uid)
 	})
 }

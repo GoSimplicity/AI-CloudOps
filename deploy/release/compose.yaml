@@ -63,6 +63,7 @@ services:
     environment:
       ENV: production
       SERVER_PORT: "8889"
+      WORKORDER_EVENT_RETENTION_DAYS: ${WORKORDER_EVENT_RETENTION_DAYS:-90}
       PROMETHEUS_HTTP_SD_API: ${PROMETHEUS_HTTP_SD_API:-http://backend:8889/api/not_auth/getTreeNodeBindIps}
       # 告警推送地址：backend 按它生成 Alertmanager 的 webhook 接收地址，目标是 webhook 服务（不是 backend 自己），
       # 与 alertmanager.yml 的 http://webhook:8889/api/v1/alerts/receive 一致。本模板用 Compose 默认网络，服务名 webhook 可解析；

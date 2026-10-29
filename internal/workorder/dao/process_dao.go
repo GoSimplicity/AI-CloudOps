@@ -53,7 +53,7 @@ func (d *processDAO) CreateProcess(ctx context.Context, process *model.Workorder
 	if process.Definition == nil {
 		return fmt.Errorf("流程定义不能为空")
 	}
-	if err := d.db.WithContext(ctx).Create(process).Error; err != nil {
+	if err := DBWithContext(ctx, d.db).Create(process).Error; err != nil {
 		d.logger.Error("创建流程失败", zap.Error(err), zap.String("name", process.Name))
 		return fmt.Errorf("创建流程失败: %w", err)
 	}
@@ -85,7 +85,7 @@ func (d *processDAO) UpdateProcess(ctx context.Context, process *model.Workorder
 		updateData["definition"] = process.Definition
 	}
 
-	result := d.db.WithContext(ctx).
+	result := DBWithContext(ctx, d.db).
 		Model(&model.WorkorderProcess{}).
 		Where("id = ?", process.ID).
 		Updates(updateData)
@@ -108,7 +108,7 @@ func (d *processDAO) DeleteProcess(ctx context.Context, id int) error {
 		return ErrProcessInvalidID
 	}
 
-	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := DBWithContext(ctx, d.db).Transaction(func(tx *gorm.DB) error {
 		var instanceCount int64
 
 		if err := tx.Model(&model.WorkorderInstance{}).Where("process_id = ?", id).Count(&instanceCount).Error; err != nil {
@@ -155,7 +155,7 @@ func (d *processDAO) GetProcessByID(ctx context.Context, id int) (*model.Workord
 
 	var process model.WorkorderProcess
 
-	err := d.db.WithContext(ctx).Preload("Category").Preload("FormDesign").Where("id = ?", id).First(&process).Error
+	err := DBWithContext(ctx, d.db).Preload("Category").Preload("FormDesign").Where("id = ?", id).First(&process).Error
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -175,7 +175,7 @@ func (d *processDAO) ListProcess(ctx context.Context, req *model.ListWorkorderPr
 
 	req.Page, req.Size = ValidatePagination(req.Page, req.Size)
 
-	db := d.db.WithContext(ctx).Model(&model.WorkorderProcess{})
+	db := DBWithContext(ctx, d.db).Model(&model.WorkorderProcess{})
 
 	if req.Search != "" {
 		searchTerm := sanitizeSearchInput(req.Search)
@@ -226,7 +226,7 @@ func (d *processDAO) CheckProcessNameExists(ctx context.Context, name string, ex
 
 	var count int64
 
-	db := d.db.WithContext(ctx).Model(&model.WorkorderProcess{}).Where("name = ?", name)
+	db := DBWithContext(ctx, d.db).Model(&model.WorkorderProcess{}).Where("name = ?", name)
 
 	if len(excludeID) > 0 && excludeID[0] > 0 {
 		db = db.Where("id != ?", excludeID[0])

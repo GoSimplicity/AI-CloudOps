@@ -66,7 +66,7 @@ func (e *EmailChannel) Send(ctx context.Context, request *SendRequest) (*SendRes
 			Status:       "failed",
 			ErrorMessage: "invalid email address",
 			SendTime:     startTime,
-		}, fmt.Errorf("invalid email address: %s", request.RecipientAddr)
+		}, fmt.Errorf("invalid email address")
 	}
 
 	m := gomail.NewMessage()
@@ -116,10 +116,7 @@ func (e *EmailChannel) Send(ctx context.Context, request *SendRequest) (*SendRes
 	select {
 	case <-ctx.Done():
 		err := fmt.Errorf("发送邮件超时或被取消: %w", ctx.Err())
-		e.logger.Error("发送邮件被上下文中断",
-			zap.String("recipient", request.RecipientAddr),
-			zap.String("subject", subject),
-			zap.Error(err))
+		e.logger.Error("发送邮件被上下文中断", zap.String("error_type", fmt.Sprintf("%T", ctx.Err())))
 		return &SendResponse{
 			Success:      false,
 			MessageID:    request.MessageID,
@@ -132,14 +129,7 @@ func (e *EmailChannel) Send(ctx context.Context, request *SendRequest) (*SendRes
 			// 解析错误信息，提供更详细的错误说明
 			errorMsg := e.parseEmailError(err, smtpHost)
 
-			e.logger.Error("发送邮件失败",
-				zap.String("recipient", request.RecipientAddr),
-				zap.String("subject", subject),
-				zap.String("smtp_host", smtpHost),
-				zap.Int("smtp_port", smtpPort),
-				zap.Bool("use_tls", useTLS),
-				zap.String("error_detail", errorMsg),
-				zap.Error(err))
+			e.logger.Error("发送邮件失败", zap.String("error_type", fmt.Sprintf("%T", err)))
 
 			return &SendResponse{
 				Success:      false,
@@ -147,13 +137,10 @@ func (e *EmailChannel) Send(ctx context.Context, request *SendRequest) (*SendRes
 				Status:       "failed",
 				ErrorMessage: errorMsg,
 				SendTime:     startTime,
-			}, fmt.Errorf("%s: %v", errorMsg, err)
+			}, fmt.Errorf("%s (%T)", errorMsg, err)
 		}
 
-		e.logger.Info("邮件发送成功",
-			zap.String("recipient", request.RecipientAddr),
-			zap.String("subject", subject),
-			zap.Duration("duration", time.Since(startTime)))
+		e.logger.Info("邮件发送成功", zap.Duration("duration", time.Since(startTime)))
 
 		return &SendResponse{
 			Success:   true,
@@ -223,7 +210,7 @@ func (e *EmailChannel) parseEmailError(err error, smtpHost string) string {
 	case strings.Contains(errStr, "authentication failed"):
 		return "认证失败：用户名或密码错误"
 	default:
-		return fmt.Sprintf("邮件发送失败：%s", errStr)
+		return "邮件发送失败，SMTP未确认投递结果"
 	}
 }
 
@@ -237,7 +224,7 @@ func (e *EmailChannel) Validate() error {
 	}
 
 	if !validateEmailAddress(e.config.GetUsername()) {
-		return fmt.Errorf("invalid sender email format: %s", e.config.GetUsername())
+		return fmt.Errorf("invalid sender email format")
 	}
 	if e.config.GetPassword() == "" {
 		return fmt.Errorf("SMTP password is required")
@@ -250,7 +237,7 @@ func (e *EmailChannel) Validate() error {
 	configuredHost := e.config.GetSMTPHost()
 	if configuredHost != "" && configuredHost != "smtp.gmail.com" {
 		if !strings.Contains(configuredHost, ".") {
-			return fmt.Errorf("invalid SMTP host format: %s", configuredHost)
+			return fmt.Errorf("invalid SMTP host format")
 		}
 
 		configuredPort := e.config.GetSMTPPort()
@@ -274,14 +261,10 @@ func (e *EmailChannel) Validate() error {
 	} else {
 		// 使用检测到的配置，验证其有效性
 		if detectedHost == "" {
-			return fmt.Errorf("无法为邮箱 %s 检测到合适的SMTP配置", e.config.GetUsername())
+			return fmt.Errorf("无法检测到合适的SMTP配置")
 		}
 
-		e.logger.Info("使用自动检测的SMTP配置",
-			zap.String("email", e.config.GetUsername()),
-			zap.String("detected_host", detectedHost),
-			zap.Int("detected_port", detectedPort),
-			zap.Bool("detected_tls", detectedTLS))
+		e.logger.Info("使用自动检测的SMTP配置", zap.Int("detected_port", detectedPort), zap.Bool("detected_tls", detectedTLS))
 	}
 
 	if e.config.GetMaxRetries() < 0 || e.config.GetMaxRetries() > 10 {
@@ -846,9 +829,7 @@ func (e *EmailChannel) detectSMTPConfig(username string) (string, int, bool) {
 		return "smtp.qq.com", 587, true
 	default:
 		// 对于未知域名，使用配置中的默认值
-		e.logger.Warn("未识别的邮箱域名，使用默认SMTP配置",
-			zap.String("domain", domain),
-			zap.String("default_smtp", e.config.GetSMTPHost()))
+		e.logger.Warn("未识别的邮箱域名，使用默认SMTP配置")
 		return e.config.GetSMTPHost(), e.config.GetSMTPPort(), e.config.GetUseTLS()
 	}
 }

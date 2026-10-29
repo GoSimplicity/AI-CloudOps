@@ -64,6 +64,8 @@ jobs:
         run: python scripts/integration/schema_smoke.py --mysql-instance-source
       - name: Isolated MySQL idempotent notification update
         run: python scripts/integration/schema_smoke.py --mysql-notification-idempotent
+      - name: Isolated MySQL notification outbox and delivery
+        run: python scripts/integration/schema_smoke.py --mysql-notification-outbox
       - name: Real notification worker with an isolated Redis and local inbox
         run: CLOUDOPS_TEST_NOTIFICATION_ASYNC=true go test -race -tags=integration ./pkg/di -run '^TestNotificationAsyncIsolatedRedis$' -count=1
       - name: Periodic tasks continue after failure is archived

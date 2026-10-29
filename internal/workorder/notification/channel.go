@@ -27,8 +27,12 @@ package notification
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+// ErrDeliveryRejected 表示供应商明确拒绝，调用方可按策略重试
+var ErrDeliveryRejected = errors.New("供应商明确拒绝发送")
 
 // NotificationChannel 通知渠道接口
 type NotificationChannel interface {

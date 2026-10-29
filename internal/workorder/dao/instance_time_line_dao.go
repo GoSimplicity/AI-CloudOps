@@ -59,7 +59,7 @@ func (d *instanceTimeLineDAO) Create(ctx context.Context, timeline *model.Workor
 		return fmt.Errorf("时间线记录不能为空")
 	}
 
-	if err := d.db.WithContext(ctx).Create(timeline).Error; err != nil {
+	if err := DBWithContext(ctx, d.db).Create(timeline).Error; err != nil {
 		d.logger.Error("创建时间线记录失败", zap.Error(err), zap.Int("instanceID", timeline.InstanceID))
 		return fmt.Errorf("创建时间线记录失败: %w", err)
 	}
@@ -74,7 +74,7 @@ func (d *instanceTimeLineDAO) GetByID(ctx context.Context, id int) (*model.Worko
 	}
 
 	var timeline model.WorkorderInstanceTimeline
-	err := d.db.WithContext(ctx).
+	err := DBWithContext(ctx, d.db).
 		Where("id = ?", id).
 		First(&timeline).Error
 
@@ -96,7 +96,7 @@ func (d *instanceTimeLineDAO) GetByInstanceID(ctx context.Context, instanceID in
 	}
 
 	var timelines []*model.WorkorderInstanceTimeline
-	err := d.db.WithContext(ctx).
+	err := DBWithContext(ctx, d.db).
 		Where("instance_id = ?", instanceID).
 		Order("created_at DESC").
 		Find(&timelines).Error
@@ -115,7 +115,7 @@ func (d *instanceTimeLineDAO) List(ctx context.Context, req *model.ListWorkorder
 
 	req.Page, req.Size = ValidatePagination(req.Page, req.Size)
 
-	db := d.db.WithContext(ctx).Model(&model.WorkorderInstanceTimeline{})
+	db := DBWithContext(ctx, d.db).Model(&model.WorkorderInstanceTimeline{})
 
 	if req.InstanceID != nil {
 		db = db.Where("instance_id = ?", *req.InstanceID)
@@ -158,7 +158,7 @@ func (d *instanceTimeLineDAO) UpdateInstanceTimeLine(ctx context.Context, timeli
 		return fmt.Errorf("时间线记录ID无效")
 	}
 
-	result := d.db.WithContext(ctx).
+	result := DBWithContext(ctx, d.db).
 		Model(&model.WorkorderInstanceTimeline{}).
 		Where("id = ?", timeline.ID).
 		Updates(map[string]any{
@@ -182,7 +182,7 @@ func (d *instanceTimeLineDAO) DeleteInstanceTimeLine(ctx context.Context, id int
 		return fmt.Errorf("时间线记录ID无效")
 	}
 
-	result := d.db.WithContext(ctx).Delete(&model.WorkorderInstanceTimeline{}, id)
+	result := DBWithContext(ctx, d.db).Delete(&model.WorkorderInstanceTimeline{}, id)
 	if result.Error != nil {
 		d.logger.Error("删除时间线记录失败", zap.Error(result.Error), zap.Int("id", id))
 		return fmt.Errorf("删除时间线记录失败: %w", result.Error)
@@ -201,7 +201,7 @@ func (d *instanceTimeLineDAO) GetInstanceTimeLine(ctx context.Context, id int) (
 	}
 
 	var timeline model.WorkorderInstanceTimeline
-	err := d.db.WithContext(ctx).
+	err := DBWithContext(ctx, d.db).
 		Where("id = ?", id).
 		First(&timeline).Error
 
@@ -222,7 +222,7 @@ func (d *instanceTimeLineDAO) ListInstanceTimeLine(ctx context.Context, req *mod
 
 	req.Page, req.Size = ValidatePagination(req.Page, req.Size)
 
-	db := d.db.WithContext(ctx).Model(&model.WorkorderInstanceTimeline{})
+	db := DBWithContext(ctx, d.db).Model(&model.WorkorderInstanceTimeline{})
 
 	if req.InstanceID != nil {
 		db = db.Where("instance_id = ?", *req.InstanceID)

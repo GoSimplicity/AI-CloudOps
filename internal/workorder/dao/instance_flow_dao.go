@@ -69,7 +69,7 @@ func (d *instanceFlowDAO) Create(ctx context.Context, flow *model.WorkorderInsta
 		return fmt.Errorf("流程记录验证失败: %w", err)
 	}
 
-	if err := d.db.WithContext(ctx).Create(flow).Error; err != nil {
+	if err := DBWithContext(ctx, d.db).Create(flow).Error; err != nil {
 		d.logger.Error("创建工单流程记录失败", zap.Error(err), zap.Int("instanceID", flow.InstanceID))
 		return fmt.Errorf("创建工单流程记录失败: %w", err)
 	}
@@ -84,7 +84,7 @@ func (d *instanceFlowDAO) GetByInstanceID(ctx context.Context, instanceID int) (
 	}
 
 	var flows []model.WorkorderInstanceFlow
-	err := d.db.WithContext(ctx).
+	err := DBWithContext(ctx, d.db).
 		Where("instance_id = ?", instanceID).
 		Order("created_at ASC").
 		Find(&flows).Error
@@ -104,7 +104,7 @@ func (d *instanceFlowDAO) GetByID(ctx context.Context, id int) (*model.Workorder
 	}
 
 	var flow model.WorkorderInstanceFlow
-	err := d.db.WithContext(ctx).Where("id = ?", id).First(&flow).Error
+	err := DBWithContext(ctx, d.db).Where("id = ?", id).First(&flow).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrInstanceFlowNotFound
@@ -121,7 +121,7 @@ func (d *instanceFlowDAO) List(ctx context.Context, req *model.ListWorkorderInst
 		return nil, 0, fmt.Errorf("请求参数为空")
 	}
 
-	query := d.db.WithContext(ctx).Model(&model.WorkorderInstanceFlow{})
+	query := DBWithContext(ctx, d.db).Model(&model.WorkorderInstanceFlow{})
 
 	// 添加过滤条件
 	if req.InstanceID != nil {

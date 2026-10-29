@@ -72,7 +72,7 @@ func NewWorkorderInstanceDAO(db *gorm.DB, logger *zap.Logger) WorkorderInstanceD
 func (d *workorderInstanceDAO) CreateInstance(ctx context.Context, instance *model.WorkorderInstance) error {
 	var count int64
 
-	if err := d.db.WithContext(ctx).Model(&model.WorkorderInstance{}).Where("serial_number = ?", instance.SerialNumber).Count(&count).Error; err != nil {
+	if err := DBWithContext(ctx, d.db).Model(&model.WorkorderInstance{}).Where("serial_number = ?", instance.SerialNumber).Count(&count).Error; err != nil {
 		d.logger.Error("检查工单编号唯一性失败", zap.Error(err), zap.String("serial_number", instance.SerialNumber))
 		return fmt.Errorf("检查工单编号唯一性失败: %w", err)
 	}
@@ -80,7 +80,7 @@ func (d *workorderInstanceDAO) CreateInstance(ctx context.Context, instance *mod
 		d.logger.Warn("工单实例已存在", zap.String("serial_number", instance.SerialNumber))
 		return ErrInstanceExists
 	}
-	if err := d.db.WithContext(ctx).Create(instance).Error; err != nil {
+	if err := DBWithContext(ctx, d.db).Create(instance).Error; err != nil {
 		d.logger.Error("创建工单实例失败", zap.Error(err), zap.String("title", instance.Title))
 		return fmt.Errorf("创建工单实例失败: %w", err)
 	}
@@ -94,7 +94,7 @@ func (d *workorderInstanceDAO) UpdateInstance(ctx context.Context, instance *mod
 		return ErrInstanceInvalidID
 	}
 
-	result := d.db.WithContext(ctx).
+	result := DBWithContext(ctx, d.db).
 		Model(&model.WorkorderInstance{}).
 		Where("id = ?", instance.ID).
 		Updates(instance)
@@ -117,7 +117,7 @@ func (d *workorderInstanceDAO) DeleteInstance(ctx context.Context, id int) error
 		return ErrInstanceInvalidID
 	}
 
-	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := DBWithContext(ctx, d.db).Transaction(func(tx *gorm.DB) error {
 		var count int64
 
 		if err := tx.Model(&model.WorkorderInstance{}).Where("id = ?", id).Count(&count).Error; err != nil {
@@ -151,7 +151,7 @@ func (d *workorderInstanceDAO) GetInstanceByID(ctx context.Context, id int) (*mo
 
 	var instance model.WorkorderInstance
 
-	err := d.db.WithContext(ctx).
+	err := DBWithContext(ctx, d.db).
 		Where("id = ?", id).
 		Preload("Process").
 		Preload("Process.FormDesign").
@@ -181,7 +181,7 @@ func (d *workorderInstanceDAO) GetInstanceByID(ctx context.Context, id int) (*mo
 func (d *workorderInstanceDAO) GetInstanceByTitle(ctx context.Context, title string) (*model.WorkorderInstance, error) {
 	var instance model.WorkorderInstance
 
-	err := d.db.WithContext(ctx).
+	err := DBWithContext(ctx, d.db).
 		Where("title = ?", title).
 		First(&instance).Error
 
@@ -208,7 +208,7 @@ func (d *workorderInstanceDAO) ListInstance(ctx context.Context, req *model.List
 
 	req.Page, req.Size = ValidatePagination(req.Page, req.Size)
 
-	db := d.db.WithContext(ctx).Model(&model.WorkorderInstance{})
+	db := DBWithContext(ctx, d.db).Model(&model.WorkorderInstance{})
 
 	// 动态条件
 	if req.Status != nil {
@@ -252,7 +252,7 @@ func (d *workorderInstanceDAO) GenerateSerialNumber(ctx context.Context) (string
 	prefix := "WO" + now.Format("20060102")
 
 	var serialNumber string
-	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := DBWithContext(ctx, d.db).Transaction(func(tx *gorm.DB) error {
 		// 使用SELECT FOR UPDATE锁住相关记录，确保并发安全
 		var maxSerialNumber string
 		err := tx.Model(&model.WorkorderInstance{}).
@@ -340,7 +340,7 @@ func (d *workorderInstanceDAO) UpdateInstanceStatus(ctx context.Context, id int,
 		return ErrInstanceInvalidID
 	}
 
-	result := d.db.WithContext(ctx).
+	result := DBWithContext(ctx, d.db).
 		Model(&model.WorkorderInstance{}).
 		Where("id = ?", id).
 		Updates(map[string]any{
@@ -364,7 +364,7 @@ func (d *workorderInstanceDAO) UpdateInstanceAssignee(ctx context.Context, id in
 		return ErrInstanceInvalidID
 	}
 
-	result := d.db.WithContext(ctx).
+	result := DBWithContext(ctx, d.db).
 		Model(&model.WorkorderInstance{}).
 		Where("id = ?", id).
 		Updates(map[string]any{

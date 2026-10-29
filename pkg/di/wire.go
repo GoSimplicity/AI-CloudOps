@@ -175,6 +175,7 @@ var ServiceSet = wire.NewSet(
 	workorderService.NewWorkorderProcessService,
 	workorderService.NewCategoryGroupService,
 	workorderService.NewWorkorderNotificationService,
+	workorderService.NewNotificationEventWorker,
 	treeService.NewTreeNodeService,
 	treeService.NewTreeLocalService,
 	treeService.NewTreeCloudService,

@@ -216,7 +216,7 @@ func (f *FeishuChannel) sendHTTPRequest(ctx context.Context, url string, message
 	if code, ok := response["code"].(float64); !ok || code != 0 {
 		safe := errors.New("Feishu API business code missing or invalid")
 		if ok {
-			safe = fmt.Errorf("Feishu API error code %g", code)
+			safe = fmt.Errorf("Feishu API error code %g: %w", code, ErrDeliveryRejected)
 		}
 		f.logger.Error("飞书API返回业务错误", zap.Float64("error_code", code), zap.Bool("code_present", ok))
 		return f.createErrorResponse(messageID, "API request rejected", safe, startTime), safe

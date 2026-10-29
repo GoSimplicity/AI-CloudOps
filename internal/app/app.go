@@ -37,6 +37,7 @@ import (
 	cronHandler "github.com/GoSimplicity/AI-CloudOps/internal/cron/handler"
 	"github.com/GoSimplicity/AI-CloudOps/internal/startup"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
+	workorderService "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
 	"github.com/GoSimplicity/AI-CloudOps/mock"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-contrib/gzip"
@@ -49,17 +50,19 @@ import (
 )
 
 type App struct {
-	cfg                   *config.Config
-	logger                *zap.Logger
-	db                    *gorm.DB
-	redis                 redis.Cmdable
-	server                *gin.Engine
-	bootstrap             startup.ApplicationBootstrap
-	cronManager           cron.CronManager
-	asynqServer           *asynq.Server
-	scheduler             *asynq.Scheduler
-	cronHandlers          *cronHandler.CronHandlers
-	notificationProcessor *notification.Processor
+	cfg                     *config.Config
+	logger                  *zap.Logger
+	db                      *gorm.DB
+	redis                   redis.Cmdable
+	server                  *gin.Engine
+	bootstrap               startup.ApplicationBootstrap
+	cronManager             cron.CronManager
+	asynqServer             *asynq.Server
+	scheduler               *asynq.Scheduler
+	cronHandlers            *cronHandler.CronHandlers
+	notificationProcessor   *notification.Processor
+	notificationEventWorker *workorderService.NotificationEventWorker
+	notificationEventDone   chan struct{}
 }
 
 func NewApp(
@@ -74,6 +77,7 @@ func NewApp(
 	scheduler *asynq.Scheduler,
 	cronHandlers *cronHandler.CronHandlers,
 	notificationProcessor *notification.Processor,
+	notificationEventWorker *workorderService.NotificationEventWorker,
 ) (*App, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("配置不能为空")
@@ -109,18 +113,24 @@ func NewApp(
 		return nil, fmt.Errorf("通知处理器不能为空")
 	}
 
+	if notificationEventWorker == nil {
+		return nil, fmt.Errorf("工单通知事件工作器不能为空")
+	}
+
 	return &App{
-		cfg:                   cfg,
-		logger:                logger,
-		db:                    db,
-		redis:                 redisClient,
-		server:                server,
-		bootstrap:             bootstrap,
-		cronManager:           cronManager,
-		asynqServer:           asynqServer,
-		scheduler:             scheduler,
-		cronHandlers:          cronHandlers,
-		notificationProcessor: notificationProcessor,
+		cfg:                     cfg,
+		logger:                  logger,
+		db:                      db,
+		redis:                   redisClient,
+		server:                  server,
+		bootstrap:               bootstrap,
+		cronManager:             cronManager,
+		asynqServer:             asynqServer,
+		scheduler:               scheduler,
+		cronHandlers:            cronHandlers,
+		notificationProcessor:   notificationProcessor,
+		notificationEventWorker: notificationEventWorker,
+		notificationEventDone:   make(chan struct{}),
 	}, nil
 }
 
@@ -220,6 +230,11 @@ func (a *App) Run(ctx context.Context) error {
 	})
 
 	g.Go(func() error {
+		defer close(a.notificationEventDone)
+		return a.notificationEventWorker.Run(runCtx)
+	})
+
+	g.Go(func() error {
 		a.logger.Info("统一Cron管理器开始运行")
 		if err := a.cronManager.Start(runCtx); err != nil {
 			return fmt.Errorf("统一Cron管理器启动失败: %w", err)
@@ -258,6 +273,12 @@ func (a *App) Shutdown(ctx context.Context, srv *http.Server) error {
 		if err := srv.Shutdown(ctx); err != nil {
 			a.logger.Warn("HTTP服务关闭失败", zap.Error(err))
 		}
+	}
+
+	select {
+	case <-a.notificationEventDone:
+	case <-ctx.Done():
+		a.logger.Warn("通知事件工作器未在关闭期限内退出")
 	}
 
 	if a.db != nil {

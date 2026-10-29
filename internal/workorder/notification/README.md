@@ -49,3 +49,23 @@ GOTOOLCHAIN=auto go test -race ./internal/system/... ./internal/workorder/...
 `max_retries=0` 表示仅首次发送，N 表示额外重试 N 次，省略继承默认；`retry_interval` 单位为分钟。同步通知由 Manager 执行，异步通知由实际 Asynq worker 执行单层重试，避免重试次数相乘。批量部分失败不重放整个批次。见[执行与真实 Redis 验证](../../../docs/release/notification-retry-policy.md)。
 
 飞书诊断日志不记录收件地址、消息正文、完整请求 URL 或供应商原始错误正文，仅保留 MessageID、状态及业务错误码等诊断信息。
+
+## 工单事件可靠投递
+
+工单创建、模板创建、编辑、删除、提交、指派、审批、拒绝、取消、完成和退回的事件，在工单变更事务内写入数据库 outbox。事件保存创建时的工单快照；删除通知使用删除前快照。写入失败会回滚本次工单变更。工作器使用有限租约领取、过期后恢复；投递记录以事件、配置、渠道和规范化地址哈希区分，已经确认成功的接收人不会被后续普通重试再次发送。
+
+工作器每次领取只调用一次渠道：飞书明确返回非零业务码时，按配置的额外重试次数和分钟间隔重试；未启用通道、网络中断、超时、未知响应以及SMTP无法确认最终回执等结果按 `uncertain` 停止自动重试。当前SMTP库不提供可验证的拒绝阶段，**所有SMTP传输错误均按 uncertain 处理，不自动重试**；包括表面上的550等拒绝。SMTP底层在上下文取消后可能仍运行，不能认为取消代表未发送。`sending` 遗留在过期租约上时也视为不确定，不自动重发。外部系统接受消息后、数据库记录确认成功之前若进程崩溃，仍无法保证恰好一次，必须先核对供应商发送记录。
+
+事件状态：`pending` 等待、`processing` 领取、`success` 有已确认投递、`skipped` 消费时没有匹配的启用配置或来源范围、`failed` 明确失败且重试耗尽或处理失败、`uncertain` 投递结果未知。配置与收件人在**首次消费时**读取；在实际发送前先持久化完整计划（渠道、地址、模板结果与重试参数），之后的重试和人工恢复严格沿用此计划。首次消费前禁用或删除配置可能导致 `skipped`，该状态不是投递成功；事件创建时快照配置不属于当前合同。失败/不确定事件会保留工单快照和投递计划，成功/跳过后清除。
+
+操作员可在独立API权限控制下查看和处理：
+
+- `GET /api/workorder/notification/events?status=uncertain` 查看事件，分页使用 `page`/`size`
+- `GET /api/workorder/notification/events/:id/deliveries` 查看渠道、地址哈希、尝试次数和状态；不返回事件快照和消息正文
+- `GET /api/workorder/notification/events/:id/resolutions` 查看人工处置审计
+- `POST /api/workorder/notification/events/:id/retry` 请求 `{ "reason": "已修复配置并核对" }`，仅允许对零投递记录的 failed 事件重试；单独精确授权并写入审计
+- `POST /api/workorder/notification/events/:id/resolve` 请求 `{"delivery_id":1,"action":"delivered|retry","reason":"已核对供应商投递结果"}`；必须选择 `delivered` 或 `retry` 中的一项。只允许处置已终止或不确定的事件；操作者来自JWT，事务内写处置记录。`retry` 表示操作者明确同意重新投递并重置该收件人重试预算；先确认原发送已停止及供应商实际结果，避免重复。reason 请填写核对依据，不填写密钥或消息正文
+
+各GET和POST按方法及路由单独授权；人工处置POST要求精确权限，旧通配符权限不隐式覆盖。现有超级管理员角色按全局规则放行。路由自动登记到系统API目录，不自动授予普通角色。事件快照可能包含工单敏感字段，数据库、备份及访问权限应按工单数据保护；列表接口不会暴露快照。
+
+事件快照仅保存发送所需工单字段，不保留表单内容；事件进入 success/skipped 时立即清除快照与自定义正文。`WORKORDER_EVENT_RETENTION_DAYS` 控制成功或跳过事件的保留天数（默认90，范围1–3650）；工作器分批清理到期的事件及其接收人状态。带人工审计的事件永久保留；pending、processing、failed、uncertain 及其接收人状态不自动删除。数据库备份应遵循同等数据保护与保留策略。

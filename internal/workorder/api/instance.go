@@ -106,7 +106,7 @@ func (h *InstanceHandler) UpdateInstance(ctx *gin.Context) {
 	req.ID = id
 
 	base.HandleRequest(ctx, &req, func() (any, error) {
-		return nil, h.service.UpdateInstance(ctx.Request.Context(), &req)
+		return nil, h.service.UpdateInstance(service.WithNotificationActor(ctx.Request.Context(), ctx.MustGet("user").(jwt.UserClaims).Uid), &req)
 	})
 }
 
@@ -118,7 +118,7 @@ func (h *InstanceHandler) DeleteInstance(ctx *gin.Context) {
 	}
 
 	base.HandleRequest(ctx, nil, func() (any, error) {
-		return nil, h.service.DeleteInstance(ctx.Request.Context(), id)
+		return nil, h.service.DeleteInstance(service.WithNotificationActor(ctx.Request.Context(), ctx.MustGet("user").(jwt.UserClaims).Uid), id)
 	})
 }
 

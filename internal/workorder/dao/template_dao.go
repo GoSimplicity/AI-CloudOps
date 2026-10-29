@@ -70,7 +70,7 @@ func (d *templateDAO) CreateTemplate(ctx context.Context, template *model.Workor
 		template.DefaultValues = model.JSONMap{}
 	}
 
-	if err := d.db.WithContext(ctx).Create(template).Error; err != nil {
+	if err := DBWithContext(ctx, d.db).Create(template).Error; err != nil {
 		d.logger.Error("创建模板失败", zap.Error(err), zap.String("name", template.Name))
 		if d.isDuplicateKeyError(err) {
 			return ErrTemplateNameExists
@@ -99,7 +99,7 @@ func (d *templateDAO) UpdateTemplate(ctx context.Context, template *model.Workor
 		"category_id":    template.CategoryID,
 	}
 
-	result := d.db.WithContext(ctx).Model(&model.WorkorderTemplate{}).
+	result := DBWithContext(ctx, d.db).Model(&model.WorkorderTemplate{}).
 		Where("id = ?", template.ID).
 		Updates(updates)
 
@@ -123,7 +123,7 @@ func (d *templateDAO) DeleteTemplate(ctx context.Context, id int) error {
 		return ErrInvalidID
 	}
 
-	result := d.db.WithContext(ctx).Where("id = ?", id).Delete(&model.WorkorderTemplate{})
+	result := DBWithContext(ctx, d.db).Where("id = ?", id).Delete(&model.WorkorderTemplate{})
 	if result.Error != nil {
 		d.logger.Error("删除模板失败", zap.Error(result.Error), zap.Int("id", id))
 		return fmt.Errorf("删除模板失败: %w", result.Error)
@@ -142,7 +142,7 @@ func (d *templateDAO) GetTemplate(ctx context.Context, id int) (*model.Workorder
 	}
 
 	var template model.WorkorderTemplate
-	err := d.db.WithContext(ctx).
+	err := DBWithContext(ctx, d.db).
 		Where("id = ?", id).
 		Preload("Process").
 		Preload("Category").
@@ -175,7 +175,7 @@ func (d *templateDAO) ListTemplate(ctx context.Context, req *model.ListWorkorder
 	var templates []*model.WorkorderTemplate
 	var total int64
 
-	db := d.db.WithContext(ctx).Model(&model.WorkorderTemplate{})
+	db := DBWithContext(ctx, d.db).Model(&model.WorkorderTemplate{})
 
 	db = d.buildListQuery(db, req)
 
@@ -217,7 +217,7 @@ func (d *templateDAO) UpdateTemplateStatus(ctx context.Context, id int, status i
 		return ErrInvalidStatus
 	}
 
-	result := d.db.WithContext(ctx).Model(&model.WorkorderTemplate{}).
+	result := DBWithContext(ctx, d.db).Model(&model.WorkorderTemplate{}).
 		Where("id = ?", id).
 		Update("status", status)
 
@@ -240,7 +240,7 @@ func (d *templateDAO) IsTemplateNameExists(ctx context.Context, name string, exc
 	}
 
 	var count int64
-	query := d.db.WithContext(ctx).Model(&model.WorkorderTemplate{}).Where("name = ?", name)
+	query := DBWithContext(ctx, d.db).Model(&model.WorkorderTemplate{}).Where("name = ?", name)
 
 	if excludeID > 0 {
 		query = query.Where("id != ?", excludeID)

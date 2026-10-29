@@ -71,7 +71,7 @@ func (d *workorderInstanceCommentDAO) CreateInstanceComment(ctx context.Context,
 		return fmt.Errorf("评论验证失败: %w", err)
 	}
 
-	if err := d.db.WithContext(ctx).Create(comment).Error; err != nil {
+	if err := DBWithContext(ctx, d.db).Create(comment).Error; err != nil {
 		d.logger.Error("创建工单评论失败", zap.Error(err), zap.Int("instanceID", comment.InstanceID))
 		return fmt.Errorf("创建工单评论失败: %w", err)
 	}
@@ -86,7 +86,7 @@ func (d *workorderInstanceCommentDAO) GetInstanceComments(ctx context.Context, i
 	}
 
 	var comments []*model.WorkorderInstanceComment
-	err := d.db.WithContext(ctx).
+	err := DBWithContext(ctx, d.db).
 		Where("instance_id = ? AND status = ?", instanceID, model.CommentStatusNormal).
 		Order("created_at ASC").
 		Find(&comments).Error
@@ -104,7 +104,7 @@ func (d *workorderInstanceCommentDAO) UpdateInstanceComment(ctx context.Context,
 		return fmt.Errorf("评论ID无效")
 	}
 
-	result := d.db.WithContext(ctx).
+	result := DBWithContext(ctx, d.db).
 		Model(&model.WorkorderInstanceComment{}).
 		Where("id = ?", comment.ID).
 		Updates(map[string]any{
@@ -130,7 +130,7 @@ func (d *workorderInstanceCommentDAO) DeleteInstanceComment(ctx context.Context,
 		return fmt.Errorf("评论ID无效")
 	}
 
-	result := d.db.WithContext(ctx).Delete(&model.WorkorderInstanceComment{}, id)
+	result := DBWithContext(ctx, d.db).Delete(&model.WorkorderInstanceComment{}, id)
 	if result.Error != nil {
 		d.logger.Error("删除工单评论失败", zap.Error(result.Error), zap.Int("id", id))
 		return fmt.Errorf("删除工单评论失败: %w", result.Error)
@@ -150,7 +150,7 @@ func (d *workorderInstanceCommentDAO) GetInstanceCommentByID(ctx context.Context
 	}
 
 	var comment model.WorkorderInstanceComment
-	err := d.db.WithContext(ctx).
+	err := DBWithContext(ctx, d.db).
 		Where("id = ?", id).
 		First(&comment).Error
 
@@ -171,7 +171,7 @@ func (d *workorderInstanceCommentDAO) ListInstanceComments(ctx context.Context, 
 
 	req.Page, req.Size = ValidatePagination(req.Page, req.Size)
 
-	db := d.db.WithContext(ctx).Model(&model.WorkorderInstanceComment{})
+	db := DBWithContext(ctx, d.db).Model(&model.WorkorderInstanceComment{})
 
 	if req.InstanceID != nil {
 		db = db.Where("instance_id = ?", *req.InstanceID)

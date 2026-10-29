@@ -51,6 +51,11 @@ type WorkorderNotificationService interface {
 	ListNotification(ctx context.Context, req *model.ListWorkorderNotificationReq) (*model.ListResp[*model.WorkorderNotification], error)
 	DetailNotification(ctx context.Context, req *model.DetailWorkorderNotificationReq) (*model.WorkorderNotification, error)
 	GetSendLogs(ctx context.Context, req *model.ListWorkorderNotificationLogReq) (*model.ListResp[*model.WorkorderNotificationLog], error)
+	ListNotificationEvents(ctx context.Context, req *model.ListWorkorderNotificationEventsReq) (*model.ListResp[*model.WorkorderNotificationEventStatus], error)
+	ListNotificationEventDeliveries(ctx context.Context, id uint64) ([]*model.WorkorderNotificationDeliveryStatus, error)
+	ResolveNotificationDelivery(ctx context.Context, eventID uint64, req *model.ResolveWorkorderNotificationDeliveryReq, operatorID int) error
+	ListNotificationEventResolutions(ctx context.Context, eventID uint64) ([]*model.WorkorderNotificationResolution, error)
+	RetryNotificationEvent(ctx context.Context, eventID uint64, reason string, operatorID int) error
 	TestSendNotification(ctx context.Context, req *model.TestSendWorkorderNotificationReq) error
 	SendWorkorderNotification(ctx context.Context, instanceID int, eventType string, customContent ...string) error
 	SendNotificationByChannels(ctx context.Context, channels []string, recipient, subject, content string) error
@@ -306,8 +311,13 @@ func (s *workorderNotificationService) SendWorkorderNotification(ctx context.Con
 		return fmt.Errorf("获取工单实例失败: %w", err)
 	}
 
-	var senderID int
-	if uid := ctx.Value("user_id"); uid != nil {
+	return s.sendInstanceNotification(ctx, instance, eventType, 0, customContent...)
+}
+
+// sendInstanceNotification 支持删除工单后的不可变事件快照
+func (s *workorderNotificationService) sendInstanceNotification(ctx context.Context, instance *model.WorkorderInstance, eventType string, senderID int, customContent ...string) error {
+	instanceID := instance.ID
+	if uid := ctx.Value("user_id"); senderID == 0 && uid != nil {
 		if id, ok := uid.(int); ok {
 			senderID = id
 		}
@@ -335,7 +345,7 @@ func (s *workorderNotificationService) SendWorkorderNotification(ctx context.Con
 			s.logger.Error("处理通知配置失败",
 				zap.Int("notification_id", notification.ID),
 				zap.Int("instance_id", instanceID),
-				zap.Error(err))
+				zap.String("error_type", fmt.Sprintf("%T", err)))
 			failures = append(failures, err)
 			continue
 		}
@@ -388,7 +398,7 @@ func (s *workorderNotificationService) processNotification(ctx context.Context, 
 				s.logger.Error("发送渠道通知失败",
 					zap.String("channel", ch),
 					zap.Int("notification_id", notification.ID),
-					zap.Error(err))
+					zap.String("error_type", fmt.Sprintf("%T", err)))
 				channelErrors <- fmt.Errorf("渠道 %s 发送失败: %w", ch, err)
 			} else {
 				s.logger.Info("渠道通知发送成功",
@@ -519,19 +529,35 @@ func (s *workorderNotificationService) getRecipients(ctx context.Context, notifi
 func (s *workorderNotificationService) sendChannelNotification(ctx context.Context, notificationConfig *model.WorkorderNotification,
 	instance *model.WorkorderInstance, channel string, recipients []RecipientInfo, eventType string, senderID int, customContent ...string) error {
 
-	subject, content := s.buildMessageContent(notificationConfig, instance, eventType, customContent...)
-
-	var wg sync.WaitGroup
-	recipientErrors := make(chan error, 2*len(recipients))
-
-	destinations, err := s.resolveChannelRecipients(ctx, channel, recipients)
-	if err != nil {
-		return err
+	var subject, content string
+	var destinations []RecipientInfo
+	if planned, ok := ctx.Value(eventPlanChannelKey{}).(*eventPlanChannel); ok {
+		subject, content, destinations = planned.Subject, planned.Content, planned.Recipients
+	} else {
+		subject, content = s.buildMessageContent(ctx, notificationConfig, instance, eventType, customContent...)
+		var err error
+		destinations, err = s.resolveChannelRecipients(ctx, channel, recipients)
+		if err != nil {
+			return err
+		}
 	}
+	var wg sync.WaitGroup
+	recipientErrors := make(chan error, 2*len(destinations)+1)
+	sem := make(chan struct{}, 8)
 	for _, recipient := range destinations {
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			recipientErrors <- ctx.Err()
+			break
+		}
+		if ctx.Err() != nil {
+			break
+		}
 		wg.Add(1)
 		go func(rec RecipientInfo) {
 			defer wg.Done()
+			defer func() { <-sem }()
 			recipientCtx := ctx
 			recipientAddr := rec.Address
 
@@ -558,7 +584,41 @@ func (s *workorderNotificationService) sendChannelNotification(ctx context.Conte
 				},
 			}
 
+			ledger, _ := recipientCtx.Value(eventDeliveryKey{}).(*eventDeliveryLedger)
+			var deliveryKey string
+			if ledger != nil {
+				deliveryKey = fmt.Sprintf("%x", sha256.Sum256([]byte(recipientAddr)))
+				already, checkErr := ledger.delivered(recipientCtx, notificationConfig.ID, channel, deliveryKey)
+				if checkErr != nil {
+					recipientErrors <- checkErr
+					return
+				}
+				if already {
+					return
+				}
+				if markErr := ledger.markDelivery(notificationConfig.ID, channel, deliveryKey, "sending", notificationConfig.MaxRetries, notificationConfig.RetryInterval); markErr != nil {
+					recipientErrors <- markErr
+					return
+				}
+				// 每次工作器领取仅调用渠道一次，重试由持久化预算控制
+				noRetry := 0
+				sendRequest.MaxRetries = &noRetry
+				sendRequest.MessageID = fmt.Sprintf("workorder-%d-%d-%s-%s", ledger.eventID, notificationConfig.ID, channel, deliveryKey)
+			}
 			response, err := s.notificationMgr.SendNotification(recipientCtx, sendRequest)
+			if ledger != nil {
+				status := "failed"
+				if err == nil {
+					status = "success"
+				} else if isDeliveryUncertain(recipientCtx, err) {
+					// SMTP底层可能在上下文取消后仍执行；不能自动重复发送
+					status = "uncertain"
+				}
+				if saveErr := ledger.markDelivery(notificationConfig.ID, channel, deliveryKey, status, notificationConfig.MaxRetries, notificationConfig.RetryInterval); saveErr != nil {
+					recipientErrors <- saveErr
+					return
+				}
+			}
 
 			log := &model.WorkorderNotificationLog{
 				NotificationID: notificationConfig.ID,
@@ -581,8 +641,7 @@ func (s *workorderNotificationService) sendChannelNotification(ctx context.Conte
 				log.ErrorMessage = err.Error()
 				s.logger.Error("发送通知失败",
 					zap.String("channel", channel),
-					zap.String("recipient", recipientAddr),
-					zap.Error(err))
+					zap.String("error_type", fmt.Sprintf("%T", err)))
 				recipientErrors <- fmt.Errorf("接收人 %s 发送失败: %w", recipientAddr, err)
 			} else if response != nil {
 				log.Status = 3
@@ -594,9 +653,7 @@ func (s *workorderNotificationService) sendChannelNotification(ctx context.Conte
 				if response.Cost != nil {
 					log.Cost = response.Cost
 				}
-				s.logger.Info("通知发送成功",
-					zap.String("channel", channel),
-					zap.String("recipient", recipientAddr))
+				s.logger.Info("通知发送成功", zap.String("channel", channel))
 			}
 
 			if err := s.dao.AddSendLog(recipientCtx, log); err != nil {
@@ -620,7 +677,7 @@ func (s *workorderNotificationService) sendChannelNotification(ctx context.Conte
 	return nil
 }
 
-func (s *workorderNotificationService) buildMessageContent(notificationConfig *model.WorkorderNotification,
+func (s *workorderNotificationService) buildMessageContent(ctx context.Context, notificationConfig *model.WorkorderNotification,
 	instance *model.WorkorderInstance, eventType string, customContent ...string) (string, string) {
 
 	// 创建发送请求对象，用于模板渲染
@@ -652,7 +709,7 @@ func (s *workorderNotificationService) buildMessageContent(notificationConfig *m
 
 	assigneeName := "待分配"
 	if instance.AssigneeID != nil {
-		if user, err := s.userDAO.GetByID(context.Background(), *instance.AssigneeID); err == nil && user != nil {
+		if user, err := s.userDAO.GetByID(ctx, *instance.AssigneeID); err == nil && user != nil {
 			assigneeName = user.RealName
 		}
 	}
@@ -729,9 +786,7 @@ AI-CloudOps 技术运维部
 		content = renderedContent
 	}
 
-	s.logger.Debug("消息内容构建完成",
-		zap.String("subject", subject),
-		zap.String("content", content))
+	s.logger.Debug("消息内容构建完成", zap.Int("instance_id", instance.ID))
 
 	return subject, content
 }
@@ -837,10 +892,7 @@ func (s *workorderNotificationService) SendNotificationByChannels(ctx context.Co
 
 		_, err := s.notificationMgr.SendNotification(ctx, sendRequest)
 		if err != nil {
-			s.logger.Error("发送通知失败",
-				zap.String("channel", channel),
-				zap.String("recipient", recipient),
-				zap.Error(err))
+			s.logger.Error("发送通知失败", zap.String("channel", channel), zap.String("error_type", fmt.Sprintf("%T", err)))
 			return err
 		}
 	}
@@ -878,4 +930,53 @@ type RecipientInfo struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
 	Type    string `json:"type"`
+}
+
+// ListNotificationEvents 返回已授权用户可查看的事件状态，不回显快照和正文
+func (s *workorderNotificationService) ListNotificationEvents(ctx context.Context, req *model.ListWorkorderNotificationEventsReq) (*model.ListResp[*model.WorkorderNotificationEventStatus], error) {
+	store, ok := s.instanceDAO.(interface {
+		ListNotificationEvents(context.Context, int, int, string) (*model.ListResp[*model.WorkorderNotificationEventStatus], error)
+	})
+	if !ok || req == nil {
+		return nil, errors.New("事件状态存储不可用")
+	}
+	return store.ListNotificationEvents(ctx, req.Page, req.Size, req.Status)
+}
+func (s *workorderNotificationService) ListNotificationEventDeliveries(ctx context.Context, id uint64) ([]*model.WorkorderNotificationDeliveryStatus, error) {
+	store, ok := s.instanceDAO.(interface {
+		ListNotificationEventDeliveries(context.Context, uint64) ([]*model.WorkorderNotificationDeliveryStatus, error)
+	})
+	if !ok || id == 0 {
+		return nil, errors.New("事件状态存储不可用或事件ID无效")
+	}
+	return store.ListNotificationEventDeliveries(ctx, id)
+}
+
+func (s *workorderNotificationService) ResolveNotificationDelivery(ctx context.Context, eventID uint64, req *model.ResolveWorkorderNotificationDeliveryReq, operatorID int) error {
+	store, ok := s.instanceDAO.(interface {
+		ResolveNotificationDelivery(context.Context, uint64, *model.ResolveWorkorderNotificationDeliveryReq, int) error
+	})
+	if !ok {
+		return errors.New("事件状态存储不可用")
+	}
+	return store.ResolveNotificationDelivery(ctx, eventID, req, operatorID)
+}
+func (s *workorderNotificationService) ListNotificationEventResolutions(ctx context.Context, eventID uint64) ([]*model.WorkorderNotificationResolution, error) {
+	store, ok := s.instanceDAO.(interface {
+		ListNotificationEventResolutions(context.Context, uint64) ([]*model.WorkorderNotificationResolution, error)
+	})
+	if !ok || eventID == 0 {
+		return nil, errors.New("事件状态存储不可用或事件ID无效")
+	}
+	return store.ListNotificationEventResolutions(ctx, eventID)
+}
+
+func (s *workorderNotificationService) RetryNotificationEvent(ctx context.Context, eventID uint64, reason string, operatorID int) error {
+	store, ok := s.instanceDAO.(interface {
+		RetryNotificationEvent(context.Context, uint64, string, int) error
+	})
+	if !ok {
+		return errors.New("事件状态存储不可用")
+	}
+	return store.RetryNotificationEvent(ctx, eventID, reason, operatorID)
 }

@@ -126,6 +126,7 @@ def main():
     database.add_argument("--mysql-cloud-account", action="store_true")
     database.add_argument("--mysql-instance-source", action="store_true")
     database.add_argument("--mysql-notification-idempotent", action="store_true")
+    database.add_argument("--mysql-notification-outbox", action="store_true")
     parser.add_argument("--container")
     args = parser.parse_args()
     try:
@@ -139,6 +140,8 @@ def main():
             isolated_mysql(args.container, "./internal/workorder/service", "TestMySQLInstanceNotificationSource")
         elif args.mysql_notification_idempotent:
             isolated_mysql(args.container, "./internal/workorder/dao", "TestMySQLNotificationIdempotentUpdate")
+        elif args.mysql_notification_outbox:
+            isolated_mysql(args.container, "./internal/workorder/service", "TestMySQLOutboxAtomicAndDelivery")
         else:
             api_check(args.url)
     except (SchemaError, KeyError, ValueError):

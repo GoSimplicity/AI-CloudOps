@@ -101,6 +101,14 @@ func NewInstanceService(
 }
 
 func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateWorkorderInstanceReq) error {
+	if !dao.InTransaction(ctx) {
+		if tx, ok := s.dao.(instanceEventStore); ok {
+			return tx.InTransaction(ctx, func(ctx context.Context) error { return s.CreateInstance(ctx, req) })
+		} else if s.notificationService != nil {
+			return fmt.Errorf("工单通知事务存储不可用")
+		}
+	}
+
 	if req.Status != model.InstanceStatusDraft {
 		return fmt.Errorf("创建工单只能使用草稿状态，请通过提交/审批接口推进流程")
 	}
@@ -195,20 +203,23 @@ func (s *instanceService) CreateInstance(ctx context.Context, req *model.CreateW
 	s.createTimelineRecord(ctx, instance.ID, model.TimelineActionCreate, req.OperatorID, req.OperatorName, "工单创建")
 
 	if s.notificationService != nil {
-		go func() {
-			// 异步发送通知，避免阻塞主流程
-			if err := s.notificationService.SendWorkorderNotification(ctx, instance.ID, model.EventTypeInstanceCreated); err != nil {
-				s.logger.Error("发送工单创建通知失败",
-					zap.Error(err),
-					zap.Int("instance_id", instance.ID))
-			}
-		}()
+		if err := s.recordNotificationEvent(ctx, instance.ID, model.EventTypeInstanceCreated, req.OperatorID, "", nil); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 func (s *instanceService) CreateInstanceFromTemplate(ctx context.Context, templateID int, req *model.CreateWorkorderInstanceFromTemplateReq) error {
+	if !dao.InTransaction(ctx) {
+		if tx, ok := s.dao.(instanceEventStore); ok {
+			return tx.InTransaction(ctx, func(ctx context.Context) error { return s.CreateInstanceFromTemplate(ctx, templateID, req) })
+		} else if s.notificationService != nil {
+			return fmt.Errorf("工单通知事务存储不可用")
+		}
+	}
+
 	if req.Priority < model.PriorityHigh || req.Priority > model.PriorityLow {
 		return fmt.Errorf("优先级无效")
 	}
@@ -299,20 +310,23 @@ func (s *instanceService) CreateInstanceFromTemplate(ctx context.Context, templa
 	s.createTimelineRecord(ctx, instance.ID, model.TimelineActionCreate, req.OperatorID, req.OperatorName, fmt.Sprintf("从模板 %s 创建工单", template.Name))
 
 	if s.notificationService != nil {
-		go func() {
-			// 异步发送通知，避免阻塞主流程
-			if err := s.notificationService.SendWorkorderNotification(ctx, instance.ID, model.EventTypeInstanceCreated, fmt.Sprintf("从模板 %s 创建", template.Name)); err != nil {
-				s.logger.Error("发送工单创建通知失败",
-					zap.Error(err),
-					zap.Int("instance_id", instance.ID))
-			}
-		}()
+		if err := s.recordNotificationEvent(ctx, instance.ID, model.EventTypeInstanceCreated, req.OperatorID, fmt.Sprintf("从模板 %s 创建", template.Name), nil); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 func (s *instanceService) UpdateInstance(ctx context.Context, req *model.UpdateWorkorderInstanceReq) error {
+	if !dao.InTransaction(ctx) {
+		if tx, ok := s.dao.(instanceEventStore); ok {
+			return tx.InTransaction(ctx, func(ctx context.Context) error { return s.UpdateInstance(ctx, req) })
+		} else if s.notificationService != nil {
+			return fmt.Errorf("工单通知事务存储不可用")
+		}
+	}
+
 	ins, err := s.dao.GetInstanceByID(ctx, req.ID)
 	if err != nil {
 		s.logger.Error("获取工单实例失败", zap.Error(err), zap.Int("instanceID", req.ID))
@@ -360,20 +374,23 @@ func (s *instanceService) UpdateInstance(ctx context.Context, req *model.UpdateW
 	}
 
 	if s.notificationService != nil {
-		go func() {
-			// 异步发送通知，避免阻塞主流程
-			if err := s.notificationService.SendWorkorderNotification(ctx, req.ID, model.EventTypeInstanceUpdated, "工单信息已更新"); err != nil {
-				s.logger.Error("发送工单更新通知失败",
-					zap.Error(err),
-					zap.Int("instance_id", req.ID))
-			}
-		}()
+		if err := s.recordNotificationEvent(ctx, req.ID, model.EventTypeInstanceUpdated, 0, "工单信息已更新", nil); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 func (s *instanceService) DeleteInstance(ctx context.Context, id int) error {
+	if !dao.InTransaction(ctx) {
+		if tx, ok := s.dao.(instanceEventStore); ok {
+			return tx.InTransaction(ctx, func(ctx context.Context) error { return s.DeleteInstance(ctx, id) })
+		} else if s.notificationService != nil {
+			return fmt.Errorf("工单通知事务存储不可用")
+		}
+	}
+
 	if id <= 0 {
 		return ErrInvalidRequest
 	}
@@ -397,14 +414,9 @@ func (s *instanceService) DeleteInstance(ctx context.Context, id int) error {
 	}
 
 	if s.notificationService != nil {
-		go func() {
-			// 异步发送通知，避免阻塞主流程
-			if err := s.notificationService.SendWorkorderNotification(ctx, id, model.EventTypeInstanceDeleted, fmt.Sprintf("工单 %s 已删除", instance.Title)); err != nil {
-				s.logger.Error("发送工单删除通知失败",
-					zap.Error(err),
-					zap.Int("instance_id", id))
-			}
-		}()
+		if err := s.recordNotificationEvent(ctx, id, model.EventTypeInstanceDeleted, 0, fmt.Sprintf("工单 %s 已删除", instance.Title), instance); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -435,6 +447,14 @@ func (s *instanceService) ListInstance(ctx context.Context, req *model.ListWorko
 
 // SubmitInstance 提交工单
 func (s *instanceService) SubmitInstance(ctx context.Context, id int, operatorID int, operatorName string) error {
+	if !dao.InTransaction(ctx) {
+		if tx, ok := s.dao.(instanceEventStore); ok {
+			return tx.InTransaction(ctx, func(ctx context.Context) error { return s.SubmitInstance(ctx, id, operatorID, operatorName) })
+		} else if s.notificationService != nil {
+			return fmt.Errorf("工单通知事务存储不可用")
+		}
+	}
+
 	instance, err := s.dao.GetInstanceByID(ctx, id)
 	if err != nil {
 		return err
@@ -500,14 +520,9 @@ func (s *instanceService) SubmitInstance(ctx context.Context, id int, operatorID
 
 	// 发送工单提交通知
 	if s.notificationService != nil {
-		go func() {
-			// 异步发送通知，避免阻塞主流程
-			if err := s.notificationService.SendWorkorderNotification(ctx, id, model.EventTypeInstanceSubmitted); err != nil {
-				s.logger.Error("发送工单提交通知失败",
-					zap.Error(err),
-					zap.Int("instance_id", id))
-			}
-		}()
+		if err := s.recordNotificationEvent(ctx, id, model.EventTypeInstanceSubmitted, operatorID, "", nil); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -515,6 +530,16 @@ func (s *instanceService) SubmitInstance(ctx context.Context, id int, operatorID
 
 // AssignInstance 指派工单
 func (s *instanceService) AssignInstance(ctx context.Context, id int, assigneeID int, operatorID int, operatorName string) error {
+	if !dao.InTransaction(ctx) {
+		if tx, ok := s.dao.(instanceEventStore); ok {
+			return tx.InTransaction(ctx, func(ctx context.Context) error {
+				return s.AssignInstance(ctx, id, assigneeID, operatorID, operatorName)
+			})
+		} else if s.notificationService != nil {
+			return fmt.Errorf("工单通知事务存储不可用")
+		}
+	}
+
 	instance, err := s.dao.GetInstanceByID(ctx, id)
 	if err != nil {
 		return err
@@ -561,14 +586,9 @@ func (s *instanceService) AssignInstance(ctx context.Context, id int, assigneeID
 
 	// 发送工单指派通知
 	if s.notificationService != nil {
-		go func() {
-			// 异步发送通知，避免阻塞主流程
-			if err := s.notificationService.SendWorkorderNotification(ctx, id, model.EventTypeInstanceAssigned, fmt.Sprintf("指派给用户ID: %d", assigneeID)); err != nil {
-				s.logger.Error("发送工单指派通知失败",
-					zap.Error(err),
-					zap.Int("instance_id", id))
-			}
-		}()
+		if err := s.recordNotificationEvent(ctx, id, model.EventTypeInstanceAssigned, operatorID, fmt.Sprintf("指派给用户ID: %d", assigneeID), nil); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -576,6 +596,14 @@ func (s *instanceService) AssignInstance(ctx context.Context, id int, assigneeID
 
 // ApproveInstance 审批通过工单
 func (s *instanceService) ApproveInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error {
+	if !dao.InTransaction(ctx) {
+		if tx, ok := s.dao.(instanceEventStore); ok {
+			return tx.InTransaction(ctx, func(ctx context.Context) error { return s.ApproveInstance(ctx, id, operatorID, operatorName, comment) })
+		} else if s.notificationService != nil {
+			return fmt.Errorf("工单通知事务存储不可用")
+		}
+	}
+
 	instance, err := s.dao.GetInstanceByID(ctx, id)
 	if err != nil {
 		return err
@@ -703,16 +731,9 @@ func (s *instanceService) ApproveInstance(ctx context.Context, id int, operatorI
 		if toStatus == model.InstanceStatusCompleted {
 			eventType = model.EventTypeInstanceCompleted
 		}
-
-		go func() {
-			// 异步发送通知，避免阻塞主流程
-			if err := s.notificationService.SendWorkorderNotification(ctx, id, eventType, comment); err != nil {
-				s.logger.Error("发送工单审批通知失败",
-					zap.Error(err),
-					zap.Int("instance_id", id),
-					zap.String("event_type", eventType))
-			}
-		}()
+		if err := s.recordNotificationEvent(ctx, id, eventType, operatorID, comment, nil); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -720,6 +741,14 @@ func (s *instanceService) ApproveInstance(ctx context.Context, id int, operatorI
 
 // RejectInstance 拒绝工单
 func (s *instanceService) RejectInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error {
+	if !dao.InTransaction(ctx) {
+		if tx, ok := s.dao.(instanceEventStore); ok {
+			return tx.InTransaction(ctx, func(ctx context.Context) error { return s.RejectInstance(ctx, id, operatorID, operatorName, comment) })
+		} else if s.notificationService != nil {
+			return fmt.Errorf("工单通知事务存储不可用")
+		}
+	}
+
 	instance, err := s.dao.GetInstanceByID(ctx, id)
 	if err != nil {
 		return err
@@ -779,14 +808,9 @@ func (s *instanceService) RejectInstance(ctx context.Context, id int, operatorID
 
 	// 发送工单拒绝通知
 	if s.notificationService != nil {
-		go func() {
-			// 异步发送通知，避免阻塞主流程
-			if err := s.notificationService.SendWorkorderNotification(ctx, id, model.EventTypeInstanceRejected, comment); err != nil {
-				s.logger.Error("发送工单拒绝通知失败",
-					zap.Error(err),
-					zap.Int("instance_id", id))
-			}
-		}()
+		if err := s.recordNotificationEvent(ctx, id, model.EventTypeInstanceRejected, operatorID, comment, nil); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1296,6 +1320,14 @@ func (s *instanceService) getStatusForStep(step *model.ProcessStep) int8 {
 
 // CancelInstance 取消工单
 func (s *instanceService) CancelInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error {
+	if !dao.InTransaction(ctx) {
+		if tx, ok := s.dao.(instanceEventStore); ok {
+			return tx.InTransaction(ctx, func(ctx context.Context) error { return s.CancelInstance(ctx, id, operatorID, operatorName, comment) })
+		} else if s.notificationService != nil {
+			return fmt.Errorf("工单通知事务存储不可用")
+		}
+	}
+
 	instance, err := s.dao.GetInstanceByID(ctx, id)
 	if err != nil {
 		return err
@@ -1353,14 +1385,9 @@ func (s *instanceService) CancelInstance(ctx context.Context, id int, operatorID
 
 	// 发送工单取消通知
 	if s.notificationService != nil {
-		go func() {
-			// 异步发送通知，避免阻塞主流程
-			if err := s.notificationService.SendWorkorderNotification(ctx, id, model.EventTypeInstanceCancelled, comment); err != nil {
-				s.logger.Error("发送工单取消通知失败",
-					zap.Error(err),
-					zap.Int("instance_id", id))
-			}
-		}()
+		if err := s.recordNotificationEvent(ctx, id, model.EventTypeInstanceCancelled, operatorID, comment, nil); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1368,6 +1395,14 @@ func (s *instanceService) CancelInstance(ctx context.Context, id int, operatorID
 
 // CompleteInstance 完成工单
 func (s *instanceService) CompleteInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error {
+	if !dao.InTransaction(ctx) {
+		if tx, ok := s.dao.(instanceEventStore); ok {
+			return tx.InTransaction(ctx, func(ctx context.Context) error { return s.CompleteInstance(ctx, id, operatorID, operatorName, comment) })
+		} else if s.notificationService != nil {
+			return fmt.Errorf("工单通知事务存储不可用")
+		}
+	}
+
 	instance, err := s.dao.GetInstanceByID(ctx, id)
 	if err != nil {
 		return err
@@ -1430,14 +1465,9 @@ func (s *instanceService) CompleteInstance(ctx context.Context, id int, operator
 
 	// 发送工单完成通知
 	if s.notificationService != nil {
-		go func() {
-			// 异步发送通知，避免阻塞主流程
-			if err := s.notificationService.SendWorkorderNotification(ctx, id, model.EventTypeInstanceCompleted, comment); err != nil {
-				s.logger.Error("发送工单完成通知失败",
-					zap.Error(err),
-					zap.Int("instance_id", id))
-			}
-		}()
+		if err := s.recordNotificationEvent(ctx, id, model.EventTypeInstanceCompleted, operatorID, comment, nil); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1445,6 +1475,14 @@ func (s *instanceService) CompleteInstance(ctx context.Context, id int, operator
 
 // ReturnInstance 退回工单
 func (s *instanceService) ReturnInstance(ctx context.Context, id int, operatorID int, operatorName string, comment string) error {
+	if !dao.InTransaction(ctx) {
+		if tx, ok := s.dao.(instanceEventStore); ok {
+			return tx.InTransaction(ctx, func(ctx context.Context) error { return s.ReturnInstance(ctx, id, operatorID, operatorName, comment) })
+		} else if s.notificationService != nil {
+			return fmt.Errorf("工单通知事务存储不可用")
+		}
+	}
+
 	instance, err := s.dao.GetInstanceByID(ctx, id)
 	if err != nil {
 		return err
@@ -1480,11 +1518,18 @@ func (s *instanceService) ReturnInstance(ctx context.Context, id int, operatorID
 
 	// 更新工单状态为草稿，清空受理人
 	instance.Status = toStatus
+	hadAssignee := instance.AssigneeID != nil
 	instance.AssigneeID = nil
 
 	if err := s.dao.UpdateInstance(ctx, instance); err != nil {
 		s.logger.Error("更新工单状态失败", zap.Error(err), zap.Int("instanceID", id))
 		return err
+	}
+
+	if hadAssignee {
+		if err := s.dao.UpdateInstanceAssignee(ctx, id, nil); err != nil {
+			return err
+		}
 	}
 
 	s.createFlowRecord(ctx, id, model.FlowActionReturn, operatorID, operatorName, fromStatus, toStatus, comment, 2)
@@ -1508,14 +1553,9 @@ func (s *instanceService) ReturnInstance(ctx context.Context, id int, operatorID
 
 	// 发送工单退回通知
 	if s.notificationService != nil {
-		go func() {
-			// 异步发送通知，避免阻塞主流程
-			if err := s.notificationService.SendWorkorderNotification(ctx, id, model.EventTypeInstanceReturned, comment); err != nil {
-				s.logger.Error("发送工单退回通知失败",
-					zap.Error(err),
-					zap.Int("instance_id", id))
-			}
-		}()
+		if err := s.recordNotificationEvent(ctx, id, model.EventTypeInstanceReturned, operatorID, comment, nil); err != nil {
+			return err
+		}
 	}
 
 	return nil

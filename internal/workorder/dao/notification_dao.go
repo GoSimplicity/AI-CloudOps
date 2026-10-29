@@ -95,7 +95,7 @@ func (d *notificationDAO) CreateNotification(ctx context.Context, req *model.Cre
 		Settings:           req.Settings,
 	}
 
-	if err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	if err := DBWithContext(ctx, d.db).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(notification).Error; err != nil {
 			return err
 		}
@@ -188,7 +188,7 @@ func (d *notificationDAO) UpdateNotification(ctx context.Context, req *model.Upd
 		updateData["settings"] = req.Settings
 	}
 
-	result := d.db.WithContext(ctx).Model(&model.WorkorderNotification{}).
+	result := DBWithContext(ctx, d.db).Model(&model.WorkorderNotification{}).
 		Where("id = ?", req.ID).
 		Updates(updateData)
 
@@ -200,7 +200,7 @@ func (d *notificationDAO) UpdateNotification(ctx context.Context, req *model.Upd
 	if result.RowsAffected == 0 {
 		// MySQL同值写可返回零变更行，必须单独区分幂等更新和不存在
 		var count int64
-		if err := d.db.WithContext(ctx).Model(&model.WorkorderNotification{}).Where("id = ?", req.ID).Count(&count).Error; err != nil {
+		if err := DBWithContext(ctx, d.db).Model(&model.WorkorderNotification{}).Where("id = ?", req.ID).Count(&count).Error; err != nil {
 			return fmt.Errorf("确认通知配置是否存在失败: %w", err)
 		}
 		if count == 0 {
@@ -212,7 +212,7 @@ func (d *notificationDAO) UpdateNotification(ctx context.Context, req *model.Upd
 }
 
 func (d *notificationDAO) DeleteNotification(ctx context.Context, req *model.DeleteWorkorderNotificationReq) error {
-	result := d.db.WithContext(ctx).Delete(&model.WorkorderNotification{}, req.ID)
+	result := DBWithContext(ctx, d.db).Delete(&model.WorkorderNotification{}, req.ID)
 	if result.Error != nil {
 		d.logger.Error("删除通知配置失败", zap.Error(result.Error), zap.Int("id", req.ID))
 		return fmt.Errorf("删除通知配置失败: %w", result.Error)
@@ -231,7 +231,7 @@ func (d *notificationDAO) ListNotification(ctx context.Context, req *model.ListW
 
 	req.Page, req.PageSize = ValidatePagination(req.Page, req.PageSize)
 
-	db := d.db.WithContext(ctx).Model(&model.WorkorderNotification{})
+	db := DBWithContext(ctx, d.db).Model(&model.WorkorderNotification{})
 
 	if req.Name != "" {
 		searchTerm := sanitizeSearchInput(req.Name)
@@ -279,7 +279,7 @@ func (d *notificationDAO) ListNotification(ctx context.Context, req *model.ListW
 
 func (d *notificationDAO) DetailNotification(ctx context.Context, req *model.DetailWorkorderNotificationReq) (*model.WorkorderNotification, error) {
 	var notification model.WorkorderNotification
-	err := d.db.WithContext(ctx).First(&notification, req.ID).Error
+	err := DBWithContext(ctx, d.db).First(&notification, req.ID).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("通知配置不存在")
@@ -293,7 +293,7 @@ func (d *notificationDAO) DetailNotification(ctx context.Context, req *model.Det
 // GetNotificationByID 根据ID获取通知配置
 func (d *notificationDAO) GetNotificationByID(ctx context.Context, id int) (*model.WorkorderNotification, error) {
 	var notification model.WorkorderNotification
-	err := d.db.WithContext(ctx).First(&notification, id).Error
+	err := DBWithContext(ctx, d.db).First(&notification, id).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("通知配置不存在")
@@ -306,7 +306,7 @@ func (d *notificationDAO) GetNotificationByID(ctx context.Context, id int) (*mod
 
 // AddSendLog 添加发送日志
 func (d *notificationDAO) AddSendLog(ctx context.Context, log *model.WorkorderNotificationLog) error {
-	if err := d.db.WithContext(ctx).Create(log).Error; err != nil {
+	if err := DBWithContext(ctx, d.db).Create(log).Error; err != nil {
 		d.logger.Error("添加发送日志失败", zap.Error(err))
 		return fmt.Errorf("添加发送日志失败: %w", err)
 	}
@@ -319,7 +319,7 @@ func (d *notificationDAO) GetSendLogs(ctx context.Context, req *model.ListWorkor
 
 	req.Page, req.PageSize = ValidatePagination(req.Page, req.PageSize)
 
-	db := d.db.WithContext(ctx).Model(&model.WorkorderNotificationLog{})
+	db := DBWithContext(ctx, d.db).Model(&model.WorkorderNotificationLog{})
 
 	if req.NotificationID != nil {
 		db = db.Where("notification_id = ?", *req.NotificationID)
@@ -363,7 +363,7 @@ func (d *notificationDAO) GetSendLogs(ctx context.Context, req *model.ListWorkor
 
 // IncrementSentCount 增加发送计数
 func (d *notificationDAO) IncrementSentCount(ctx context.Context, id int) error {
-	err := d.db.WithContext(ctx).Model(&model.WorkorderNotification{}).
+	err := DBWithContext(ctx, d.db).Model(&model.WorkorderNotification{}).
 		Where("id = ?", id).
 		Update("updated_at", time.Now()).Error
 	if err != nil {
@@ -377,7 +377,7 @@ func (d *notificationDAO) IncrementSentCount(ctx context.Context, id int) error 
 func (d *notificationDAO) GetActiveNotificationsByEventType(ctx context.Context, eventType string, processID int) ([]*model.WorkorderNotification, error) {
 	var notifications []*model.WorkorderNotification
 
-	db := d.db.WithContext(ctx).Model(&model.WorkorderNotification{}).
+	db := DBWithContext(ctx, d.db).Model(&model.WorkorderNotification{}).
 		Where("status = ?", 1) // 1-启用状态
 
 	db = db.Where("(process_id IS NULL OR process_id = ?)", processID)
@@ -398,7 +398,7 @@ func (d *notificationDAO) GetActiveNotificationsByEventType(ctx context.Context,
 // GetInstanceByID 根据ID获取工单实例信息
 func (d *notificationDAO) GetInstanceByID(ctx context.Context, instanceID int) (*model.WorkorderInstance, error) {
 	var instance model.WorkorderInstance
-	err := d.db.WithContext(ctx).First(&instance, instanceID).Error
+	err := DBWithContext(ctx, d.db).First(&instance, instanceID).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("工单实例不存在")
