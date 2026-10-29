@@ -46,7 +46,7 @@ func (s credentialCloudStub) GetAvailableRegions(context.Context) ([]model.Avail
 	return []model.AvailableRegion{{Region: region, Available: true}}, nil
 }
 func (s credentialCloudStub) ListInstances(context.Context, []string) ([]*model.TreeCloudResource, error) {
-	return nil, nil
+	return []*model.TreeCloudResource{}, nil
 }
 
 func TestTemporaryCredentialsSQLite(t *testing.T) {
@@ -67,7 +67,7 @@ func assertTemporaryCredentials(t *testing.T, db *gorm.DB) {
 	oldKey := viper.Get("tree.password_encryption_key")
 	viper.Set("tree.password_encryption_key", strings.Repeat("k", 32))
 	t.Cleanup(func() { viper.Set("tree.password_encryption_key", oldKey) })
-	if err := db.AutoMigrate(&model.CloudAccount{}, &model.CloudAccountRegion{}, &model.TreeCloudResource{}); err != nil {
+	if err := db.AutoMigrate(&model.CloudAccount{}, &model.CloudAccountRegion{}, &model.TreeCloudResource{}, &model.CloudRegionSyncLease{}, &model.CloudResourceSyncHistory{}); err != nil {
 		t.Fatal(err)
 	}
 	store := dao.NewCloudAccountDAO(db, zap.NewNop())
@@ -110,7 +110,7 @@ func assertTemporaryCredentials(t *testing.T, db *gorm.DB) {
 	if _, err := svc.GetAvailableRegionsForAccount(context.Background(), saved.ID); err != nil || seen != 2 {
 		t.Fatalf("region query failed: %v", err)
 	}
-	syncService := &treeCloudService{logger: zap.NewNop(), cloudAccountDAO: store, dao: validationHistoryDAO{}, credentialFactory: svc.credentialFactory}
+	syncService := &treeCloudService{logger: zap.NewNop(), cloudAccountDAO: store, dao: dao.NewTreeCloudDAO(db, zap.NewNop()), credentialFactory: svc.credentialFactory}
 	if _, err := syncService.SyncTreeCloudResource(context.Background(), &model.SyncTreeCloudResourceReq{CloudAccountID: saved.ID, SyncMode: model.SyncModeIncremental}); err != nil || seen != 3 {
 		t.Fatalf("temporary sync failed: %v", err)
 	}
@@ -131,7 +131,7 @@ func assertTemporaryCredentials(t *testing.T, db *gorm.DB) {
 		t.Fatal("expired credentials reached cloud factory")
 	}
 	newExpiry := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
-	rotation := &model.UpdateCloudAccountReq{ID: saved.ID, AccessKey: "ASIANEWKEY123456", SecretKey: "new-secret-canary", CredentialType: "temporary", SessionToken: "new-token-canary", CredentialExpiresAt: &newExpiry}
+	rotation := &model.UpdateCloudAccountReq{ID: saved.ID, AccessKey: "ASIAnew", SecretKey: "new-secret-canary", CredentialType: "temporary", SessionToken: "new-token-canary", CredentialExpiresAt: &newExpiry}
 	if err := svc.UpdateCloudAccount(context.Background(), rotation); err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func assertTemporaryCredentials(t *testing.T, db *gorm.DB) {
 	if err := svc.UpdateCloudAccount(context.Background(), &model.UpdateCloudAccountReq{ID: saved.ID, CredentialType: "long_term"}); err == nil {
 		t.Fatal("incomplete type switch accepted")
 	}
-	if err := svc.UpdateCloudAccount(context.Background(), &model.UpdateCloudAccountReq{ID: saved.ID, CredentialType: "long_term", AccessKey: "AKIALONGKEY123456", SecretKey: "long-secret-canary"}); err != nil {
+	if err := svc.UpdateCloudAccount(context.Background(), &model.UpdateCloudAccountReq{ID: saved.ID, CredentialType: "long_term", AccessKey: "LONGkey", SecretKey: "long-secret-canary"}); err != nil {
 		t.Fatal(err)
 	}
 	var long model.CloudAccount
@@ -254,12 +254,85 @@ func TestHuaweiUnboundedSyncRejectsBeforeProviderOrResourceDAO(t *testing.T) {
 	}
 }
 
-func TestTemporaryFullSyncRejectsBeforeProviderOrResourceDAO(t *testing.T) {
-	account := &model.CloudAccount{Model: model.Model{ID: 7}, Provider: model.ProviderAWS, Status: model.CloudAccountEnabled, CredentialType: "temporary"}
-	svc := &treeCloudService{logger: zap.NewNop(), cloudAccountDAO: storedCloudAccount{account: account}}
-	_, err := svc.SyncTreeCloudResource(context.Background(), &model.SyncTreeCloudResourceReq{CloudAccountID: 7, SyncMode: model.SyncModeFull})
-	if err == nil || !strings.Contains(err.Error(), "临时凭据全量同步暂不可用") {
-		t.Fatal("temporary full sync was not blocked before access")
+func TestTemporaryFullSyncAtomicAndExpiredCredentials(t *testing.T) {
+	previous := viper.Get("tree.password_encryption_key")
+	viper.Set("tree.password_encryption_key", strings.Repeat("k", 32))
+	t.Cleanup(func() { viper.Set("tree.password_encryption_key", previous) })
+	for _, provider := range []model.CloudProvider{model.ProviderAWS, model.ProviderTencent} {
+		t.Run(fmt.Sprint(provider), func(t *testing.T) {
+			db, svc, account, region, _ := regionSyncFixture(t)
+			key := "test-ak"
+			if provider == model.ProviderAWS {
+				key = "ASIAx"
+			} else {
+				region.Region = "ap-shanghai"
+			}
+			access, err := treeUtils.EncryptPassword(key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			secret, err := treeUtils.EncryptPassword("test-sk")
+			if err != nil {
+				t.Fatal(err)
+			}
+			token, err := treeUtils.EncryptPassword("test-token")
+			if err != nil {
+				t.Fatal(err)
+			}
+			expires := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+			if err := db.Model(account).Updates(map[string]any{"provider": provider, "access_key": access, "secret_key": secret, "credential_type": "temporary", "session_token": token, "credential_expires_at": expires}).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Model(region).Update("region", region.Region).Error; err != nil {
+				t.Fatal(err)
+			}
+			old := resource(account, region, "old")
+			if err := db.Create(old).Error; err != nil {
+				t.Fatal(err)
+			}
+			calls := 0
+			svc.cloudAccountDAO = dao.NewCloudAccountDAO(db, zap.NewNop())
+			svc.credentialFactory = func(got model.CloudProvider, c treeUtils.CloudCredentials, _ string, _ *zap.Logger) (treeUtils.CloudComputeClient, error) {
+				calls++
+				if got != provider || c.SessionToken != "test-token" || c.CredentialType != "temporary" {
+					t.Fatal("temporary credential not propagated")
+				}
+				return snapshotClient{read: func(context.Context) ([]*model.TreeCloudResource, error) {
+					return []*model.TreeCloudResource{resource(account, region, "new")}, nil
+				}}, nil
+			}
+			callback := "test:temporary-log-failure"
+			if err := db.Callback().Create().Before("gorm:create").Register(callback, func(tx *gorm.DB) {
+				if _, ok := tx.Statement.Dest.(*model.CloudResourceChangeLog); ok {
+					tx.AddError(errors.New("injected failure"))
+				}
+			}); err != nil {
+				t.Fatal(err)
+			}
+			result, err := svc.SyncTreeCloudResource(context.Background(), &model.SyncTreeCloudResourceReq{CloudAccountID: account.ID, SyncMode: model.SyncModeFull})
+			if err != nil || result.Status != "failed" || result.DeleteCount != 0 || result.NewCount != 0 {
+				t.Fatalf("failed sync result=%+v err=%v", result, err)
+			}
+			var n int64
+			db.Model(&model.TreeCloudResource{}).Where("id = ?", old.ID).Count(&n)
+			if n != 1 {
+				t.Fatal("failed full sync deleted old resource")
+			}
+			if err := db.Callback().Create().Remove(callback); err != nil {
+				t.Fatal(err)
+			}
+			result, err = svc.SyncTreeCloudResource(context.Background(), &model.SyncTreeCloudResourceReq{CloudAccountID: account.ID, SyncMode: model.SyncModeFull})
+			if err != nil || result.Status != "success" || result.NewCount != 1 || result.DeleteCount != 1 || calls != 2 {
+				t.Fatalf("full sync result=%+v calls=%d err=%v", result, calls, err)
+			}
+			expired := time.Now().UTC().Add(-time.Minute)
+			if err := db.Model(account).Update("credential_expires_at", expired).Error; err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.SyncTreeCloudResource(context.Background(), &model.SyncTreeCloudResourceReq{CloudAccountID: account.ID, SyncMode: model.SyncModeFull}); err == nil || calls != 2 {
+				t.Fatal("expired credential reached provider")
+			}
+		})
 	}
 }
 

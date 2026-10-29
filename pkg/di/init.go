@@ -59,6 +59,7 @@ func InitTables(db *gorm.DB) error {
 		&model.K8sYamlTask{},
 		&model.CloudResourceSyncHistory{},
 		&model.CloudResourceChangeLog{},
+		&model.CloudRegionSyncLease{},
 
 		// prometheus
 		&model.MonitorScrapePool{},

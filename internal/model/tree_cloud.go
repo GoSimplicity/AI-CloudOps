@@ -265,6 +265,11 @@ type BatchUpdateCloudResourceStatusReq struct {
 
 type CloudResourceSyncHistory struct {
 	Model
+	RegionID        int           `json:"region_id" gorm:"index"`
+	Region          string        `json:"region" gorm:"type:varchar(50)"`
+	OperationID     string        `json:"-" gorm:"type:varchar(64);index"`
+	LeaseExpiresMS  int64         `json:"-" gorm:"not null;default:0"`
+	RetrySafe       *bool         `json:"retry_safe,omitempty" gorm:"-"`
 	CloudAccountID  int           `json:"cloud_account_id" gorm:"not null;index;comment:云账户ID"`
 	CloudAccount    *CloudAccount `json:"cloud_account,omitempty" gorm:"foreignKey:CloudAccountID"`
 	SyncMode        SyncMode      `json:"sync_mode" gorm:"type:varchar(20);index;comment:同步模式"`
@@ -290,7 +295,7 @@ func (c *CloudResourceSyncHistory) TableName() string {
 type GetCloudResourceSyncHistoryReq struct {
 	ListReq
 	CloudAccountID int        `json:"cloud_account_id" form:"cloud_account_id" binding:"omitempty,gt=0"`
-	SyncStatus     SyncStatus `json:"sync_status" form:"sync_status" binding:"omitempty,oneof=success failed partial"`
+	SyncStatus     SyncStatus `json:"sync_status" form:"sync_status" binding:"omitempty,oneof=success failed partial running unknown cancelled"`
 	SyncMode       SyncMode   `json:"sync_mode" form:"sync_mode" binding:"omitempty,oneof=full incremental"`
 }
 
@@ -332,14 +337,29 @@ type ExportCloudResourceReq struct {
 }
 
 type SyncCloudResourceResp struct {
-	TotalCount      int       `json:"total_count"`      // 总数
-	NewCount        int       `json:"new_count"`        // 新增数量
-	UpdateCount     int       `json:"update_count"`     // 更新数量
-	DeleteCount     int       `json:"delete_count"`     // 删除数量
-	FailedCount     int       `json:"failed_count"`     // 失败数量
-	FailedInstances []string  `json:"failed_instances"` // 失败的实例ID列表
-	SyncTime        time.Time `json:"sync_time"`        // 同步时间
-	Message         string    `json:"message"`          // 同步消息
+	TotalCount      int                     `json:"total_count"`      // 总数
+	NewCount        int                     `json:"new_count"`        // 新增数量
+	UpdateCount     int                     `json:"update_count"`     // 更新数量
+	DeleteCount     int                     `json:"delete_count"`     // 删除数量
+	FailedCount     int                     `json:"failed_count"`     // 失败数量
+	FailedInstances []string                `json:"failed_instances"` // 失败的实例ID列表
+	SyncTime        time.Time               `json:"sync_time"`        // 同步时间
+	Message         string                  `json:"message"`          // 同步消息
+	Status          string                  `json:"status"`
+	Regions         []CloudRegionSyncResult `json:"regions"`
+}
+
+type CloudRegionSyncResult struct {
+	RegionID      int    `json:"region_id"`
+	Region        string `json:"region"`
+	Status        string `json:"status"`
+	TotalCount    int    `json:"total_count"`
+	NewCount      int    `json:"new_count"`
+	UpdateCount   int    `json:"update_count"`
+	DeleteCount   int    `json:"delete_count"`
+	ErrorCategory string `json:"error_category,omitempty"`
+	HistoryID     int    `json:"history_id,omitempty"`
+	RetrySafe     bool   `json:"retry_safe"`
 }
 
 // String CloudProvider转字符串方法

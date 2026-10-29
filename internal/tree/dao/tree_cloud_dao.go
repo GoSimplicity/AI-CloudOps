@@ -28,6 +28,7 @@ package dao
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
@@ -36,6 +37,15 @@ import (
 )
 
 type TreeCloudDAO interface {
+	AcquireRegionSyncLease(context.Context, int, time.Duration) (*RegionSyncLease, error)
+	ReleaseRegionSyncLease(context.Context, *RegionSyncLease) error
+	ApplyRegionSync(context.Context, *model.CloudAccount, *model.CloudAccountRegion, *RegionSyncLease, func(TreeCloudDAO) error) error
+	EnsureTreeNode(context.Context, int) error
+	CompleteRegionSyncHistory(context.Context, int, string, model.CloudRegionSyncResult) error
+	FinishRegionSyncHistory(context.Context, int, string, string, string) error
+	GetAnyByRegionAndInstanceID(context.Context, int, string) (*model.TreeCloudResource, error)
+	RestoreCloudResource(context.Context, int, map[string]interface{}) error
+	DeleteCloudResourceWithBindings(context.Context, int) error
 	Create(ctx context.Context, cloud *model.TreeCloudResource) error
 	Update(ctx context.Context, cloud *model.TreeCloudResource) error
 	UpdateMetadata(ctx context.Context, id int, metadata map[string]interface{}) error
@@ -331,6 +341,14 @@ func (d *treeCloudDAO) CreateSyncHistory(ctx context.Context, history *model.Clo
 func (d *treeCloudDAO) GetSyncHistoryList(ctx context.Context, req *model.GetCloudResourceSyncHistoryReq) ([]*model.CloudResourceSyncHistory, int64, error) {
 	var histories []*model.CloudResourceSyncHistory
 	var total int64
+	clock, err := databaseEpochMS(d.db)
+	if err != nil {
+		return nil, 0, err
+	}
+	var nowEpoch int64
+	if err := d.db.WithContext(ctx).Raw("SELECT " + clock).Scan(&nowEpoch).Error; err != nil {
+		return nil, 0, err
+	}
 
 	query := d.db.WithContext(ctx).Model(&model.CloudResourceSyncHistory{})
 
@@ -338,7 +356,11 @@ func (d *treeCloudDAO) GetSyncHistoryList(ctx context.Context, req *model.GetClo
 		query = query.Where("cloud_account_id = ?", req.CloudAccountID)
 	}
 
-	if req.SyncStatus != "" {
+	if req.SyncStatus == "unknown" {
+		query = query.Where("sync_status = ? OR (sync_status = ? AND region_id > 0 AND lease_expires_ms <= ?)", "unknown", "running", nowEpoch)
+	} else if req.SyncStatus == "running" {
+		query = query.Where("sync_status = ? AND (region_id = 0 OR lease_expires_ms > ?)", "running", nowEpoch)
+	} else if req.SyncStatus != "" {
 		query = query.Where("sync_status = ?", req.SyncStatus)
 	}
 
@@ -358,6 +380,20 @@ func (d *treeCloudDAO) GetSyncHistoryList(ctx context.Context, req *model.GetClo
 		Find(&histories).Error; err != nil {
 		d.logger.Error("获取同步历史列表失败", zap.Error(err))
 		return nil, 0, err
+	}
+	for _, history := range histories {
+		if history.RegionID <= 0 {
+			continue
+		}
+		if history.SyncStatus == "running" && history.LeaseExpiresMS <= nowEpoch {
+			history.SyncStatus = "unknown"
+			history.ErrorMessage = "租约已过期，提交结果尚未确认"
+		}
+		if history.SyncStatus == "success" {
+			continue
+		}
+		safe := history.SyncStatus == "failed" || history.SyncStatus == "cancelled"
+		history.RetrySafe = &safe
 	}
 
 	return histories, total, nil

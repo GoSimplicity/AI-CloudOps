@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
@@ -16,6 +17,15 @@ import (
 type validationHistoryDAO struct{ dao.TreeCloudDAO }
 
 func (validationHistoryDAO) CreateSyncHistory(context.Context, *model.CloudResourceSyncHistory) error {
+	return nil
+}
+func (validationHistoryDAO) AcquireRegionSyncLease(_ context.Context, id int, _ time.Duration) (*dao.RegionSyncLease, error) {
+	return &dao.RegionSyncLease{RegionID: id, Token: "fixture", Generation: 1, ExpiresEpochMS: time.Now().Add(time.Minute).UnixMilli()}, nil
+}
+func (validationHistoryDAO) ReleaseRegionSyncLease(context.Context, *dao.RegionSyncLease) error {
+	return nil
+}
+func (validationHistoryDAO) FinishRegionSyncHistory(context.Context, int, string, string, string) error {
 	return nil
 }
 
@@ -57,9 +67,12 @@ func TestSyncValidatesCompleteRegionSelectionBeforeSideEffects(t *testing.T) {
 				called = append(called, region)
 				return cloudReadStub{err: errors.New("offline fixture: no provider response")}, nil
 			}}
-			_, err := s.SyncTreeCloudResource(context.Background(), &model.SyncTreeCloudResourceReq{CloudAccountID: 7, CloudAccountRegionIDs: tc.ids, SyncMode: model.SyncModeFull})
-			if err == nil {
-				t.Fatal("expected validation or offline provider error")
+			resp, err := s.SyncTreeCloudResource(context.Background(), &model.SyncTreeCloudResourceReq{CloudAccountID: 7, CloudAccountRegionIDs: tc.ids, SyncMode: model.SyncModeFull})
+			if tc.invalid && err == nil {
+				t.Fatal("expected region validation failure")
+			}
+			if !tc.invalid && (err != nil || resp == nil || resp.Status != "failed") {
+				t.Fatalf("expected structured provider failure: %+v %v", resp, err)
 			}
 			if tc.invalid && !strings.Contains(err.Error(), "指定的地域") {
 				t.Fatalf("unexpected error: %v", err)

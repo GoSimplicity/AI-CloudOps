@@ -43,6 +43,16 @@ type TreeCloudHandler struct {
 	logger     *zap.Logger
 }
 
+func cloudOperator(ctx *gin.Context) (jwt.UserClaims, bool) {
+	value, ok := ctx.Get("user")
+	user, valid := value.(jwt.UserClaims)
+	if !ok || !valid || user.Uid <= 0 {
+		base.ForbiddenError(ctx, "缺少可信操作人")
+		return jwt.UserClaims{}, false
+	}
+	return user, true
+}
+
 func NewTreeCloudHandler(service service.TreeCloudService, factory TerminalClientFactory, wsUpgrader *websocket.Upgrader, logger *zap.Logger) *TreeCloudHandler {
 	if logger == nil {
 		logger = zap.NewNop()
@@ -95,6 +105,7 @@ func (h *TreeCloudHandler) GetTreeCloudResourceDetail(ctx *gin.Context) {
 	req.ID = id
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		req.ID = id
 		return h.service.GetTreeCloudResourceDetail(ctx.Request.Context(), &req)
 	})
 }
@@ -108,12 +119,16 @@ func (h *TreeCloudHandler) UpdateTreeCloudResource(ctx *gin.Context) {
 		return
 	}
 
-	uc := ctx.MustGet("user").(jwt.UserClaims)
+	uc, ok := cloudOperator(ctx)
+	if !ok {
+		return
+	}
 	req.ID = id
 	req.OperatorID = uc.Uid
 	req.OperatorName = uc.Username
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		req.ID, req.OperatorID, req.OperatorName = id, uc.Uid, uc.Username
 		return nil, h.service.UpdateTreeCloudResource(ctx.Request.Context(), &req)
 	})
 }
@@ -127,12 +142,16 @@ func (h *TreeCloudHandler) DeleteTreeCloudResource(ctx *gin.Context) {
 		return
 	}
 
-	uc := ctx.MustGet("user").(jwt.UserClaims)
+	uc, ok := cloudOperator(ctx)
+	if !ok {
+		return
+	}
 	req.ID = id
 	req.OperatorID = uc.Uid
 	req.OperatorName = uc.Username
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		req.ID, req.OperatorID, req.OperatorName = id, uc.Uid, uc.Username
 		return nil, h.service.DeleteTreeCloudResource(ctx.Request.Context(), &req)
 	})
 }
@@ -149,6 +168,7 @@ func (h *TreeCloudHandler) BindTreeCloudResource(ctx *gin.Context) {
 	req.ID = id
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		req.ID = id
 		return nil, h.service.BindTreeCloudResource(ctx.Request.Context(), &req)
 	})
 }
@@ -165,6 +185,7 @@ func (h *TreeCloudHandler) UnBindTreeCloudResource(ctx *gin.Context) {
 	req.ID = id
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		req.ID = id
 		return nil, h.service.UnBindTreeCloudResource(ctx.Request.Context(), &req)
 	})
 }
@@ -172,11 +193,15 @@ func (h *TreeCloudHandler) UnBindTreeCloudResource(ctx *gin.Context) {
 func (h *TreeCloudHandler) SyncTreeCloudResource(ctx *gin.Context) {
 	var req model.SyncTreeCloudResourceReq
 
-	uc := ctx.MustGet("user").(jwt.UserClaims)
+	uc, ok := cloudOperator(ctx)
+	if !ok {
+		return
+	}
 	req.OperatorID = uc.Uid
 	req.OperatorName = uc.Username
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		req.OperatorID, req.OperatorName = uc.Uid, uc.Username
 		return h.service.SyncTreeCloudResource(ctx.Request.Context(), &req)
 	})
 }
@@ -331,6 +356,7 @@ func (h *TreeCloudHandler) UpdateCloudResourceStatus(ctx *gin.Context) {
 	req.ID = id
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		req.ID = id
 		return nil, h.service.UpdateCloudResourceStatus(ctx.Request.Context(), &req)
 	})
 }
@@ -338,11 +364,15 @@ func (h *TreeCloudHandler) UpdateCloudResourceStatus(ctx *gin.Context) {
 func (h *TreeCloudHandler) BatchDeleteTreeCloudResource(ctx *gin.Context) {
 	var req model.BatchDeleteTreeCloudResourceReq
 
-	uc := ctx.MustGet("user").(jwt.UserClaims)
+	uc, ok := cloudOperator(ctx)
+	if !ok {
+		return
+	}
 	req.OperatorID = uc.Uid
 	req.OperatorName = uc.Username
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		req.OperatorID, req.OperatorName = uc.Uid, uc.Username
 		return nil, h.service.BatchDeleteTreeCloudResource(ctx.Request.Context(), &req)
 	})
 }
@@ -350,11 +380,15 @@ func (h *TreeCloudHandler) BatchDeleteTreeCloudResource(ctx *gin.Context) {
 func (h *TreeCloudHandler) BatchUpdateCloudResourceStatus(ctx *gin.Context) {
 	var req model.BatchUpdateCloudResourceStatusReq
 
-	uc := ctx.MustGet("user").(jwt.UserClaims)
+	uc, ok := cloudOperator(ctx)
+	if !ok {
+		return
+	}
 	req.OperatorID = uc.Uid
 	req.OperatorName = uc.Username
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		req.OperatorID, req.OperatorName = uc.Uid, uc.Username
 		return nil, h.service.BatchUpdateCloudResourceStatus(ctx.Request.Context(), &req)
 	})
 }

@@ -66,6 +66,10 @@ jobs:
         run: python scripts/integration/schema_smoke.py --mysql-cloud-temporary
       - name: Isolated MySQL provider credential migration
         run: python scripts/integration/schema_smoke.py --mysql-cloud-provider-credentials
+      - name: Isolated MySQL cloud region transaction and fencing
+        run: python scripts/integration/schema_smoke.py --mysql-cloud-region-sync
+      - name: Isolated MySQL temporary credential full sync
+        run: python scripts/integration/schema_smoke.py --mysql-cloud-temporary-full
       - name: Isolated MySQL immutable instance notification scope
         run: python scripts/integration/schema_smoke.py --mysql-instance-source
       - name: Isolated MySQL idempotent notification update
