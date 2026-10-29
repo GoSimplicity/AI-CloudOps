@@ -53,7 +53,7 @@ jobs:
       - name: Gateway smoke
         env:
           CLOUDOPS_PROMTOOL_IMAGE: prom/prometheus:v3.2.1
-        run: go test -tags=smoke ./internal/app ./internal/middleware ./internal/cron/api ./internal/cron/handler ./internal/cron/scheduler ./internal/cron/executor ./internal/cron/dao ./internal/tree/api ./internal/tree/ssh ./pkg/ssh ./pkg/terminal ./pkg/di ./pkg/logger ./internal/prometheus/webhook/di ./internal/prometheus/cache
+        run: go test -tags=smoke ./internal/app ./internal/middleware ./internal/cron/api ./internal/cron/service ./internal/cron/handler ./internal/cron/scheduler ./internal/cron/executor ./internal/cron/dao ./internal/tree/api ./internal/tree/ssh ./pkg/ssh ./pkg/terminal ./pkg/di ./pkg/logger ./internal/prometheus/webhook/di ./internal/prometheus/cache
 
       - name: Build
         run: go build -v main.go

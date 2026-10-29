@@ -28,6 +28,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -43,6 +44,17 @@ import (
 type scheduledEntry struct {
 	id        string
 	signature string
+	spec      string
+	task      *asynq.Task
+	options   []asynq.Option
+}
+
+// StatusSnapshot 反映本进程最近一次调度配置加载结果，不包含数据库错误正文
+type StatusSnapshot struct {
+	Running             bool
+	Ready               bool
+	ConsecutiveFailures int
+	LastSuccess         time.Time
 }
 
 type taskScheduler interface {
@@ -57,8 +69,54 @@ type CronScheduler struct {
 	cronDAO   dao.CronJobDAO
 	scheduler taskScheduler
 	client    *asynq.Client
+	statusMu  sync.RWMutex
+	status    StatusSnapshot
+	retryWait func(context.Context, time.Duration) error
 	// localExecAllowed 读取 cron.allow_local_exec；为 nil 时读取全局配置（测试可替换）
 	localExecAllowed func() bool
+}
+
+// Status 返回线程安全的本地调度状态快照
+func (cs *CronScheduler) Status() StatusSnapshot {
+	cs.statusMu.RLock()
+	defer cs.statusMu.RUnlock()
+	return cs.status
+}
+
+func (cs *CronScheduler) setRunning(running bool) {
+	cs.statusMu.Lock()
+	defer cs.statusMu.Unlock()
+	cs.status.Running = running
+	if !running {
+		cs.status.Ready = false
+	}
+}
+
+func (cs *CronScheduler) recordLoadResult(err error) {
+	cs.statusMu.Lock()
+	defer cs.statusMu.Unlock()
+	if err != nil {
+		cs.status.Ready = false
+		cs.status.ConsecutiveFailures++
+		return
+	}
+	cs.status.Ready = true
+	cs.status.ConsecutiveFailures = 0
+	cs.status.LastSuccess = time.Now().UTC()
+}
+
+func (cs *CronScheduler) wait(ctx context.Context, delay time.Duration) error {
+	if cs.retryWait != nil {
+		return cs.retryWait(ctx, delay)
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // allowLocalExec 当前是否允许调度命令行(2)/脚本(4)任务
@@ -95,28 +153,31 @@ func NewCronScheduler(
 // StartScheduler 启动调度器 - 从数据库加载任务并调度
 func (cs *CronScheduler) StartScheduler(ctx context.Context) error {
 	cs.logger.Info("启动Cron任务调度器")
-
-	if err := cs.loadAndScheduleJobs(ctx); err != nil {
-		cs.logger.Error("加载任务失败", zap.Error(err))
-		return err
-	}
-
-	// 定期重新加载任务配置（每30秒检查一次，及时清理已删除的任务）
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
+	cs.setRunning(true)
+	defer cs.setRunning(false)
+	const maxDelay = 30 * time.Second
+	retryDelay := time.Second
 	for {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
+			return nil
+		}
+		err := cs.loadAndScheduleJobs(ctx)
+		cs.recordLoadResult(err)
+		delay := maxDelay
+		if err != nil {
+			cs.logger.Error("加载调度配置失败，等待重试", zap.String("error_type", fmt.Sprintf("%T", err)), zap.Duration("retry_delay", retryDelay))
+			delay = retryDelay
+			retryDelay *= 2
+			if retryDelay > maxDelay {
+				retryDelay = maxDelay
+			}
+		} else {
+			retryDelay = time.Second
+			cs.logger.Debug("任务配置重新加载完成")
+		}
+		if cs.wait(ctx, delay) != nil {
 			cs.logger.Info("Cron任务调度器已停止")
 			return nil
-		case <-ticker.C:
-			cs.logger.Debug("重新加载任务配置")
-			if err := cs.loadAndScheduleJobs(ctx); err != nil {
-				cs.logger.Error("重新加载任务失败", zap.Error(err))
-			} else {
-				cs.logger.Debug("任务配置重新加载完成")
-			}
 		}
 	}
 }
@@ -126,7 +187,7 @@ func (cs *CronScheduler) loadAndScheduleJobs(ctx context.Context) error {
 	defer cs.mu.Unlock()
 	jobs, err := cs.cronDAO.GetEnabledCronJobs(ctx)
 	if err != nil {
-		cs.logger.Error("获取启用任务列表失败", zap.Error(err))
+		cs.logger.Error("获取启用任务列表失败", zap.String("error_type", fmt.Sprintf("%T", err)))
 		return err
 	}
 
@@ -174,7 +235,7 @@ func (cs *CronScheduler) loadAndScheduleJobs(ctx context.Context) error {
 			cs.logger.Error("调度任务失败",
 				zap.Int("jobID", job.ID),
 				zap.String("jobName", job.Name),
-				zap.Error(err))
+				zap.String("error_type", fmt.Sprintf("%T", err)))
 			failedCount++
 			continue
 		}
@@ -192,6 +253,9 @@ func (cs *CronScheduler) loadAndScheduleJobs(ctx context.Context) error {
 		zap.Int("skipped", skippedCount),
 		zap.Int("failed", failedCount))
 
+	if failedCount > 0 {
+		return fmt.Errorf("%d 个任务未能登记", failedCount)
+	}
 	return nil
 }
 
@@ -211,29 +275,45 @@ func (cs *CronScheduler) scheduleJob(job *model.CronJob) error {
 		return err
 	}
 
+	// 与实际 Asynq 使用同一解析合同，失败时不能先注销旧配置
+	if _, err := task.ParseSchedule(job.Schedule); err != nil {
+		return fmt.Errorf("无效的调度表达式: %w", err)
+	}
+
 	// 创建Asynq任务
-	task := asynq.NewTask("cron:task", payloadBytes)
+	queueTask := asynq.NewTask("cron:task", payloadBytes)
+	options := []asynq.Option{asynq.MaxRetry(job.MaxRetry)}
 
 	signature := fmt.Sprintf("%d:%s:%s", job.MaxRetry, job.Schedule, string(payloadBytes))
-	if entry, exists := cs.entries[job.ID]; exists {
-		if entry.signature == signature {
+	previous, replacing := cs.entries[job.ID]
+	if replacing {
+		if previous.signature == signature {
 			return nil
 		}
-		if err := cs.scheduler.Unregister(entry.id); err != nil {
-			return err
+		if err := cs.scheduler.Unregister(previous.id); err != nil {
+			return fmt.Errorf("注销旧调度失败: %w", err)
 		}
 		delete(cs.entries, job.ID)
 	}
 	// 每次入队由 Asynq 生成独立任务 ID，避免已归档任务阻塞后续周期
 	// 调度条目的注销仍使用 Register 返回的条目 ID
-	entryID, err := cs.scheduler.Register(job.Schedule, task, asynq.MaxRetry(job.MaxRetry))
+	entryID, err := cs.scheduler.Register(job.Schedule, queueTask, options...)
 	if err != nil {
-		return err
+		if replacing && previous.task != nil {
+			restored, restoreErr := cs.scheduler.Register(previous.spec, previous.task, previous.options...)
+			if restoreErr != nil {
+				return fmt.Errorf("新调度登记失败且旧调度恢复失败: %w", errors.Join(err, restoreErr))
+			}
+			previous.id = restored
+			cs.entries[job.ID] = previous
+			return fmt.Errorf("新调度登记失败，旧配置已恢复: %w", err)
+		}
+		return fmt.Errorf("调度登记失败: %w", err)
 	}
 	if cs.entries == nil {
 		cs.entries = make(map[int]scheduledEntry)
 	}
-	cs.entries[job.ID] = scheduledEntry{id: entryID, signature: signature}
+	cs.entries[job.ID] = scheduledEntry{id: entryID, signature: signature, spec: job.Schedule, task: queueTask, options: options}
 	return nil
 }
 

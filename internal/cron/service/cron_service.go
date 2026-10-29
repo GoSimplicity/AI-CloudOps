@@ -117,6 +117,10 @@ func (s *cronService) CreateCronJob(ctx context.Context, req *model.CreateCronJo
 		return err
 	}
 
+	if _, err := task.ParseSchedule(req.Schedule); err != nil {
+		return fmt.Errorf("调度表达式无效: %w", err)
+	}
+
 	if err := s.validateBasicJobConfig(req.JobType, req.Command, req.HTTPUrl, req.ScriptContent, req.SSHResourceID, req.SSHCommand); err != nil {
 		s.logger.Error("任务配置验证失败", zap.String("name", req.Name), zap.Error(err))
 		return err
@@ -172,6 +176,10 @@ func (s *cronService) UpdateCronJob(ctx context.Context, req *model.UpdateCronJo
 	if err := s.checkLocalExecAllowed(req.JobType); err != nil {
 		s.logger.Warn("拒绝更新为本地执行任务", zap.Int("id", req.ID), zap.Int8("jobType", int8(req.JobType)))
 		return err
+	}
+
+	if _, err := task.ParseSchedule(req.Schedule); err != nil {
+		return fmt.Errorf("调度表达式无效: %w", err)
 	}
 
 	if err := s.validateBasicJobConfig(req.JobType, req.Command, req.HTTPUrl, req.ScriptContent, req.SSHResourceID, req.SSHCommand); err != nil {
@@ -300,6 +308,10 @@ func (s *cronService) EnableCronJob(ctx context.Context, id int) error {
 		return err
 	}
 
+	if _, err := task.ParseSchedule(job.Schedule); err != nil {
+		return fmt.Errorf("调度表达式无效: %w", err)
+	}
+
 	if err := s.cronDAO.UpdateCronJobStatus(ctx, id, model.CronJobStatusEnabled); err != nil {
 		s.logger.Error("启用任务失败", zap.Int("id", id), zap.Error(err))
 		return err
@@ -382,9 +394,8 @@ func (s *cronService) TriggerCronJob(ctx context.Context, id int) error {
 func (s *cronService) ValidateSchedule(ctx context.Context, req *model.ValidateScheduleReq) (*model.ValidateScheduleResp, error) {
 	s.logger.Info("验证调度表达式", zap.String("schedule", req.Schedule))
 
-	// 使用robfig/cron库验证表达式
-	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
-	schedule, err := parser.Parse(req.Schedule)
+	// 与实际Asynq调度器使用相同的表达式解析规则
+	schedule, err := task.ParseSchedule(req.Schedule)
 	if err != nil {
 		s.logger.Warn("调度表达式验证失败", zap.String("schedule", req.Schedule), zap.Error(err))
 		return &model.ValidateScheduleResp{
@@ -417,8 +428,7 @@ func (s *cronService) fillNextRunTime(job *model.CronJob) {
 	}
 
 	// 解析cron表达式
-	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
-	schedule, err := parser.Parse(job.Schedule)
+	schedule, err := task.ParseSchedule(job.Schedule)
 	if err != nil {
 		s.logger.Warn("解析调度表达式失败",
 			zap.Int("jobID", job.ID),
@@ -428,7 +438,8 @@ func (s *cronService) fillNextRunTime(job *model.CronJob) {
 	}
 
 	// 计算下次运行时间
-	now := time.Now()
+	// Asynq默认使用UTC，不能依赖后端主机的本地时区
+	now := time.Now().UTC()
 	nextTime := schedule.Next(now)
 	job.NextRunTime = &nextTime
 }
@@ -491,11 +502,11 @@ func (s *cronService) generateNextRunTimes(schedule cron.Schedule, count int) mo
 	var nextRunTimes []string
 	now := time.Now()
 
-	// 确保时间格式化使用本地时区
+	// 按Asynq的UTC时区计算，再转换为本机时区展示
+	now = now.UTC()
 	for i := 0; i < count; i++ {
 		next := schedule.Next(now)
-		// 使用中国标准时间格式，更友好的显示
-		nextRunTimes = append(nextRunTimes, next.Format("2006-01-02 15:04:05 MST"))
+		nextRunTimes = append(nextRunTimes, next.In(time.Local).Format("2006-01-02 15:04:05 MST"))
 		now = next
 	}
 

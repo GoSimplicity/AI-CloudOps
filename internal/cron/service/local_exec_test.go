@@ -155,7 +155,7 @@ func (listOnlyDAO) GetCronJobList(context.Context, *model.GetCronJobListReq) ([]
 func TestEnableCronJobLocalExecSwitch(t *testing.T) {
 	for _, allowed := range []bool{false, true} {
 		for _, jobType := range append(allJobTypes, model.CronJobTypeSystem) {
-			store := &localExecStore{job: &model.CronJob{Model: model.Model{ID: 1}, Status: model.CronJobStatusDisabled, JobType: jobType}}
+			store := &localExecStore{job: &model.CronJob{Model: model.Model{ID: 1}, Status: model.CronJobStatusDisabled, JobType: jobType, Schedule: "@every 1h"}}
 			err := newLocalExecService(allowed, store, nil).EnableCronJob(context.Background(), 1)
 			if !allowed && task.IsLocalExecJobType(jobType) {
 				if !errors.Is(err, task.ErrLocalExecDisabled) || store.status != nil {
