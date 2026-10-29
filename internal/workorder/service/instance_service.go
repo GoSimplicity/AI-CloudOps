@@ -344,7 +344,7 @@ func (s *instanceService) UpdateInstance(ctx context.Context, req *model.UpdateW
 	}
 
 	// 只有草稿和待处理状态可以更新
-	if ins.Status != model.InstanceStatusDraft && ins.Status != model.InstanceStatusPending {
+	if !instanceStatusAllowsEdit(ins.Status) {
 		return fmt.Errorf("当前状态的工单不允许修改")
 	}
 
@@ -1133,6 +1133,12 @@ func (s *instanceService) GetAvailableActions(ctx context.Context, instanceID in
 	}
 
 	s.logger.Debug("工单实例信息", zap.Int8("status", instance.Status), zap.Int("processID", instance.ProcessID))
+	// 编辑由更新接口 RBAC 与实例状态共同约束，不依赖流程步骤受理人。
+	// 动作列表仅描述状态可用性，调用方仍必须拥有更新接口权限。
+	actions := []string{}
+	if instanceStatusAllowsEdit(instance.Status) {
+		actions = append(actions, "edit")
+	}
 
 	currentStep, err := s.GetCurrentStep(ctx, instanceID)
 	if err != nil {
@@ -1142,7 +1148,7 @@ func (s *instanceService) GetAvailableActions(ctx context.Context, instanceID in
 
 	if currentStep == nil {
 		s.logger.Warn("当前步骤为空", zap.Int("instanceID", instanceID))
-		return []string{}, nil
+		return actions, nil
 	}
 
 	s.logger.Debug("当前步骤信息", zap.String("stepID", currentStep.ID), zap.String("stepType", currentStep.Type), zap.String("assigneeType", currentStep.AssigneeType))
@@ -1152,13 +1158,17 @@ func (s *instanceService) GetAvailableActions(ctx context.Context, instanceID in
 
 	if !canOperate {
 		s.logger.Info("用户无权限操作此工单", zap.Int("operatorID", operatorID), zap.Int("instanceID", instanceID))
-		return []string{}, nil // 无权限操作
+		return actions, nil // 不能流转，但仍可按更新接口权限编辑
 	}
 
-	actions := s.getActionsForStep(currentStep, instance.Status)
+	actions = append(actions, s.getActionsForStep(currentStep, instance.Status)...)
 	s.logger.Debug("获取到的可用动作", zap.Strings("actions", actions))
 
 	return actions, nil
+}
+
+func instanceStatusAllowsEdit(status int8) bool {
+	return status == model.InstanceStatusDraft || status == model.InstanceStatusPending
 }
 
 func (s *instanceService) findStepByStatus(steps []model.ProcessStep, status int8) *model.ProcessStep {
@@ -1234,7 +1244,12 @@ func (s *instanceService) getActionsForStep(step *model.ProcessStep, currentStat
 	var actions []string
 
 	// 基础动作：从步骤定义中获取
-	actions = append(actions, step.Actions...)
+	for _, action := range step.Actions {
+		// 不能由流程定义绕过 UpdateInstance 的编辑状态约束。
+		if action != "edit" {
+			actions = append(actions, action)
+		}
+	}
 
 	// 根据当前状态添加额外的动作
 	switch currentStatus {
