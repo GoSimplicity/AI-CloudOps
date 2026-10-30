@@ -11,7 +11,11 @@ import (
 	"sort"
 	"strconv"
 	"time"
+	"unicode/utf8"
 )
+
+type managedOperationClaimKey struct{}
+type managedOperationClaim struct{ key, token string }
 
 func operationKey(id string, owner int) (string, error) {
 	parsed, err := uuid.Parse(id)
@@ -21,15 +25,44 @@ func operationKey(id string, owner int) (string, error) {
 	sum := sha256.Sum256([]byte(strconv.Itoa(owner) + ":" + id))
 	return hex.EncodeToString(sum[:]), nil
 }
+func managedRequestHash(accountID, regionID int, kind string, resourceIDs []string) string {
+	ids := append([]string{}, resourceIDs...)
+	sort.Strings(ids)
+	body, _ := json.Marshal(struct {
+		Account, Region int
+		Kind            string
+		IDs             []string
+	}{accountID, regionID, kind, ids})
+	hash := sha256.Sum256(body)
+	return hex.EncodeToString(hash[:])
+}
 func operationView(row *model.CloudManagedOperation) (*model.CloudManagedOperationView, error) {
-	view := &model.CloudManagedOperationView{OperationID: row.OperationID, CloudAccountID: row.CloudAccountID, CloudAccountRegionID: row.CloudAccountRegionID, Kind: row.Kind, State: row.State, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+	if len(row.ResourceIDs) > 100 {
+		return nil, errors.New("操作资源快照无效")
+	}
+	seen := map[string]bool{}
+	for _, id := range row.ResourceIDs {
+		if !managedIDPattern.MatchString(id) || seen[id] {
+			return nil, errors.New("操作资源快照无效")
+		}
+		seen[id] = true
+	}
+	view := &model.CloudManagedOperationView{OperationID: row.OperationID, CloudAccountID: row.CloudAccountID, CloudAccountRegionID: row.CloudAccountRegionID, Kind: row.Kind, ResourceIDs: append(model.StringList{}, row.ResourceIDs...), State: row.State, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, ReviewedAt: row.ReviewedAt, ReviewedBy: row.ReviewedBy, ReviewReason: row.ReviewReason, PreviousState: row.PreviousState}
 	if row.State == "running" {
 		if time.Since(row.CreatedAt) > 2*time.Minute {
 			view.State = "unknown"
 		}
 		return view, nil
 	}
-	if row.State != "completed" || len(row.Result) == 0 || len(row.Result) > 8192 {
+	if row.State == "reviewed" {
+		if row.ReviewedAt == nil || row.ReviewedAt.IsZero() || row.ReviewedBy <= 0 || utf8.RuneCountInString(row.ReviewReason) < 10 || utf8.RuneCountInString(row.ReviewReason) > 1000 || (row.PreviousState != "not_recorded" && row.PreviousState != "running" && row.PreviousState != "completed") {
+			return nil, errors.New("操作核对记录不完整")
+		}
+		if len(row.Result) == 0 {
+			return view, nil
+		}
+	}
+	if (row.State != "completed" && row.State != "reviewed") || len(row.Result) == 0 || len(row.Result) > 8192 {
 		return nil, errors.New("操作状态不可用")
 	}
 	var fields map[string]json.RawMessage
@@ -86,15 +119,8 @@ func (s *managedCloudService) SyncManaged(ctx context.Context, req *model.SyncCl
 	if len(req.ResourceIDs) == 0 || s.store == nil {
 		return nil, errors.New("操作存储或资源ID不可用")
 	}
-	ids := append([]string{}, req.ResourceIDs...)
-	sort.Strings(ids)
-	body, _ := json.Marshal(struct {
-		Account, Region int
-		Kind            string
-		IDs             []string
-	}{req.CloudAccountID, req.CloudAccountRegionID, req.Kind, ids})
-	hash := sha256.Sum256(body)
-	row := &model.CloudManagedOperation{Key: key, OperationID: req.OperationID, OperatorID: req.OperatorID, CloudAccountID: req.CloudAccountID, CloudAccountRegionID: req.CloudAccountRegionID, Kind: req.Kind, RequestHash: hex.EncodeToString(hash[:]), State: "running", ClaimToken: uuid.NewString()}
+	requestHash := managedRequestHash(req.CloudAccountID, req.CloudAccountRegionID, req.Kind, req.ResourceIDs)
+	row := &model.CloudManagedOperation{Key: key, OperationID: req.OperationID, OperatorID: req.OperatorID, CloudAccountID: req.CloudAccountID, CloudAccountRegionID: req.CloudAccountRegionID, Kind: req.Kind, ResourceIDs: append(model.StringList{}, req.ResourceIDs...), RequestHash: requestHash, State: "running", ClaimToken: uuid.NewString()}
 	created, previous, err := s.store.BeginOperation(ctx, row)
 	if err != nil {
 		return nil, errors.New("操作未确认，禁止重复提交")
@@ -109,7 +135,8 @@ func (s *managedCloudService) SyncManaged(ctx context.Context, req *model.SyncCl
 		}
 		return view.Result, nil
 	}
-	result, runErr := s.syncManaged(ctx, req)
+	executionCtx := context.WithValue(ctx, managedOperationClaimKey{}, managedOperationClaim{key: key, token: row.ClaimToken})
+	result, runErr := s.syncManaged(executionCtx, req)
 	if runErr != nil {
 		result = &model.CloudManagedSyncResult{Status: "failed", ErrorCategory: "request_rejected", RetrySafe: true}
 	}

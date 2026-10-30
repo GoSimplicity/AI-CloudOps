@@ -99,6 +99,24 @@ func TestMySQLManagedResourceAtomicAndFencing(t *testing.T) {
 	if err := db.Model(&model.CloudManagedOperation{}).Count(&operations).Error; err != nil || operations != 1 {
 		t.Fatal("MySQL operation deduplication failed")
 	}
+	reviewReq := &model.ReviewCloudManagedOperationReq{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: operationReq.Kind, ResourceIDs: append([]string{}, operationReq.ResourceIDs...), ResourcesVerified: true, Reason: "已核对数据库中的操作原始结果与实际资源", OperationID: operationReq.OperationID, OperatorID: 7}
+	reviewedOperation, err := svc.ReviewManagedOperation(context.Background(), reviewReq)
+	if err != nil || reviewedOperation.State != "reviewed" || reviewedOperation.PreviousState != "completed" || reviewedOperation.Result == nil {
+		t.Fatal("MySQL original operation review failed")
+	}
+	if _, err := svc.ReviewManagedOperation(context.Background(), reviewReq); err == nil {
+		t.Fatal("MySQL review overwrote existing audit")
+	}
+	missingReview := *reviewReq
+	missingReview.OperationID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+	if view, err := svc.ReviewManagedOperation(context.Background(), &missingReview); err != nil || view.PreviousState != "not_recorded" {
+		t.Fatal("MySQL missing operation tombstone failed")
+	}
+	delayed := operationReq
+	delayed.OperationID = missingReview.OperationID
+	if _, err := svc.SyncManaged(context.Background(), &delayed); err == nil {
+		t.Fatal("MySQL reviewed tombstone allowed delayed delivery")
+	}
 	var total int64
 	db.Model(&model.CloudManagedResource{}).Count(&total)
 	if total != 2 {

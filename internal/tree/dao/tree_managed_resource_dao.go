@@ -12,6 +12,8 @@ import (
 )
 
 type ManagedCloudDAO interface {
+	CheckOperationClaim(context.Context, string, string) error
+	ReviewOperation(context.Context, *model.CloudManagedOperation, string) error
 	BeginOperation(context.Context, *model.CloudManagedOperation) (bool, *model.CloudManagedOperation, error)
 	CompleteOperation(context.Context, string, []byte) error
 	GetOperation(context.Context, string, int) (*model.CloudManagedOperation, error)

@@ -75,6 +75,17 @@ func (d *treeCloudDAO) ReleaseRegionSyncLease(ctx context.Context, lease *Region
 
 // ApplyRegionSync protects account/region changes and lease fencing in one short transaction.
 func (d *treeCloudDAO) ApplyRegionSync(ctx context.Context, account *model.CloudAccount, region *model.CloudAccountRegion, lease *RegionSyncLease, apply func(TreeCloudDAO) error) error {
+	return d.applyRegionLocked(ctx, account, region, lease, true, apply)
+}
+
+// Review can inspect a disabled account without enabling sync or cloud access.
+func (d *treeCloudDAO) ReviewManagedOperation(ctx context.Context, account *model.CloudAccount, region *model.CloudAccountRegion, lease *RegionSyncLease, row *model.CloudManagedOperation, reason string) error {
+	return d.applyRegionLocked(ctx, account, region, lease, false, func(tx TreeCloudDAO) error { return tx.ManagedResourceStore().ReviewOperation(ctx, row, reason) })
+}
+func (d *treeCloudDAO) ReviewManagedHistory(ctx context.Context, account *model.CloudAccount, region *model.CloudAccountRegion, lease *RegionSyncLease, req *model.ResolveCloudManagedHistoryReq) error {
+	return d.applyRegionLocked(ctx, account, region, lease, false, func(tx TreeCloudDAO) error { return tx.ManagedResourceStore().ResolveHistory(ctx, req) })
+}
+func (d *treeCloudDAO) applyRegionLocked(ctx context.Context, account *model.CloudAccount, region *model.CloudAccountRegion, lease *RegionSyncLease, requireEnabled bool, apply func(TreeCloudDAO) error) error {
 	if account == nil || region == nil || lease == nil || region.ID != lease.RegionID {
 		return errors.New("地域同步参数无效")
 	}
@@ -91,14 +102,14 @@ func (d *treeCloudDAO) ApplyRegionSync(ctx context.Context, account *model.Cloud
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, account.ID).Error; err != nil {
 		return err
 	}
-	if current.Status != model.CloudAccountEnabled || current.Provider != account.Provider || current.CredentialVersion != account.CredentialVersion {
+	if (requireEnabled && current.Status != model.CloudAccountEnabled) || current.Provider != account.Provider || current.CredentialVersion != account.CredentialVersion {
 		return errors.New("云账户或凭据已变化，请重新同步")
 	}
 	var actual model.CloudAccountRegion
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND cloud_account_id = ?", region.ID, account.ID).First(&actual).Error; err != nil {
 		return err
 	}
-	if actual.Status != model.CloudAccountRegionEnabled || actual.Region != region.Region || !sameOptionalString(actual.ProjectID, region.ProjectID) {
+	if (requireEnabled && actual.Status != model.CloudAccountRegionEnabled) || actual.Region != region.Region || !sameOptionalString(actual.ProjectID, region.ProjectID) {
 		return errors.New("地域配置已变化，请重新同步")
 	}
 	var locked model.CloudRegionSyncLease

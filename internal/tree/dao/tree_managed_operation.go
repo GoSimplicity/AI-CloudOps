@@ -42,3 +42,13 @@ func (d *managedCloudDAO) GetOperation(ctx context.Context, key string, owner in
 	}
 	return &row, nil
 }
+
+// Called inside the region commit transaction with the same account->region->
+// lease->operation lock order as manual review.
+func (d *managedCloudDAO) CheckOperationClaim(ctx context.Context, key, token string) error {
+	var row model.CloudManagedOperation
+	if err := d.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`key` = ? AND claim_token = ? AND state = ?", key, token, "running").First(&row).Error; err != nil {
+		return errors.New("操作已核对或领取状态失效")
+	}
+	return nil
+}

@@ -16,9 +16,10 @@ import (
 
 type managedAPIStub struct {
 	service.ManagedCloudService
-	actor     int
-	historyID int
-	calls     int
+	actor       int
+	historyID   int
+	operationID string
+	calls       int
 }
 
 func (s *managedAPIStub) ResolveManagedHistory(_ context.Context, req *model.ResolveCloudManagedHistoryReq) error {
@@ -31,6 +32,12 @@ func (s *managedAPIStub) GetManagedOperation(_ context.Context, id string, owner
 	s.actor = owner
 	s.calls++
 	return &model.CloudManagedOperationView{OperationID: id, State: "running"}, nil
+}
+func (s *managedAPIStub) ReviewManagedOperation(_ context.Context, req *model.ReviewCloudManagedOperationReq) (*model.CloudManagedOperationView, error) {
+	s.actor = req.OperatorID
+	s.operationID = req.OperationID
+	s.calls++
+	return &model.CloudManagedOperationView{OperationID: req.OperationID, State: "reviewed"}, nil
 }
 func (s *managedAPIStub) SyncManaged(_ context.Context, req *model.SyncCloudManagedResourcesReq) (*model.CloudManagedSyncResult, error) {
 	s.actor = req.OperatorID
@@ -73,6 +80,8 @@ func TestManagedCloudRoutesRequirePermissionsAndTrustedActor(t *testing.T) {
 		{"review wildcard denied", "POST", "/api/tree/cloud/managed/history/12/resolve", `{}`, []*model.Api{{Method: 2, Path: "/api/tree/cloud/*"}}, 7, 403, 0, 0},
 		{"operation owner", "GET", "/api/tree/cloud/managed/operations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa?operator_id=999", "", []*model.Api{{Method: 1, Path: "/api/tree/cloud/managed/operations/:operation_id"}}, 7, 200, 1, 7},
 		{"operation permission denied", "GET", "/api/tree/cloud/managed/operations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "", []*model.Api{{Method: 1, Path: "/api/tree/cloud/managed/history"}}, 7, 403, 0, 0},
+		{"review operation owner", "POST", "/api/tree/cloud/managed/operations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/resolve", `{"cloud_account_id":1,"cloud_account_region_id":2,"kind":"rds","resource_ids":["rm-one"],"resources_verified":true,"reason":"resources checked and reconciled","operator_id":999,"operation_id":"forged"}`, []*model.Api{{Method: 2, Path: model.CloudManagedOperationReviewRoute}}, 7, 200, 1, 7},
+		{"review operation wildcard denied", "POST", "/api/tree/cloud/managed/operations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/resolve", `{}`, []*model.Api{{Method: 2, Path: "/api/tree/cloud/*"}}, 7, 403, 0, 0},
 		{"list allowed", "GET", "/api/tree/cloud/managed/list?cloud_account_id=1&cloud_account_region_id=2&kind=rds", "", []*model.Api{{Method: 1, Path: "/api/tree/cloud/managed/list"}}, 7, 200, 1, 0},
 		{"detail wrong grant", "GET", "/api/tree/cloud/managed/detail/9?cloud_account_id=1&cloud_account_region_id=2&kind=rds", "", []*model.Api{{Method: 1, Path: "/api/tree/cloud/managed/list"}}, 7, 403, 0, 0},
 		{"detail allowed", "GET", "/api/tree/cloud/managed/detail/9?cloud_account_id=1&cloud_account_region_id=2&kind=rds", "", []*model.Api{{Method: 1, Path: "/api/tree/cloud/managed/detail/:id"}}, 7, 200, 1, 0},
@@ -91,6 +100,9 @@ func TestManagedCloudRoutesRequirePermissionsAndTrustedActor(t *testing.T) {
 			app.ServeHTTP(response, req)
 			if tc.name == "review trusted actor" && stub.historyID != 12 {
 				t.Fatal("body overrode history route identity")
+			}
+			if tc.name == "review operation owner" && stub.operationID != "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" {
+				t.Fatal("body overrode operation identity")
 			}
 			if response.Code != tc.status || stub.calls != tc.calls || stub.actor != tc.actor {
 				t.Fatalf("status=%d calls=%d actor=%d", response.Code, stub.calls, stub.actor)

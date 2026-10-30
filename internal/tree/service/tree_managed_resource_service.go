@@ -18,6 +18,7 @@ type managedReader interface {
 	ListCache(context.Context, []string) ([]model.AliyunCacheInstance, error)
 }
 type ManagedCloudService interface {
+	ReviewManagedOperation(context.Context, *model.ReviewCloudManagedOperationReq) (*model.CloudManagedOperationView, error)
 	GetManagedOperation(context.Context, string, int) (*model.CloudManagedOperationView, error)
 	ResolveManagedHistory(context.Context, *model.ResolveCloudManagedHistoryReq) error
 	ListManaged(context.Context, *model.ListCloudManagedResourcesReq) (model.ListResp[*model.CloudManagedResource], error)
@@ -201,7 +202,7 @@ func (s *managedCloudService) syncManaged(ctx context.Context, req *model.SyncCl
 			status, category = "cancelled", "cancelled"
 		}
 		now := time.Now().UTC()
-		history := &model.CloudManagedSyncHistory{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: req.Kind, ResourceIDs: append(model.StringList{}, req.ResourceIDs...), Status: status, ErrorCategory: category, OperatorID: req.OperatorID, StartedAt: now, FinishedAt: &now}
+		history := &model.CloudManagedSyncHistory{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: req.Kind, ClientOperationID: req.OperationID, ResourceIDs: append(model.StringList{}, req.ResourceIDs...), Status: status, ErrorCategory: category, OperatorID: req.OperatorID, StartedAt: now, FinishedAt: &now}
 		if s.store.CreateHistory(auditCtx, history) != nil {
 			result.ErrorCategory = "audit_unavailable"
 			result.RetrySafe = false
@@ -229,7 +230,13 @@ func (s *managedCloudService) syncManaged(ctx context.Context, req *model.SyncCl
 	if blocked {
 		return nil, errors.New("存在未核对的同步结果，请先人工核对并记录处置")
 	}
-	history := &model.CloudManagedSyncHistory{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: req.Kind, ResourceIDs: append(model.StringList{}, req.ResourceIDs...), OperationID: lease.Token, LeaseExpiresMS: lease.ExpiresEpochMS, Status: "running", OperatorID: req.OperatorID, StartedAt: time.Now().UTC()}
+	if claim, ok := operationCtx.Value(managedOperationClaimKey{}).(managedOperationClaim); ok {
+		row, err := s.store.GetOperation(operationCtx, claim.key, req.OperatorID)
+		if err != nil || row == nil || row.State != "running" || row.ClaimToken != claim.token {
+			return nil, errors.New("操作已核对或领取状态失效")
+		}
+	}
+	history := &model.CloudManagedSyncHistory{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: req.Kind, ClientOperationID: req.OperationID, ResourceIDs: append(model.StringList{}, req.ResourceIDs...), OperationID: lease.Token, LeaseExpiresMS: lease.ExpiresEpochMS, Status: "running", OperatorID: req.OperatorID, StartedAt: time.Now().UTC()}
 	if s.store.CreateHistory(operationCtx, history) != nil {
 		result.ErrorCategory = "audit_unavailable"
 		result.RetrySafe = false
@@ -332,6 +339,11 @@ func (s *managedCloudService) syncManaged(ctx context.Context, req *model.SyncCl
 		managed := tx.ManagedResourceStore()
 		if managed == nil {
 			return errors.New("资源存储不可用")
+		}
+		if claim, ok := operationCtx.Value(managedOperationClaimKey{}).(managedOperationClaim); ok {
+			if err := managed.CheckOperationClaim(operationCtx, claim.key, claim.token); err != nil {
+				return err
+			}
 		}
 		for _, item := range items {
 			if err := operationCtx.Err(); err != nil {

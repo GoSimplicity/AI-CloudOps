@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -41,5 +40,5 @@ func (s *managedCloudService) ResolveManagedHistory(ctx context.Context, req *mo
 	copyReq.Reason = reason
 	// Acquiring a fresh fenced lease excludes active synchronization, including
 	// old paused workers; this operation itself never calls a cloud API.
-	return s.regions.ApplyRegionSync(ctx, account, region, lease, func(tx dao.TreeCloudDAO) error { return tx.ManagedResourceStore().ResolveHistory(ctx, &copyReq) })
+	return s.regions.ReviewManagedHistory(ctx, account, region, lease, &copyReq)
 }

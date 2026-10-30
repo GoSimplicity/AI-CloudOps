@@ -26,6 +26,7 @@ type CloudManagedSyncHistory struct {
 	CloudAccountRegionID int        `json:"cloud_account_region_id" gorm:"not null;index"`
 	Kind                 string     `json:"kind" gorm:"type:varchar(20);not null"`
 	ResourceIDs          StringList `json:"resource_ids" gorm:"type:text;not null"`
+	ClientOperationID    string     `json:"operation_id,omitempty" gorm:"type:varchar(36);index"`
 	OperationID          string     `json:"-" gorm:"type:varchar(64);index"`
 	LeaseExpiresMS       int64      `json:"-" gorm:"not null;default:0"`
 	Status               string     `json:"status" gorm:"type:varchar(20);not null;index"`

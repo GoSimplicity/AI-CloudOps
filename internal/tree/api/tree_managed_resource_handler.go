@@ -19,6 +19,7 @@ func (h *ManagedCloudHandler) RegisterRouters(server *gin.Engine) {
 	group.GET("/detail/:id", h.Detail)
 	group.GET("/history", h.History)
 	group.GET("/operations/:operation_id", h.GetOperation)
+	group.POST("/operations/:operation_id/resolve", h.ReviewOperation)
 	group.POST("/sync", h.Sync)
 	group.POST("/history/:id/resolve", h.ResolveHistory)
 }
@@ -95,5 +96,18 @@ func (h *ManagedCloudHandler) GetOperation(ctx *gin.Context) {
 	}
 	base.HandleRequest(ctx, nil, func() (interface{}, error) {
 		return h.service.GetManagedOperation(ctx.Request.Context(), ctx.Param("operation_id"), user.Uid)
+	})
+}
+
+func (h *ManagedCloudHandler) ReviewOperation(ctx *gin.Context) {
+	user, ok := managedCloudUser(ctx)
+	if !ok {
+		return
+	}
+	var req model.ReviewCloudManagedOperationReq
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		req.OperatorID = user.Uid
+		req.OperationID = ctx.Param("operation_id")
+		return h.service.ReviewManagedOperation(ctx.Request.Context(), &req)
 	})
 }

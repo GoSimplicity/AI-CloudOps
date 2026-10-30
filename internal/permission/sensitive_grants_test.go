@@ -15,6 +15,7 @@ func TestSensitivePermissionsRequireExactMethodAndTemplate(t *testing.T) {
 		{Method: 2, Path: model.K8sServiceAccountTokenRoute},
 		{Method: 2, Path: model.WorkorderNotificationCancelScheduledRoute},
 		{Method: 2, Path: model.CloudManagedResolveRoute},
+		{Method: 2, Path: model.CloudManagedOperationReviewRoute},
 	} {
 		t.Run(endpoint.Code(), func(t *testing.T) {
 			if !Allowed([]Grant{{Method: endpoint.Method, Path: endpoint.Path}}, endpoint.Method, endpoint.Path) {
