@@ -19,6 +19,7 @@ func (h *ManagedCloudHandler) RegisterRouters(server *gin.Engine) {
 	group.GET("/detail/:id", h.Detail)
 	group.GET("/history", h.History)
 	group.POST("/sync", h.Sync)
+	group.POST("/history/:id/resolve", h.ResolveHistory)
 }
 
 func (h *ManagedCloudHandler) Detail(ctx *gin.Context) {
@@ -65,5 +66,23 @@ func (h *ManagedCloudHandler) Sync(ctx *gin.Context) {
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
 		req.OperatorID = user.Uid
 		return h.service.SyncManaged(ctx.Request.Context(), &req)
+	})
+}
+
+func (h *ManagedCloudHandler) ResolveHistory(ctx *gin.Context) {
+	user, ok := managedCloudUser(ctx)
+	if !ok {
+		return
+	}
+	id, err := base.GetParamID(ctx)
+	if err != nil || id <= 0 {
+		base.ErrorWithMessage(ctx, "无效的历史ID")
+		return
+	}
+	var req model.ResolveCloudManagedHistoryReq
+	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+		req.HistoryID = id
+		req.OperatorID = user.Uid
+		return nil, h.service.ResolveManagedHistory(ctx.Request.Context(), &req)
 	})
 }

@@ -16,10 +16,17 @@ import (
 
 type managedAPIStub struct {
 	service.ManagedCloudService
-	actor int
-	calls int
+	actor     int
+	historyID int
+	calls     int
 }
 
+func (s *managedAPIStub) ResolveManagedHistory(_ context.Context, req *model.ResolveCloudManagedHistoryReq) error {
+	s.actor = req.OperatorID
+	s.historyID = req.HistoryID
+	s.calls++
+	return nil
+}
 func (s *managedAPIStub) SyncManaged(_ context.Context, req *model.SyncCloudManagedResourcesReq) (*model.CloudManagedSyncResult, error) {
 	s.actor = req.OperatorID
 	s.calls++
@@ -57,6 +64,8 @@ func TestManagedCloudRoutesRequirePermissionsAndTrustedActor(t *testing.T) {
 		{"denied sync", "POST", "/api/tree/cloud/managed/sync", `{"cloud_account_id":1,"cloud_account_region_id":2,"kind":"rds","resource_ids":["rm-test"]}`, nil, 7, 403, 0, 0},
 		{"trusted actor", "POST", "/api/tree/cloud/managed/sync", `{"cloud_account_id":1,"cloud_account_region_id":2,"kind":"rds","resource_ids":["rm-test"],"operator_id":999}`, []*model.Api{{Method: 2, Path: "/api/tree/cloud/managed/sync"}}, 7, 200, 1, 7},
 		{"wrong method grant", "POST", "/api/tree/cloud/managed/sync", `{"cloud_account_id":1,"cloud_account_region_id":2,"kind":"rds","resource_ids":["rm-test"]}`, []*model.Api{{Method: 1, Path: "/api/tree/cloud/managed/sync"}}, 7, 403, 0, 0},
+		{"review trusted actor", "POST", "/api/tree/cloud/managed/history/12/resolve", `{"cloud_account_id":1,"cloud_account_region_id":2,"kind":"rds","resources_verified":true,"reason":"resources checked and reconciled","operator_id":999,"history_id":999}`, []*model.Api{{Method: 2, Path: model.CloudManagedResolveRoute}}, 7, 200, 1, 7},
+		{"review wildcard denied", "POST", "/api/tree/cloud/managed/history/12/resolve", `{}`, []*model.Api{{Method: 2, Path: "/api/tree/cloud/*"}}, 7, 403, 0, 0},
 		{"list allowed", "GET", "/api/tree/cloud/managed/list?cloud_account_id=1&cloud_account_region_id=2&kind=rds", "", []*model.Api{{Method: 1, Path: "/api/tree/cloud/managed/list"}}, 7, 200, 1, 0},
 		{"detail wrong grant", "GET", "/api/tree/cloud/managed/detail/9?cloud_account_id=1&cloud_account_region_id=2&kind=rds", "", []*model.Api{{Method: 1, Path: "/api/tree/cloud/managed/list"}}, 7, 403, 0, 0},
 		{"detail allowed", "GET", "/api/tree/cloud/managed/detail/9?cloud_account_id=1&cloud_account_region_id=2&kind=rds", "", []*model.Api{{Method: 1, Path: "/api/tree/cloud/managed/detail/:id"}}, 7, 200, 1, 0},
@@ -73,6 +82,9 @@ func TestManagedCloudRoutesRequirePermissionsAndTrustedActor(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 			response := httptest.NewRecorder()
 			app.ServeHTTP(response, req)
+			if tc.name == "review trusted actor" && stub.historyID != 12 {
+				t.Fatal("body overrode history route identity")
+			}
 			if response.Code != tc.status || stub.calls != tc.calls || stub.actor != tc.actor {
 				t.Fatalf("status=%d calls=%d actor=%d", response.Code, stub.calls, stub.actor)
 			}

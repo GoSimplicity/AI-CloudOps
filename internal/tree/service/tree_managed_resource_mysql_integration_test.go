@@ -150,6 +150,16 @@ func TestMySQLManagedResourceAtomicAndFencing(t *testing.T) {
 	if err := db.Model(&model.CloudRegionSyncLease{}).Where("region_id = ?", region.ID).Update("expires_epoch_ms", 0).Error; err != nil {
 		t.Fatal(err)
 	}
+	if _, err := svc.SyncManaged(context.Background(), req); err == nil {
+		t.Fatal("unreviewed expired sync accepted")
+	}
+	var previous model.CloudManagedSyncHistory
+	if err := db.Where("status = ?", "running").First(&previous).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ResolveManagedHistory(context.Background(), &model.ResolveCloudManagedHistoryReq{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: "rds", HistoryID: previous.ID, OperatorID: 9, Reason: "已经核对实际资源与本地记录的状态", ResourcesVerified: true}); err != nil {
+		t.Fatal(err)
+	}
 	fresh, err := svc.SyncManaged(context.Background(), req)
 	if err != nil || fresh.Status != "success" {
 		t.Fatal("new owner failed")

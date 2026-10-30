@@ -234,12 +234,29 @@ func TestManagedSyncSerializesAndFencesExpiredOwner(t *testing.T) {
 	if err := db.Model(&model.CloudRegionSyncLease{}).Where("region_id = ?", region.ID).Update("expires_epoch_ms", 0).Error; err != nil {
 		t.Fatal(err)
 	}
+	if _, err := svc.SyncManaged(context.Background(), req); err == nil {
+		t.Fatal("expired in-flight result bypassed review")
+	}
+	var previous model.CloudManagedSyncHistory
+	if err := db.Where("status = ?", "running").First(&previous).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ResolveManagedHistory(context.Background(), &model.ResolveCloudManagedHistoryReq{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: "rds", HistoryID: previous.ID, OperatorID: 7, Reason: "已经核对实际资源与本地记录的状态", ResourcesVerified: true}); err != nil {
+		t.Fatal(err)
+	}
 	fresh, err := svc.SyncManaged(context.Background(), req)
 	if err != nil || fresh.Status != "success" {
 		t.Fatalf("fresh=%+v err=%v", fresh, err)
 	}
 	close(release)
 	stale := <-done
+	var reviewed model.CloudManagedSyncHistory
+	if err := db.First(&reviewed, previous.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if reviewed.ResolvedAt == nil || reviewed.Status != "running" {
+		t.Fatal("late worker rewrote reviewed history")
+	}
 	if stale.Status != "failed" {
 		t.Fatalf("stale=%+v", stale)
 	}

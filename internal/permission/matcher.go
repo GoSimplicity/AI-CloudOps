@@ -61,7 +61,7 @@ func Covers(granted, template string) bool {
 		return true
 	}
 	// Secret 明文读取和 ServiceAccount 令牌操作必须显式授予。
-	if template == model.K8sSecretRevealRoute || template == model.K8sServiceAccountTokenRoute || template == model.WorkorderNotificationResolveRoute || template == model.WorkorderNotificationRetryEventRoute || template == model.WorkorderNotificationCancelScheduledRoute {
+	if template == model.CloudManagedResolveRoute || template == model.K8sSecretRevealRoute || template == model.K8sServiceAccountTokenRoute || template == model.WorkorderNotificationResolveRoute || template == model.WorkorderNotificationRetryEventRoute || template == model.WorkorderNotificationCancelScheduledRoute {
 		return false
 	}
 	if strings.Count(granted, "*") == 1 && strings.HasSuffix(granted, "*") {

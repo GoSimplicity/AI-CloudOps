@@ -18,6 +18,8 @@ type CloudManagedResource struct {
 
 func (CloudManagedResource) TableName() string { return "cl_tree_cloud_managed_resource" }
 
+const CloudManagedResolveRoute = "/api/tree/cloud/managed/history/:id/resolve"
+
 type CloudManagedSyncHistory struct {
 	Model
 	CloudAccountID       int        `json:"cloud_account_id" gorm:"not null;index"`
@@ -34,6 +36,9 @@ type CloudManagedSyncHistory struct {
 	OperatorID           int        `json:"operator_id" gorm:"not null"`
 	StartedAt            time.Time  `json:"started_at" gorm:"not null"`
 	FinishedAt           *time.Time `json:"finished_at,omitempty"`
+	ResolvedAt           *time.Time `json:"resolved_at,omitempty"`
+	ResolvedBy           int        `json:"resolved_by,omitempty"`
+	ResolutionReason     string     `json:"resolution_reason,omitempty" gorm:"type:varchar(1000)"`
 	RetrySafe            *bool      `json:"retry_safe,omitempty" gorm:"-"`
 }
 
@@ -61,4 +66,14 @@ type CloudManagedSyncResult struct {
 	UpdateCount   int    `json:"update_count"`
 	ErrorCategory string `json:"error_category,omitempty"`
 	RetrySafe     bool   `json:"retry_safe"`
+}
+
+type ResolveCloudManagedHistoryReq struct {
+	CloudAccountID       int    `json:"cloud_account_id" binding:"required,gt=0"`
+	CloudAccountRegionID int    `json:"cloud_account_region_id" binding:"required,gt=0"`
+	Kind                 string `json:"kind" binding:"required,oneof=rds clb cache"`
+	Reason               string `json:"reason" binding:"required,min=10,max=1000"`
+	ResourcesVerified    bool   `json:"resources_verified" binding:"required"`
+	HistoryID            int    `json:"-"`
+	OperatorID           int    `json:"-"`
 }

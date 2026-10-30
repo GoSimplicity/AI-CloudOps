@@ -12,6 +12,8 @@ import (
 )
 
 type ManagedCloudDAO interface {
+	HasUnresolvedHistory(context.Context, int, int, string) (bool, error)
+	ResolveHistory(context.Context, *model.ResolveCloudManagedHistoryReq) error
 	List(context.Context, *model.ListCloudManagedResourcesReq) ([]*model.CloudManagedResource, int64, error)
 	Get(context.Context, *model.ListCloudManagedResourcesReq, int) (*model.CloudManagedResource, error)
 	Upsert(context.Context, *model.CloudManagedResource) (bool, error)
@@ -99,7 +101,7 @@ func (d *managedCloudDAO) CreateHistory(ctx context.Context, row *model.CloudMan
 }
 func (d *managedCloudDAO) CompleteHistory(ctx context.Context, id int, token string, result model.CloudManagedSyncResult) error {
 	now := time.Now().UTC()
-	update := d.db.WithContext(ctx).Model(&model.CloudManagedSyncHistory{}).Where("id = ? AND operation_id = ? AND status = ?", id, token, "running").Updates(map[string]any{"status": "success", "count": result.Count, "new_count": result.NewCount, "update_count": result.UpdateCount, "error_category": "", "finished_at": now})
+	update := d.db.WithContext(ctx).Model(&model.CloudManagedSyncHistory{}).Where("id = ? AND operation_id = ? AND status = ? AND resolved_at IS NULL", id, token, "running").Updates(map[string]any{"status": "success", "count": result.Count, "new_count": result.NewCount, "update_count": result.UpdateCount, "error_category": "", "finished_at": now})
 	if update.Error != nil {
 		return update.Error
 	}
@@ -113,7 +115,7 @@ func (d *managedCloudDAO) FinishHistory(ctx context.Context, id int, token, stat
 		return errors.New("同步历史状态无效")
 	}
 	now := time.Now().UTC()
-	result := d.db.WithContext(ctx).Model(&model.CloudManagedSyncHistory{}).Where("id = ? AND operation_id = ? AND status = ?", id, token, "running").Updates(map[string]any{"status": status, "error_category": category, "finished_at": now})
+	result := d.db.WithContext(ctx).Model(&model.CloudManagedSyncHistory{}).Where("id = ? AND operation_id = ? AND status = ? AND resolved_at IS NULL", id, token, "running").Updates(map[string]any{"status": status, "error_category": category, "finished_at": now})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -121,6 +123,9 @@ func (d *managedCloudDAO) FinishHistory(ctx context.Context, id int, token, stat
 		var row model.CloudManagedSyncHistory
 		if err := d.db.WithContext(ctx).Where("id = ? AND operation_id = ?", id, token).First(&row).Error; err != nil {
 			return err
+		}
+		if row.ResolvedAt != nil {
+			return nil
 		}
 		if row.Status != "success" && row.Status != "failed" && row.Status != "unknown" && row.Status != "cancelled" {
 			return errors.New("同步历史状态冲突")
@@ -147,6 +152,11 @@ func (d *managedCloudDAO) ListHistory(ctx context.Context, req *model.ListCloudM
 		return nil, 0, err
 	}
 	for _, row := range rows {
+		if row.ResolvedAt != nil {
+			safe := true
+			row.RetrySafe = &safe
+			continue
+		}
 		if row.Status == "running" && row.LeaseExpiresMS <= now {
 			row.Status = "unknown"
 			row.ErrorCategory = "lease_expired"

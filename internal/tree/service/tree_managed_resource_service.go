@@ -18,6 +18,7 @@ type managedReader interface {
 	ListCache(context.Context, []string) ([]model.AliyunCacheInstance, error)
 }
 type ManagedCloudService interface {
+	ResolveManagedHistory(context.Context, *model.ResolveCloudManagedHistoryReq) error
 	ListManaged(context.Context, *model.ListCloudManagedResourcesReq) (model.ListResp[*model.CloudManagedResource], error)
 	GetManaged(context.Context, *model.ListCloudManagedResourcesReq, int) (*model.CloudManagedResource, error)
 	ListManagedHistory(context.Context, *model.ListCloudManagedResourcesReq) (model.ListResp[*model.CloudManagedSyncHistory], error)
@@ -220,6 +221,13 @@ func (s *managedCloudService) SyncManaged(ctx context.Context, req *model.SyncCl
 			}
 		}
 	}()
+	blocked, checkErr := s.store.HasUnresolvedHistory(operationCtx, account.ID, region.ID, req.Kind)
+	if checkErr != nil {
+		return nil, errors.New("无法核对同步历史，禁止重试")
+	}
+	if blocked {
+		return nil, errors.New("存在未核对的同步结果，请先人工核对并记录处置")
+	}
 	history := &model.CloudManagedSyncHistory{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: req.Kind, ResourceIDs: append(model.StringList{}, req.ResourceIDs...), OperationID: lease.Token, LeaseExpiresMS: lease.ExpiresEpochMS, Status: "running", OperatorID: req.OperatorID, StartedAt: time.Now().UTC()}
 	if s.store.CreateHistory(operationCtx, history) != nil {
 		result.ErrorCategory = "audit_unavailable"
