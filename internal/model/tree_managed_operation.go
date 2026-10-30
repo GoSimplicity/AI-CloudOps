@@ -68,3 +68,10 @@ type ListCloudManagedOperationsReq struct {
 	ViewerID        int  `form:"-" json:"-"`
 	TrustedSuper    bool `form:"-" json:"-"`
 }
+
+// ScopeBlocked is an aggregate only; ordinary users never receive other owners' IDs.
+type CloudManagedOperationList struct {
+	Items        []*CloudManagedOperationView `json:"items"`
+	Total        int64                        `json:"total"`
+	ScopeBlocked bool                         `json:"scope_blocked"`
+}

@@ -40,10 +40,10 @@ func (s *managedAPIStub) ReviewManagedOperation(_ context.Context, req *model.Re
 	s.calls++
 	return &model.CloudManagedOperationView{OperationID: req.OperationID, State: "reviewed"}, nil
 }
-func (s *managedAPIStub) ListManagedOperations(_ context.Context, req *model.ListCloudManagedOperationsReq) (model.ListResp[*model.CloudManagedOperationView], error) {
+func (s *managedAPIStub) ListManagedOperations(_ context.Context, req *model.ListCloudManagedOperationsReq) (model.CloudManagedOperationList, error) {
 	s.actor = req.ViewerID
 	s.calls++
-	return model.ListResp[*model.CloudManagedOperationView]{}, nil
+	return model.CloudManagedOperationList{}, nil
 }
 func (s *managedAPIStub) SyncManaged(_ context.Context, req *model.SyncCloudManagedResourcesReq) (*model.CloudManagedSyncResult, error) {
 	s.actor = req.OperatorID

@@ -18,7 +18,7 @@ type managedReader interface {
 	ListCache(context.Context, []string) ([]model.AliyunCacheInstance, error)
 }
 type ManagedCloudService interface {
-	ListManagedOperations(context.Context, *model.ListCloudManagedOperationsReq) (model.ListResp[*model.CloudManagedOperationView], error)
+	ListManagedOperations(context.Context, *model.ListCloudManagedOperationsReq) (model.CloudManagedOperationList, error)
 	ReviewManagedOperation(context.Context, *model.ReviewCloudManagedOperationReq) (*model.CloudManagedOperationView, error)
 	GetManagedOperation(context.Context, string, int) (*model.CloudManagedOperationView, error)
 	ResolveManagedHistory(context.Context, *model.ResolveCloudManagedHistoryReq) error

@@ -6,8 +6,8 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 )
 
-func (s *managedCloudService) ListManagedOperations(ctx context.Context, req *model.ListCloudManagedOperationsReq) (model.ListResp[*model.CloudManagedOperationView], error) {
-	empty := model.ListResp[*model.CloudManagedOperationView]{}
+func (s *managedCloudService) ListManagedOperations(ctx context.Context, req *model.ListCloudManagedOperationsReq) (model.CloudManagedOperationList, error) {
+	empty := model.CloudManagedOperationList{ScopeBlocked: true}
 	if req == nil || req.ViewerID <= 0 {
 		return empty, errors.New("缺少可信用户身份")
 	}
@@ -51,5 +51,13 @@ func (s *managedCloudService) ListManagedOperations(ctx context.Context, req *mo
 		}
 		views = append(views, view)
 	}
-	return model.ListResp[*model.CloudManagedOperationView]{Items: views, Total: total}, nil
+	operationsBlocked, err := s.store.HasUnresolvedOperations(ctx, req.CloudAccountID, req.CloudAccountRegionID, req.Kind, "")
+	if err != nil {
+		return empty, errors.New("无法确认范围操作状态")
+	}
+	historyBlocked, err := s.store.HasUnresolvedHistory(ctx, req.CloudAccountID, req.CloudAccountRegionID, req.Kind)
+	if err != nil {
+		return empty, errors.New("无法确认范围历史状态")
+	}
+	return model.CloudManagedOperationList{Items: views, Total: total, ScopeBlocked: operationsBlocked || historyBlocked}, nil
 }

@@ -10,7 +10,7 @@ import (
 
 func (d *managedCloudDAO) HasUnresolvedHistory(ctx context.Context, accountID, regionID int, kind string) (bool, error) {
 	var count int64
-	err := d.db.WithContext(ctx).Model(&model.CloudManagedSyncHistory{}).Where("cloud_account_id = ? AND cloud_account_region_id = ? AND kind = ? AND resolved_at IS NULL AND status IN (?, ?)", accountID, regionID, kind, "unknown", "running").Count(&count).Error
+	err := d.db.WithContext(ctx).Model(&model.CloudManagedSyncHistory{}).Where("cloud_account_id = ? AND cloud_account_region_id = ? AND kind = ? AND resolved_at IS NULL AND status NOT IN (?, ?, ?)", accountID, regionID, kind, "success", "failed", "cancelled").Count(&count).Error
 	return count > 0, err
 }
 

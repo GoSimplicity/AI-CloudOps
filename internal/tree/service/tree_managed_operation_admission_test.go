@@ -27,7 +27,7 @@ func TestManagedScopeBlocksUncertainOperationWithoutHistoryAcrossOwners(t *testi
 		t.Fatal("legacy request bypassed durable scope guard")
 	}
 	own, err := svc.ListManagedOperations(context.Background(), &model.ListCloudManagedOperationsReq{ListCloudManagedResourcesReq: model.ListCloudManagedResourcesReq{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: "rds"}, ViewerID: 7, UnconfirmedOnly: true})
-	if err != nil || own.Total != 0 {
+	if err != nil || own.Total != 0 || !own.ScopeBlocked {
 		t.Fatal("other user's uncertainty leaked")
 	}
 	if _, err := svc.ListManagedOperations(context.Background(), &model.ListCloudManagedOperationsReq{ListCloudManagedResourcesReq: model.ListCloudManagedResourcesReq{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: "rds"}, ViewerID: 7, AllOwners: true}); err == nil {
@@ -59,6 +59,11 @@ func TestManagedScopeBlocksUncertainOperationWithoutHistoryAcrossOwners(t *testi
 	if err != nil || result.Status != "success" {
 		t.Fatalf("audited scope stayed blocked: %v", err)
 	}
+	cleared, err := svc.ListManagedOperations(context.Background(), &model.ListCloudManagedOperationsReq{ListCloudManagedResourcesReq: model.ListCloudManagedResourcesReq{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: "rds"}, ViewerID: 7, UnconfirmedOnly: true})
+	if err != nil || cleared.ScopeBlocked || cleared.Total != 0 {
+		t.Fatal("scope summary did not reflect completed review")
+	}
+
 }
 
 func TestManagedAdmissionOrdersPendingReservationsAndPersistsStart(t *testing.T) {
@@ -155,4 +160,16 @@ func TestManagedAdmissionEqualTimestampsHaveDeterministicWinner(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = svc.regions.ReleaseRegionSyncLease(context.Background(), lease)
+}
+
+func TestManagedScopeSummaryBlocksUnknownHistoryState(t *testing.T) {
+	db, svc, account, region := managedServiceFixture(t)
+	row := model.CloudManagedSyncHistory{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: "rds", ResourceIDs: model.StringList{"rm-one"}, Status: "unexpected", OperatorID: 7, StartedAt: time.Now().UTC()}
+	if err := db.Create(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	response, err := svc.ListManagedOperations(context.Background(), &model.ListCloudManagedOperationsReq{ListCloudManagedResourcesReq: model.ListCloudManagedResourcesReq{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: "rds"}, ViewerID: 7})
+	if err != nil || !response.ScopeBlocked {
+		t.Fatal("unknown history status was declared safe")
+	}
 }
