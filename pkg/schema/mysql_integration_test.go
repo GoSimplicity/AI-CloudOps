@@ -252,3 +252,28 @@ func TestMySQLPanicAfterDDLLeavesDirtyHistory(t *testing.T) {
 		t.Fatal("panicked version was replayed")
 	}
 }
+
+func TestMySQLSharedInitializationLock(t *testing.T) {
+	db, _ := ownedMySQL(t)
+	db.SetMaxOpenConns(1)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	manifest := validManifest()
+	if err := Migrate(ctx, db, manifest); err != nil {
+		t.Fatal(err)
+	}
+	if err := WithMigrationLock(ctx, db, func(conn *sql.Conn) error {
+		return VerifyConnection(ctx, conn, manifest)
+	}); err != nil {
+		t.Fatal("same-connection verification failed", err)
+	}
+	err := WithMigrationLock(ctx, db, func(*sql.Conn) error { panic("private-lock-panic-canary") })
+	if !errors.Is(err, ErrUncertain) || strings.Contains(err.Error(), "private-lock-panic-canary") {
+		t.Fatal("lock panic was not sanitized")
+	}
+	if err := WithMigrationLock(ctx, db, func(conn *sql.Conn) error {
+		return VerifyConnection(ctx, conn, manifest)
+	}); err != nil {
+		t.Fatal("panic retained the migration lock", err)
+	}
+}

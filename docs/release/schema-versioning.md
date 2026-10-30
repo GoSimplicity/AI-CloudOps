@@ -30,3 +30,5 @@ go test -race -tags=integration ./pkg/schema -count=1 -timeout=180s
 ```sh
 go test -race -tags=integration ./internal/dbschema -count=1 -timeout=180s
 ```
+
+显式初始化（例如通知时区登记）可复用 `WithMigrationLock` 与 `VerifyConnection`：在同一个物理连接先锁定、再验证账本与操作，避免单连接池再次取连接而死锁。锁获取仍为fail-fast，不暗中重试初始化写入；callback必须在返回前提交或回滚事务，panic会脱敏并丢弃物理会话，避免事务和锁泄漏。新测试验证单连接池内核验及panic后的再次获取锁。

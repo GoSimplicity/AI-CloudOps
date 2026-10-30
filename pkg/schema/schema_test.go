@@ -125,3 +125,16 @@ func TestCallbackPanicAndUnexpectedStateDoNotLeakValues(t *testing.T) {
 		t.Fatal("unexpected history state leaked")
 	}
 }
+
+func TestSharedInitializationRejectsNilInputs(t *testing.T) {
+	ctx := context.Background()
+	if !errors.Is(VerifyConnection(ctx, nil, validManifest()), ErrPreflight) {
+		t.Fatal("nil connection accepted")
+	}
+	if !errors.Is(WithMigrationLock(ctx, nil, func(*sql.Conn) error { return nil }), ErrPreflight) {
+		t.Fatal("nil database accepted")
+	}
+	if !errors.Is(WithMigrationLock(ctx, nil, nil), ErrPreflight) {
+		t.Fatal("nil callback accepted")
+	}
+}

@@ -114,6 +114,19 @@ func Verify(ctx context.Context, db *sql.DB, migrations []Migration) error {
 		return fmt.Errorf("%w: connection unavailable", ErrPreflight)
 	}
 	defer conn.Close()
+	return VerifyConnection(ctx, conn, migrations)
+}
+
+// VerifyConnection performs the same bounded, read-only history verification on
+// an already-owned connection. Callers can verify while holding the migration
+// lock without acquiring a second pool connection.
+func VerifyConnection(ctx context.Context, conn *sql.Conn, migrations []Migration) error {
+	if err := Validate(migrations); err != nil {
+		return err
+	}
+	if conn == nil {
+		return ErrPreflight
+	}
 	records, err := history(ctx, conn, len(migrations)+1)
 	if err != nil {
 		return fmt.Errorf("%w: schema history unavailable", ErrPreflight)
@@ -134,6 +147,20 @@ func Verify(ctx context.Context, db *sql.DB, migrations []Migration) error {
 func Migrate(ctx context.Context, db *sql.DB, migrations []Migration) (result error) {
 	if err := Validate(migrations); err != nil {
 		return err
+	}
+	return WithMigrationLock(ctx, db, func(conn *sql.Conn) error {
+		return migrateConnection(ctx, conn, migrations)
+	})
+}
+
+// WithMigrationLock serializes explicit schema and initialization operations on
+// one primary-only MySQL connection. The callback must use only this connection,
+// finish or roll back every transaction, and must not close the connection.
+// This function does not initialize history or execute DDL itself. Lost lock
+// acknowledgements discard the physical session; callback panics are sanitized.
+func WithMigrationLock(ctx context.Context, db *sql.DB, run func(*sql.Conn) error) (result error) {
+	if run == nil {
+		return ErrPreflight
 	}
 	if db == nil {
 		return ErrPreflight
@@ -175,6 +202,18 @@ func Migrate(ctx context.Context, db *sql.DB, migrations []Migration) (result er
 			result = errors.Join(result, ErrUncertain)
 		}
 	}()
+	defer func() {
+		if recover() != nil {
+			// The callback may have left an open transaction. Discard the
+			// physical session so neither that transaction nor its lock is reused.
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+			result = errors.Join(result, ErrUncertain)
+		}
+	}()
+	return run(conn)
+}
+
+func migrateConnection(ctx context.Context, conn *sql.Conn, migrations []Migration) error {
 	if _, err := conn.ExecContext(ctx, ledgerDDL); err != nil {
 		return fmt.Errorf("%w: cannot initialize schema history", ErrUncertain)
 	}
