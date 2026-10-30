@@ -30,7 +30,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spf13/viper"
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
@@ -49,22 +49,30 @@ type monitorCache struct {
 	AlertRuleConfig        AlertRuleConfigCache
 	AlertRecordConfig      RecordRuleConfigCache
 	l                      *zap.Logger
+	enableAlert            bool
+	enableRecord           bool
 }
 
 func NewMonitorCache(
+	cfg *config.Config,
 	promConfig PrometheusConfigCache,
 	alertManagerConfig AlertManagerConfigCache,
 	alertRuleConfig AlertRuleConfigCache,
 	alertRecordConfig RecordRuleConfigCache,
 	l *zap.Logger,
-) MonitorCache {
+) (MonitorCache, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("配置不能为空")
+	}
 	return &monitorCache{
 		PrometheusMainConfig:   promConfig,
 		AlertManagerMainConfig: alertManagerConfig,
 		AlertRuleConfig:        alertRuleConfig,
 		AlertRecordConfig:      alertRecordConfig,
 		l:                      l,
-	}
+		enableAlert:            cfg.Prometheus.EnableAlert == 1,
+		enableRecord:           cfg.Prometheus.EnableRecord == 1,
+	}, nil
 }
 
 // MonitorCacheManager 监控缓存入口
@@ -78,19 +86,16 @@ func (mc *monitorCache) MonitorCacheManager(ctx context.Context) error {
 		name string
 		fn   func(context.Context) error
 	}
-	enableAlert := viper.GetInt("prometheus.enable_alert") == 1
-	enableRecord := viper.GetInt("prometheus.enable_record") == 1
-
 	tasks := make([]taskDef, 0, 4)
 	// 主配置（Prometheus、AlertManager）始终可执行，因为其生成与开关无关
 	tasks = append(tasks, taskDef{"Prometheus主配置", mc.PrometheusMainConfig.GenerateMainConfig})
 	tasks = append(tasks, taskDef{"AlertManager主配置", mc.AlertManagerMainConfig.GenerateMainConfig})
-	if enableAlert {
+	if mc.enableAlert {
 		tasks = append(tasks, taskDef{"告警规则配置", mc.AlertRuleConfig.GenerateMainConfig})
 	} else {
 		mc.l.Info("跳过告警规则配置生成：prometheus.enable_alert=0")
 	}
-	if enableRecord {
+	if mc.enableRecord {
 		tasks = append(tasks, taskDef{"预聚合规则配置", mc.AlertRecordConfig.GenerateMainConfig})
 	} else {
 		mc.l.Info("跳过预聚合规则配置生成：prometheus.enable_record=0")

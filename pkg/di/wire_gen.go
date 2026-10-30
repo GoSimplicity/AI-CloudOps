@@ -167,7 +167,10 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	alertRuleConfigCache := cache.NewAlertRuleConfigCache(logger, scrapePoolDAO, alertManagerRuleDAO, monitorConfigDAO, batchConfigManager, cmdable)
 	alertManagerRecordDAO := alert.NewAlertManagerRecordDAO(db, logger, userDAO)
 	recordRuleConfigCache := cache.NewRecordRuleConfigCache(logger, scrapePoolDAO, alertManagerRecordDAO, monitorConfigDAO, batchConfigManager, cmdable)
-	monitorCache := cache.NewMonitorCache(prometheusConfigCache, alertManagerConfigCache, alertRuleConfigCache, recordRuleConfigCache, logger)
+	monitorCache, err := cache.NewMonitorCache(cfg, prometheusConfigCache, alertManagerConfigCache, alertRuleConfigCache, recordRuleConfigCache, logger)
+	if err != nil {
+		return nil, err
+	}
 	alertManagerEventService := alert2.NewAlertManagerEventService(alertManagerEventDAO, monitorCache, logger, userDAO, alertManagerSendDAO)
 	alertEventHandler := api4.NewAlertEventHandler(alertManagerEventService)
 	alertManagerPoolService := alert2.NewAlertManagerPoolService(alertManagerPoolDAO, alertManagerSendDAO, logger, monitorCache)
