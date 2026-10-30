@@ -1,0 +1,275 @@
+// Command schema inspects and explicitly initializes versioned MySQL schemas.
+// It never loads application .env files or uses runtime database credentials.
+package main
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/GoSimplicity/AI-CloudOps/internal/dbschema"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/schema"
+	"github.com/go-sql-driver/mysql"
+	"golang.org/x/sys/unix"
+)
+
+const credentialEnvironment = "CLOUDOPS_SCHEMA_DSN"
+
+var errCredentials = errors.New("dedicated schema credentials are missing or invalid")
+
+type options struct {
+	command string
+	dsnFile string
+	timeout time.Duration
+	confirm bool
+}
+
+type schemaDatabase interface {
+	Verify(context.Context, []schema.Migration) error
+	PreflightFresh(context.Context) error
+	Migrate(context.Context, []schema.Migration) error
+	Close() error
+}
+
+type dependencies struct {
+	manifest func() ([]schema.Migration, error)
+	getenv   func(string) string
+	open     func(string, time.Duration) (schemaDatabase, error)
+}
+
+func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	os.Exit(run(ctx, os.Args[1:], os.Stdout, os.Stderr, dependencies{
+		manifest: dbschema.Manifest,
+		getenv:   os.Getenv,
+		open:     openDatabase,
+	}))
+}
+
+func parseOptions(args []string) (options, error) {
+	result := options{command: "plan", timeout: 2 * time.Minute}
+	if len(args) == 0 {
+		return result, nil
+	}
+	result.command = args[0]
+	if result.command != "plan" && result.command != "verify" && result.command != "migrate" {
+		return options{}, errors.New("expected plan, verify or migrate")
+	}
+	flags := flag.NewFlagSet("schema", flag.ContinueOnError)
+	// flag errors can include supplied values. Credentials must never appear in
+	// diagnostics, including accidentally pasted DSNs in unsupported arguments.
+	flags.SetOutput(io.Discard)
+	flags.StringVar(&result.dsnFile, "dsn-file", "", "private DSN file")
+	flags.DurationVar(&result.timeout, "timeout", result.timeout, "operation deadline")
+	flags.BoolVar(&result.confirm, "confirm-new-database", false, "allow fresh baseline DDL")
+	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
+		return options{}, errors.New("invalid command options; use --help")
+	}
+	if result.timeout < time.Second || result.timeout > 30*time.Minute {
+		return options{}, errors.New("timeout must be between 1s and 30m")
+	}
+	if result.command == "migrate" && !result.confirm {
+		return options{}, errors.New("migrate requires --confirm-new-database")
+	}
+	if result.command != "migrate" && result.confirm {
+		return options{}, errors.New("confirmation is only valid for migrate")
+	}
+	if result.command == "plan" && result.dsnFile != "" {
+		return options{}, errors.New("plan is offline and does not accept credentials")
+	}
+	return result, nil
+}
+
+func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps dependencies) int {
+	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
+		fmt.Fprintln(out, "Usage: schema [plan | verify | migrate --confirm-new-database] [--dsn-file PATH] [--timeout 2m]")
+		fmt.Fprintln(out, "Default plan is offline. Database commands use a private DSN file or CLOUDOPS_SCHEMA_DSN; no application .env is loaded.")
+		return 0
+	}
+	config, err := parseOptions(args)
+	if err != nil {
+		fmt.Fprintln(diagnostics, err.Error())
+		return 2
+	}
+	manifest, err := deps.manifest()
+	if err != nil || schema.Validate(manifest) != nil {
+		fmt.Fprintln(diagnostics, "embedded migration manifest is invalid")
+		return 1
+	}
+	if config.command == "plan" {
+		fmt.Fprintln(out, "Manifest only: database state has not been inspected; no changes executed.")
+		for _, migration := range manifest {
+			fmt.Fprintf(out, "version=%d name=%s checksum=%s\n", migration.Version, migration.Name, migration.Checksum)
+		}
+		return 0
+	}
+	dsn, err := readCredentials(config.dsnFile, deps.getenv)
+	if err != nil {
+		fmt.Fprintln(diagnostics, errCredentials.Error())
+		return 2
+	}
+	db, err := deps.open(dsn, config.timeout)
+	if err != nil {
+		fmt.Fprintln(diagnostics, "database connection configuration is invalid")
+		return 1
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(ctx, config.timeout)
+	defer cancel()
+	verification := db.Verify(ctx, manifest)
+	if config.command == "verify" || verification == nil {
+		if verification != nil {
+			fmt.Fprintln(diagnostics, safeError(verification))
+			return 1
+		}
+		fmt.Fprintln(out, "Schema history matches the embedded manifest. No changes executed.")
+		return 0
+	}
+	// Dirty/drift outcomes must never flow into migration automatically. A missing
+	// ledger is expected for a new database, but cannot establish freshness alone.
+	if !errors.Is(verification, schema.ErrPreflight) && !errors.Is(verification, schema.ErrPending) {
+		fmt.Fprintln(diagnostics, safeError(verification))
+		return 1
+	}
+	if err := db.PreflightFresh(ctx); err != nil {
+		fmt.Fprintln(diagnostics, safeError(err))
+		return 1
+	}
+	if err := db.Migrate(ctx, manifest); err != nil {
+		fmt.Fprintln(diagnostics, safeError(err))
+		return 1
+	}
+	if err := db.Verify(ctx, manifest); err != nil {
+		fmt.Fprintln(diagnostics, "migration returned but verification failed; inspect the database before retry")
+		return 1
+	}
+	fmt.Fprintln(out, "Fresh baseline applied and schema history verified. Application startup is a separate step.")
+	return 0
+}
+
+func safeError(err error) string {
+	switch {
+	case errors.Is(err, schema.ErrUncertain):
+		return "schema operation outcome is uncertain; inspect the database before retry"
+	case errors.Is(err, schema.ErrDirty):
+		return "schema history is dirty; reconcile partially committed DDL before retry"
+	case errors.Is(err, schema.ErrDrift):
+		return "schema history differs from this release; no automatic repair is permitted"
+	case errors.Is(err, dbschema.ErrLegacy):
+		return "unversioned database is not empty; explicit legacy adoption is required"
+	case errors.Is(err, schema.ErrLocked):
+		return "schema migration lock is unavailable"
+	case errors.Is(err, schema.ErrPending):
+		return "schema migrations are pending; verify does not execute migrations"
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return "schema operation was canceled or timed out; inspect state before retrying a write"
+	default:
+		return "schema inspection failed; check database access and history without exposing credentials"
+	}
+}
+
+func readCredentials(path string, getenv func(string) string) (string, error) {
+	if path == "" {
+		value := strings.TrimSpace(getenv(credentialEnvironment))
+		if value == "" || len(value) > 64*1024 || strings.ContainsAny(value, "\r\n\x00") {
+			return "", errCredentials
+		}
+		return value, nil
+	}
+	before, err := os.Lstat(path)
+	if err != nil || !privateFile(before) {
+		return "", errCredentials
+	}
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return "", errCredentials
+	}
+	file := os.NewFile(uintptr(fd), "schema credentials")
+	defer file.Close()
+	after, err := file.Stat()
+	if err != nil || !os.SameFile(before, after) || !privateFile(after) {
+		return "", errCredentials
+	}
+	content, err := io.ReadAll(io.LimitReader(file, 64*1024+1))
+	if err != nil || len(content) > 64*1024 {
+		return "", errCredentials
+	}
+	value := strings.TrimSpace(string(content))
+	if value == "" || strings.ContainsAny(value, "\r\n\x00") {
+		return "", errCredentials
+	}
+	return value, nil
+}
+
+func privateFile(info os.FileInfo) bool {
+	if info == nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+		return false
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return ok && stat.Uid == uint32(os.Geteuid())
+}
+
+type sqlDatabase struct{ db *sql.DB }
+
+func (db sqlDatabase) Verify(ctx context.Context, manifest []schema.Migration) error {
+	return schema.Verify(ctx, db.db, manifest)
+}
+func (db sqlDatabase) PreflightFresh(ctx context.Context) error {
+	conn, err := db.db.Conn(ctx)
+	if err != nil {
+		return schema.ErrPreflight
+	}
+	defer conn.Close()
+	return dbschema.PreflightFresh(ctx, conn)
+}
+func (db sqlDatabase) Migrate(ctx context.Context, manifest []schema.Migration) error {
+	return schema.Migrate(ctx, db.db, manifest)
+}
+func (db sqlDatabase) Close() error { return db.db.Close() }
+
+func databaseConfig(dsn string, deadline time.Duration) (*mysql.Config, error) {
+	config, err := mysql.ParseDSN(dsn)
+	if err != nil || config.DBName == "" || config.MultiStatements || config.AllowAllFiles || config.AllowCleartextPasswords || config.AllowFallbackToPlaintext {
+		return nil, errCredentials
+	}
+	config.Logger = &mysql.NopLogger{}
+	// Both context cancellation and transport deadlines bound failed handshakes
+	// and stalled SQL I/O. Keep stricter operator-provided timeout settings.
+	capDuration := func(value, limit time.Duration) time.Duration {
+		if limit > deadline {
+			limit = deadline
+		}
+		if value <= 0 || value > limit {
+			return limit
+		}
+		return value
+	}
+	config.Timeout = capDuration(config.Timeout, 5*time.Second)
+	config.ReadTimeout = capDuration(config.ReadTimeout, 30*time.Second)
+	config.WriteTimeout = capDuration(config.WriteTimeout, 30*time.Second)
+	return config, nil
+}
+
+func openDatabase(dsn string, timeout time.Duration) (schemaDatabase, error) {
+	config, err := databaseConfig(dsn, timeout)
+	if err != nil {
+		return nil, errCredentials
+	}
+	connector, err := mysql.NewConnector(config)
+	if err != nil {
+		return nil, errCredentials
+	}
+	db := sql.OpenDB(connector)
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	return sqlDatabase{db: db}, nil
+}
