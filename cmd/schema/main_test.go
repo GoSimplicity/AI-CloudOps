@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -51,6 +53,14 @@ func (db *fakeDatabase) VerifyClock(context.Context, string) error {
 func (db *fakeDatabase) InitializeClock(context.Context, string) error {
 	db.actions = append(db.actions, "init-clock")
 	return db.clockError
+}
+func (db *fakeDatabase) ValidateLegacy(context.Context) error {
+	db.actions = append(db.actions, "legacy-preflight")
+	return db.preflightError
+}
+func (db *fakeDatabase) AdoptBaseline(context.Context, []schema.Migration, string) error {
+	db.actions = append(db.actions, "adopt")
+	return db.migrationError
 }
 func (db *fakeDatabase) Close() error { db.actions = append(db.actions, "close"); return nil }
 
@@ -304,6 +314,33 @@ func TestStructuredRolesPlanKeepsPrivilegeStagesSeparate(t *testing.T) {
 		}
 		if !reflect.DeepEqual(payload.Statements, statements) {
 			t.Fatal("privilege stages mixed")
+		}
+	}
+}
+
+func TestLegacyCommandsRequireExplicitIntentAndPreserveWriteBoundary(t *testing.T) {
+	for _, args := range [][]string{{"adopt"}, {"adopt", "--confirm-legacy-schema", "--confirm-no-writers"}, {"verify", "--confirm-legacy-schema"}, {"preflight-legacy", "--confirm-no-writers"}, {"migrate", "--confirm-new-database", "--adoption-note-file", privateCanary}} {
+		if _, err := parseOptions(args); err == nil {
+			t.Fatal("unsafe adoption options accepted")
+		}
+	}
+	notePath := filepath.Join(t.TempDir(), "note")
+	if err := os.WriteFile(notePath, []byte("fixture operator reviewed schema after private backup"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		args    []string
+		actions []string
+	}{
+		{[]string{"preflight-legacy"}, []string{"legacy-preflight", "close"}},
+		{[]string{"adopt", "--confirm-legacy-schema", "--confirm-no-writers", "--adoption-note-file", notePath}, []string{"adopt", "verify", "close"}},
+	}
+	for _, tc := range cases {
+		var out, diagnostic bytes.Buffer
+		db := &fakeDatabase{}
+		code := run(context.Background(), tc.args, &out, &diagnostic, dependencies{manifest: dbschema.Manifest, getenv: func(string) string { return "fixture" }, open: func(string, time.Duration) (schemaDatabase, error) { return db, nil }})
+		if code != 0 || !reflect.DeepEqual(db.actions, tc.actions) {
+			t.Fatalf("status %d actions %v", code, db.actions)
 		}
 	}
 }

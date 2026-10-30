@@ -15,6 +15,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/dbschema"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/schema"
@@ -27,19 +28,21 @@ const credentialEnvironment = "CLOUDOPS_SCHEMA_DSN"
 var errCredentials = errors.New("dedicated schema credentials are missing or invalid")
 
 type options struct {
-	command      string
-	dsnFile      string
-	timeout      time.Duration
-	confirm      bool
-	confirmClock bool
-	zone         string
-	database     string
-	runtimeName  string
-	runtimeHost  string
-	migratorName string
-	migratorHost string
-	section      string
-	format       string
+	command       string
+	dsnFile       string
+	timeout       time.Duration
+	confirm       bool
+	confirmClock  bool
+	zone          string
+	database      string
+	runtimeName   string
+	runtimeHost   string
+	migratorName  string
+	migratorHost  string
+	section       string
+	format        string
+	confirmLegacy bool
+	noteFile      string
 }
 
 type schemaDatabase interface {
@@ -48,6 +51,8 @@ type schemaDatabase interface {
 	Migrate(context.Context, []schema.Migration) error
 	VerifyClock(context.Context, string) error
 	InitializeClock(context.Context, string) error
+	ValidateLegacy(context.Context) error
+	AdoptBaseline(context.Context, []schema.Migration, string) error
 	Close() error
 }
 
@@ -73,8 +78,8 @@ func parseOptions(args []string) (options, error) {
 		return result, nil
 	}
 	result.command = args[0]
-	if result.command != "plan" && result.command != "verify" && result.command != "migrate" && result.command != "init-clock" && result.command != "verify-clock" && result.command != "roles" {
-		return options{}, errors.New("expected plan, verify, migrate, init-clock, verify-clock or roles")
+	if result.command != "plan" && result.command != "verify" && result.command != "migrate" && result.command != "init-clock" && result.command != "verify-clock" && result.command != "roles" && result.command != "preflight-legacy" && result.command != "adopt" {
+		return options{}, errors.New("expected plan, verify, migrate, init-clock, verify-clock, roles, preflight-legacy or adopt")
 	}
 	flags := flag.NewFlagSet("schema", flag.ContinueOnError)
 	// flag errors can include supplied values. Credentials must never appear in
@@ -92,6 +97,8 @@ func parseOptions(args []string) (options, error) {
 	flags.StringVar(&result.migratorHost, "migrator-role-host", "", "explicit migrator role host")
 	flags.StringVar(&result.section, "section", "", "roles plan section: migrator, runtime or all")
 	flags.StringVar(&result.format, "format", "", "roles plan output: sql or json")
+	flags.BoolVar(&result.confirmLegacy, "confirm-legacy-schema", false, "confirm verified existing version-1 schema adoption")
+	flags.StringVar(&result.noteFile, "adoption-note-file", "", "owner-only single-line adoption audit note file")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
 		return options{}, errors.New("invalid command options; use --help")
 	}
@@ -114,11 +121,18 @@ func parseOptions(args []string) (options, error) {
 	} else if result.zone != "" {
 		return options{}, errors.New("notification-timezone is only valid for clock commands")
 	}
-	if result.command != "init-clock" && result.confirmClock {
-		return options{}, errors.New("confirm-no-writers is only valid for init-clock")
+	if result.command != "init-clock" && result.command != "adopt" && result.confirmClock {
+		return options{}, errors.New("confirm-no-writers is only valid for init-clock or adopt")
 	}
 	if result.command == "plan" && result.dsnFile != "" {
 		return options{}, errors.New("plan is offline and does not accept credentials")
+	}
+	if result.command == "adopt" {
+		if !result.confirmLegacy || !result.confirmClock || result.noteFile == "" {
+			return options{}, errors.New("adopt requires --confirm-legacy-schema, --confirm-no-writers and --adoption-note-file")
+		}
+	} else if result.confirmLegacy || result.noteFile != "" {
+		return options{}, errors.New("adoption options are only valid for adopt")
 	}
 	if result.command == "roles" {
 		if result.section == "" {
@@ -145,6 +159,7 @@ func parseOptions(args []string) (options, error) {
 func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps dependencies) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprintln(out, "Usage: schema [plan | verify | migrate --confirm-new-database | verify-clock --notification-timezone ZONE | init-clock --confirm-no-writers --notification-timezone ZONE] [--dsn-file PATH] [--timeout 2m]")
+		fmt.Fprintln(out, "Legacy inspection: preflight-legacy. Adoption: adopt --confirm-legacy-schema --confirm-no-writers --adoption-note-file PATH. These never convert historical timestamps.")
 		fmt.Fprintln(out, "Default plan and roles are offline. roles requires --database, --runtime-role, --runtime-role-host, --migrator-role and --migrator-role-host. Database commands use a private DSN file or CLOUDOPS_SCHEMA_DSN; no application .env is loaded.")
 		return 0
 	}
@@ -207,6 +222,15 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 		}
 		return 0
 	}
+	var adoptionNote string
+	if config.command == "adopt" {
+		var err error
+		adoptionNote, err = readCredentials(config.noteFile, func(string) string { return "" })
+		if err != nil || len(adoptionNote) > 1000 || !utf8.ValidString(adoptionNote) {
+			fmt.Fprintln(diagnostics, "adoption requires a valid owner-only note file of at most 1000 UTF-8 bytes")
+			return 2
+		}
+	}
 	dsn, err := readCredentials(config.dsnFile, deps.getenv)
 	if err != nil {
 		fmt.Fprintln(diagnostics, errCredentials.Error())
@@ -220,6 +244,26 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 	defer db.Close()
 	ctx, cancel := context.WithTimeout(ctx, config.timeout)
 	defer cancel()
+	if config.command == "preflight-legacy" {
+		if err := db.ValidateLegacy(ctx); err != nil {
+			fmt.Fprintln(diagnostics, safeError(err))
+			return 1
+		}
+		fmt.Fprintln(out, "Existing schema and repair postconditions match version 1. No ledger or application data changed; adoption has not been performed.")
+		return 0
+	}
+	if config.command == "adopt" {
+		if err := db.AdoptBaseline(ctx, manifest, adoptionNote); err != nil {
+			fmt.Fprintln(diagnostics, safeError(err))
+			return 1
+		}
+		if err := db.Verify(ctx, manifest); err != nil {
+			fmt.Fprintln(diagnostics, "adoption returned but history verification failed; inspect state before retry")
+			return 1
+		}
+		fmt.Fprintln(out, "Schema history verified. Existing business data and notification timezone have not been converted. Inspect ledger adoption audit separately.")
+		return 0
+	}
 	verification := db.Verify(ctx, manifest)
 	if config.command == "init-clock" || config.command == "verify-clock" {
 		if verification != nil {
@@ -271,6 +315,14 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 
 func safeError(err error) string {
 	switch {
+	case errors.Is(err, dbschema.ErrLegacyStructure):
+		return "legacy schema differs from this release; no adoption or automatic repair is permitted"
+	case errors.Is(err, dbschema.ErrLegacyData):
+		return "legacy data does not satisfy release repair postconditions; no changes were executed"
+	case errors.Is(err, dbschema.ErrLegacyVisibility):
+		return "legacy inspection requires proven complete schema metadata visibility"
+	case errors.Is(err, schema.ErrAdoption):
+		return "invalid explicit baseline adoption request"
 	case errors.Is(err, dbschema.ErrClockInvalidZone):
 		return "notification timezone must be explicit UTC or a valid IANA timezone"
 	case errors.Is(err, dbschema.ErrClockMissing):
@@ -360,6 +412,12 @@ func (db sqlDatabase) VerifyClock(ctx context.Context, zone string) error {
 }
 func (db sqlDatabase) InitializeClock(ctx context.Context, zone string) error {
 	return dbschema.InitializeFreshClock(ctx, db.db, zone)
+}
+func (db sqlDatabase) ValidateLegacy(ctx context.Context) error {
+	return schema.WithMigrationLock(ctx, db.db, func(conn *sql.Conn) error { return dbschema.ValidateLegacyCurrent(ctx, conn) })
+}
+func (db sqlDatabase) AdoptBaseline(ctx context.Context, manifest []schema.Migration, note string) error {
+	return schema.AdoptBaseline(ctx, db.db, manifest, dbschema.ValidateLegacyCurrent, note)
 }
 func (db sqlDatabase) Close() error { return db.db.Close() }
 

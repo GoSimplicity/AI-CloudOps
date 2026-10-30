@@ -204,8 +204,10 @@ func WithMigrationLock(ctx context.Context, db *sql.DB, run func(*sql.Conn) erro
 	}()
 	defer func() {
 		if recover() != nil {
-			// The callback may have left an open transaction. Discard the
-			// physical session so neither that transaction nor its lock is reused.
+			// Transaction callbacks must defer Rollback before returning or
+			// panicking. Once they have unwound, discard the physical session.
+			// sql.Conn cannot forcibly close a transaction retained in violation
+			// of this contract; that waits for the transaction's context.
 			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
 			result = errors.Join(result, ErrUncertain)
 		}
