@@ -59,7 +59,10 @@ func run() error {
 	}
 	defer func() { _ = logger.Sync() }()
 
-	cmd := di.InitWebServer(di.MySQLDSN(secrets.MySQLAddr))
+	cmd, err := di.InitWebServer(cfg, di.MySQLDSN(secrets.MySQLAddr))
+	if err != nil {
+		return err
+	}
 	cmd.Server.GET("/headers", printHeaders)
 	cmd.Start()
 

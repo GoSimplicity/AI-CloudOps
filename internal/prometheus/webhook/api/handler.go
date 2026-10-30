@@ -33,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/dao"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
@@ -41,28 +42,38 @@ import (
 	"github.com/prometheus/alertmanager/pkg/labels"
 	"github.com/prometheus/alertmanager/template"
 	"github.com/prometheus/alertmanager/types"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
 // WebHookHandler 负责处理Webhook相关的HTTP请求
 type WebHookHandler struct {
-	l          *zap.Logger
-	dao        dao.WebhookDao
-	alertQueue chan template.Alert // 告警队列，用于异步处理
-	workerWG   sync.WaitGroup      // 工作组用于等待所有工作者完成
-	quitChan   chan struct{}       // 用于优雅地关闭工作者的通道
+	l                     *zap.Logger
+	dao                   dao.WebhookDao
+	alertQueue            chan template.Alert // 告警队列，用于异步处理
+	workerWG              sync.WaitGroup      // 工作组用于等待所有工作者完成
+	alertManagerAPI       string
+	requestTimeoutSeconds int
+	quitChan              chan struct{} // 用于优雅地关闭工作者的通道
 }
 
-// NewWebHookHandler 创建一个新的WebHookHandler实例，并启动告警处理工作者
-func NewWebHookHandler(l *zap.Logger, dao dao.WebhookDao, alertQueue chan template.Alert) *WebHookHandler {
-	handler := &WebHookHandler{
-		l:          l,
-		dao:        dao,
-		alertQueue: alertQueue,
-		quitChan:   make(chan struct{}),
+// NewWebHookHandler 创建处理器并保存已验证配置的静默请求参数快照。
+func NewWebHookHandler(cfg *config.WebhookConfig, l *zap.Logger, dao dao.WebhookDao, alertQueue chan template.Alert) (*WebHookHandler, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("Webhook配置不能为空")
 	}
-	return handler
+	if cfg.ImFeishu.RequestTimeoutSeconds < 1 || cfg.ImFeishu.RequestTimeoutSeconds > 600 {
+		return nil, fmt.Errorf("webhook.im_feishu.request_timeout_seconds 必须在1到600之间")
+	}
+
+	handler := &WebHookHandler{
+		l:                     l,
+		dao:                   dao,
+		alertQueue:            alertQueue,
+		quitChan:              make(chan struct{}),
+		alertManagerAPI:       cfg.AlertManagerAPI,
+		requestTimeoutSeconds: cfg.ImFeishu.RequestTimeoutSeconds,
+	}
+	return handler, nil
 }
 
 // RegisterRouters 注册Webhook相关的HTTP路由
@@ -169,9 +180,9 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 		return
 	}
 
-	url := fmt.Sprintf("%s/api/v2/silences", viper.GetString("webhook.alert_manager_api"))
+	url := fmt.Sprintf("%s/api/v2/silences", w.alertManagerAPI)
 	resp, err := base.PostWithJsonString(w.l, "AlertSilence",
-		viper.GetInt("webhook.im_feishu.request_timeout_seconds"),
+		w.requestTimeoutSeconds,
 		url, string(jsonData), nil, nil)
 
 	if err != nil {
@@ -234,12 +245,12 @@ func (w *WebHookHandler) MonitorAlertUnSilence(ctx *gin.Context) {
 
 	// 构建取消静默的URL
 	silenceURL := fmt.Sprintf("%s/api/v2/silence/%v",
-		viper.GetString("webhook.alert_manager_api"),
+		w.alertManagerAPI,
 		event.SilenceID)
 
 	// 调用AlertManager API取消静默
 	_, err = base.DeleteWithId(w.l, "MonitorAlertUnSilence",
-		viper.GetInt("webhook.im_feishu.request_timeout_seconds"),
+		w.requestTimeoutSeconds,
 		silenceURL, nil, nil)
 
 	if err != nil {

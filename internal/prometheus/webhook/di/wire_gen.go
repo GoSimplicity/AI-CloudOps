@@ -7,6 +7,7 @@
 package di
 
 import (
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/consumer"
@@ -17,13 +18,16 @@ import (
 
 // Injectors from wire.go:
 
-func InitWebServer(dsn MySQLDSN) *Cmd {
+func InitWebServer(cfg *config.WebhookConfig, dsn MySQLDSN) (*Cmd, error) {
 	logger := InitLogger()
 	v := InitMiddlewares(logger)
 	db := InitDB(logger, dsn)
 	webhookDao := dao.NewWebhookDao(logger, db)
 	v2 := CreateAlertChan()
-	webHookHandler := api.NewWebHookHandler(logger, webhookDao, v2)
+	webHookHandler, err := api.NewWebHookHandler(cfg, logger, webhookDao, v2)
+	if err != nil {
+		return nil, err
+	}
 	engine := InitGinServer(v, webHookHandler)
 	webhookRobot := robot.NewWebhookRobot(logger)
 	webhookCache := cache.NewWebhookCache(logger, webhookDao, webhookRobot)
@@ -34,5 +38,5 @@ func InitWebServer(dsn MySQLDSN) *Cmd {
 		Server: engine,
 		Start:  v3,
 	}
-	return cmd
+	return cmd, nil
 }

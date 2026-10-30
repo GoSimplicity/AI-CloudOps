@@ -28,6 +28,7 @@
 package di
 
 import (
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/consumer"
@@ -37,7 +38,7 @@ import (
 	"github.com/google/wire"
 )
 
-func InitWebServer(dsn MySQLDSN) *Cmd {
+func InitWebServer(cfg *config.WebhookConfig, dsn MySQLDSN) (*Cmd, error) {
 	wire.Build(
 		InitLogger,
 		InitGinServer,
@@ -54,5 +55,5 @@ func InitWebServer(dsn MySQLDSN) *Cmd {
 		wire.Struct(new(Cmd), "*"),
 	)
 
-	return new(Cmd)
+	return new(Cmd), nil
 }
