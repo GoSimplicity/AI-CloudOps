@@ -195,7 +195,7 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 		return 1
 	}
 	if config.command == knownUpgradeCommand && !config.upgradeExecute {
-		plan, err := dbschema.KnownA8Upgrade()
+		plan, err := knownUpgradePlan()
 		if err != nil {
 			fmt.Fprintln(diagnostics, "immutable known-source upgrade inputs are invalid")
 			return 1
@@ -288,7 +288,7 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 	if config.command == knownUpgradeCommand {
 		if err := db.UpgradeBaseline(ctx, manifest, upgradeEvidence); err != nil {
 			if errors.Is(err, schema.ErrPreflight) {
-				fmt.Fprintln(diagnostics, "known-source preflight rejected: inspect exact 49-table source, direct metadata privileges, disabled unsupported providers and historical-time attestation; no automatic repair is performed")
+				fmt.Fprintln(diagnostics, "known-source preflight rejected: inspect exact 49-table source, direct table/trigger metadata privileges, zero triggers, disabled unsupported providers and historical-time attestation; no automatic repair is performed")
 			} else {
 				fmt.Fprintln(diagnostics, safeError(err))
 			}
@@ -481,7 +481,7 @@ func (db sqlDatabase) AdoptBaseline(ctx context.Context, manifest []schema.Migra
 	return schema.AdoptBaseline(ctx, db.db, manifest, dbschema.ValidateLegacyCurrent, note)
 }
 func (db sqlDatabase) UpgradeBaseline(ctx context.Context, manifest []schema.Migration, evidence schema.UpgradeEvidence) error {
-	plan, err := dbschema.KnownA8Upgrade()
+	plan, err := knownUpgradePlan()
 	if err != nil {
 		return err
 	}

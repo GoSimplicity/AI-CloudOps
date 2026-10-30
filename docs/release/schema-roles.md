@@ -12,7 +12,7 @@
 | 两项历史修复目标表 | 同上 | 额外 UPDATE，限 `cl_tree_cloud_resource_change_log`、`cl_workorder_notification` |
 | 通知时区 clock 表 | SELECT | SELECT、INSERT、UPDATE，以及 CREATE、ALTER、INDEX |
 | schema history 账本 | SELECT | SELECT、INSERT、UPDATE、DELETE，以及 CREATE、ALTER、INDEX |
-| 目标 schema 元数据 | 通过上述逐表权限查看已知表 | schema 级 REFERENCES，保证未知旧表也可见 |
+| 目标 schema 元数据 | 通过上述逐表权限查看已知表 | schema 级 REFERENCES、TRIGGER，保证未知旧表及触发器元数据也可见 |
 
 总计58张应用表（含 clock）和一张版本账本。生产授权不解析任意 SQL 猜测对象，使用固定、可审查清单；单测直接对内嵌不可变版本1执行内容做内存捕获，精确比较58个 CREATE TABLE 和两项 UPDATE 修复对象。
 
@@ -23,6 +23,14 @@ clock 的 UPDATE 是 MySQL `SELECT ... FOR UPDATE` 所需权限，真实隔离 M
 ## 完整元数据与标识符边界
 
 只授已知表权限会隐藏未知旧表，导致“空库”预检漏判。迁移角色额外获得目标 schema 的 REFERENCES，能够枚举全部表元数据，但不能据此读取或修改未知表的行；隔离测试创建未知旧表，验证迁移角色能发现它，空库预检返回拒绝，直接读取其数据被权限系统拒绝。
+
+已知 a8f1700 升级的 safe-v2 预检另要求实际 `CURRENT_USER()` 具有直接 schema/global TRIGGER 权限，再证明目标 schema 没有触发器；仅 REFERENCES 无法证明触发器不存在，role 继承不代替直接授权证明。运行角色不获得 TRIGGER。MySQL 的 TRIGGER 权限也能创建/删除触发器，并非纯只读权限，因此只授受信任维护账号；该账号及凭据不进入应用。工具不自动删除未知触发器，发现即在账本写入前拒绝。
+
+下面只是维护账号直接元数据授权的示例，不会由 `schema roles` 自动执行，也不创建账号或替代完整最小权限角色；管理员必须确认实际认证账号与目标数据库。
+
+```sql
+GRANT REFERENCES, TRIGGER ON `cloudops`.* TO 'cloudops_migrator'@'%';
+```
 
 数据库名只允许1至64个 ASCII 英文字母或数字，并拒绝 MySQL 系统 schema。下划线和百分号在数据库级 GRANT 中可能成为通配符，且 `partial_revokes` 会改变解释方式，因此工具直接拒绝这些名称，不猜测服务端模式。已有带下划线的库不能用该计划生成器；未来若支持，必须明确验证服务端模式和精确授权行为。角色名只允许1至32个字母、数字或下划线；host 必须显式提供并通过有限字符校验。host 中通配符由调用者明确选择，工具不自动添加。参见 [MySQL GRANT 文档](https://dev.mysql.com/doc/refman/8.4/en/grant.html)。
 

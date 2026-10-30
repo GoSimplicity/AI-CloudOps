@@ -277,7 +277,7 @@ func minimalKnownMigrator(t *testing.T, db *sql.DB, address string) (*sql.DB, st
 		execKnownFixture(t, db, statement)
 	}
 	// Strict metadata proof must be direct for CURRENT_USER, not role inference.
-	execKnownFixture(t, db, "GRANT REFERENCES ON knownupgrade.* TO 'known_migrator'@'%'")
+	execKnownFixture(t, db, "GRANT REFERENCES, TRIGGER ON knownupgrade.* TO 'known_migrator'@'%'")
 	config := mysql.NewConfig()
 	config.User = "known_migrator"
 	config.Passwd = "fixture-only-migration"
@@ -380,7 +380,7 @@ func TestKnownA8RealUpgradePreservesOriginalDataUsingMinimalRole(t *testing.T) {
 	seedKnownRows(t, admin)
 	before := knownDataDigest(t, admin, source)
 	backupSHA := knownPrivateBackup(t, admin, source)
-	plan, err := dbschema.KnownA8Upgrade()
+	plan, err := dbschema.KnownA8SafeUpgradeV2()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -191,3 +191,29 @@ func TestBackupProofRejectsDuplicateOrAmbiguousJSONFieldsBeforeDatabase(t *testi
 		t.Fatal("case-folded unexpected field was accepted")
 	}
 }
+
+func TestKnownUpgradePlanAndOfflineOutputSelectSafeV2(t *testing.T) {
+	selected, err := knownUpgradePlan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	guarded, err := dbschema.KnownA8SafeUpgradeV2()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := dbschema.KnownA8Upgrade()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected.ImplementationChecksum != guarded.ImplementationChecksum || selected.ImplementationChecksum == old.ImplementationChecksum {
+		t.Fatal("CLI selected the unguarded historical plan")
+	}
+	var out, diagnostic bytes.Buffer
+	status := run(context.Background(), []string{knownUpgradeCommand}, &out, &diagnostic, dependencies{manifest: dbschema.Manifest, getenv: func(string) string { t.Fatal("offline guard plan read credentials"); return "" }, open: func(string, time.Duration) (schemaDatabase, error) {
+		t.Fatal("offline guard plan connected database")
+		return nil, nil
+	}})
+	if status != 0 || !strings.Contains(out.String(), "implementation_checksum="+guarded.ImplementationChecksum) {
+		t.Fatal("offline plan and execution selector differ")
+	}
+}

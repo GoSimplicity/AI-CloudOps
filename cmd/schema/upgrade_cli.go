@@ -14,6 +14,11 @@ import (
 
 const knownUpgradeCommand = "upgrade-a8f1700"
 
+// Both offline display and SQL execution select the same trigger-guarded plan.
+func knownUpgradePlan() (schema.BaselineUpgrade, error) {
+	return dbschema.KnownA8SafeUpgradeV2()
+}
+
 var errUpgradeEvidence = errors.New("upgrade requires valid private note and backup-attestation files")
 var backupSHA256Pattern = regexp.MustCompile("^[0-9a-f]{64}$")
 

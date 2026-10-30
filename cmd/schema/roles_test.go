@@ -25,7 +25,7 @@ func TestRolePlanHasOnlyReviewedTableGrants(t *testing.T) {
 		t.Fatalf("unexpected grant count: %d / %d", len(plan.Runtime), len(plan.Migrator))
 	}
 	for _, statement := range append(append([]string{}, plan.Runtime...), plan.Migrator...) {
-		if !strings.HasPrefix(statement, "GRANT ") || (strings.Contains(statement, "*") && !strings.HasPrefix(statement, "GRANT REFERENCES ON `cloudopsTest`.* TO ")) || strings.Contains(statement, "PASSWORD") || strings.Contains(statement, "IDENTIFIED") || strings.Contains(statement, "GRANT OPTION") || strings.Contains(statement, "DROP") || !strings.HasSuffix(statement, ";") {
+		if !strings.HasPrefix(statement, "GRANT ") || (strings.Contains(statement, "*") && !strings.HasPrefix(statement, "GRANT REFERENCES, TRIGGER ON `cloudopsTest`.* TO ")) || strings.Contains(statement, "PASSWORD") || strings.Contains(statement, "IDENTIFIED") || strings.Contains(statement, "GRANT OPTION") || strings.Contains(statement, "DROP") || !strings.HasSuffix(statement, ";") {
 			t.Fatal("plan contains a broad or unsupported statement")
 		}
 	}
@@ -205,4 +205,20 @@ func (r *roleCaptureRows) Next(values []driver.Value) error {
 	r.read = true
 	values[0] = r.value
 	return nil
+}
+
+func TestTriggerMetadataPrivilegeIsMigrationOnly(t *testing.T) {
+	plan, err := BuildRolePlan("cloudopsTest", RoleAccount{Name: "runtime", Host: "%"}, RoleAccount{Name: "migration", Host: "%"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "GRANT REFERENCES, TRIGGER ON `cloudopsTest`.* TO 'migration'@'%';"
+	if plan.Migrator[0] != want {
+		t.Fatal("missing direct schema-wide trigger metadata grant")
+	}
+	for _, statement := range plan.Runtime {
+		if strings.Contains(statement, "TRIGGER") {
+			t.Fatal("runtime received trigger administration authority")
+		}
+	}
 }

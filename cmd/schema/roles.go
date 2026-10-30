@@ -97,7 +97,8 @@ var baselineBusinessTables = [...]string{
 
 // BuildRolePlan produces grants for the immutable version-1 schema. Migrator
 // DDL and DML are table-scoped; schema REFERENCES permits complete metadata
-// inspection without granting unknown tables row access. Applying
+// inspection without granting unknown tables row access. Schema TRIGGER proves
+// complete trigger visibility; it is restricted to the maintenance account. Applying
 // these grants cannot remove older broad or inherited privileges from a role.
 func BuildRolePlan(database string, runtimeRole, migratorRole RoleAccount) (RolePlan, error) {
 	if !validDatabase(database) || !validRole(runtimeRole) || !validRole(migratorRole) ||
@@ -114,7 +115,7 @@ func BuildRolePlan(database string, runtimeRole, migratorRole RoleAccount) (Role
 	// tables, without granting their row contents or mutation. Database-level
 	// GRANT patterns treat '_' and '%' specially on default MySQL settings;
 	// validDatabase therefore permits ASCII letters and digits only.
-	plan := RolePlan{Migrator: []string{fmt.Sprintf("GRANT REFERENCES ON `%s`.* TO %s;", database, migratorAccount)}}
+	plan := RolePlan{Migrator: []string{fmt.Sprintf("GRANT REFERENCES, TRIGGER ON `%s`.* TO %s;", database, migratorAccount)}}
 	for _, table := range baselineBusinessTables {
 		runtimePrivileges := "SELECT, INSERT, UPDATE, DELETE"
 		if table == notificationClockTable {

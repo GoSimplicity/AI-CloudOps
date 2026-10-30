@@ -200,6 +200,9 @@ func TestMySQLRolePlanEnforcesRuntimeAndMigratorBoundaries(t *testing.T) {
 	if _, err := runtimeDB.ExecContext(ctx, "DELETE FROM cl_system_departments WHERE id=901"); err != nil {
 		t.Fatal("runtime business DELETE denied")
 	}
+	// In this owned fixture, remove the binary-log creator restriction so the
+	// trigger probe specifically exercises the runtime role's missing TRIGGER.
+	adminSQL("SET GLOBAL log_bin_trust_function_creators=1")
 	for _, statement := range []string{
 		"INSERT INTO cloudops_schema_history (version,name,checksum,state) VALUES (2,'forbidden',REPEAT('a',64),'started')",
 		"UPDATE cloudops_schema_history SET state='failed' WHERE version=1",
@@ -210,6 +213,7 @@ func TestMySQLRolePlanEnforcesRuntimeAndMigratorBoundaries(t *testing.T) {
 		"ALTER TABLE cl_system_departments ADD COLUMN forbidden INT",
 		"CREATE TABLE forbidden (id BIGINT PRIMARY KEY)",
 		"DROP TABLE cl_system_departments",
+		"CREATE TRIGGER forbidden_runtime_trigger BEFORE UPDATE ON cl_system_departments FOR EACH ROW SET NEW.name=OLD.name",
 		"SELECT User FROM mysql.user",
 	} {
 		denied(runtimeDB, statement)
