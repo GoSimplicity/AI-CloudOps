@@ -169,6 +169,10 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 			if config.section == "runtime" {
 				statements = plan.Runtime
 			}
+			statements = append([]string(nil), statements...)
+			for index, statement := range statements {
+				statements[index] = strings.TrimSuffix(statement, ";")
+			}
 			payload := struct {
 				Version    int      `json:"version"`
 				Database   string   `json:"database"`
@@ -185,13 +189,13 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 		if config.section == "all" || config.section == "migrator" {
 			fmt.Fprintln(out, "-- Migrator: apply before explicit migration to separately provisioned roles.")
 			for _, statement := range plan.Migrator {
-				fmt.Fprintln(out, statement+";")
+				fmt.Fprintln(out, strings.TrimSuffix(statement, ";")+";")
 			}
 		}
 		if config.section == "all" || config.section == "runtime" {
 			fmt.Fprintln(out, "-- Runtime: apply only after all baseline tables exist. Review and remove inherited broad grants separately.")
 			for _, statement := range plan.Runtime {
-				fmt.Fprintln(out, statement+";")
+				fmt.Fprintln(out, strings.TrimSuffix(statement, ";")+";")
 			}
 		}
 		return 0

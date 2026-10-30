@@ -298,6 +298,10 @@ func TestStructuredRolesPlanKeepsPrivilegeStagesSeparate(t *testing.T) {
 		if section == "runtime" {
 			statements = expected.Runtime
 		}
+		statements = append([]string(nil), statements...)
+		for index, statement := range statements {
+			statements[index] = strings.TrimSuffix(statement, ";")
+		}
 		if !reflect.DeepEqual(payload.Statements, statements) {
 			t.Fatal("privilege stages mixed")
 		}
