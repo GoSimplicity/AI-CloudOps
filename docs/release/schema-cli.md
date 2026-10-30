@@ -67,3 +67,13 @@ go test -race -tags=integration ./cmd/schema -count=1 -timeout=180s
 `verify-clock`只读验证版本和时区标记，不写入。时区须显式UTC或合法IANA名称，禁止Local与空值；别名按确切名称核对，不自动等价转换。初始化仍不支持缺marker且有历史通知的旧库，该情况需独立备份和人工核对流程。
 
 隔离MySQL集成覆盖CLI首次登记、重复登记、只读检查及不同zone拒绝；模块额外覆盖历史数据、缺表、并发、只读角色和单连接池。未迁移任何既有部署数据。
+
+## 离线角色授权计划
+
+```sh
+/tmp/cloudops-schema roles --database cloudops \
+  --runtime-role cloudops_runtime --runtime-role-host '%' \
+  --migrator-role cloudops_migrator --migrator-role-host '%'
+```
+
+该命令不读取凭据、不连接数据库、不创建账号或执行GRANT，仅输出明确分阶段的授权SQL。先由管理员创建独立角色/账号并审查继承权限，再应用迁移角色计划；基线表全部创建后才应用运行角色计划。不能给已有ALL权限账号叠加这些GRANT后声称已收敛权限。具体最小权限与实证边界见 [schema-roles.md](schema-roles.md)。

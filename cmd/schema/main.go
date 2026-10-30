@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -32,6 +33,13 @@ type options struct {
 	confirm      bool
 	confirmClock bool
 	zone         string
+	database     string
+	runtimeName  string
+	runtimeHost  string
+	migratorName string
+	migratorHost string
+	section      string
+	format       string
 }
 
 type schemaDatabase interface {
@@ -65,8 +73,8 @@ func parseOptions(args []string) (options, error) {
 		return result, nil
 	}
 	result.command = args[0]
-	if result.command != "plan" && result.command != "verify" && result.command != "migrate" && result.command != "init-clock" && result.command != "verify-clock" {
-		return options{}, errors.New("expected plan, verify, migrate, init-clock or verify-clock")
+	if result.command != "plan" && result.command != "verify" && result.command != "migrate" && result.command != "init-clock" && result.command != "verify-clock" && result.command != "roles" {
+		return options{}, errors.New("expected plan, verify, migrate, init-clock, verify-clock or roles")
 	}
 	flags := flag.NewFlagSet("schema", flag.ContinueOnError)
 	// flag errors can include supplied values. Credentials must never appear in
@@ -77,6 +85,13 @@ func parseOptions(args []string) (options, error) {
 	flags.BoolVar(&result.confirm, "confirm-new-database", false, "allow fresh baseline DDL")
 	flags.BoolVar(&result.confirmClock, "confirm-no-writers", false, "confirm every database writer and migration job is stopped")
 	flags.StringVar(&result.zone, "notification-timezone", "", "explicit UTC or IANA timezone")
+	flags.StringVar(&result.database, "database", "", "target database name for offline GRANT plan")
+	flags.StringVar(&result.runtimeName, "runtime-role", "", "existing runtime role name")
+	flags.StringVar(&result.runtimeHost, "runtime-role-host", "", "explicit runtime role host")
+	flags.StringVar(&result.migratorName, "migrator-role", "", "existing migrator role name")
+	flags.StringVar(&result.migratorHost, "migrator-role-host", "", "explicit migrator role host")
+	flags.StringVar(&result.section, "section", "", "roles plan section: migrator, runtime or all")
+	flags.StringVar(&result.format, "format", "", "roles plan output: sql or json")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
 		return options{}, errors.New("invalid command options; use --help")
 	}
@@ -105,13 +120,32 @@ func parseOptions(args []string) (options, error) {
 	if result.command == "plan" && result.dsnFile != "" {
 		return options{}, errors.New("plan is offline and does not accept credentials")
 	}
+	if result.command == "roles" {
+		if result.section == "" {
+			result.section = "all"
+		}
+		if result.format == "" {
+			result.format = "sql"
+		}
+		if (result.section != "all" && result.section != "migrator" && result.section != "runtime") || (result.format != "sql" && result.format != "json") || (result.format == "json" && result.section == "all") {
+			return options{}, errors.New("roles requires a valid section and format; JSON requires migrator or runtime")
+		}
+		if result.dsnFile != "" {
+			return options{}, errors.New("roles is offline and does not accept credentials")
+		}
+		if _, err := BuildRolePlan(result.database, RoleAccount{result.runtimeName, result.runtimeHost}, RoleAccount{result.migratorName, result.migratorHost}); err != nil {
+			return options{}, errRolePlan
+		}
+	} else if result.database != "" || result.runtimeName != "" || result.runtimeHost != "" || result.migratorName != "" || result.migratorHost != "" || result.section != "" || result.format != "" {
+		return options{}, errors.New("role options are only valid for roles")
+	}
 	return result, nil
 }
 
 func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps dependencies) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprintln(out, "Usage: schema [plan | verify | migrate --confirm-new-database | verify-clock --notification-timezone ZONE | init-clock --confirm-no-writers --notification-timezone ZONE] [--dsn-file PATH] [--timeout 2m]")
-		fmt.Fprintln(out, "Default plan is offline. Database commands use a private DSN file or CLOUDOPS_SCHEMA_DSN; no application .env is loaded.")
+		fmt.Fprintln(out, "Default plan and roles are offline. roles requires --database, --runtime-role, --runtime-role-host, --migrator-role and --migrator-role-host. Database commands use a private DSN file or CLOUDOPS_SCHEMA_DSN; no application .env is loaded.")
 		return 0
 	}
 	config, err := parseOptions(args)
@@ -123,6 +157,44 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 	if err != nil || schema.Validate(manifest) != nil {
 		fmt.Fprintln(diagnostics, "embedded migration manifest is invalid")
 		return 1
+	}
+	if config.command == "roles" {
+		plan, err := BuildRolePlan(config.database, RoleAccount{config.runtimeName, config.runtimeHost}, RoleAccount{config.migratorName, config.migratorHost})
+		if err != nil {
+			fmt.Fprintln(diagnostics, "invalid offline role plan")
+			return 2
+		}
+		if config.format == "json" {
+			statements := plan.Migrator
+			if config.section == "runtime" {
+				statements = plan.Runtime
+			}
+			payload := struct {
+				Version    int      `json:"version"`
+				Database   string   `json:"database"`
+				Section    string   `json:"section"`
+				Statements []string `json:"statements"`
+			}{1, config.database, config.section, statements}
+			if json.NewEncoder(out).Encode(payload) != nil {
+				fmt.Fprintln(diagnostics, "role plan output failed")
+				return 1
+			}
+			return 0
+		}
+		fmt.Fprintln(out, "-- Offline GRANT plan only. No users, credentials or permissions have been changed.")
+		if config.section == "all" || config.section == "migrator" {
+			fmt.Fprintln(out, "-- Migrator: apply before explicit migration to separately provisioned roles.")
+			for _, statement := range plan.Migrator {
+				fmt.Fprintln(out, statement+";")
+			}
+		}
+		if config.section == "all" || config.section == "runtime" {
+			fmt.Fprintln(out, "-- Runtime: apply only after all baseline tables exist. Review and remove inherited broad grants separately.")
+			for _, statement := range plan.Runtime {
+				fmt.Fprintln(out, statement+";")
+			}
+		}
+		return 0
 	}
 	if config.command == "plan" {
 		fmt.Fprintln(out, "Manifest only: database state has not been inspected; no changes executed.")

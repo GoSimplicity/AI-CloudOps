@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -246,5 +247,59 @@ func TestClockCommandsRequireExplicitIntentAndPreserveHistory(t *testing.T) {
 				t.Fatalf("status=%d actions=%v", code, db.actions)
 			}
 		})
+	}
+}
+
+func TestRolesPlanNeverReadsCredentialsOrOpensDatabase(t *testing.T) {
+	var out, diagnostic bytes.Buffer
+	args := []string{"roles", "--database", "cloudops", "--runtime-role", "app", "--runtime-role-host", "%", "--migrator-role", "migration", "--migrator-role-host", "%"}
+	code := run(context.Background(), args, &out, &diagnostic, dependencies{
+		manifest: dbschema.Manifest, getenv: func(string) string { t.Fatal("offline roles read credentials"); return "" },
+		open: func(string, time.Duration) (schemaDatabase, error) {
+			t.Fatal("offline roles opened database")
+			return nil, nil
+		},
+	})
+	if code != 0 || !strings.Contains(out.String(), "GRANT SELECT ON `cloudops`.`cloudops_schema_history`") || strings.Contains(out.String(), "IDENTIFIED BY") {
+		t.Fatal("offline role output invalid")
+	}
+	for _, invalid := range [][]string{{"roles"}, append(append([]string{}, args...), "--dsn-file", privateCanary), {"verify", "--database", "cloudops"}} {
+		if _, err := parseOptions(invalid); err == nil {
+			t.Fatal("unsafe role arguments accepted")
+		}
+	}
+}
+
+func TestStructuredRolesPlanKeepsPrivilegeStagesSeparate(t *testing.T) {
+	for _, section := range []string{"migrator", "runtime"} {
+		var out, diagnostic bytes.Buffer
+		args := []string{"roles", "--database", "cloudops", "--runtime-role", "app", "--runtime-role-host", "%", "--migrator-role", "migration", "--migrator-role-host", "%", "--section", section, "--format", "json"}
+		code := run(context.Background(), args, &out, &diagnostic, dependencies{manifest: dbschema.Manifest,
+			getenv: func(string) string { t.Fatal("offline JSON read credentials"); return "" },
+			open: func(string, time.Duration) (schemaDatabase, error) {
+				t.Fatal("offline JSON opened database")
+				return nil, nil
+			},
+		})
+		var payload struct {
+			Version    int
+			Database   string
+			Section    string
+			Statements []string
+		}
+		if code != 0 || json.Unmarshal(out.Bytes(), &payload) != nil || payload.Version != 1 || payload.Database != "cloudops" || payload.Section != section || len(payload.Statements) == 0 {
+			t.Fatal("structured plan contract invalid")
+		}
+		expected, err := BuildRolePlan("cloudops", RoleAccount{"app", "%"}, RoleAccount{"migration", "%"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		statements := expected.Migrator
+		if section == "runtime" {
+			statements = expected.Runtime
+		}
+		if !reflect.DeepEqual(payload.Statements, statements) {
+			t.Fatal("privilege stages mixed")
+		}
 	}
 }
