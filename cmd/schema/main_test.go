@@ -21,6 +21,7 @@ type fakeDatabase struct {
 	verifyErrors   []error
 	preflightError error
 	migrationError error
+	clockError     error
 	deadline       bool
 }
 
@@ -41,6 +42,14 @@ func (db *fakeDatabase) PreflightFresh(context.Context) error {
 func (db *fakeDatabase) Migrate(context.Context, []schema.Migration) error {
 	db.actions = append(db.actions, "migrate")
 	return db.migrationError
+}
+func (db *fakeDatabase) VerifyClock(context.Context, string) error {
+	db.actions = append(db.actions, "verify-clock")
+	return db.clockError
+}
+func (db *fakeDatabase) InitializeClock(context.Context, string) error {
+	db.actions = append(db.actions, "init-clock")
+	return db.clockError
 }
 func (db *fakeDatabase) Close() error { db.actions = append(db.actions, "close"); return nil }
 
@@ -201,5 +210,41 @@ func TestDriverConfigurationIsBoundedAndDoesNotLogRawErrors(t *testing.T) {
 		if _, err := databaseConfig(dsn, time.Minute); err == nil {
 			t.Fatal("invalid or unscoped DSN accepted")
 		}
+	}
+}
+
+func TestClockCommandsRequireExplicitIntentAndPreserveHistory(t *testing.T) {
+	for _, args := range [][]string{
+		{"init-clock"}, {"init-clock", "--notification-timezone", "UTC"},
+		{"init-clock", "--confirm-no-writers", "--notification-timezone", "Local"},
+		{"verify-clock"}, {"verify-clock", "--confirm-no-writers", "--notification-timezone", "UTC"},
+		{"verify", "--notification-timezone", "UTC"},
+	} {
+		if _, err := parseOptions(args); err == nil {
+			t.Fatal("unsafe clock options accepted")
+		}
+	}
+	cases := []struct {
+		name     string
+		args     []string
+		clockErr error
+		want     int
+		actions  []string
+	}{
+		{"read only", []string{"verify-clock", "--notification-timezone", "UTC"}, nil, 0, []string{"verify", "verify-clock", "close"}},
+		{"initialize", []string{"init-clock", "--confirm-no-writers", "--notification-timezone", "Asia/Shanghai"}, nil, 0, []string{"verify", "init-clock", "verify-clock", "close"}},
+		{"legacy rejected", []string{"init-clock", "--confirm-no-writers", "--notification-timezone", "UTC"}, dbschema.ErrClockHistory, 1, []string{"verify", "init-clock", "close"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := &fakeDatabase{clockError: tc.clockErr}
+			var out, diagnostic bytes.Buffer
+			code := run(context.Background(), tc.args, &out, &diagnostic, dependencies{
+				manifest: dbschema.Manifest, getenv: func(string) string { return "fixture" }, open: func(string, time.Duration) (schemaDatabase, error) { return db, nil },
+			})
+			if code != tc.want || !reflect.DeepEqual(db.actions, tc.actions) {
+				t.Fatalf("status=%d actions=%v", code, db.actions)
+			}
+		})
 	}
 }

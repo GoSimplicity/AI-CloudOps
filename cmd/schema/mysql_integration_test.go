@@ -121,6 +121,16 @@ func TestMySQLCLIFreshBaselineAndLegacyRefusal(t *testing.T) {
 		t.Fatal("baseline must be applied exactly once")
 	}
 
+	invoke(1, "verify-clock", "--notification-timezone", "UTC")
+	invoke(0, "init-clock", "--confirm-no-writers", "--notification-timezone", "UTC")
+	invoke(0, "verify-clock", "--notification-timezone", "UTC")
+	invoke(0, "init-clock", "--confirm-no-writers", "--notification-timezone", "UTC")
+	invoke(1, "init-clock", "--confirm-no-writers", "--notification-timezone", "Asia/Shanghai")
+	var clockZone string
+	if err := db.QueryRowContext(ctx, "SELECT time_zone FROM cl_workorder_notification_clock WHERE id=1").Scan(&clockZone); err != nil || clockZone != "UTC" {
+		t.Fatal("CLI clock initialization rewrote the established timezone")
+	}
+
 	// Runtime verification can succeed with SELECT on the ledger only. It never
 	// asks for DDL, data repairs, lock acquisition or history mutation privileges.
 	if _, err := db.ExecContext(ctx, "CREATE USER 'cli_reader'@'%' IDENTIFIED BY 'isolated-reader-only'"); err != nil {

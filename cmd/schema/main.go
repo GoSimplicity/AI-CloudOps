@@ -26,16 +26,20 @@ const credentialEnvironment = "CLOUDOPS_SCHEMA_DSN"
 var errCredentials = errors.New("dedicated schema credentials are missing or invalid")
 
 type options struct {
-	command string
-	dsnFile string
-	timeout time.Duration
-	confirm bool
+	command      string
+	dsnFile      string
+	timeout      time.Duration
+	confirm      bool
+	confirmClock bool
+	zone         string
 }
 
 type schemaDatabase interface {
 	Verify(context.Context, []schema.Migration) error
 	PreflightFresh(context.Context) error
 	Migrate(context.Context, []schema.Migration) error
+	VerifyClock(context.Context, string) error
+	InitializeClock(context.Context, string) error
 	Close() error
 }
 
@@ -61,8 +65,8 @@ func parseOptions(args []string) (options, error) {
 		return result, nil
 	}
 	result.command = args[0]
-	if result.command != "plan" && result.command != "verify" && result.command != "migrate" {
-		return options{}, errors.New("expected plan, verify or migrate")
+	if result.command != "plan" && result.command != "verify" && result.command != "migrate" && result.command != "init-clock" && result.command != "verify-clock" {
+		return options{}, errors.New("expected plan, verify, migrate, init-clock or verify-clock")
 	}
 	flags := flag.NewFlagSet("schema", flag.ContinueOnError)
 	// flag errors can include supplied values. Credentials must never appear in
@@ -71,6 +75,8 @@ func parseOptions(args []string) (options, error) {
 	flags.StringVar(&result.dsnFile, "dsn-file", "", "private DSN file")
 	flags.DurationVar(&result.timeout, "timeout", result.timeout, "operation deadline")
 	flags.BoolVar(&result.confirm, "confirm-new-database", false, "allow fresh baseline DDL")
+	flags.BoolVar(&result.confirmClock, "confirm-no-writers", false, "confirm every database writer and migration job is stopped")
+	flags.StringVar(&result.zone, "notification-timezone", "", "explicit UTC or IANA timezone")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
 		return options{}, errors.New("invalid command options; use --help")
 	}
@@ -83,6 +89,19 @@ func parseOptions(args []string) (options, error) {
 	if result.command != "migrate" && result.confirm {
 		return options{}, errors.New("confirmation is only valid for migrate")
 	}
+	if result.command == "init-clock" || result.command == "verify-clock" {
+		if dbschema.ValidateClockZone(result.zone) != nil {
+			return options{}, errors.New("clock commands require an explicit valid notification timezone")
+		}
+		if result.command == "init-clock" && !result.confirmClock {
+			return options{}, errors.New("init-clock requires --confirm-no-writers")
+		}
+	} else if result.zone != "" {
+		return options{}, errors.New("notification-timezone is only valid for clock commands")
+	}
+	if result.command != "init-clock" && result.confirmClock {
+		return options{}, errors.New("confirm-no-writers is only valid for init-clock")
+	}
 	if result.command == "plan" && result.dsnFile != "" {
 		return options{}, errors.New("plan is offline and does not accept credentials")
 	}
@@ -91,7 +110,7 @@ func parseOptions(args []string) (options, error) {
 
 func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps dependencies) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
-		fmt.Fprintln(out, "Usage: schema [plan | verify | migrate --confirm-new-database] [--dsn-file PATH] [--timeout 2m]")
+		fmt.Fprintln(out, "Usage: schema [plan | verify | migrate --confirm-new-database | verify-clock --notification-timezone ZONE | init-clock --confirm-no-writers --notification-timezone ZONE] [--dsn-file PATH] [--timeout 2m]")
 		fmt.Fprintln(out, "Default plan is offline. Database commands use a private DSN file or CLOUDOPS_SCHEMA_DSN; no application .env is loaded.")
 		return 0
 	}
@@ -126,6 +145,24 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 	ctx, cancel := context.WithTimeout(ctx, config.timeout)
 	defer cancel()
 	verification := db.Verify(ctx, manifest)
+	if config.command == "init-clock" || config.command == "verify-clock" {
+		if verification != nil {
+			fmt.Fprintln(diagnostics, safeError(verification))
+			return 1
+		}
+		if config.command == "init-clock" {
+			if err := db.InitializeClock(ctx, config.zone); err != nil {
+				fmt.Fprintln(diagnostics, safeError(err))
+				return 1
+			}
+		}
+		if err := db.VerifyClock(ctx, config.zone); err != nil {
+			fmt.Fprintln(diagnostics, safeError(err))
+			return 1
+		}
+		fmt.Fprintln(out, "Notification timezone marker verified. Historical timestamps have not been converted.")
+		return 0
+	}
 	if config.command == "verify" || verification == nil {
 		if verification != nil {
 			fmt.Fprintln(diagnostics, safeError(verification))
@@ -158,6 +195,14 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 
 func safeError(err error) string {
 	switch {
+	case errors.Is(err, dbschema.ErrClockInvalidZone):
+		return "notification timezone must be explicit UTC or a valid IANA timezone"
+	case errors.Is(err, dbschema.ErrClockMissing):
+		return "notification timezone marker is missing; explicit initialization is required"
+	case errors.Is(err, dbschema.ErrClockMismatch):
+		return "notification timezone differs from the recorded marker; no automatic conversion is permitted"
+	case errors.Is(err, dbschema.ErrClockHistory):
+		return "notification history exists without a timezone marker; operator reconciliation is required"
 	case errors.Is(err, schema.ErrUncertain):
 		return "schema operation outcome is uncertain; inspect the database before retry"
 	case errors.Is(err, schema.ErrDirty):
@@ -233,6 +278,12 @@ func (db sqlDatabase) PreflightFresh(ctx context.Context) error {
 }
 func (db sqlDatabase) Migrate(ctx context.Context, manifest []schema.Migration) error {
 	return schema.Migrate(ctx, db.db, manifest)
+}
+func (db sqlDatabase) VerifyClock(ctx context.Context, zone string) error {
+	return dbschema.VerifyClock(ctx, db.db, zone)
+}
+func (db sqlDatabase) InitializeClock(ctx context.Context, zone string) error {
+	return dbschema.InitializeFreshClock(ctx, db.db, zone)
 }
 func (db sqlDatabase) Close() error { return db.db.Close() }
 
