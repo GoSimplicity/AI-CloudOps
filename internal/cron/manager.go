@@ -45,7 +45,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"github.com/hibiken/asynq"
 	robcron "github.com/robfig/cron/v3"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -830,39 +829,4 @@ func (cm *unifiedCronManager) checkClusterStatus(ctx context.Context, cluster *m
 		return fmt.Errorf("集群 %d 状态检查失败", cluster.ID)
 	}
 	return nil
-}
-
-// getPrometheusRefreshInterval 从配置读取刷新间隔，支持两种格式：
-// 1) "@every 15s"（与常见的 cron 语法一致，仅支持 @every 前缀）
-// 2) "15s"（直接 time.ParseDuration 支持的时长表示）
-// 解析失败时回退到 DefaultPrometheusConfigRefreshInterval。
-func (cm *unifiedCronManager) getPrometheusRefreshInterval() time.Duration {
-	spec := strings.TrimSpace(viper.GetString("prometheus.refresh_cron"))
-	if spec == "" {
-		return DefaultPrometheusConfigRefreshInterval
-	}
-
-	// 支持 @every 前缀
-	if strings.HasPrefix(spec, "@every") {
-		durStr := strings.TrimSpace(strings.TrimPrefix(spec, "@every"))
-		if d, err := time.ParseDuration(durStr); err == nil && d > 0 {
-			cm.logger.Info("使用配置的 Prometheus 刷新间隔(@every)", zap.String("spec", spec), zap.Duration("interval", d))
-			return d
-		}
-		cm.logger.Warn("解析 @every 刷新间隔失败，使用默认值",
-			zap.String("spec", spec),
-			zap.Duration("default", DefaultPrometheusConfigRefreshInterval))
-		return DefaultPrometheusConfigRefreshInterval
-	}
-
-	// 尝试直接解析 duration
-	if d, err := time.ParseDuration(spec); err == nil && d > 0 {
-		cm.logger.Info("使用配置的 Prometheus 刷新间隔(duration)", zap.String("spec", spec), zap.Duration("interval", d))
-		return d
-	}
-
-	cm.logger.Warn("刷新间隔配置无法解析，使用默认值",
-		zap.String("spec", spec),
-		zap.Duration("default", DefaultPrometheusConfigRefreshInterval))
-	return DefaultPrometheusConfigRefreshInterval
 }
