@@ -27,6 +27,11 @@ func (s *managedAPIStub) ResolveManagedHistory(_ context.Context, req *model.Res
 	s.calls++
 	return nil
 }
+func (s *managedAPIStub) GetManagedOperation(_ context.Context, id string, owner int) (*model.CloudManagedOperationView, error) {
+	s.actor = owner
+	s.calls++
+	return &model.CloudManagedOperationView{OperationID: id, State: "running"}, nil
+}
 func (s *managedAPIStub) SyncManaged(_ context.Context, req *model.SyncCloudManagedResourcesReq) (*model.CloudManagedSyncResult, error) {
 	s.actor = req.OperatorID
 	s.calls++
@@ -66,6 +71,8 @@ func TestManagedCloudRoutesRequirePermissionsAndTrustedActor(t *testing.T) {
 		{"wrong method grant", "POST", "/api/tree/cloud/managed/sync", `{"cloud_account_id":1,"cloud_account_region_id":2,"kind":"rds","resource_ids":["rm-test"]}`, []*model.Api{{Method: 1, Path: "/api/tree/cloud/managed/sync"}}, 7, 403, 0, 0},
 		{"review trusted actor", "POST", "/api/tree/cloud/managed/history/12/resolve", `{"cloud_account_id":1,"cloud_account_region_id":2,"kind":"rds","resources_verified":true,"reason":"resources checked and reconciled","operator_id":999,"history_id":999}`, []*model.Api{{Method: 2, Path: model.CloudManagedResolveRoute}}, 7, 200, 1, 7},
 		{"review wildcard denied", "POST", "/api/tree/cloud/managed/history/12/resolve", `{}`, []*model.Api{{Method: 2, Path: "/api/tree/cloud/*"}}, 7, 403, 0, 0},
+		{"operation owner", "GET", "/api/tree/cloud/managed/operations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa?operator_id=999", "", []*model.Api{{Method: 1, Path: "/api/tree/cloud/managed/operations/:operation_id"}}, 7, 200, 1, 7},
+		{"operation permission denied", "GET", "/api/tree/cloud/managed/operations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "", []*model.Api{{Method: 1, Path: "/api/tree/cloud/managed/history"}}, 7, 403, 0, 0},
 		{"list allowed", "GET", "/api/tree/cloud/managed/list?cloud_account_id=1&cloud_account_region_id=2&kind=rds", "", []*model.Api{{Method: 1, Path: "/api/tree/cloud/managed/list"}}, 7, 200, 1, 0},
 		{"detail wrong grant", "GET", "/api/tree/cloud/managed/detail/9?cloud_account_id=1&cloud_account_region_id=2&kind=rds", "", []*model.Api{{Method: 1, Path: "/api/tree/cloud/managed/list"}}, 7, 403, 0, 0},
 		{"detail allowed", "GET", "/api/tree/cloud/managed/detail/9?cloud_account_id=1&cloud_account_region_id=2&kind=rds", "", []*model.Api{{Method: 1, Path: "/api/tree/cloud/managed/detail/:id"}}, 7, 200, 1, 0},

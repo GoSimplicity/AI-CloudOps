@@ -52,6 +52,7 @@ type ListCloudManagedResourcesReq struct {
 	Size                 int    `form:"size"`
 }
 type SyncCloudManagedResourcesReq struct {
+	OperationID          string   `json:"operation_id,omitempty" binding:"omitempty,max=36"`
 	CloudAccountID       int      `json:"cloud_account_id" binding:"required,gt=0"`
 	CloudAccountRegionID int      `json:"cloud_account_region_id" binding:"required,gt=0"`
 	Kind                 string   `json:"kind" binding:"required,oneof=rds clb cache"`
@@ -59,6 +60,7 @@ type SyncCloudManagedResourcesReq struct {
 	OperatorID           int      `json:"-"`
 }
 type CloudManagedSyncResult struct {
+	OperationID   string `json:"operation_id,omitempty"`
 	Status        string `json:"status"`
 	HistoryID     int    `json:"history_id,omitempty"`
 	Count         int    `json:"count"`

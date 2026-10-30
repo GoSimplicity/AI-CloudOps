@@ -18,6 +18,7 @@ type managedReader interface {
 	ListCache(context.Context, []string) ([]model.AliyunCacheInstance, error)
 }
 type ManagedCloudService interface {
+	GetManagedOperation(context.Context, string, int) (*model.CloudManagedOperationView, error)
 	ResolveManagedHistory(context.Context, *model.ResolveCloudManagedHistoryReq) error
 	ListManaged(context.Context, *model.ListCloudManagedResourcesReq) (model.ListResp[*model.CloudManagedResource], error)
 	GetManaged(context.Context, *model.ListCloudManagedResourcesReq, int) (*model.CloudManagedResource, error)
@@ -159,7 +160,7 @@ func (s *managedCloudService) ListManagedHistory(ctx context.Context, req *model
 	}
 	return model.ListResp[*model.CloudManagedSyncHistory]{Items: rows, Total: total}, nil
 }
-func (s *managedCloudService) SyncManaged(ctx context.Context, req *model.SyncCloudManagedResourcesReq) (result *model.CloudManagedSyncResult, resultErr error) {
+func (s *managedCloudService) syncManaged(ctx context.Context, req *model.SyncCloudManagedResourcesReq) (result *model.CloudManagedSyncResult, resultErr error) {
 	if req == nil {
 		return nil, errors.New("请求无效")
 	}

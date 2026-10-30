@@ -32,6 +32,7 @@ func TestMySQLManagedResourceAtomicAndFencing(t *testing.T) {
 	if err != nil || !regexp.MustCompile(`^schema_[a-f0-9]{24}$`).MatchString(cfg.DBName) || cfg.User != cfg.DBName {
 		t.Fatal("refusing non-isolated database")
 	}
+	cfg.ClientFoundRows = true // duplicate insert row counts must not grant execution
 	cfg.Timeout, cfg.ReadTimeout, cfg.WriteTimeout = 5*time.Second, 10*time.Second, 10*time.Second
 	db, err := gorm.Open(mysql.Open(cfg.FormatDSN()), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
@@ -39,7 +40,7 @@ func TestMySQLManagedResourceAtomicAndFencing(t *testing.T) {
 	}
 	pool, _ := db.DB()
 	defer pool.Close()
-	if err := db.AutoMigrate(&model.CloudAccount{}, &model.CloudAccountRegion{}, &model.TreeCloudResource{}, &model.CloudRegionSyncLease{}, &model.CloudManagedResource{}, &model.CloudManagedSyncHistory{}); err != nil {
+	if err := db.AutoMigrate(&model.CloudAccount{}, &model.CloudAccountRegion{}, &model.TreeCloudResource{}, &model.CloudRegionSyncLease{}, &model.CloudManagedResource{}, &model.CloudManagedSyncHistory{}, &model.CloudManagedOperation{}); err != nil {
 		t.Fatal(err)
 	}
 	prior := viper.Get("tree.password_encryption_key")
@@ -83,6 +84,20 @@ func TestMySQLManagedResourceAtomicAndFencing(t *testing.T) {
 	var saved model.CloudManagedResource
 	if err := db.First(&saved, rows[0].ID).Error; err != nil || saved.LocalDescription != "local note" || saved.RDS == nil {
 		t.Fatal("local metadata or typed JSON lost")
+	}
+	operationReq := *req
+	operationReq.OperationID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	firstOperation, err := svc.SyncManaged(context.Background(), &operationReq)
+	if err != nil || firstOperation.Status != "success" {
+		t.Fatal("MySQL operation reservation failed")
+	}
+	replay, err := svc.SyncManaged(context.Background(), &operationReq)
+	if err != nil || replay.HistoryID != firstOperation.HistoryID {
+		t.Fatal("MySQL clientFoundRows duplicate executed again")
+	}
+	var operations int64
+	if err := db.Model(&model.CloudManagedOperation{}).Count(&operations).Error; err != nil || operations != 1 {
+		t.Fatal("MySQL operation deduplication failed")
 	}
 	var total int64
 	db.Model(&model.CloudManagedResource{}).Count(&total)
