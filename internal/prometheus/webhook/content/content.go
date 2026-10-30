@@ -52,30 +52,6 @@ var ErrPrivateDelivery = errors.New("private notification delivery failed")
 var ErrGroupDelivery = errors.New("group notification delivery failed")
 var ErrPartialDelivery = errors.New("notification delivery partially failed; reconciliation required")
 var ErrGroupNotConfigured = errors.New("group robot token is not configured")
-var ErrMessageResponse = errors.New("notification provider response is invalid")
-
-type MessageProviderError struct{ Code int }
-
-func (err *MessageProviderError) Error() string {
-	return fmt.Sprintf("notification provider code %d", err.Code)
-}
-
-func notificationProviderResult(body []byte) error {
-	var result struct {
-		Code       *int `json:"code"`
-		StatusCode *int `json:"StatusCode"`
-	}
-	if json.Unmarshal(body, &result) != nil || (result.Code == nil && result.StatusCode == nil) {
-		return ErrMessageResponse
-	}
-	if result.Code != nil && *result.Code != 0 {
-		return &MessageProviderError{Code: *result.Code}
-	}
-	if result.StatusCode != nil && *result.StatusCode != 0 {
-		return &MessageProviderError{Code: *result.StatusCode}
-	}
-	return nil
-}
 
 type WebhookContent interface {
 	// GenerateFeishuCardContentOneAlert 生成单个告警的 Feishu 卡片内容并发送到群聊和私聊
@@ -347,9 +323,9 @@ func (wc *webhookContent) SentFeishuGroup(ctx context.Context, msg string, robot
 		return ErrGroupDelivery
 	}
 
-	if err := notificationProviderResult(response); err != nil {
+	if err := utils.ConfirmFeishuResponse(response); err != nil {
 		fields := []zap.Field{zap.String("operation", "group_notification_provider")}
-		var provider *MessageProviderError
+		var provider *utils.FeishuProviderError
 		if errors.As(err, &provider) {
 			fields = append(fields, zap.Int("provider_code", provider.Code))
 		}
@@ -410,9 +386,9 @@ func (wc *webhookContent) SentFeishuPrivate(ctx context.Context, cardContent str
 			failed = true
 			continue
 		}
-		if err := notificationProviderResult(response); err != nil {
+		if err := utils.ConfirmFeishuResponse(response); err != nil {
 			fields := []zap.Field{zap.String("operation", "private_notification_provider")}
-			var provider *MessageProviderError
+			var provider *utils.FeishuProviderError
 			if errors.As(err, &provider) {
 				fields = append(fields, zap.Int("provider_code", provider.Code))
 			}

@@ -27,6 +27,7 @@ package alert
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -242,12 +243,21 @@ func (d *alertManagerEventDAO) SendMessageToGroup(ctx context.Context, url strin
 	content := fmt.Sprintf(`{"msg_type":"text","content":{"text":"%s"}}`, message)
 
 	// 发送消息到群组
-	_, err := utils.PostWithJson(ctx, d.httpClient, d.l, url, content, nil, nil)
+	body, err := utils.PostWithJson(ctx, d.httpClient, d.l, url, content, nil, nil)
 	if err != nil {
 		d.l.Error("发送飞书群聊消息失败", zap.String("operation", "group_text_notification"))
 		return fmt.Errorf("发送飞书群聊消息失败: %w", err)
 	}
 
+	if err := utils.ConfirmFeishuResponse(body); err != nil {
+		fields := []zap.Field{zap.String("operation", "group_text_provider_confirm")}
+		var provider *utils.FeishuProviderError
+		if errors.As(err, &provider) {
+			fields = append(fields, zap.Int("provider_code", provider.Code))
+		}
+		d.l.Error("群聊业务响应未确认", fields...)
+		return err
+	}
 	d.l.Info("发送飞书群聊消息成功", zap.String("operation", "group_text_notification"))
 
 	return nil

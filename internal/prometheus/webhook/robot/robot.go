@@ -37,6 +37,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/request"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -55,10 +56,6 @@ type TokenHTTPStatusError struct{ StatusCode int }
 func (err *TokenHTTPStatusError) Error() string {
 	return fmt.Sprintf("token HTTP status %d", err.StatusCode)
 }
-
-type TokenProviderError struct{ Code int }
-
-func (err *TokenProviderError) Error() string { return fmt.Sprintf("token provider code %d", err.Code) }
 
 // WebhookRobot 定义了Webhook机器人相关的接口
 type WebhookRobot interface {
@@ -213,17 +210,20 @@ func (w *webhookRobot) getTokenFromAPI(ctx context.Context) (string, int, error)
 		return "", 0, err
 	}
 
+	if err := utils.ConfirmFeishuResponse(bodyBytes); err != nil {
+		fields := []zap.Field{zap.String("operation", "token_provider_confirm")}
+		var provider *utils.FeishuProviderError
+		if errors.As(err, &provider) {
+			fields = append(fields, zap.Int("provider_code", provider.Code))
+		}
+		w.logger.Error("令牌业务响应未确认", fields...)
+		return "", 0, err
+	}
 	var responseData request.RobotTenantAccessTokenRes
 	err = json.Unmarshal(bodyBytes, &responseData)
 	if err != nil {
 		w.logger.Error("解析响应JSON失败", zap.String("operation", "token_response_decode"))
 		return "", 0, ErrTokenDecode
-	}
-
-	// 如果 API 返回错误码，记录错误并返回
-	if responseData.Code != 0 {
-		w.logger.Error("API返回错误", zap.String("operation", "token_provider"), zap.Int("provider_code", responseData.Code))
-		return "", 0, &TokenProviderError{Code: responseData.Code}
 	}
 
 	if strings.TrimSpace(responseData.TenantAccessToken) == "" || responseData.Expire <= 0 || int64(responseData.Expire) > int64(time.Duration(1<<63-1)/time.Second) {
