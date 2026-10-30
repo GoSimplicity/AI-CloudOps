@@ -85,6 +85,22 @@ class BusinessBrowserSafetyTests(unittest.TestCase):
             data["suites"][0]["suites"][0]["specs"][0]["tests"][0].update(change)
             with self.assertRaises(tool.BrowserGateError): tool.validate_report(data)
 
+    def test_failure_location_exposes_only_known_source_coordinates(self):
+        private = "private-location-canary"
+        result = {"error": {"message": private, "stack": private + "\n at /private/work/tests/e2e/cron-edit-contract.spec.ts:180:13"}}
+        self.assertEqual(tool.safe_failure_location(result), "cron-edit-contract.spec.ts:180:13")
+        result["error"]["location"] = {"file": "/private/work/tests/e2e/console.spec.ts", "line": 96, "column": 9}
+        self.assertEqual(tool.safe_failure_location(result), "console.spec.ts:96:9")
+        for location in ({"file": private, "line": 1, "column": 1}, {"file": "console.spec.ts", "line": True, "column": 9}):
+            self.assertIsNone(tool.safe_failure_location({"error": {"message": private, "location": location}}))
+        data = report()
+        failed = data["suites"][0]["suites"][0]["specs"][-1]["tests"][0]["results"][0]
+        failed.update(result)
+        text = "\n".join(tool.failure_diagnostics(data))
+        self.assertIn("source=console.spec.ts:96:9", text)
+        self.assertNotIn(private, text)
+        self.assertNotIn("/private/work", text)
+
     def test_process_failure_diagnostics_never_enter_gate_error(self):
         result = tool.subprocess.CompletedProcess([], 1, b"private output", b"private error")
         with patch.object(tool.subprocess, "run", return_value=result):

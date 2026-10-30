@@ -128,6 +128,30 @@ def validate_report(report: dict) -> int:
     return len(found)
 
 
+def safe_failure_location(result: dict) -> str | None:
+    """Emit only known repository filenames and bounded source coordinates."""
+    allowed = {Path(path).name for path in TEST_FILES}
+    errors = result.get("errors", [])
+    candidates = [result.get("error"), *(errors if isinstance(errors, list) else [])]
+    for error in candidates:
+        if not isinstance(error, dict):
+            continue
+        location = error.get("location")
+        if isinstance(location, dict):
+            name = str(location.get("file", "")).replace("\\", "/").rsplit("/", 1)[-1]
+            line, column = location.get("line"), location.get("column")
+            if name in allowed and type(line) is int and 1 <= line <= 100_000 and type(column) is int and 1 <= column <= 10_000:
+                return f"{name}:{line}:{column}"
+        stack = error.get("stack")
+        if not isinstance(stack, str) or len(stack) > 64 * 1024:
+            continue
+        for path in TEST_FILES:
+            match = re.search(re.escape(path) + r":([0-9]{1,6}):([0-9]{1,5})(?:[^0-9]|$)", stack.replace("\\", "/"))
+            if match and 1 <= int(match[1]) <= 100_000 and 1 <= int(match[2]) <= 10_000:
+                return f"{Path(path).name}:{int(match[1])}:{int(match[2])}"
+    return None
+
+
 def failure_diagnostics(report: object) -> list[str]:
     """Project untrusted report fields onto fixed titles, states and integer counts."""
     known_results = {"passed", "failed", "timedOut", "skipped", "interrupted"}
@@ -155,6 +179,7 @@ def failure_diagnostics(report: object) -> list[str]:
     lines: list[str] = []
     for title in TEST_TITLES:
         status = outcome = "unknown"
+        source = None
         specs = selected[title]
         if len(specs) == 1:
             tests = specs[0].get("tests", [])
@@ -167,8 +192,11 @@ def failure_diagnostics(report: object) -> list[str]:
                     candidate = results[0].get("status")
                     if isinstance(candidate, str) and candidate in known_results:
                         status = candidate
+                    source = safe_failure_location(results[0])
         # title comes from the fixed catalogue, never from an error or arbitrary spec.
         lines.append(f"BROWSER {title}: status={status} outcome={outcome}")
+        if source:
+            lines.append(f"BROWSER source={source}")
     stats = report.get("stats") if isinstance(report, dict) else None
     counts = []
     for key in ("expected", "skipped", "unexpected", "flaky"):
