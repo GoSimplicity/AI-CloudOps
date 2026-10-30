@@ -16,7 +16,7 @@ type recordTransport struct{ urls []string }
 
 func (r *recordTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	r.urls = append(r.urls, req.URL.String())
-	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("{}")), Header: http.Header{}, Request: req}, nil
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"code":0}`)), Header: http.Header{}, Request: req}, nil
 }
 
 // 第 18 点：群聊 URL 按 event_service.go 的 .../open-apis/bot/v2/hook/<token> 拼接，配置值带不带尾斜杠结果相同

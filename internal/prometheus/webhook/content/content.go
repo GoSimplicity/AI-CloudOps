@@ -28,6 +28,7 @@ package content
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -43,6 +44,38 @@ import (
 	"github.com/prometheus/alertmanager/template"
 	"go.uber.org/zap"
 )
+
+var ErrNotificationLookup = errors.New("notification context lookup failed")
+var ErrNotificationUpgrade = errors.New("notification upgrade persistence failed")
+var ErrCardBuild = errors.New("notification card construction failed")
+var ErrPrivateDelivery = errors.New("private notification delivery failed")
+var ErrGroupDelivery = errors.New("group notification delivery failed")
+var ErrPartialDelivery = errors.New("notification delivery partially failed; reconciliation required")
+var ErrGroupNotConfigured = errors.New("group robot token is not configured")
+var ErrMessageResponse = errors.New("notification provider response is invalid")
+
+type MessageProviderError struct{ Code int }
+
+func (err *MessageProviderError) Error() string {
+	return fmt.Sprintf("notification provider code %d", err.Code)
+}
+
+func notificationProviderResult(body []byte) error {
+	var result struct {
+		Code       *int `json:"code"`
+		StatusCode *int `json:"StatusCode"`
+	}
+	if json.Unmarshal(body, &result) != nil || (result.Code == nil && result.StatusCode == nil) {
+		return ErrMessageResponse
+	}
+	if result.Code != nil && *result.Code != 0 {
+		return &MessageProviderError{Code: *result.Code}
+	}
+	if result.StatusCode != nil && *result.StatusCode != 0 {
+		return &MessageProviderError{Code: *result.StatusCode}
+	}
+	return nil
+}
 
 type WebhookContent interface {
 	// GenerateFeishuCardContentOneAlert 生成单个告警的 Feishu 卡片内容并发送到群聊和私聊
@@ -112,7 +145,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	yuanshiRen := ""
 	onDutyGroup, err := wc.dao.GetOnDutyGroupById(ctx, sendGroup.OnDutyGroupID)
 	if err != nil {
-		return fmt.Errorf("获取值班组失败: %w", err)
+		return ErrNotificationLookup
 	}
 
 	onDutyGroupUrl := fmt.Sprintf(constant.SendGroupURLTemplate,
@@ -124,8 +157,8 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	// 填充当天的值班用户
 	onDutyGroup, err = wc.dao.FillTodayOnDutyUser(ctx, onDutyGroup)
 	if err != nil {
-		wc.l.Error("填充当天值班用户失败", zap.Error(err), zap.Int("onDutyGroupId", onDutyGroup.ID))
-		return fmt.Errorf("填充当天值班用户失败: %w", err)
+		wc.l.Error("填充当天值班用户失败", zap.String("operation", "notification_duty_lookup"))
+		return ErrNotificationLookup
 	}
 
 	if onDutyGroup.TodayDutyUser != nil {
@@ -168,7 +201,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 			)
 			event.Status = model.MonitorAlertEventStatusUpgraded
 			if err := wc.dao.UpdateMonitorAlertEvent(ctx, event); err != nil {
-				return fmt.Errorf("更新告警事件状态失败: %w", err)
+				return ErrNotificationUpgrade
 			}
 		}
 	}
@@ -238,26 +271,22 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 		buttonURLs[5],    // 屏蔽7天 URL
 	)
 	if err != nil {
-		return fmt.Errorf("构建 Feishu 卡片内容失败: %w", err)
+		return ErrCardBuild
 	}
-	// 私聊发送
+	failed := false
 	if err := wc.SentFeishuPrivate(ctx, cardContent, privateUserIds); err != nil {
-		wc.l.Error("发送 Feishu 私聊消息失败",
-			zap.Error(err),
-			zap.Any("privateUserIds", privateUserIds),
-		)
-		return fmt.Errorf("发送 Feishu 私聊消息失败: %w", err)
+		wc.l.Error("发送 Feishu 私聊消息失败", zap.String("operation", "private_notification"))
+		failed = true
 	}
-
-	// 群聊发送
-	msgQun := fmt.Sprintf(constant.CartDataGroup, cardContent)
-
-	if err := wc.SentFeishuGroup(ctx, msgQun, sendGroup.FeiShuQunRobotToken); err != nil {
-		wc.l.Error("发送 Feishu 群聊消息失败",
-			zap.Error(err),
-			zap.String("robotToken", sendGroup.FeiShuQunRobotToken),
-		)
-		return fmt.Errorf("发送 Feishu 群聊消息失败: %w", err)
+	if strings.TrimSpace(sendGroup.FeiShuQunRobotToken) != "" {
+		msgQun := fmt.Sprintf(constant.CartDataGroup, cardContent)
+		if err := wc.SentFeishuGroup(ctx, msgQun, sendGroup.FeiShuQunRobotToken); err != nil {
+			wc.l.Error("发送 Feishu 群聊消息失败", zap.String("operation", "group_notification"))
+			failed = true
+		}
+	}
+	if failed {
+		return ErrPartialDelivery
 	}
 
 	return nil
@@ -296,7 +325,7 @@ func (wc *webhookContent) buildFeishuCardContent(
 	// 验证生成的 JSON 是否有效
 	var temp interface{}
 	if err := json.Unmarshal([]byte(cardContent), &temp); err != nil {
-		return "", fmt.Errorf("生成的 Feishu 卡片内容 JSON 无效: %w", err)
+		return "", ErrCardBuild
 	}
 
 	return cardContent, nil
@@ -304,6 +333,9 @@ func (wc *webhookContent) buildFeishuCardContent(
 
 // SentFeishuGroup 发送消息到 Feishu 群聊
 func (wc *webhookContent) SentFeishuGroup(ctx context.Context, msg string, robotToken string) error {
+	if strings.TrimSpace(robotToken) == "" {
+		return ErrGroupNotConfigured
+	}
 	// 构建 Feishu 群聊机器人 URL：<group_message_api>/<token>，格式同 event_service.go 的 .../open-apis/bot/v2/hook/<token>；
 	// 先去首尾空白再去尾斜杠，避免拼出 hook//<token> 或 hook/ /<token>
 	url := fmt.Sprintf("%s/%s", strings.TrimRight(strings.TrimSpace(viper.GetString("webhook.im_feishu.group_message_api")), "/"), robotToken)
@@ -311,13 +343,19 @@ func (wc *webhookContent) SentFeishuGroup(ctx context.Context, msg string, robot
 	// 发送 HTTP POST 请求
 	response, err := utils.PostWithJson(ctx, wc.client, wc.l, url, msg, nil, nil)
 	if err != nil {
-		wc.l.Error("发送飞书群聊卡片消息失败",
-			zap.Error(err),
-			zap.Any("结果", string(response)),
-		)
-		return fmt.Errorf("发送飞书群聊卡片消息失败: %w", err)
+		wc.l.Error("发送飞书群聊卡片消息失败", zap.String("operation", "group_notification_http"))
+		return ErrGroupDelivery
 	}
 
+	if err := notificationProviderResult(response); err != nil {
+		fields := []zap.Field{zap.String("operation", "group_notification_provider")}
+		var provider *MessageProviderError
+		if errors.As(err, &provider) {
+			fields = append(fields, zap.Int("provider_code", provider.Code))
+		}
+		wc.l.Error("群聊业务响应失败", fields...)
+		return err
+	}
 	return nil
 }
 
@@ -331,7 +369,16 @@ type FeishuPrivateCardMsg struct {
 
 // SentFeishuPrivate 发送消息到 Feishu 私聊
 func (wc *webhookContent) SentFeishuPrivate(ctx context.Context, cardContent string, privateUserIds map[string]string) error {
+	if len(privateUserIds) == 0 {
+		return nil
+	}
+	failed := false
 	for userId := range privateUserIds {
+		token := wc.robot.GetPrivateRobotToken()
+		if strings.TrimSpace(token) == "" {
+			failed = true
+			continue
+		}
 		feishuPrivateCardMsg := FeishuPrivateCardMsg{
 			ReceiveId:     userId,
 			ReceiveIdType: "user_id",
@@ -342,10 +389,8 @@ func (wc *webhookContent) SentFeishuPrivate(ctx context.Context, cardContent str
 		// 序列化消息结构体为 JSON
 		data, err := json.Marshal(feishuPrivateCardMsg)
 		if err != nil {
-			wc.l.Error("序列化 Feishu 私聊消息失败",
-				zap.Error(err),
-				zap.Any("userId", userId),
-			)
+			wc.l.Error("序列化 Feishu 私聊消息失败", zap.String("operation", "private_notification_encode"))
+			failed = true
 			continue
 		}
 
@@ -353,7 +398,7 @@ func (wc *webhookContent) SentFeishuPrivate(ctx context.Context, cardContent str
 		url := viper.GetString("webhook.im_feishu.private_message_api")
 
 		headers := map[string]string{
-			"Authorization": fmt.Sprintf("Bearer %s", wc.robot.GetPrivateRobotToken()),
+			"Authorization": fmt.Sprintf("Bearer %s", token),
 			"Content-Type":  "application/json; charset=utf-8",
 		}
 		params := map[string]string{"receive_id_type": "user_id"}
@@ -361,14 +406,22 @@ func (wc *webhookContent) SentFeishuPrivate(ctx context.Context, cardContent str
 		// 发送 HTTP POST 请求
 		response, err := utils.PostWithJson(ctx, wc.client, wc.l, url, string(data), params, headers)
 		if err != nil {
-			wc.l.Error("发送飞书私聊卡片消息失败",
-				zap.Error(err),
-				zap.Any("结果", string(response)),
-				zap.Any("userId", userId),
-			)
+			wc.l.Error("发送飞书私聊卡片消息失败", zap.String("operation", "private_notification_http"))
+			failed = true
 			continue
 		}
+		if err := notificationProviderResult(response); err != nil {
+			fields := []zap.Field{zap.String("operation", "private_notification_provider")}
+			var provider *MessageProviderError
+			if errors.As(err, &provider) {
+				fields = append(fields, zap.Int("provider_code", provider.Code))
+			}
+			wc.l.Error("私聊业务响应失败", fields...)
+			failed = true
+		}
 	}
-
+	if failed {
+		return ErrPartialDelivery
+	}
 	return nil
 }

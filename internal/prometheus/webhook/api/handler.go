@@ -91,7 +91,7 @@ func (w *WebHookHandler) MonitorAlertReceive(ctx *gin.Context) {
 	var msg webhook.Message
 
 	if err := ctx.ShouldBindJSON(&msg); err != nil {
-		w.l.Error("解析告警JSON失败", zap.Error(err))
+		w.l.Error("解析告警JSON失败", zap.String("operation", "alert_receive_decode"))
 		base.ErrorWithMessage(ctx, "无效的JSON数据")
 		return
 	}

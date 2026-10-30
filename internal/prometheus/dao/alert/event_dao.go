@@ -242,22 +242,13 @@ func (d *alertManagerEventDAO) SendMessageToGroup(ctx context.Context, url strin
 	content := fmt.Sprintf(`{"msg_type":"text","content":{"text":"%s"}}`, message)
 
 	// 发送消息到群组
-	body, err := utils.PostWithJson(ctx, d.httpClient, d.l, url, content, nil, nil)
+	_, err := utils.PostWithJson(ctx, d.httpClient, d.l, url, content, nil, nil)
 	if err != nil {
-		d.l.Error("发送飞书群聊消息失败",
-			zap.Error(err),
-			zap.String("url", url),
-			zap.String("message", message),
-			zap.Any("结果", string(body)),
-		)
+		d.l.Error("发送飞书群聊消息失败", zap.String("operation", "group_text_notification"))
 		return fmt.Errorf("发送飞书群聊消息失败: %w", err)
 	}
 
-	d.l.Info("发送飞书群聊消息成功",
-		zap.String("url", url),
-		zap.String("message", message),
-		zap.Any("结果", string(body)),
-	)
+	d.l.Info("发送飞书群聊消息成功", zap.String("operation", "group_text_notification"))
 
 	return nil
 }

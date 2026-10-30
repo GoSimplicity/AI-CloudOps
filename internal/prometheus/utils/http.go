@@ -28,6 +28,7 @@ package utils
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,15 +36,22 @@ import (
 	"go.uber.org/zap"
 )
 
+var ErrPostRequest = errors.New("notification HTTP request construction failed")
+var ErrPostTransport = errors.New("notification HTTP transport failed")
+var ErrPostRead = errors.New("notification HTTP response read failed")
+
+type PostHTTPStatusError struct{ StatusCode int }
+
+func (err *PostHTTPStatusError) Error() string {
+	return fmt.Sprintf("notification HTTP status %d", err.StatusCode)
+}
+
 // PostWithJson 发送带有JSON字符串的POST请求
 func PostWithJson(ctx context.Context, client *http.Client, l *zap.Logger, url string, jsonStr string, params map[string]string, headers map[string]string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer([]byte(jsonStr)))
 	if err != nil {
-		l.Error("创建 HTTP 请求失败",
-			zap.Error(err),
-			zap.String("url", url),
-		)
-		return nil, err
+		l.Error("创建 HTTP 请求失败", zap.String("operation", "notification_request_build"), zap.String("method", "POST"))
+		return nil, ErrPostRequest
 	}
 
 	q := req.URL.Query()
@@ -62,30 +70,20 @@ func PostWithJson(ctx context.Context, client *http.Client, l *zap.Logger, url s
 
 	resp, err := client.Do(req)
 	if err != nil {
-		l.Error("发送 HTTP 请求失败",
-			zap.Error(err),
-			zap.String("url", url),
-		)
-		return nil, err
+		l.Error("发送 HTTP 请求失败", zap.String("operation", "notification_transport"), zap.String("method", "POST"))
+		return nil, ErrPostTransport
 	}
 	defer resp.Body.Close()
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		l.Error("读取响应体失败",
-			zap.Error(err),
-			zap.String("url", url),
-		)
-		return nil, err
+		l.Error("读取响应体失败", zap.String("operation", "notification_response_read"), zap.String("method", "POST"))
+		return nil, ErrPostRead
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		l.Error("服务器返回非2xx状态码",
-			zap.String("url", url),
-			zap.Int("statusCode", resp.StatusCode),
-			zap.String("responseBody", string(bodyBytes)),
-		)
-		return bodyBytes, fmt.Errorf("server returned HTTP status %s", resp.Status)
+		l.Error("服务器返回非2xx状态码", zap.String("operation", "notification_http_status"), zap.String("method", "POST"), zap.Int("status_code", resp.StatusCode))
+		return nil, &PostHTTPStatusError{StatusCode: resp.StatusCode}
 	}
 
 	return bodyBytes, nil

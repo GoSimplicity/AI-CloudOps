@@ -43,6 +43,22 @@ import (
 )
 
 var ErrPrivateRobotDisabled = errors.New("private robot credentials are not configured")
+var ErrTokenRequest = errors.New("token request construction failed")
+var ErrTokenTransport = errors.New("token HTTP transport failed")
+var ErrTokenRead = errors.New("token response read failed")
+var ErrTokenEncode = errors.New("token request encoding failed")
+var ErrTokenDecode = errors.New("token response decoding failed")
+var ErrTokenInvalid = errors.New("token provider returned an unusable token or expiry")
+
+type TokenHTTPStatusError struct{ StatusCode int }
+
+func (err *TokenHTTPStatusError) Error() string {
+	return fmt.Sprintf("token HTTP status %d", err.StatusCode)
+}
+
+type TokenProviderError struct{ Code int }
+
+func (err *TokenProviderError) Error() string { return fmt.Sprintf("token provider code %d", err.Code) }
 
 // WebhookRobot 定义了Webhook机器人相关的接口
 type WebhookRobot interface {
@@ -81,7 +97,7 @@ func (w *webhookRobot) RefreshPrivateRobotToken(ctx context.Context) {
 		return
 	}
 	if err != nil {
-		w.logger.Error("刷新私有机器人令牌失败", zap.Error(err))
+		w.logger.Error("刷新私有机器人令牌失败", zap.String("operation", "private_token_refresh"))
 		return
 	}
 
@@ -114,7 +130,7 @@ func (w *webhookRobot) GetTenantAccessToken(ctx context.Context) (string, error)
 		return "", err
 	}
 	if err != nil {
-		w.logger.Error("获取租户访问令牌失败", zap.Error(err))
+		w.logger.Error("获取租户访问令牌失败", zap.String("operation", "tenant_token_get"))
 		return "", err
 	}
 
@@ -137,11 +153,8 @@ func (w *webhookRobot) postWithJson(ctx context.Context, url string, jsonBytes [
 	// 创建HTTP请求
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBytes))
 	if err != nil {
-		w.logger.Error("创建HTTP请求失败",
-			zap.Error(err),
-			zap.String("url", url),
-		)
-		return nil, err
+		w.logger.Error("创建HTTP请求失败", zap.String("operation", "token_request_build"))
+		return nil, ErrTokenRequest
 	}
 
 	for key, value := range headers {
@@ -155,31 +168,21 @@ func (w *webhookRobot) postWithJson(ctx context.Context, url string, jsonBytes [
 
 	resp, err := w.httpClient.Do(req)
 	if err != nil {
-		w.logger.Error("发送HTTP请求失败",
-			zap.Error(err),
-			zap.String("url", url),
-		)
-		return nil, err
+		w.logger.Error("发送HTTP请求失败", zap.String("operation", "token_transport"))
+		return nil, ErrTokenTransport
 	}
 	defer resp.Body.Close()
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		w.logger.Error("读取响应体失败",
-			zap.Error(err),
-			zap.String("url", url),
-		)
-		return nil, err
+		w.logger.Error("读取响应体失败", zap.String("operation", "token_response_read"))
+		return nil, ErrTokenRead
 	}
 
 	// 检查HTTP状态码
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		w.logger.Error("服务器返回非2xx状态码",
-			zap.String("url", url),
-			zap.Int("statusCode", resp.StatusCode),
-			zap.String("responseBody", string(bodyBytes)),
-		)
-		return bodyBytes, fmt.Errorf("server returned HTTP status %s", resp.Status)
+		w.logger.Error("服务器返回非2xx状态码", zap.String("operation", "token_http_status"), zap.Int("status_code", resp.StatusCode))
+		return nil, &TokenHTTPStatusError{StatusCode: resp.StatusCode}
 	}
 
 	return bodyBytes, nil
@@ -198,44 +201,34 @@ func (w *webhookRobot) getTokenFromAPI(ctx context.Context) (string, int, error)
 
 	jsonBytes, err := json.Marshal(requestData)
 	if err != nil {
-		w.logger.Error("获取令牌时序列化请求数据失败",
-			zap.Error(err),
-			zap.String("AppID", requestData.AppID),
-		)
-		return "", 0, fmt.Errorf("failed to serialize request: %w", err)
+		w.logger.Error("获取令牌时序列化请求数据失败", zap.String("operation", "token_request_encode"))
+		return "", 0, ErrTokenEncode
 	}
 
 	// 发送 HTTP POST 请求
 	url := viper.GetString("webhook.im_feishu.tenant_access_token_api")
 	bodyBytes, err := w.postWithJson(ctx, url, jsonBytes, nil)
 	if err != nil {
-		w.logger.Error("获取令牌时发送HTTP请求失败",
-			zap.Error(err),
-			zap.String("url", url),
-		)
-		return "", 0, fmt.Errorf("failed to send HTTP request: %w", err)
+		w.logger.Error("获取令牌时发送HTTP请求失败", zap.String("operation", "token_exchange"))
+		return "", 0, err
 	}
 
 	var responseData request.RobotTenantAccessTokenRes
 	err = json.Unmarshal(bodyBytes, &responseData)
 	if err != nil {
-		w.logger.Error("解析响应JSON失败",
-			zap.Error(err),
-			zap.String("AppID", requestData.AppID),
-			zap.String("responseBody", string(bodyBytes)),
-		)
-		return "", 0, fmt.Errorf("failed to parse response: %w", err)
+		w.logger.Error("解析响应JSON失败", zap.String("operation", "token_response_decode"))
+		return "", 0, ErrTokenDecode
 	}
 
 	// 如果 API 返回错误码，记录错误并返回
 	if responseData.Code != 0 {
-		w.logger.Error("API返回错误",
-			zap.Int("Code", responseData.Code),
-			zap.String("Message", responseData.Message),
-			zap.String("responseBody", string(bodyBytes)),
-		)
-		return "", 0, fmt.Errorf("API error: code=%d, message=%s", responseData.Code, responseData.Message)
+		w.logger.Error("API返回错误", zap.String("operation", "token_provider"), zap.Int("provider_code", responseData.Code))
+		return "", 0, &TokenProviderError{Code: responseData.Code}
 	}
 
+	if strings.TrimSpace(responseData.TenantAccessToken) == "" || responseData.Expire <= 0 || int64(responseData.Expire) > int64(time.Duration(1<<63-1)/time.Second) {
+		w.logger.Error("令牌响应不可用", zap.String("operation", "token_response_validate"))
+		return "", 0, ErrTokenInvalid
+	}
 	return responseData.TenantAccessToken, responseData.Expire, nil
 }
