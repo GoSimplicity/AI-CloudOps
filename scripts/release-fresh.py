@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -37,13 +38,36 @@ class SafeArgumentParser(argparse.ArgumentParser):
         raise FreshError("invalid-options")
 
 
+def stable_file(path: Path, maximum: int, *, private: bool) -> bytes:
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        raise FreshError("unsafe-input-file") from None
+    try:
+        before = os.fstat(descriptor)
+        if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.getuid()
+                or before.st_size > maximum
+                or (private and stat.S_IMODE(before.st_mode) != 0o600)):
+            raise FreshError("unsafe-input-file")
+        content = bytearray()
+        while len(content) <= maximum:
+            chunk = os.read(descriptor, min(64 * 1024, maximum + 1 - len(content)))
+            if not chunk:
+                break
+            content.extend(chunk)
+        after = os.fstat(descriptor)
+        attributes = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
+        if len(content) > maximum or any(getattr(before, key) != getattr(after, key) for key in attributes):
+            raise FreshError("input-file-changed")
+        return bytes(content)
+    finally:
+        os.close(descriptor)
+
+
 def private_settings(path: Path) -> dict[str, str]:
-    info = path.lstat()
-    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
-            or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > 64 * 1024):
-        raise FreshError("private-config")
+    content = stable_file(path, 64 * 1024, private=True).decode("utf-8")
     result: dict[str, str] = {}
-    for line in path.read_text().splitlines():
+    for line in content.splitlines():
         if not line or line.lstrip().startswith("#"):
             continue
         if "=" not in line:
@@ -156,6 +180,124 @@ class FreshRunner:
         self.image = ""
         self.network = ""
         self.mysql = ""
+        self.snapshot: Path | None = None
+        self.build_token = secrets.token_hex(16)
+        self.images: dict[str, str] = {}
+
+    def save_snapshot_file(self, name: str, content: bytes) -> Path:
+        if self.snapshot is None or not re.fullmatch(r"[a-z0-9.-]+", name):
+            raise FreshError("snapshot-not-ready")
+        path = self.snapshot / name
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, "wb") as output:
+            os.fchmod(output.fileno(), 0o600)
+            output.write(content)
+            output.flush()
+            os.fsync(output.fileno())
+        return path
+
+    def save_snapshot_json(self, name: str, value: object) -> Path:
+        return self.save_snapshot_file(name, (json.dumps(value, ensure_ascii=True, indent=2) + "\n").encode())
+
+    def append_snapshot_record(self, name: str, record: dict) -> None:
+        if self.snapshot is None:
+            return
+        path = self.snapshot / name
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, "ab") as output:
+            info = os.fstat(output.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
+                raise FreshError("unsafe-snapshot-record")
+            output.write((json.dumps(record, ensure_ascii=True) + "\n").encode())
+            output.flush()
+            os.fsync(output.fileno())
+
+    def select_image(self, service: str, identity: str) -> None:
+        if service in self.images:
+            raise FreshError("image-already-selected")
+        self.images[service] = identity
+        self.append_snapshot_record("image-records.jsonl", {"service": service, "id": identity})
+
+    def prepare_snapshot(self) -> None:
+        source = stable_file(self.root / "deploy/release/compose.yaml", 2 * 1024 * 1024, private=False)
+        parent = self.root.parent / ".cloudops-fresh"
+        try:
+            parent.mkdir(mode=0o700)
+        except FileExistsError:
+            pass
+        descriptor = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW)
+        try:
+            info = os.fstat(descriptor)
+            if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
+                raise FreshError("private-snapshot-parent-required")
+            leaf = self.project + "-" + self.build_token
+            os.mkdir(leaf, mode=0o700, dir_fd=descriptor)
+        finally:
+            os.close(descriptor)
+        self.snapshot = parent / leaf
+        private_env = self.save_snapshot_file("settings.env", "".join(key + "=" + value + "\n" for key, value in self.settings.items()).encode())
+        base = self.save_snapshot_file("compose.yaml", source)
+        # Keep the original text: canonical JSON/YAML output is not a source
+        # format, and parsing it again can change literal $$ health commands.
+        # --project-directory preserves the original relative build/bind paths.
+        self.compose = [*self.docker, "compose", "--project-name", self.project,
+                        "--project-directory", str(self.root / "deploy/release"),
+                        "--env-file", str(private_env), "-f", str(base)]
+        self.save_snapshot_json("snapshot.json", {
+            "version": 1, "project": self.project, "owner": self.owner,
+            "build_token": self.build_token, "source_root": str(self.root),
+            "compose_sha256": hashlib.sha256(source).hexdigest(),
+        })
+        print("Private fresh snapshot: " + str(self.snapshot), flush=True)
+
+    def image_id(self, reference: str, expected_labels: dict[str, str] | None = None) -> str:
+        projection = '{"id":{{json .Id}},"labels":{{json (index .Config "Labels")}}}'
+        record = json.loads(self.command([*self.docker, "image", "inspect", "--format", projection, reference]))
+        identity = record.get("id", "")
+        labels = record.get("labels") or {}
+        if (not isinstance(identity, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", identity)
+                or any(labels.get(key) != value for key, value in (expected_labels or {}).items())):
+            raise FreshError("image-build-provenance-mismatch")
+        return identity
+
+    def build_and_pin(self, config: dict) -> None:
+        services = config["services"]
+        built_by_reference: dict[str, str] = {}
+        overrides: dict[str, dict] = {}
+        for name, service in services.items():
+            if "build" not in service:
+                continue
+            reference = service["image"]
+            if reference in built_by_reference:
+                raise FreshError("ambiguous-build-image-reference")
+            built_by_reference[reference] = name
+            labels = {OWNER_LABEL: self.owner, "ai.cloudops.fresh.build": self.build_token,
+                      "ai.cloudops.fresh.project": self.project, "ai.cloudops.fresh.service": name}
+            overrides[name] = {"image": f"cloudops-fresh/{self.project}-{name}:{self.build_token}", "build": {"labels": labels}}
+        build_file = self.save_snapshot_json("build-images.json", {"services": overrides})
+        self.compose += ["-f", str(build_file)]
+        self.command([*self.compose, "--profile", "maintenance", "build"], timeout=1800)
+        for name, override in overrides.items():
+            self.select_image(name, self.image_id(override["image"], override["build"]["labels"]))
+        upstream: dict[str, str] = {}
+        for name, service in services.items():
+            if name in self.images:
+                continue
+            reference = service["image"]
+            if reference in built_by_reference:
+                self.select_image(name, self.images[built_by_reference[reference]])
+            else:
+                if reference not in upstream:
+                    self.command([*self.docker, "image", "pull", "--quiet", reference], timeout=300)
+                    upstream[reference] = self.image_id(reference)
+                self.select_image(name, upstream[reference])
+        image_file = self.save_snapshot_json("pinned-images.json", {
+            "services": {name: {"image": identity, "pull_policy": "never"} for name, identity in self.images.items()},
+        })
+        self.compose += ["-f", str(image_file)]
+        self.image = self.images["schema"]
+        self.save_snapshot_json("images.json", {"version": 1, "project": self.project, "images": self.images})
+        self.save_snapshot_json("compose-command.json", self.compose)
 
     def command(self, arguments: list[str], payload: bytes | None = None, timeout: int = 120) -> bytes:
         process = None
@@ -180,6 +322,7 @@ class FreshRunner:
         if phase not in PHASES:
             raise FreshError("invalid-phase")
         self.phase = phase
+        self.append_snapshot_record("phases.jsonl", {"phase": phase})
         print("Fresh phase: " + phase, flush=True)
 
     def require_empty_project(self, config: dict) -> None:
@@ -200,7 +343,7 @@ class FreshRunner:
                 raise FreshError("existing-storage-refused-use-adoption")
 
     def tool(self, arguments: list[str], dsn: str | None = None) -> bytes:
-        command = [*self.docker, "run", "--rm", "--name", self.project + "-schema-" + secrets.token_hex(6),
+        command = [*self.docker, "run", "--rm", "--pull=never", "--name", self.project + "-schema-" + secrets.token_hex(6),
                    "--label", OWNER_LABEL + "=" + self.owner,
                    "--label", "com.docker.compose.project=" + self.project,
                    "--label", "com.docker.compose.service=schema",
@@ -268,11 +411,13 @@ class FreshRunner:
         for sibling in ("AI-CloudOps-web", "AI-CloudOps-aiops"):
             if not (self.root.parent / sibling / "Dockerfile").is_file():
                 raise FreshError("missing-sibling-repository")
+        self.prepare_snapshot()
         config = json.loads(self.command([*self.compose, "--profile", "maintenance", "config", "--format", "json"]))
         self.image, self.network = validate_config(config, self.settings, self.project)
+        self.save_snapshot_json("rendered-before-build.json", config)
         self.require_empty_project(config)
         self.stage("build")
-        self.command([*self.compose, "--profile", "maintenance", "build"], timeout=1800)
+        self.build_and_pin(config)
         # Recheck after a potentially long build, before creating any resources.
         self.require_empty_project(config)
         self.stage("plan-roles")
@@ -284,7 +429,7 @@ class FreshRunner:
             plans[section] = role_statements(raw, section)
         self.initialize_database(plans["migrator"], plans["runtime"])
         self.stage("start-services")
-        self.command([*self.compose, "up", "-d", "--no-build", "--wait", "--wait-timeout", "300"], timeout=360)
+        self.command([*self.compose, "up", "-d", "--no-build", "--pull", "never", "--wait", "--wait-timeout", "300"], timeout=360)
         print("PASS fresh local stack initialized; runtime credentials only; no existing deployment modified")
 
 

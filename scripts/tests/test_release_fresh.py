@@ -6,6 +6,8 @@ import json
 import os
 from pathlib import Path
 import secrets
+import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout, redirect_stderr
@@ -32,6 +34,8 @@ def config(values):
     result["services"]["backend"]["environment"] = {"MYSQL_ADDR": values["WEBHOOK_MYSQL_ADDR"]}
     result["services"]["webhook"]["environment"] = {"WEBHOOK_MYSQL_ADDR": values["WEBHOOK_MYSQL_ADDR"]}
     result["services"]["schema"]["image"] = "cloudops-schema:fixture"
+    for name, image in {"mysql": "mysql:8.4.11", "redis": "redis:7.4.11-alpine", "backend": "cloudops-backend:fixture", "webhook": "cloudops-webhook:fixture", "gateway": "nginx:1.28-alpine", "aiops": "cloudops-aiops:fixture"}.items():
+        result["services"][name]["image"] = image
     result["services"]["aiops"]["environment"] = {"LLM_API_KEY": "", "LLM_BASE_URL": "http://127.0.0.1:9/v1", "NOTIFICATION_ENABLED": "false", "FEISHU_WEBHOOK": ""}
     result["services"]["gateway"]["ports"] = [{"host_ip": "127.0.0.1", "published": "18080", "target": 8080}]
     return result
@@ -73,6 +77,11 @@ class FakeRunner(tool.FreshRunner):
         if args[0] == "migrate" and self.fail_migrate:
             raise tool.FreshError("private-driver-diagnostic")
         return b""
+
+    def build_and_pin(self, config):
+        self.command([*self.compose, "--profile", "maintenance", "build"])
+        self.images = {name: "sha256:" + "a" * 64 for name in config["services"]}
+        self.image = self.images["schema"]
 
     def admin(self, sql):
         self.admin_calls.append(sql)
@@ -150,6 +159,8 @@ class FreshReleaseTests(unittest.TestCase):
     def run_fixture(self, function):
         with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
             root = Path(directory) / "AI-CloudOps"; root.mkdir()
+            release = root / "deploy/release"; release.mkdir(parents=True)
+            (release / "compose.yaml").write_text("name: fixture\nservices: {}\n")
             for name in ("AI-CloudOps-web", "AI-CloudOps-aiops"):
                 sibling = root.parent / name; sibling.mkdir(); (sibling / "Dockerfile").touch()
             runner = FakeRunner(root, settings())
@@ -158,12 +169,12 @@ class FreshReleaseTests(unittest.TestCase):
     def test_existing_project_or_foreign_storage_fails_before_build_or_account_mutation(self):
         def check(runner):
             for name in ("existing", "foreign_name"):
-                setattr(runner, name, True)
-                with self.assertRaises(tool.FreshError): runner.execute()
-                self.assertFalse(any("build" in args for args, _ in runner.commands))
-                self.assertEqual(runner.admin_calls, [])
-                self.assertEqual(runner.tools, [])
-                setattr(runner, name, False)
+                attempt = FakeRunner(runner.root, runner.settings)
+                setattr(attempt, name, True)
+                with self.assertRaises(tool.FreshError): attempt.execute()
+                self.assertFalse(any("build" in args for args, _ in attempt.commands))
+                self.assertEqual(attempt.admin_calls, [])
+                self.assertEqual(attempt.tools, [])
         self.run_fixture(check)
 
     def test_full_metadata_preflight_precedes_every_mutation(self):
@@ -211,6 +222,104 @@ class FreshReleaseTests(unittest.TestCase):
         self.assertEqual(payload, (values["WEBHOOK_MYSQL_ADDR"] + "\n").encode())
         self.assertNotIn("MYSQL_ROOT_PASSWORD", runner.environment)
         self.assertNotIn("MYSQL_MIGRATOR_PASSWORD", runner.environment)
+
+    def test_opened_private_inode_is_kept_when_path_is_replaced(self):
+        values = settings()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "checked.env"
+            public = Path(directory) / "public.env"
+            path.write_text("".join(key + "=" + value + "\n" for key, value in values.items())); path.chmod(0o600)
+            alternate = settings()
+            public.write_text("".join(key + "=" + value + "\n" for key, value in alternate.items())); public.chmod(0o644)
+            original = os.open
+            def swap(candidate, flags, *args, **kwargs):
+                descriptor = original(candidate, flags, *args, **kwargs)
+                if candidate == path:
+                    path.unlink(); path.symlink_to(public)
+                return descriptor
+            with patch.object(tool.os, "open", side_effect=swap):
+                self.assertEqual(tool.private_settings(path), values)
+
+    def test_fifo_is_rejected_without_waiting_for_a_writer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fifo = Path(directory) / "private.env"
+            os.mkfifo(fifo, mode=0o600)
+            script = (
+                "import importlib.util,sys; from pathlib import Path; "
+                "spec=importlib.util.spec_from_file_location('fresh',sys.argv[1]); "
+                "module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module); "
+                "\ntry: module.private_settings(Path(sys.argv[2]))"
+                "\nexcept module.FreshError: sys.exit(0)"
+                "\nraise SystemExit(1)\n"
+            )
+            result = subprocess.run([sys.executable, "-c", script, str(MODULE), str(fifo)], capture_output=True, timeout=2)
+            self.assertEqual(result.returncode, 0)
+
+    def test_snapshot_keeps_original_text_and_credentials_after_source_edits(self):
+        with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
+            root = Path(directory) / "AI-CloudOps"; release = root / "deploy/release"; release.mkdir(parents=True)
+            original = 'services:\n  mysql:\n    healthcheck:\n      test: [CMD-SHELL, \'echo "$$MYSQL_ROOT_PASSWORD"\']\n'
+            (release / "compose.yaml").write_text(original)
+            values = settings()
+            runner = tool.FreshRunner(root, PROJECT, Path("/fixture.sock"), values)
+            runner.prepare_snapshot()
+            (release / "compose.yaml").write_text("services: {}\n")
+            (release / ".env").write_text("LLM_API_KEY=changed-private-value\n")
+            self.assertEqual((runner.snapshot / "compose.yaml").read_text(), original)
+            self.assertEqual(tool.private_settings(runner.snapshot / "settings.env"), values)
+            self.assertIn(str(runner.snapshot / "settings.env"), runner.compose)
+            self.assertNotIn(str(release / ".env"), runner.compose)
+            self.assertIn("--project-directory", runner.compose)
+            self.assertEqual((runner.snapshot.stat().st_mode & 0o777), 0o700)
+            self.assertEqual((runner.snapshot.parent.stat().st_mode & 0o777), 0o700)
+            for path in runner.snapshot.iterdir():
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_unique_build_labels_are_checked_and_every_service_uses_pinned_ids(self):
+        with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
+            root = Path(directory) / "AI-CloudOps"; release = root / "deploy/release"; release.mkdir(parents=True)
+            (release / "compose.yaml").write_text("services: {}\n")
+            values = settings(); data = config(values)
+            for name in ("schema", "backend", "aiops"):
+                data["services"][name]["build"] = {"context": "/fixture"}
+            data["services"]["mcp"] = {"image": data["services"]["aiops"]["image"]}
+            runner = tool.FreshRunner(root, PROJECT, Path("/fixture.sock"), values); runner.prepare_snapshot()
+            calls = []
+            def command(args, payload=None, timeout=120):
+                calls.append(args)
+                if "inspect" in args:
+                    reference = args[-1]
+                    labels = {}
+                    if reference.startswith("cloudops-fresh/"):
+                        name = reference.split(":")[0].split("-")[-1]
+                        labels = {tool.OWNER_LABEL: runner.owner, "ai.cloudops.fresh.build": runner.build_token, "ai.cloudops.fresh.project": PROJECT, "ai.cloudops.fresh.service": name}
+                    identity = "sha256:" + __import__("hashlib").sha256(reference.encode()).hexdigest()
+                    return json.dumps({"id": identity, "labels": labels}).encode()
+                return b""
+            with patch.object(runner, "command", side_effect=command):
+                runner.build_and_pin(data)
+            self.assertEqual(runner.images["mcp"], runner.images["aiops"])
+            self.assertTrue(all(identity.startswith("sha256:") for identity in runner.images.values()))
+            self.assertTrue(any("pull" in args and "mysql:8.4.11" in args for args in calls))
+            self.assertFalse(any("pull" in args and "cloudops-aiops:fixture" in args for args in calls))
+            overrides = json.loads((runner.snapshot / "build-images.json").read_text())["services"]
+            self.assertTrue(all(runner.build_token in service["image"] for service in overrides.values()))
+            pinned = json.loads((runner.snapshot / "pinned-images.json").read_text())["services"]
+            self.assertTrue(all(service["pull_policy"] == "never" for service in pinned.values()))
+            # Changing a mutable tag after pinning cannot change the tool command.
+            runner.image_id = lambda *_: "sha256:" + "f" * 64
+            with patch.object(runner, "command", return_value=b"") as run:
+                runner.tool(["plan"])
+            self.assertIn(runner.images["schema"], run.call_args.args[0])
+            self.assertIn("--pull=never", run.call_args.args[0])
+            self.assertNotIn("cloudops-schema:fixture", run.call_args.args[0])
+
+    def test_another_build_cannot_supply_the_selected_image(self):
+        runner = tool.FreshRunner(Path("/fixture"), PROJECT, Path("/fixture.sock"), settings())
+        wrong = {"id": "sha256:" + "a" * 64, "labels": {"ai.cloudops.fresh.build": "another-build"}}
+        with patch.object(runner, "command", return_value=json.dumps(wrong).encode()):
+            with self.assertRaises(tool.FreshError):
+                runner.image_id("unique-reference", {"ai.cloudops.fresh.build": runner.build_token})
 
 
 if __name__ == "__main__":
