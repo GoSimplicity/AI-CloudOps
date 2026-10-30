@@ -8,7 +8,8 @@ import (
 	"time"
 )
 
-// A unique insert is the only execution grant. A duplicate never acquires one.
+// A unique insert/token grants a reservation. Cloud reads additionally require
+// fenced durable admission; duplicates never acquire another reservation.
 func (d *managedCloudDAO) BeginOperation(ctx context.Context, row *model.CloudManagedOperation) (bool, *model.CloudManagedOperation, error) {
 	result := d.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(row)
 	if result.Error != nil {

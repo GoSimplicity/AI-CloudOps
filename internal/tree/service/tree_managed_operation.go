@@ -47,7 +47,7 @@ func operationView(row *model.CloudManagedOperation) (*model.CloudManagedOperati
 		}
 		seen[id] = true
 	}
-	view := &model.CloudManagedOperationView{OperationID: row.OperationID, CloudAccountID: row.CloudAccountID, CloudAccountRegionID: row.CloudAccountRegionID, Kind: row.Kind, ResourceIDs: append(model.StringList{}, row.ResourceIDs...), State: row.State, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, ReviewedAt: row.ReviewedAt, ReviewedBy: row.ReviewedBy, ReviewReason: row.ReviewReason, PreviousState: row.PreviousState}
+	view := &model.CloudManagedOperationView{OperationID: row.OperationID, OwnerID: row.OperatorID, CloudAccountID: row.CloudAccountID, CloudAccountRegionID: row.CloudAccountRegionID, Kind: row.Kind, ResourceIDs: append(model.StringList{}, row.ResourceIDs...), State: row.State, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, ReviewedAt: row.ReviewedAt, ReviewedBy: row.ReviewedBy, ReviewReason: row.ReviewReason, PreviousState: row.PreviousState}
 	if row.State == "running" {
 		if time.Since(row.CreatedAt) > 2*time.Minute {
 			view.State = "unknown"
@@ -75,13 +75,16 @@ func operationView(row *model.CloudManagedOperation) (*model.CloudManagedOperati
 		}
 	}
 	var result model.CloudManagedSyncResult
-	if json.Unmarshal(row.Result, &result) != nil || result.OperationID != row.OperationID || result.Count < 0 || result.NewCount < 0 || result.UpdateCount < 0 || result.NewCount > result.Count || result.UpdateCount > result.Count || result.NewCount > result.Count-result.UpdateCount {
+	if json.Unmarshal(row.Result, &result) != nil || result.OperationID != row.OperationID || result.Count < 0 || result.Count > 100 || result.NewCount < 0 || result.UpdateCount < 0 || result.NewCount > result.Count || result.UpdateCount > result.Count || result.NewCount > result.Count-result.UpdateCount {
 		return nil, errors.New("操作结果不可用")
 	}
 	switch result.Status {
 	case "success", "failed", "cancelled", "unknown":
 	default:
 		return nil, errors.New("操作结果状态无效")
+	}
+	if result.Status == "success" && (result.Count == 0 || result.NewCount+result.UpdateCount != result.Count || !result.RetrySafe) {
+		return nil, errors.New("成功操作结果不完整")
 	}
 	if result.Status == "unknown" && result.RetrySafe {
 		return nil, errors.New("未知操作结果不能声明安全重试")
@@ -120,7 +123,7 @@ func (s *managedCloudService) SyncManaged(ctx context.Context, req *model.SyncCl
 		return nil, errors.New("操作存储或资源ID不可用")
 	}
 	requestHash := managedRequestHash(req.CloudAccountID, req.CloudAccountRegionID, req.Kind, req.ResourceIDs)
-	row := &model.CloudManagedOperation{Key: key, OperationID: req.OperationID, OperatorID: req.OperatorID, CloudAccountID: req.CloudAccountID, CloudAccountRegionID: req.CloudAccountRegionID, Kind: req.Kind, ResourceIDs: append(model.StringList{}, req.ResourceIDs...), RequestHash: requestHash, State: "running", ClaimToken: uuid.NewString()}
+	row := &model.CloudManagedOperation{Key: key, OperationID: req.OperationID, OperatorID: req.OperatorID, CloudAccountID: req.CloudAccountID, CloudAccountRegionID: req.CloudAccountRegionID, Kind: req.Kind, ResourceIDs: append(model.StringList{}, req.ResourceIDs...), RequestHash: requestHash, State: "running", AdmissionVersion: 1, ClaimToken: uuid.NewString()}
 	created, previous, err := s.store.BeginOperation(ctx, row)
 	if err != nil {
 		return nil, errors.New("操作未确认，禁止重复提交")

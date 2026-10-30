@@ -43,6 +43,7 @@ type TreeCloudDAO interface {
 	EnsureTreeNode(context.Context, int) error
 	ReviewManagedOperation(context.Context, *model.CloudAccount, *model.CloudAccountRegion, *RegionSyncLease, *model.CloudManagedOperation, string) error
 	ReviewManagedHistory(context.Context, *model.CloudAccount, *model.CloudAccountRegion, *RegionSyncLease, *model.ResolveCloudManagedHistoryReq) error
+	AdmitManagedOperation(context.Context, *model.CloudAccount, *model.CloudAccountRegion, *RegionSyncLease, string, string, string) error
 	ManagedResourceStore() ManagedCloudDAO
 	CompleteRegionSyncHistory(context.Context, int, string, model.CloudRegionSyncResult) error
 	FinishRegionSyncHistory(context.Context, int, string, string, string) error

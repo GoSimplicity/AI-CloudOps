@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"regexp"
@@ -116,6 +117,33 @@ func TestMySQLManagedResourceAtomicAndFencing(t *testing.T) {
 	delayed.OperationID = missingReview.OperationID
 	if _, err := svc.SyncManaged(context.Background(), &delayed); err == nil {
 		t.Fatal("MySQL reviewed tombstone allowed delayed delivery")
+	}
+	unsafeID := "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+	unsafeKey, _ := operationKey(unsafeID, 8)
+	unsafePayload, _ := json.Marshal(model.CloudManagedSyncResult{OperationID: unsafeID, Status: "failed", ErrorCategory: "audit_unavailable", RetrySafe: false})
+	unsafeOperation := model.CloudManagedOperation{Key: unsafeKey, OperationID: unsafeID, OperatorID: 8, CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: "rds", RequestHash: managedRequestHash(account.ID, region.ID, "rds", []string{"id-one"}), ClaimToken: "mysql-fixture", State: "completed", AdmissionVersion: 1, Result: unsafePayload}
+	if err := db.Create(&unsafeOperation).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SyncManaged(context.Background(), req); err == nil {
+		t.Fatal("MySQL JSON guard failed to block legacy bypass of unsafe operation")
+	}
+	listReq := &model.ListCloudManagedOperationsReq{ListCloudManagedResourcesReq: model.ListCloudManagedResourcesReq{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: "rds"}, ViewerID: 7, TrustedSuper: true, AllOwners: true, UnconfirmedOnly: true}
+	unsafeList, err := svc.ListManagedOperations(context.Background(), listReq)
+	if err != nil || unsafeList.Total != 1 || unsafeList.Items[0].OwnerID != 8 {
+		t.Fatal("MySQL owner-filtered recovery list failed")
+	}
+	superReview := &model.ReviewCloudManagedOperationReq{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: "rds", ResourceIDs: []string{"id-one"}, ResourcesVerified: true, Reason: "超级管理员已核对该用户实际资源与本地数据", OperationID: unsafeID, OperatorID: 7, OwnerID: 8, TrustedSuper: true}
+	linkedHistory := model.CloudManagedSyncHistory{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: "rds", ClientOperationID: unsafeID, ResourceIDs: model.StringList{"id-one"}, OperatorID: 8, Status: "unknown", StartedAt: time.Now().UTC()}
+	if err := db.Create(&linkedHistory).Error; err != nil {
+		t.Fatal(err)
+	}
+	if view, err := svc.ReviewManagedOperation(context.Background(), superReview); err != nil || view.OwnerID != 8 || view.ReviewedBy != 7 {
+		t.Fatal("MySQL cross-owner audit attribution failed")
+	}
+	var auditedHistory model.CloudManagedSyncHistory
+	if err := db.First(&auditedHistory, linkedHistory.ID).Error; err != nil || auditedHistory.OperatorID != 8 || auditedHistory.ResolvedBy != 7 || auditedHistory.ResolvedAt == nil {
+		t.Fatal("MySQL review confused original owner and reviewer")
 	}
 	var total int64
 	db.Model(&model.CloudManagedResource{}).Count(&total)

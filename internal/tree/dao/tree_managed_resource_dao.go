@@ -12,6 +12,9 @@ import (
 )
 
 type ManagedCloudDAO interface {
+	ListOperations(context.Context, *model.ListCloudManagedOperationsReq, int) ([]*model.CloudManagedOperation, int64, error)
+	HasUnresolvedOperations(context.Context, int, int, string, string) (bool, error)
+	MarkOperationStarted(context.Context, string, string) error
 	CheckOperationClaim(context.Context, string, string) error
 	ReviewOperation(context.Context, *model.CloudManagedOperation, string) error
 	BeginOperation(context.Context, *model.CloudManagedOperation) (bool, *model.CloudManagedOperation, error)

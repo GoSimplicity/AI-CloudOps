@@ -58,7 +58,7 @@ func (f managedFixture) ListCache(c context.Context, ids []string) ([]model.Aliy
 func managedServiceFixture(t *testing.T) (*gorm.DB, *managedCloudService, *model.CloudAccount, *model.CloudAccountRegion) {
 	t.Helper()
 	db, _, account, region, _ := regionSyncFixture(t)
-	if err := db.AutoMigrate(&model.CloudManagedResource{}, &model.CloudManagedSyncHistory{}); err != nil {
+	if err := db.AutoMigrate(&model.CloudManagedResource{}, &model.CloudManagedSyncHistory{}, &model.CloudManagedOperation{}); err != nil {
 		t.Fatal(err)
 	}
 	prior := viper.Get("tree.password_encryption_key")

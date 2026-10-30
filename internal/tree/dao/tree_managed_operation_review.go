@@ -32,7 +32,7 @@ func (d *managedCloudDAO) ReviewOperation(ctx context.Context, candidate *model.
 		return errors.New("操作状态不允许核对")
 	}
 	now := time.Now().UTC()
-	update := d.db.WithContext(ctx).Model(&model.CloudManagedOperation{}).Where("`key` = ? AND reviewed_at IS NULL", candidate.Key).Updates(map[string]any{"state": "reviewed", "previous_state": previous, "reviewed_at": now, "reviewed_by": candidate.OperatorID, "review_reason": reason, "updated_at": now})
+	update := d.db.WithContext(ctx).Model(&model.CloudManagedOperation{}).Where("`key` = ? AND reviewed_at IS NULL", candidate.Key).Updates(map[string]any{"state": "reviewed", "previous_state": previous, "reviewed_at": now, "reviewed_by": candidate.ReviewedBy, "review_reason": reason, "updated_at": now})
 	if update.Error != nil {
 		return update.Error
 	}
@@ -46,5 +46,5 @@ func (d *managedCloudDAO) ReviewOperation(ctx context.Context, candidate *model.
 			return err
 		}
 	}
-	return d.db.WithContext(ctx).Model(&model.CloudManagedSyncHistory{}).Where("cloud_account_id = ? AND cloud_account_region_id = ? AND kind = ? AND client_operation_id = ? AND operator_id = ? AND resolved_at IS NULL", candidate.CloudAccountID, candidate.CloudAccountRegionID, candidate.Kind, candidate.OperationID, candidate.OperatorID).Updates(map[string]any{"resolved_at": now, "resolved_by": candidate.OperatorID, "resolution_reason": reason}).Error
+	return d.db.WithContext(ctx).Model(&model.CloudManagedSyncHistory{}).Where("cloud_account_id = ? AND cloud_account_region_id = ? AND kind = ? AND client_operation_id = ? AND operator_id = ? AND resolved_at IS NULL", candidate.CloudAccountID, candidate.CloudAccountRegionID, candidate.Kind, candidate.OperationID, candidate.OperatorID).Updates(map[string]any{"resolved_at": now, "resolved_by": candidate.ReviewedBy, "resolution_reason": reason}).Error
 }

@@ -235,3 +235,21 @@ func (d *treeCloudDAO) FinishRegionSyncHistory(ctx context.Context, id int, toke
 	}
 	return nil
 }
+
+// Admission is durable before cloud reads and uses the same lock order as commit/review.
+func (d *treeCloudDAO) AdmitManagedOperation(ctx context.Context, account *model.CloudAccount, region *model.CloudAccountRegion, lease *RegionSyncLease, kind, key, token string) error {
+	return d.applyRegionLocked(ctx, account, region, lease, true, func(tx TreeCloudDAO) error {
+		store := tx.ManagedResourceStore()
+		if err := store.CheckOperationClaim(ctx, key, token); err != nil {
+			return err
+		}
+		blocked, err := store.HasUnresolvedOperations(ctx, account.ID, region.ID, kind, key)
+		if err != nil {
+			return err
+		}
+		if blocked {
+			return errors.New("该范围存在未确认操作，请先核对")
+		}
+		return store.MarkOperationStarted(ctx, key, token)
+	})
+}

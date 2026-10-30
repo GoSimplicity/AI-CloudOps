@@ -11,10 +11,17 @@ import (
 )
 
 func (s *managedCloudService) ReviewManagedOperation(ctx context.Context, req *model.ReviewCloudManagedOperationReq) (*model.CloudManagedOperationView, error) {
-	if req == nil {
+	if req == nil || req.OperatorID <= 0 || req.OwnerID < 0 {
 		return nil, errors.New("核对请求无效")
 	}
-	key, err := operationKey(req.OperationID, req.OperatorID)
+	owner := req.OperatorID
+	if req.OwnerID > 0 {
+		if req.OwnerID != req.OperatorID && !req.TrustedSuper {
+			return nil, errors.New("无权核对其他用户的操作")
+		}
+		owner = req.OwnerID
+	}
+	key, err := operationKey(req.OperationID, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -44,9 +51,9 @@ func (s *managedCloudService) ReviewManagedOperation(ctx context.Context, req *m
 		defer cancel()
 		_ = s.regions.ReleaseRegionSyncLease(cleanup, lease)
 	}()
-	row := &model.CloudManagedOperation{Key: key, OperationID: req.OperationID, OperatorID: req.OperatorID, CloudAccountID: req.CloudAccountID, CloudAccountRegionID: req.CloudAccountRegionID, Kind: req.Kind, ResourceIDs: append(model.StringList{}, req.ResourceIDs...), RequestHash: managedRequestHash(req.CloudAccountID, req.CloudAccountRegionID, req.Kind, req.ResourceIDs), State: "reviewed", ClaimToken: uuid.NewString()}
+	row := &model.CloudManagedOperation{Key: key, OperationID: req.OperationID, OperatorID: owner, ReviewedBy: req.OperatorID, AdmissionVersion: 1, CloudAccountID: req.CloudAccountID, CloudAccountRegionID: req.CloudAccountRegionID, Kind: req.Kind, ResourceIDs: append(model.StringList{}, req.ResourceIDs...), RequestHash: managedRequestHash(req.CloudAccountID, req.CloudAccountRegionID, req.Kind, req.ResourceIDs), State: "reviewed", ClaimToken: uuid.NewString()}
 	if err := s.regions.ReviewManagedOperation(ctx, account, region, lease, row, reason); err != nil {
 		return nil, err
 	}
-	return s.GetManagedOperation(ctx, req.OperationID, req.OperatorID)
+	return s.GetManagedOperation(ctx, req.OperationID, owner)
 }

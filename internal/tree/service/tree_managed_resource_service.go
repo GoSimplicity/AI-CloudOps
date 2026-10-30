@@ -18,6 +18,7 @@ type managedReader interface {
 	ListCache(context.Context, []string) ([]model.AliyunCacheInstance, error)
 }
 type ManagedCloudService interface {
+	ListManagedOperations(context.Context, *model.ListCloudManagedOperationsReq) (model.ListResp[*model.CloudManagedOperationView], error)
 	ReviewManagedOperation(context.Context, *model.ReviewCloudManagedOperationReq) (*model.CloudManagedOperationView, error)
 	GetManagedOperation(context.Context, string, int) (*model.CloudManagedOperationView, error)
 	ResolveManagedHistory(context.Context, *model.ResolveCloudManagedHistoryReq) error
@@ -231,9 +232,13 @@ func (s *managedCloudService) syncManaged(ctx context.Context, req *model.SyncCl
 		return nil, errors.New("存在未核对的同步结果，请先人工核对并记录处置")
 	}
 	if claim, ok := operationCtx.Value(managedOperationClaimKey{}).(managedOperationClaim); ok {
-		row, err := s.store.GetOperation(operationCtx, claim.key, req.OperatorID)
-		if err != nil || row == nil || row.State != "running" || row.ClaimToken != claim.token {
-			return nil, errors.New("操作已核对或领取状态失效")
+		if err := s.regions.AdmitManagedOperation(operationCtx, account, region, lease, req.Kind, claim.key, claim.token); err != nil {
+			return nil, err
+		}
+	} else {
+		blocked, err := s.store.HasUnresolvedOperations(operationCtx, account.ID, region.ID, req.Kind, "")
+		if err != nil || blocked {
+			return nil, errors.New("该范围存在未确认操作，禁止无ID请求绕过")
 		}
 	}
 	history := &model.CloudManagedSyncHistory{CloudAccountID: account.ID, CloudAccountRegionID: region.ID, Kind: req.Kind, ClientOperationID: req.OperationID, ResourceIDs: append(model.StringList{}, req.ResourceIDs...), OperationID: lease.Token, LeaseExpiresMS: lease.ExpiresEpochMS, Status: "running", OperatorID: req.OperatorID, StartedAt: time.Now().UTC()}
