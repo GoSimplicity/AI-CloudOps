@@ -1,6 +1,6 @@
 # 1.0 部署与验收
 
-本目录包含历史1.0证据及当前开发中的迁移/验收工具。旧固定清单仅对应其记录的源码和镜像，不能据此宣称最新开发组合已经验收完成。[历史验收](verification.md)与[固定产品源码及镜像清单](release-candidate.json)是部署依据；过程中的旧结果归档在 history/。正式上线前由部署方完成目标环境的凭据、TLS、卷备份与变更窗口准备。
+本目录包含历史1.0证据与当前迁移/验收工具。请先看[当前清单闭环与验收边界](readiness-current.md)和[本轮固定候选](candidates/2026-10-30-eec9582a/README.md)；[历史验收](verification.md)与[历史固定清单](release-candidate.json)仅对应其中的源码和镜像，不能据此部署或验收最新开发组合。过程中的旧结果归档在 history/。正式上线前由部署方完成目标环境的凭据、TLS、卷备份与变更窗口准备。
 
 ## 部署目录
 
@@ -58,7 +58,7 @@ AIOps 飞书自定义机器人可在服务端私有 `.env` 设置 `FEISHU_WEBHOO
 
 ## 升级与回滚
 
-升级前备份 MySQL、Redis、AIOps 数据卷及 `.env`，保存三仓 commit SHA 和镜像 digest。尤其保留 `TREE_PASSWORD_ENCRYPTION_KEY`，更换它会影响已存资产密码的解密。先在数据库副本上演练升级；MySQL DDL可能隐式提交，版本账本也不提供DDL回滚；当前只实现明确的新库基线与匹配当前结构的旧库认领，较旧结构升级须另行设计和演练。
+升级前备份 MySQL、Redis、AIOps 数据卷及 `.env`，保存三仓 commit SHA 和镜像 digest。尤其保留 `TREE_PASSWORD_ENCRYPTION_KEY`，更换它会影响已存资产密码的解密。先在数据库副本上演练升级；MySQL DDL可能隐式提交，版本账本也不提供DDL回滚；当前支持明确的新库基线、匹配当前结构的旧库认领，以及来源严格匹配 a8f1700 的49表旧库显式升级；未知结构拒绝。参见[已知历史升级](known-a8f1700-upgrade.md)与[物理恢复旧库演练](known-upgrade-rollback.md)，须先停写、备份、预检，并按副本演练结果操作。
 
 使用固定 `RELEASE_VERSION` 构建镜像，保留上一版镜像。应用回滚可指定上一版镜像，但数据库结构变化必须依据升级前备份和演练结果处理。`docker compose down` 保留数据卷；不要在生产使用 `down -v`。
 

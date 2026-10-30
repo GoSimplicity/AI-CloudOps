@@ -14,9 +14,9 @@
 
 ## 1.0 交付入口
 
-[验收记录](docs/release/verification.md) · [固定源码与镜像清单](docs/release/release-candidate.json) · [部署与升级](docs/release/README.md) · [阶段变更](docs/release/CHANGELOG.md)
+[当前开发与验收边界](docs/release/readiness-current.md) · [历史验收](docs/release/verification.md) · [历史固定清单](docs/release/release-candidate.json) · [部署与升级](docs/release/README.md) · [阶段变更](docs/release/CHANGELOG.md)
 
-三仓放在同级目录。1.0 的云资源支持阿里 ECS，工单自动通知支持即时触发；其它提供商和高级触发明确关闭。工作区使用 API 级 RBAC，模型、集群、SSH 和通知须配置各自依赖，具体实测与边界见验收记录。
+三仓放在同级目录。当前开发版包含三家完整计算管理台、其余三家受限计算同步、首批阿里云 RDS/传统 CLB/缓存，以及高级通知、消息中心和持久会话/审批；具体支持模式与验收状态见当前清单。历史 1.0 清单只对应其固定提交。工作区使用 API 级 RBAC，模型、集群、SSH 和通知须配置各自依赖，真实外部环境与生产发布仍需单独验收。
 
 ## 项目介绍
 

@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "status": "prepared-not-built",
+  "prepared_at": "2026-10-30T15:09:21.063287+00:00",
+  "sources": {
+    "backend": {
+      "repository": "GoSimplicity/AI-CloudOps",
+      "revision": "eec9582a0aa1eda3718f7924811c119ef197bcd8",
+      "archive": "archives/AI-CloudOps.tar",
+      "archive_sha256": "26f466d43b5db65cb4de54c73545026974866f4089e31ca7aa0c148d26570dcd",
+      "source_directory": "sources/AI-CloudOps",
+      "file_count": 949
+    },
+    "web": {
+      "repository": "GoSimplicity/AI-CloudOps-web",
+      "revision": "d0f098e91b26eda8055c5f49cda70530fd32f8fe",
+      "archive": "archives/AI-CloudOps-web.tar",
+      "archive_sha256": "e411c2c545c95dd22fa816421162fe5bafd193acfcabf1308158f608231430b5",
+      "source_directory": "sources/AI-CloudOps-web",
+      "file_count": 1222
+    },
+    "aiops": {
+      "repository": "GoSimplicity/AI-CloudOps-aiops",
+      "revision": "c2de23e724168b1d8aab01ea9f0d0e604a3a0306",
+      "archive": "archives/AI-CloudOps-aiops.tar",
+      "archive_sha256": "ea407d996fc585b6565128e7a1a0802f45c8a64ba47469975ef5c572b562d3b8",
+      "source_directory": "sources/AI-CloudOps-aiops",
+      "file_count": 396
+    }
+  },
+  "verification": {
+    "working_trees": "clean-at-preflight",
+    "archive_blob_ids": "matched-selected-commits",
+    "build": "not-run",
+    "tests": "not-run",
+    "deployment": "not-run"
+  }
+}

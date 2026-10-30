@@ -44,7 +44,7 @@ The list below reflects what is implemented in this repository today.
 ### Service tree and CMDB
 - Hierarchical service tree with node membership and resource binding.
 - Local hosts with encrypted credentials and a browser-based SSH terminal over WebSocket. In production, host keys are verified against an operator-provided `known_hosts` file.
-- Cloud accounts and read-only instance sync. The backend has SDK implementations for **Alibaba Cloud ECS, AWS EC2 and Tencent Cloud CVM** (credential check, live region listing, instance sync). The sync only reads cloud APIs; it never creates, modifies or deletes cloud instances. See [docs/multicloud-compute.md](docs/multicloud-compute.md). *Note: the current web console only enables Alibaba Cloud in its account form.*
+- Cloud accounts and read-only instance sync. The backend has SDK implementations for **Alibaba Cloud ECS, AWS EC2 and Tencent Cloud CVM** (credential check, live region listing, instance sync). The sync only reads cloud APIs; it never creates, modifies or deletes cloud instances. See [docs/multicloud-compute.md](docs/multicloud-compute.md). The current console supports all three providers. Huawei, Azure and GCP support explicitly scoped instance-ID synchronization; the first managed-resource release covers Alibaba Cloud RDS, classic CLB and cache. See [current scope and verification boundaries](docs/release/readiness-current.md); historical release evidence applies only to its recorded source revisions.
 
 ### Monitoring and alerting (Prometheus)
 - Manage scrape pools and scrape jobs, alert rules, recording rules and Alertmanager configuration.

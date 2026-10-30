@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "status": "built-locally-business-validated-exported",
+  "sources": {
+    "backend": {
+      "repository": "GoSimplicity/AI-CloudOps",
+      "revision": "eec9582a0aa1eda3718f7924811c119ef197bcd8",
+      "archive": "archives/AI-CloudOps.tar",
+      "archive_sha256": "26f466d43b5db65cb4de54c73545026974866f4089e31ca7aa0c148d26570dcd",
+      "source_directory": "sources/AI-CloudOps",
+      "file_count": 949
+    },
+    "web": {
+      "repository": "GoSimplicity/AI-CloudOps-web",
+      "revision": "d0f098e91b26eda8055c5f49cda70530fd32f8fe",
+      "archive": "archives/AI-CloudOps-web.tar",
+      "archive_sha256": "e411c2c545c95dd22fa816421162fe5bafd193acfcabf1308158f608231430b5",
+      "source_directory": "sources/AI-CloudOps-web",
+      "file_count": 1222
+    },
+    "aiops": {
+      "repository": "GoSimplicity/AI-CloudOps-aiops",
+      "revision": "c2de23e724168b1d8aab01ea9f0d0e604a3a0306",
+      "archive": "archives/AI-CloudOps-aiops.tar",
+      "archive_sha256": "ea407d996fc585b6565128e7a1a0802f45c8a64ba47469975ef5c572b562d3b8",
+      "source_directory": "sources/AI-CloudOps-aiops",
+      "file_count": 396
+    }
+  },
+  "images": {
+    "aiops": "sha256:b0fce43895c8705e09f3f48f7f03778d37b8771abd28b7086f49fff3497711ff",
+    "backend": "sha256:b6bfe19ecee6307a8442d23b9fdd492e07ff0ffb20f06ee04072f7b80e98cc8b",
+    "schema": "sha256:3471551ebd4948d89cb990ee3a8d11efc08e496d1b55e46216ba1129e07071c8",
+    "web": "sha256:6908639eaf78e1d4d4811717e1aab4ffd37a33d125da6009a61a1b7d7d56d71f",
+    "webhook": "sha256:033d151b9712507b0f18f0c91f8b27b6d6db29efd584f1c61e92415658e85e86",
+    "gateway": "sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236",
+    "mcp": "sha256:b0fce43895c8705e09f3f48f7f03778d37b8771abd28b7086f49fff3497711ff",
+    "mysql": "sha256:0f51e63e537a1f176423fa03ef559aabe6fa4372a53160a44bc7e75da7d15364",
+    "prometheus": "sha256:6927e0919a144aa7616fd0137d4816816d42f6b816de3af269ab065250859a62",
+    "redis": "sha256:d9436322172a5b482c187bf1f363d3c4fea086fcca6b9c8a94de8f0f39ed3193"
+  },
+  "image_platforms": {
+    "sha256:033d151b9712507b0f18f0c91f8b27b6d6db29efd584f1c61e92415658e85e86": "linux/arm64",
+    "sha256:0f51e63e537a1f176423fa03ef559aabe6fa4372a53160a44bc7e75da7d15364": "linux/arm64",
+    "sha256:3471551ebd4948d89cb990ee3a8d11efc08e496d1b55e46216ba1129e07071c8": "linux/arm64",
+    "sha256:6908639eaf78e1d4d4811717e1aab4ffd37a33d125da6009a61a1b7d7d56d71f": "linux/arm64",
+    "sha256:6927e0919a144aa7616fd0137d4816816d42f6b816de3af269ab065250859a62": "linux/arm64",
+    "sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236": "linux/arm64",
+    "sha256:b0fce43895c8705e09f3f48f7f03778d37b8771abd28b7086f49fff3497711ff": "linux/arm64",
+    "sha256:b6bfe19ecee6307a8442d23b9fdd492e07ff0ffb20f06ee04072f7b80e98cc8b": "linux/arm64",
+    "sha256:d9436322172a5b482c187bf1f363d3c4fea086fcca6b9c8a94de8f0f39ed3193": "linux/arm64"
+  },
+  "runtime_archive": {
+    "path": "runtime-images.tar",
+    "sha256": "35c99e9e688dd04b10f3cfb853af2e6e58458f9e7f830930f7223a2a67bf408e",
+    "bytes": 768092160,
+    "docker_save_exact_image_ids": true
+  },
+  "source_archive_and_extracted_files_rechecked": true,
+  "fresh_initialization": {
+    "phases": [
+      "build",
+      "plan-roles",
+      "start-database",
+      "preflight-metadata",
+      "create-accounts",
+      "migrator-grants",
+      "migrate",
+      "initialize-clock",
+      "runtime-grants",
+      "verify-runtime",
+      "start-services"
+    ],
+    "runtime_role_and_clock_verified": true
+  },
+  "local_validation": {
+    "status": "passed",
+    "gateway_loopback_verified": true,
+    "containers": [
+      {
+        "service": "gateway",
+        "image_id": "sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236",
+        "running": true,
+        "health": "healthy",
+        "loopback_only": true
+      },
+      {
+        "service": "aiops",
+        "image_id": "sha256:b0fce43895c8705e09f3f48f7f03778d37b8771abd28b7086f49fff3497711ff",
+        "running": true,
+        "health": "healthy",
+        "loopback_only": true
+      },
+      {
+        "service": "prometheus",
+        "image_id": "sha256:6927e0919a144aa7616fd0137d4816816d42f6b816de3af269ab065250859a62",
+        "running": true,
+        "health": "healthy",
+        "loopback_only": true
+      },
+      {
+        "service": "mcp",
+        "image_id": "sha256:b0fce43895c8705e09f3f48f7f03778d37b8771abd28b7086f49fff3497711ff",
+        "running": true,
+        "health": "healthy",
+        "loopback_only": true
+      },
+      {
+        "service": "web",
+        "image_id": "sha256:6908639eaf78e1d4d4811717e1aab4ffd37a33d125da6009a61a1b7d7d56d71f",
+        "running": true,
+        "health": "healthy",
+        "loopback_only": true
+      },
+      {
+        "service": "backend",
+        "image_id": "sha256:b6bfe19ecee6307a8442d23b9fdd492e07ff0ffb20f06ee04072f7b80e98cc8b",
+        "running": true,
+        "health": "healthy",
+        "loopback_only": true
+      },
+      {
+        "service": "webhook",
+        "image_id": "sha256:033d151b9712507b0f18f0c91f8b27b6d6db29efd584f1c61e92415658e85e86",
+        "running": true,
+        "health": "healthy",
+        "loopback_only": true
+      },
+      {
+        "service": "redis",
+        "image_id": "sha256:d9436322172a5b482c187bf1f363d3c4fea086fcca6b9c8a94de8f0f39ed3193",
+        "running": true,
+        "health": "healthy",
+        "loopback_only": true
+      },
+      {
+        "service": "mysql",
+        "image_id": "sha256:0f51e63e537a1f176423fa03ef559aabe6fa4372a53160a44bc7e75da7d15364",
+        "running": true,
+        "health": "healthy",
+        "loopback_only": true
+      }
+    ],
+    "http": {
+      "/ready": 200,
+      "/health": 200
+    },
+    "browser": [
+      "BROWSER cron default retry budget and responsive cancellation use real API: status=passed outcome=expected",
+      "BROWSER workorder instance completes a real template draft submit and approval lifecycle: status=passed outcome=expected",
+      "BROWSER expired login preserves its dialog and rebuilds current route permissions: status=passed outcome=expected",
+      "BROWSER cloud account local CRUD preserves regions and never auto-verifies: status=passed outcome=expected",
+      "BROWSER disabled HTTP cron persists create and execution-field edits without running: status=passed outcome=expected",
+      "BROWSER stats expected=5 skipped=0 unexpected=0 flaky=0"
+    ],
+    "browser_counts": {
+      "passed": 5,
+      "skipped": 0,
+      "failed": 0,
+      "retried": 0
+    }
+  },
+  "production_deployment": "not-performed",
+  "registry_publish": "not-performed",
+  "external_llm_feishu_cloud_calls": "disabled-not-tested",
+  "cleanup": "owned-containers-volumes-network-removed-runtime-images-and-archives-preserved",
+  "completed_at": "2026-10-30T15:44:46.180605+00:00",
+  "prepared_manifest": {
+    "path": "candidate.json",
+    "sha256": "9dea600dde0c55b29fccf8c0b83bf0f6acc8e68bc2dc29b5343b0b3f93131bbb",
+    "status": "historical-prepared-not-built-step-preserved"
+  },
+  "ci_reference": {
+    "repository": "GoSimplicity/AI-CloudOps",
+    "run_id": 41078544655,
+    "url": "https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41078544655",
+    "status": "success",
+    "verification_source": "parent-agent-live-verified",
+    "same_product_source_revisions": true,
+    "local_validation_independent": true
+  },
+  "temporary_machine_setting": {
+    "orbstack_network_proxy": "restored-auto",
+    "verification": "orb config get network_proxy returned auto after cleanup"
+  },
+  "verification_limits": [
+    "Built and validated only on the image platforms recorded here; production and other architectures are not verified.",
+    "Local business checks use disabled test cloud accounts and disabled Cron; real cloud, LLM, Feishu and production integrations are not exercised.",
+    "No registry publication, release or production deployment was performed."
+  ]
+}
