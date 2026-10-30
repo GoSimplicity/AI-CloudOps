@@ -28,13 +28,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: AI-CloudOps
+      - name: Read locked secondary source revisions
+        id: sources
+        run: python3 scripts/integration/locked_sources.py --github-output
       - uses: actions/checkout@v4
         with:
+          ref: ${{ steps.sources.outputs.web }}
           repository: GoSimplicity/AI-CloudOps-web
           path: AI-CloudOps-web
       - uses: actions/checkout@v4
         with:
           repository: GoSimplicity/AI-CloudOps-aiops
+          ref: ${{ steps.sources.outputs.aiops }}
           path: AI-CloudOps-aiops
       - uses: actions/setup-python@v5
         with:
@@ -55,7 +60,7 @@ jobs:
       - name: Generate private isolated configuration
         run: python scripts/release-env.py
       - name: Offline fresh-stack safety regression
-        run: python -m unittest scripts.tests.test_release_fresh scripts.tests.test_release_env -v
+        run: python -m unittest scripts.tests.test_release_fresh scripts.tests.test_release_env scripts.tests.test_locked_sources -v
       - name: Explicitly migrate a new owned stack and start with runtime roles
         run: python scripts/release-fresh.py --execute-new-stack --project "$COMPOSE_PROJECT_NAME" --docker-socket /var/run/docker.sock
       - name: Versioned migration engine with owned MySQL fixtures
