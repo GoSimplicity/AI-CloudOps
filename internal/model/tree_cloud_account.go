@@ -116,6 +116,7 @@ func (ProviderCredentialInput) String() string   { return "[REDACTED]" }
 func (ProviderCredentialInput) GoString() string { return "[REDACTED]" }
 
 type CreateCloudAccountReq struct {
+	Status              *int                           `json:"status" binding:"omitempty,oneof=1 2"` // 缺省启用；支持先保存停用账户
 	ProviderCredentials *ProviderCredentialInput       `json:"provider_credentials,omitempty"`
 	Name                string                         `json:"name" binding:"required,min=2,max=100"`         // 账户名称
 	Provider            CloudProvider                  `json:"provider" binding:"required,oneof=1 2 3 4 5 6"` // 云厂商类型

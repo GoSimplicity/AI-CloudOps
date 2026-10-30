@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run two selected business browser checks against this CI job's owned stack only."""
+"""Run selected business browser checks against this CI job's owned stack only."""
 from __future__ import annotations
 
 import json
@@ -16,6 +16,14 @@ BASE_URL = "http://127.0.0.1:18080"
 TEST_TITLES = (
     "cron default retry budget and responsive cancellation use real API",
     "workorder instance completes a real template draft submit and approval lifecycle",
+    "expired login preserves its dialog and rebuilds current route permissions",
+    "cloud account local CRUD preserves regions and never auto-verifies",
+    "disabled HTTP cron persists create and execution-field edits without running",
+)
+TEST_FILES = (
+    "tests/e2e/console.spec.ts",
+    "tests/e2e/cloud-account-contract.spec.ts",
+    "tests/e2e/cron-edit-contract.spec.ts",
 )
 REQUIRED_SERVICES = {"mysql", "redis", "backend", "aiops", "web", "gateway"}
 MAX_REPORT_BYTES = 4 * 1024 * 1024
@@ -63,7 +71,12 @@ def validate_private_config(path: Path) -> None:
             or settings.get("NOTIFICATION_ENABLED") != "false"
             or settings.get("FEISHU_WEBHOOK_URL")
             or settings.get("LLM_API_KEY")
-            or settings.get("LLM_BASE_URL") != "http://127.0.0.1:9/v1"):
+            or settings.get("LLM_BASE_URL") != "http://127.0.0.1:9/v1"
+            or settings.get("WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_ID") != ""
+            or settings.get("WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET") != ""
+            or settings.get("WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API") != "http://127.0.0.1:9/open-apis/auth/v3/tenant_access_token/internal"
+            or settings.get("WEBHOOK_IM_FEISHU_PRIVATE_MESSAGE_API") != "http://127.0.0.1:9/open-apis/im/v1/messages"
+            or settings.get("WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API") != "http://127.0.0.1:9/open-apis/bot/v2/hook"):
         raise BrowserGateError("CI target or external capability configuration is unsafe")
 
 
@@ -206,9 +219,9 @@ def main() -> int:
             os.chmod(error_path, 0o600)
             try:
                 result = subprocess.run(
-                    ["pnpm", "exec", "playwright", "test", "tests/e2e/console.spec.ts", "--grep", pattern,
+                    ["pnpm", "exec", "playwright", "test", *TEST_FILES, "--grep", pattern,
                      "--reporter=json", "--retries=0", "--workers=1"],
-                    cwd=web, env=child_env, stdout=report, stderr=errors, timeout=480,
+                    cwd=web, env=child_env, stdout=report, stderr=errors, timeout=720,
                 )
             except subprocess.TimeoutExpired:
                 print("BROWSER infrastructure=runner_timeout", file=sys.stderr)

@@ -28,7 +28,11 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/config"
@@ -110,6 +114,13 @@ func (s *cronService) checkLocalExecAllowed(jobType model.CronJobType) error {
 }
 
 func (s *cronService) CreateCronJob(ctx context.Context, req *model.CreateCronJobReq) error {
+	initialStatus := model.CronJobStatusEnabled
+	if req.Status != nil {
+		if *req.Status != int(model.CronJobStatusEnabled) && *req.Status != int(model.CronJobStatusDisabled) {
+			return errors.New("初始任务状态只能为启用或停用")
+		}
+		initialStatus = model.CronJobStatus(*req.Status)
+	}
 	s.logger.Info("创建任务", zap.String("name", req.Name))
 
 	if err := s.checkLocalExecAllowed(req.JobType); err != nil {
@@ -139,6 +150,7 @@ func (s *cronService) CreateCronJob(ctx context.Context, req *model.CreateCronJo
 		Name:           req.Name,
 		Description:    req.Description,
 		JobType:        req.JobType,
+		Status:         initialStatus,
 		Schedule:       req.Schedule,
 		Command:        req.Command,
 		Args:           req.Args,
@@ -475,8 +487,8 @@ func (s *cronService) validateBasicJobConfig(jobType model.CronJobType, command,
 			return fmt.Errorf("命令行任务必须指定执行命令")
 		}
 	case model.CronJobTypeHTTP:
-		if httpUrl == "" {
-			return fmt.Errorf("HTTP任务必须指定请求URL")
+		if err := validateHTTPJobURL(httpUrl); err != nil {
+			return err
 		}
 	case model.CronJobTypeScript:
 		if scriptContent == "" {
@@ -493,6 +505,29 @@ func (s *cronService) validateBasicJobConfig(jobType model.CronJobType, command,
 		// 系统任务由内置任务管理器处理
 	default:
 		return fmt.Errorf("不支持的任务类型: %d", int8(jobType))
+	}
+	return nil
+}
+
+func validateHTTPJobURL(raw string) error {
+	invalid := errors.New("请求URL必须是有效的HTTP或HTTPS地址")
+	if raw == "" || strings.ContainsRune(raw, '\\') {
+		return invalid
+	}
+	for _, character := range raw {
+		if character <= ' ' || character == 0x7f {
+			return invalid
+		}
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" || parsed.Opaque != "" {
+		return invalid
+	}
+	if parsed.Port() != "" {
+		port, err := strconv.Atoi(parsed.Port())
+		if err != nil || port < 1 || port > 65535 {
+			return invalid
+		}
 	}
 	return nil
 }

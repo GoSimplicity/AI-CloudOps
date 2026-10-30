@@ -109,6 +109,7 @@ type CronJobListResp struct {
 }
 
 type CreateCronJobReq struct {
+	Status         *int         `json:"status" binding:"omitempty,oneof=1 2"` // 缺省启用；可先保存为停用任务
 	Name           string       `json:"name" binding:"required,min=1,max=100"`
 	Description    string       `json:"description" binding:"max=500"`
 	JobType        CronJobType  `json:"job_type" binding:"required,oneof=1 2 3 4 5"`

@@ -145,6 +145,13 @@ func (s *cloudAccountService) GetCloudAccountDetail(ctx context.Context, req *mo
 }
 
 func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model.CreateCloudAccountReq, createUserID int, createUserName string) error {
+	initialStatus := model.CloudAccountEnabled
+	if req.Status != nil {
+		if *req.Status != int(model.CloudAccountEnabled) && *req.Status != int(model.CloudAccountDisabled) {
+			return errors.New("初始账户状态只能为启用或停用")
+		}
+		initialStatus = model.CloudAccountStatus(*req.Status)
+	}
 	credentials := treeUtils.CloudCredentials{AccessKey: req.AccessKey, SecretKey: req.SecretKey, CredentialType: req.CredentialType, SessionToken: req.SessionToken, ExpiresAt: req.CredentialExpiresAt}
 	isStructured := req.Provider == model.ProviderAzure || req.Provider == model.ProviderGCP
 	if isStructured {
@@ -234,7 +241,7 @@ func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model
 			AccountName:         req.AccountName,
 			AccountAlias:        req.AccountAlias,
 			Description:         req.Description,
-			Status:              model.CloudAccountEnabled, // 默认启用
+			Status:              initialStatus,
 			CreateUserID:        createUserID,
 			CreateUserName:      createUserName,
 		}

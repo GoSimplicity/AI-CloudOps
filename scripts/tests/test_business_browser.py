@@ -21,7 +21,7 @@ def containers():
 
 
 def report():
-    return {"errors": [], "suites": [{"suites": [{"specs": [{"title": title, "ok": True, "tests": [{"expectedStatus": "passed", "status": "expected", "results": [{"status": "passed"}]}]} for title in tool.TEST_TITLES]}]}], "stats": {"expected": 2, "skipped": 0, "unexpected": 0, "flaky": 0}}
+    return {"errors": [], "suites": [{"suites": [{"specs": [{"title": title, "ok": True, "tests": [{"expectedStatus": "passed", "status": "expected", "results": [{"status": "passed"}]}]} for title in tool.TEST_TITLES]}]}], "stats": {"expected": len(tool.TEST_TITLES), "skipped": 0, "unexpected": 0, "flaky": 0}}
 
 
 class BusinessBrowserSafetyTests(unittest.TestCase):
@@ -38,7 +38,11 @@ class BusinessBrowserSafetyTests(unittest.TestCase):
                 tool.require_owned_ci({**environment(), key: value})
 
     def test_private_configuration_refuses_links_public_permissions_duplicates_and_external_capabilities(self):
-        good = "BOOTSTRAP_ADMIN_PASSWORD=fixture-only\nBIND_ADDRESS=127.0.0.1\nHTTP_PORT=18080\nPUBLIC_ORIGIN=http://localhost:18080\nNOTIFICATION_ENABLED=false\nFEISHU_WEBHOOK_URL=\nLLM_BASE_URL=http://127.0.0.1:9/v1\n"
+        good = ("BOOTSTRAP_ADMIN_PASSWORD=fixture-only\nBIND_ADDRESS=127.0.0.1\nHTTP_PORT=18080\nPUBLIC_ORIGIN=http://localhost:18080\nNOTIFICATION_ENABLED=false\nFEISHU_WEBHOOK_URL=\nLLM_BASE_URL=http://127.0.0.1:9/v1\n"
+                "WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_ID=\nWEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET=\n"
+                "WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API=http://127.0.0.1:9/open-apis/auth/v3/tenant_access_token/internal\n"
+                "WEBHOOK_IM_FEISHU_PRIVATE_MESSAGE_API=http://127.0.0.1:9/open-apis/im/v1/messages\n"
+                "WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API=http://127.0.0.1:9/open-apis/bot/v2/hook\n")
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "fixture.env"
             path.write_text(good); path.chmod(0o600)
@@ -51,6 +55,16 @@ class BusinessBrowserSafetyTests(unittest.TestCase):
             for content in [good + "HTTP_PORT=18080\n", good.replace("NOTIFICATION_ENABLED=false", "NOTIFICATION_ENABLED=true"), good + "LLM_API_KEY=fixture\n", good.replace("FEISHU_WEBHOOK_URL=\n", "FEISHU_WEBHOOK_URL=https://example.invalid/\n"), good.replace("BIND_ADDRESS=127.0.0.1", "BIND_ADDRESS=0.0.0.0"), good.replace("http://127.0.0.1:9/v1", "https://example.invalid/v1")]:
                 path.write_text(content)
                 with self.assertRaises(tool.BrowserGateError): tool.validate_private_config(path)
+            for name, safe_value in {
+                "WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_ID": "",
+                "WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET": "",
+                "WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API": "http://127.0.0.1:9/open-apis/auth/v3/tenant_access_token/internal",
+                "WEBHOOK_IM_FEISHU_PRIVATE_MESSAGE_API": "http://127.0.0.1:9/open-apis/im/v1/messages",
+                "WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API": "http://127.0.0.1:9/open-apis/bot/v2/hook",
+            }.items():
+                for replacement in ("fixture-private-value", "https://example.invalid/api"):
+                    path.write_text(good.replace(name + "=" + safe_value + "\n", name + "=" + replacement + "\n"))
+                    with self.assertRaises(tool.BrowserGateError): tool.validate_private_config(path)
 
     def test_container_ownership_health_and_exact_loopback_publication(self):
         tool.validate_containers(containers(), "cloudops-ci-123")
@@ -58,8 +72,9 @@ class BusinessBrowserSafetyTests(unittest.TestCase):
             rows = containers(); mutate(rows)
             with self.assertRaises(tool.BrowserGateError): tool.validate_containers(rows, "cloudops-ci-123")
 
-    def test_only_two_selected_passes_accepted(self):
-        self.assertEqual(tool.validate_report(report()), 2)
+    def test_only_five_selected_passes_accepted(self):
+        self.assertEqual(len(tool.TEST_TITLES), 5)
+        self.assertEqual(tool.validate_report(report()), 5)
         for mutate in [lambda data: data.update(errors=[{"message": "private"}]), lambda data: data["stats"].update(skipped=1), lambda data: data["stats"].update(unexpected=1), lambda data: data["stats"].update(flaky=1), lambda data: data["stats"].update(expected=0), lambda data: data["suites"].clear(), lambda data: data["suites"][0]["suites"][0]["specs"].pop(), lambda data: data["suites"][0]["suites"][0]["specs"][0].update(title="different")]:
             data = report(); mutate(data)
             with self.assertRaises(tool.BrowserGateError): tool.validate_report(data)
@@ -95,6 +110,8 @@ class BusinessBrowserSafetyTests(unittest.TestCase):
         self.assertEqual(options["env"]["CLOUDOPS_TEST_WORKORDER_FLOW_READY"], "true")
         self.assertIn("--retries=0", command)
         self.assertIn("--reporter=json", command)
+        self.assertEqual(command[4:command.index("--grep")], list(tool.TEST_FILES))
+        self.assertEqual(options["timeout"], 720)
         self.assertNotIn("CLOUDOPS_CI_OWNED_STACK", options["env"])
         self.assertEqual(calls[0][0][:3], ["docker", "--host", "unix:///var/run/docker.sock"])
 
@@ -115,9 +132,9 @@ class BusinessBrowserSafetyTests(unittest.TestCase):
         self.assertNotIn(private, output)
         self.assertIn("status=failed outcome=expected", output)
         self.assertIn("status=unknown outcome=unknown", output)
-        self.assertIn("expected=2 skipped=unknown unexpected=unknown flaky=unknown", output)
+        self.assertIn("expected=5 skipped=unknown unexpected=unknown flaky=unknown", output)
         self.assertIn("infrastructure=runner_error", output)
-        self.assertEqual(len(output.splitlines()), 4)
+        self.assertEqual(len(output.splitlines()), len(tool.TEST_TITLES) + 2)
 
     def test_nonzero_browser_process_still_emits_safe_status_and_counts(self):
         data = report()
