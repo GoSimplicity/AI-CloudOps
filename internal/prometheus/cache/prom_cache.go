@@ -38,6 +38,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/utils"
 	"gopkg.in/yaml.v3"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	configDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
 	scrapeJobDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
@@ -50,7 +51,6 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/redis/go-redis/v9"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -82,23 +82,27 @@ type prometheusConfigCache struct {
 }
 
 func NewPrometheusConfigCache(
+	cfg *config.Config,
 	logger *zap.Logger,
 	scrapePoolDAO scrapeJobDao.ScrapePoolDAO,
 	scrapeJobDAO scrapeJobDao.ScrapeJobDAO,
 	configDAO configDao.MonitorConfigDAO,
 	batchManager *BatchConfigManager,
 	redisClient redis.Cmdable,
-) PrometheusConfigCache {
+) (PrometheusConfigCache, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("配置不能为空")
+	}
 	return &prometheusConfigCache{
 		redis:         redisClient,
-		httpSdAPI:     viper.GetString("prometheus.httpSdAPI"),
+		httpSdAPI:     cfg.Prometheus.HttpSdAPI,
 		scrapePoolDAO: scrapePoolDAO,
 		scrapeJobDAO:  scrapeJobDAO,
 		configDAO:     configDAO,
 		logger:        logger,
 		mu:            sync.RWMutex{},
 		batchManager:  batchManager,
-	}
+	}, nil
 }
 
 // GetConfigByIP 根据IP地址获取Prometheus主配置
