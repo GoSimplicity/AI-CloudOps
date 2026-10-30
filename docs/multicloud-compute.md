@@ -1,4 +1,13 @@
-# 云计算资源接入：阿里云、AWS、腾讯云
+# 云计算资源接入与当前支持边界
+
+> 当前口径（2026-10-30）：首批三家 SDK 的详细合同保留在下文；后续已接华为、Azure、GCP 计算账户/前端与受限增量同步，以及 AWS/腾讯显式临时凭据。完整交付和未验范围见[当前完成度矩阵](release/readiness-current.md)。
+
+| 当前能力 | 阿里云 / AWS / 腾讯云 | 华为云 / Azure / GCP |
+| --- | --- | --- |
+| 计算账户与管理台 | 已接账户、验证、地域和同步入口 | 已接专用凭据、显式地域及指定实例 ID 同步入口 |
+| 全量范围 | 通过服务端完整性检查后，按地域事务对账；禁止筛选 ID 的全量删除 | 拒绝 full 和无 ID 增量，不推测企业项目、订阅或项目权限覆盖 |
+| 临时凭据 | AWS/腾讯支持显式令牌与 UTC 到期时间；阿里本合同仍使用长期 AK/SK | 华为显式 AK/SK+地域 project_id；Azure 服务主体、GCP service_account，不借用宿主身份 |
+| 真实账号验收 | 未在本阶段执行 | 未在本阶段执行 |
 
 这三个厂商都有实际 SDK 调用实现，可验证指定地域的实例读取权限、查询厂商地域列表并同步实例。
 新增 AWS/Tencent 的验收依据是官方 SDK 类型/源码、API 文档和离线契约测试；没有真实云账号，
@@ -16,12 +25,12 @@
 
 ## 凭据与地域 API
 
-使用已保存账号的长期 AccessKey/SecretKey。AWS 客户端使用显式凭据，不读取本机 profile、环境凭据或实例角色作为替代账号。
-AWS `ASIA` 临时凭据需要 session token，目前明确拒绝；腾讯云 STS 临时凭据同样不在本版支持范围。
-本版没有声明只有两个字段即可兼容临时凭据，也没有偷偷丢弃 token。
+首批三家使用已保存账号的显式凭据。AWS 客户端不读取本机 profile、环境凭据或实例角色作为替代账号。
+AWS `ASIA` 及腾讯云 STS 临时凭据现已支持，但必须整组提供 credential_type、AccessKey/SecretKey、session_token 和未来 UTC 到期时间；长期模式中的临时 Key、不完整或过期凭据均拒绝，不丢弃 token。令牌加密存储与整组轮换，前端只写不回填。详见[临时凭据合同](release/cloud-temporary-credentials.md)。
+显式临时凭据不代表自动 AssumeRole、身份链回退或自动续期已经实现。
 
 账户创建：`POST /api/tree/cloud/account/create`，包含 `provider`、`access_key`、`secret_key`、
-`regions: [{region, region_name, is_default}]`。厂商枚举保持阿里云1、腾讯云2、AWS3、华为云4。
+`regions: [{region, region_name, is_default}]`。厂商枚举保持阿里云1、腾讯云2、AWS3、华为云4、Azure5、GCP6；Azure/GCP使用独立的完整 provider_credentials 对象，华为地域另需 project_id。
 账户更新接受可选的同形 `regions` 数组；不能通过更新切换厂商。
 
 实时地域列表使用：
@@ -52,7 +61,7 @@ AWS身份需要 `ec2:DescribeInstances`；实时地域查询另需 `ec2:Describe
 - 腾讯云映射CPU、GiB内存、系统盘加数据盘容量、网络、镜像、标签、状态、PREPAID到期时间。未知计费类型不会伪装成已确认计费方式。
 - 本地Currency字段沿用厂商默认元数据，不是账单验收；AWS预留实例折扣、Savings Plans等不能从DescribeInstances推断。
 
-华为云、Azure、GCP仍未实现真实凭据/地域/实例查询，明确返回未实现；没有用隐藏入口替代实现或宣称六云全部可用。
+华为云、Azure、GCP的实际只读客户端、账户工厂及管理台已接入，但只开放明确地域和指定实例ID增量；不能把局部返回解释为全账号/全项目列表，也不允许用它清理缺席资产。Azure/GCP未提供的容量、费用和部分网络字段保持未知。详细合同见[华为](release/huawei-client.md)、[Azure](release/azure-client.md)、[GCP](release/gcp-client.md)和[专用凭据](release/cloud-provider-credentials.md)。这些实现与隔离 SDK 合同不等于真实云账号已验收。
 
 ## 离线回归
 
