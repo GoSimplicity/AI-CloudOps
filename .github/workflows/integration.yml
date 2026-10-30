@@ -56,6 +56,8 @@ jobs:
         run: python scripts/release-env.py
       - name: Build and start isolated stack
         run: docker compose -f deploy/release/compose.yaml up -d --build --wait --wait-timeout 300
+      - name: Versioned migration engine with owned MySQL fixtures
+        run: go test -race -tags=integration ./pkg/schema -count=1 -timeout=180s
       - name: Isolated MySQL full migration and YAML persistence
         run: python scripts/integration/schema_smoke.py --mysql-migration
       - name: Isolated MySQL notification channel pagination
