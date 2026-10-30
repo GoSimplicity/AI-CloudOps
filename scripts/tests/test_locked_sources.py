@@ -54,6 +54,7 @@ class LockedSourcesTests(unittest.TestCase):
     def test_workflow_checks_out_secondary_repositories_by_locked_hash(self):
         workflow = (tool.ROOT / ".github/workflows/integration.yml").read_text()
         self.assertIn("python3 scripts/integration/locked_sources.py --github-output", workflow)
+        self.assertIn("group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}",workflow)
         for role in tool.REPOSITORIES:
             self.assertIn("ref: ${{ steps.sources.outputs." + role + " }}", workflow)
 
