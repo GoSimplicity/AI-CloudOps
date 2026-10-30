@@ -135,7 +135,7 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 
 	event, err := w.dao.GetMonitorAlertEventByFingerprintId(ctx, fingerprint)
 	if err != nil {
-		w.l.Error("获取告警事件失败", zap.Error(err))
+		w.l.Error("获取告警事件失败", zap.String("operation", "alert_event_lookup"))
 		base.ErrorWithMessage(ctx, "获取告警事件失败")
 		return
 	}
@@ -143,13 +143,14 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 		base.ErrorWithMessage(ctx, "未找到对应的告警事件")
 		return
 	}
+	expectedState := dao.AlertEventSilenceState{Status: event.Status, SilenceID: event.SilenceID}
 
 	// 解析标签
 	labelsM := make(map[string]string)
 	for _, label := range event.Labels {
 		parts := strings.Split(label, "=")
 		if len(parts) != 2 {
-			w.l.Warn("无效的标签格式", zap.String("label", label))
+			w.l.Warn("无效的标签格式")
 			continue
 		}
 		labelsM[parts[0]] = parts[1]
@@ -175,7 +176,7 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 
 	jsonData, err := json.Marshal(silence)
 	if err != nil {
-		w.l.Error("序列化静默请求失败", zap.Error(err))
+		w.l.Error("序列化静默请求失败", zap.String("operation", "request_encode"))
 		base.ErrorWithMessage(ctx, "创建静默请求失败")
 		return
 	}
@@ -186,11 +187,8 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 		url, string(jsonData), nil, nil)
 
 	if err != nil {
-		w.l.Error("调用静默接口失败",
-			zap.Error(err),
-			zap.String("url", url),
-			zap.String("request", string(jsonData)))
-		base.ErrorWithMessage(ctx, "设置静默失败")
+		w.l.Error("调用静默接口失败", zap.String("operation", "silence_upstream"))
+		base.ErrorWithMessage(ctx, "上游静默结果未确认，请人工核对，勿重复提交")
 		return
 	}
 
@@ -199,22 +197,25 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 		SilenceID string `json:"silenceID"`
 	}
 	if err := json.Unmarshal([]byte(resp), &silenceResp); err != nil {
-		w.l.Error("解析静默响应失败", zap.Error(err))
-		base.ErrorWithMessage(ctx, "设置静默失败")
+		w.l.Error("解析静默响应失败", zap.String("operation", "response_decode"))
+		base.ErrorWithMessage(ctx, "上游静默结果未确认，请人工核对，勿重复提交")
 		return
 	}
 
+	if !validSilenceID(silenceResp.SilenceID) {
+		w.l.Error("上游静默标识无效", zap.String("operation", "silence_id_validate"))
+		base.ErrorWithMessage(ctx, "上游静默结果未确认，请人工核对，勿重复提交")
+		return
+	}
 	// 更新告警事件的静默状态和silenceID
-	event.Status = model.MonitorAlertEventStatusSilenced
-	event.SilenceID = silenceResp.SilenceID
-	if err := w.dao.UpdateMonitorAlertEvent(ctx, event); err != nil {
-		w.l.Error("更新告警事件状态失败", zap.Error(err))
+	desiredState := dao.AlertEventSilenceState{Status: model.MonitorAlertEventStatusSilenced, SilenceID: silenceResp.SilenceID}
+	if err := w.dao.UpdateMonitorAlertEventSilence(ctx, event.ID, expectedState, desiredState); err != nil {
+		w.l.Error("更新告警事件状态失败", zap.String("operation", "silence_local_save"), zap.Int("event_id", event.ID))
+		base.ErrorWithMessage(ctx, "上游静默已受理，本地状态保存未确认，请人工核对，勿重复提交")
+		return
 	}
 
-	w.l.Info("静默设置成功",
-		zap.String("fingerprint", fingerprint),
-		zap.Int("hour", hourInt),
-		zap.String("silenceID", silenceResp.SilenceID))
+	w.l.Info("静默设置成功", zap.Int("event_id", event.ID), zap.Int("hour", hourInt))
 
 	base.SuccessWithMessage(ctx, "静默设置成功")
 }
@@ -228,7 +229,7 @@ func (w *WebHookHandler) MonitorAlertUnSilence(ctx *gin.Context) {
 
 	event, err := w.dao.GetMonitorAlertEventByFingerprintId(ctx, fingerprint)
 	if err != nil {
-		w.l.Error("获取告警事件失败", zap.Error(err))
+		w.l.Error("获取告警事件失败", zap.String("operation", "alert_event_lookup"))
 		base.ErrorWithMessage(ctx, "获取告警事件失败")
 		return
 	}
@@ -237,12 +238,18 @@ func (w *WebHookHandler) MonitorAlertUnSilence(ctx *gin.Context) {
 		base.ErrorWithMessage(ctx, "未找到对应的告警事件")
 		return
 	}
+	expectedState := dao.AlertEventSilenceState{Status: event.Status, SilenceID: event.SilenceID}
 
 	if event.Status != model.MonitorAlertEventStatusSilenced {
 		base.ErrorWithMessage(ctx, "该告警未处于静默状态")
 		return
 	}
 
+	if !validSilenceID(event.SilenceID) {
+		w.l.Error("本地静默标识无效", zap.String("operation", "silence_id_validate"), zap.Int("event_id", event.ID))
+		base.ErrorWithMessage(ctx, "本地静默标识无效，请人工核对")
+		return
+	}
 	// 构建取消静默的URL
 	silenceURL := fmt.Sprintf("%s/api/v2/silence/%v",
 		w.alertManagerAPI,
@@ -254,21 +261,33 @@ func (w *WebHookHandler) MonitorAlertUnSilence(ctx *gin.Context) {
 		silenceURL, nil, nil)
 
 	if err != nil {
-		w.l.Error("取消静默失败",
-			zap.Error(err),
-			zap.String("url", silenceURL))
-		base.ErrorWithMessage(ctx, "取消静默失败")
+		w.l.Error("取消静默失败", zap.String("operation", "unsilence_upstream"))
+		base.ErrorWithMessage(ctx, "上游取消静默结果未确认，请人工核对，勿重复提交")
 		return
 	}
 
-	event.Status = model.MonitorAlertEventStatusFiring
-	event.SilenceID = ""
-	if err := w.dao.UpdateMonitorAlertEvent(ctx, event); err != nil {
-		w.l.Error("更新告警事件状态失败", zap.Error(err))
+	desiredState := dao.AlertEventSilenceState{Status: model.MonitorAlertEventStatusFiring, SilenceID: ""}
+	if err := w.dao.UpdateMonitorAlertEventSilence(ctx, event.ID, expectedState, desiredState); err != nil {
+		w.l.Error("更新告警事件状态失败", zap.String("operation", "unsilence_local_save"), zap.Int("event_id", event.ID))
+		base.ErrorWithMessage(ctx, "上游取消静默已受理，本地状态保存未确认，请人工核对，勿重复提交")
+		return
 	}
 
-	w.l.Info("取消静默成功",
-		zap.String("fingerprint", fingerprint))
+	w.l.Info("取消静默成功", zap.Int("event_id", event.ID))
 
 	base.SuccessWithMessage(ctx, "取消静默成功")
+}
+
+// AlertManager IDs occupy one bounded URL segment and fit the persisted column.
+// Accept existing non-UUID test/legacy IDs without allowing path or control data.
+func validSilenceID(id string) bool {
+	if len(id) == 0 || len(id) > 100 {
+		return false
+	}
+	for _, character := range id {
+		if !((character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9') || character == '-' || character == '_') {
+			return false
+		}
+	}
+	return true
 }

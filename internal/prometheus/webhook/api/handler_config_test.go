@@ -201,3 +201,17 @@ func TestWebhookHandlerRejectsUnboundedTimeout(t *testing.T) {
 		})
 	}
 }
+
+func (memory *silenceMemoryDAO) UpdateMonitorAlertEventSilence(ctx context.Context, id int, expected, desired dao.AlertEventSilenceState) error {
+	current := dao.AlertEventSilenceState{Status: memory.event.Status, SilenceID: memory.event.SilenceID}
+	if current != expected {
+		if current == desired {
+			return nil
+		}
+		return dao.ErrAlertSilenceConflict
+	}
+	event := memory.event
+	event.Status = desired.Status
+	event.SilenceID = desired.SilenceID
+	return memory.UpdateMonitorAlertEvent(ctx, &event)
+}

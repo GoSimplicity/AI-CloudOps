@@ -36,6 +36,16 @@ import (
 	"gorm.io/gorm"
 )
 
+// AlertEventSilenceState is the two-field state compared and written by a
+// silence operation. Generic event updates retain their separate full contract.
+type AlertEventSilenceState struct {
+	Status    model.MonitorAlertEventStatus
+	SilenceID string
+}
+
+var ErrAlertSilenceConflict = errors.New("alert silence state missing or changed")
+var ErrAlertSilenceStore = errors.New("alert silence persistence outcome unconfirmed")
+
 type WebhookDao interface {
 	GetOnDutyGroupById(ctx context.Context, id int) (*model.MonitorOnDutyGroup, error)
 	GetRuleById(ctx context.Context, id int) (*model.MonitorAlertRule, error)
@@ -49,6 +59,7 @@ type WebhookDao interface {
 
 	CreateOrUpdateEvent(ctx context.Context, event *model.MonitorAlertEvent) error
 	UpdateMonitorAlertEvent(ctx context.Context, event *model.MonitorAlertEvent) error
+	UpdateMonitorAlertEventSilence(ctx context.Context, id int, expected, desired AlertEventSilenceState) error
 
 	FillTodayOnDutyUser(ctx context.Context, onDutyGroup *model.MonitorOnDutyGroup) (*model.MonitorOnDutyGroup, error)
 }
@@ -181,11 +192,11 @@ func (wd *webhookDao) GetMonitorAlertEventByFingerprintId(ctx context.Context, f
 
 	if err := wd.db.WithContext(ctx).Where("fingerprint = ?", fingerprintId).First(&alertEvent).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			wd.l.Warn("MonitorAlertEvent 未找到", zap.String("fingerprintId", fingerprintId))
+			wd.l.Warn("MonitorAlertEvent 未找到")
 			return nil, nil
 		}
-		wd.l.Error("通过 fingerprint 查询 MonitorAlertEvent 失败", zap.Error(err), zap.String("fingerprintId", fingerprintId))
-		return nil, fmt.Errorf("failed to get MonitorAlertEvent by fingerprint %s: %w", fingerprintId, err)
+		wd.l.Error("通过 fingerprint 查询 MonitorAlertEvent 失败", zap.String("operation", "alert_event_lookup"))
+		return nil, errors.New("failed to get MonitorAlertEvent")
 	}
 
 	return &alertEvent, nil
@@ -294,13 +305,48 @@ func (wd *webhookDao) UpdateMonitorAlertEvent(ctx context.Context, event *model.
 		Model(&model.MonitorAlertEvent{}).
 		Where("id = ?", event.ID).
 		Updates(event).Error; err != nil {
-		wd.l.Error("更新 MonitorAlertEvent 失败",
-			zap.Error(err),
-			zap.Any("event", event),
-		)
-		return fmt.Errorf("failed to update MonitorAlertEvent: %w", err)
+		wd.l.Error("更新 MonitorAlertEvent 失败", zap.String("operation", "alert_event_update"))
+		return errors.New("failed to update MonitorAlertEvent")
 	}
 
+	return nil
+}
+
+// UpdateMonitorAlertEventSilence atomically changes only the requested silence
+// state. An old HTTP response cannot overwrite a newer local silence ID. NULL
+// old IDs compare as empty, matching GORM's string decoding of legacy rows.
+func (wd *webhookDao) UpdateMonitorAlertEventSilence(ctx context.Context, id int, expected, desired AlertEventSilenceState) error {
+	if id <= 0 {
+		return ErrAlertSilenceConflict
+	}
+	result := wd.db.WithContext(ctx).Model(&model.MonitorAlertEvent{}).
+		// HEX preserves byte equality under case-insensitive MySQL collations.
+		Where("id = ? AND status = ? AND HEX(COALESCE(silence_id, '')) = HEX(?)", id, expected.Status, expected.SilenceID).
+		Updates(map[string]any{"status": desired.Status, "silence_id": desired.SilenceID})
+	if result.Error != nil {
+		wd.l.Error("保存静默状态失败", zap.String("operation", "alert_silence_update"))
+		return ErrAlertSilenceStore
+	}
+	if result.RowsAffected == 1 {
+		return nil
+	}
+	if result.RowsAffected != 0 {
+		return ErrAlertSilenceStore
+	}
+	// MySQL can report zero for an unchanged row; concurrent identical requests
+	// can also miss the old-state predicate. Read back the exact desired state.
+	var current AlertEventSilenceState
+	err := wd.db.WithContext(ctx).Model(&model.MonitorAlertEvent{}).Select("status", "silence_id").Where("id = ?", id).Take(&current).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrAlertSilenceConflict
+	}
+	if err != nil {
+		wd.l.Error("核对静默状态失败", zap.String("operation", "alert_silence_readback"))
+		return ErrAlertSilenceStore
+	}
+	if current != desired {
+		return ErrAlertSilenceConflict
+	}
 	return nil
 }
 

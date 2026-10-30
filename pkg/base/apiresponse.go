@@ -27,6 +27,7 @@ package base
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -162,6 +163,20 @@ func InternalServerErrorWithDetails(c *gin.Context, data interface{}, message st
 	InternalServerError(c, StatusError, data, message)
 }
 
+// HTTP helper errors intentionally contain no URL, payload, response text or
+// original transport error. Callers can classify failures without leaking them.
+var (
+	ErrHTTPRequest   = errors.New("upstream request construction failed")
+	ErrHTTPTransport = errors.New("upstream transport outcome unconfirmed")
+	ErrHTTPRead      = errors.New("upstream response read outcome unconfirmed")
+)
+
+type HTTPStatusError struct{ StatusCode int }
+
+func (err *HTTPStatusError) Error() string {
+	return fmt.Sprintf("upstream returned HTTP status %d", err.StatusCode)
+}
+
 // PostWithJsonString 发送带 JSON 数据的 POST 请求
 func PostWithJsonString(l *zap.Logger, funcName string, timeout int, url string, jsonStr string, paramsMap map[string]string, headerMap map[string]string) ([]byte, error) {
 	client := &http.Client{Timeout: time.Duration(timeout) * time.Second}
@@ -169,8 +184,8 @@ func PostWithJsonString(l *zap.Logger, funcName string, timeout int, url string,
 
 	req, err := http.NewRequest("POST", url, reader)
 	if err != nil {
-		l.Error(fmt.Sprintf("[PostWithJsonString.NewRequest.error][funcName:%s][url:%s][err:%v]", funcName, url, err))
-		return nil, err
+		l.Error("HTTP request failed", zap.String("method", "POST"), zap.String("operation", "request_build"))
+		return nil, ErrHTTPRequest
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -189,21 +204,20 @@ func PostWithJsonString(l *zap.Logger, funcName string, timeout int, url string,
 
 	resp, err := client.Do(req)
 	if err != nil {
-		l.Error(fmt.Sprintf("[PostWithJsonString.Do.error][funcName:%s][url:%s][err:%v]", funcName, url, err))
-		return nil, err
+		l.Error("HTTP request failed", zap.String("method", "POST"), zap.String("operation", "transport"))
+		return nil, ErrHTTPTransport
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body) // 忽略错误，记录原始响应体
-		l.Error(fmt.Sprintf("[PostWithJsonString.StatusCode.notOK][funcName:%s][url:%s][code:%d][resp_body:%s]", funcName, url, resp.StatusCode, string(bodyBytes)))
-		return nil, fmt.Errorf("server returned HTTP status %s", resp.Status)
+		l.Error("HTTP request failed", zap.String("method", "POST"), zap.String("operation", "http_status"), zap.Int("status_code", resp.StatusCode))
+		return nil, &HTTPStatusError{StatusCode: resp.StatusCode}
 	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		l.Error(fmt.Sprintf("[PostWithJsonString.ReadBody.error][funcName:%s][url:%s][err:%v]", funcName, url, err))
-		return nil, err
+		l.Error("HTTP request failed", zap.String("method", "POST"), zap.String("operation", "response_read"))
+		return nil, ErrHTTPRead
 	}
 
 	return bodyBytes, nil
@@ -216,8 +230,8 @@ func DeleteWithId(l *zap.Logger, funcName string, timeout int, url string, param
 	client.Timeout = time.Duration(timeout) * time.Second
 	req, err := http.NewRequest("DELETE", url, reader)
 	if err != nil {
-		l.Error(fmt.Sprintf("[DeleteWithId.http.NewRequest.error][funcName:%+v][url:%v][err:%v]", funcName, url, err))
-		return nil, err
+		l.Error("HTTP request failed", zap.String("method", "DELETE"), zap.String("operation", "request_build"))
+		return nil, ErrHTTPRequest
 	}
 
 	// 添加URL参数
@@ -234,21 +248,20 @@ func DeleteWithId(l *zap.Logger, funcName string, timeout int, url string, param
 
 	resp, err := client.Do(req)
 	if err != nil {
-		l.Error(fmt.Sprintf("[DeleteWithId.request.error][funcName:%+v][url:%v][err:%v]", funcName, url, err))
-		return nil, err
+		l.Error("HTTP request failed", zap.String("method", "DELETE"), zap.String("operation", "transport"))
+		return nil, ErrHTTPTransport
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		l.Error(fmt.Sprintf("[DeleteWithId.StatusCode.not2xx.error][funcName:%+v][url:%v][code:%v][resp_body_text:%v]", funcName, url, resp.StatusCode, string(bodyBytes)))
-		return nil, fmt.Errorf("server returned HTTP status %s", resp.Status)
+		l.Error("HTTP request failed", zap.String("method", "DELETE"), zap.String("operation", "http_status"), zap.Int("status_code", resp.StatusCode))
+		return nil, &HTTPStatusError{StatusCode: resp.StatusCode}
 	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		l.Error(fmt.Sprintf("[DeleteWithId.readbody.error][funcName:%+v][url:%v][err:%v]", funcName, url, err))
-		return nil, err
+		l.Error("HTTP request failed", zap.String("method", "DELETE"), zap.String("operation", "response_read"))
+		return nil, ErrHTTPRead
 	}
 
 	return bodyBytes, nil
