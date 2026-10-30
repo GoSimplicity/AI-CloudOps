@@ -160,6 +160,9 @@ func (s *treeLocalService) CreateTreeLocal(ctx context.Context, req *model.Creat
 			s.logger.Error("密码加密失败", zap.Error(err))
 			return fmt.Errorf("密码加密失败: %w", err)
 		}
+		if len(encryptedPassword) > 500 {
+			return errors.New("SSH密码超出加密存储限制")
+		}
 		local.Password = encryptedPassword
 	}
 
@@ -219,6 +222,9 @@ func (s *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.Updat
 		encrypted, err := treeUtils.EncryptPassword(req.Password, s.passwordEncryptionKey)
 		if err != nil {
 			return fmt.Errorf("密码加密失败: %w", err)
+		}
+		if len(encrypted) > 500 {
+			return errors.New("SSH密码超出加密存储限制")
 		}
 		updates["password"] = encrypted
 	}

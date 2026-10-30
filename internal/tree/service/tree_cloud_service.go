@@ -179,6 +179,9 @@ func (s *treeCloudService) UpdateTreeCloudResource(ctx context.Context, req *mod
 			s.logger.Error("密码加密失败", zap.Error(err))
 			return fmt.Errorf("密码加密失败: %w", err)
 		}
+		if len(encrypted) > 500 {
+			return errors.New("SSH密码超出加密存储限制")
+		}
 		metadata["password"] = encrypted
 	}
 	if req.Key != "" {
