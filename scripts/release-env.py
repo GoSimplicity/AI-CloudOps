@@ -106,6 +106,12 @@ def main():
     content += "NOTIFICATION_ENABLED=false\nFEISHU_WEBHOOK_URL=\n"
     content += "# Fresh local stacks start without an external model connection.\n"
     content += "LLM_BASE_URL=http://127.0.0.1:9/v1\n"
+    content += "# Fresh webhook bot credentials are disabled and every bot destination is loopback.\n"
+    content += 'WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_ID=\n'
+    content += 'WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET=\n'
+    content += 'WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API=http://127.0.0.1:9/open-apis/auth/v3/tenant_access_token/internal\n'
+    content += 'WEBHOOK_IM_FEISHU_PRIVATE_MESSAGE_API=http://127.0.0.1:9/open-apis/im/v1/messages\n'
+    content += 'WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API=http://127.0.0.1:9/open-apis/bot/v2/hook\n'
     try:
         descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:

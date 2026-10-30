@@ -50,8 +50,8 @@ func TestLoadWebhookNestedEnvStableWhenParentNullOrEmpty(t *testing.T) {
 				if cfg.ImFeishu.GroupMessageAPI != "https://open.feishu.cn/open-apis/bot/v2/hook" {
 					t.Fatalf("第 %d 次：未覆盖的子键应取默认值", i)
 				}
-				if n := compareWebhookCfgWithGlobal(t, reflect.ValueOf(*cfg), "webhook"); n != 12 {
-					t.Fatalf("应比对 12 个字段, got %d", n)
+				if n := compareWebhookCfgWithGlobal(t, reflect.ValueOf(*cfg), "webhook"); n != 13 {
+					t.Fatalf("应比对 13 个字段, got %d", n)
 				}
 			}
 			if bad > 0 {
@@ -84,8 +84,8 @@ func TestCollectWebhookLeafValuesSkipsParentKeys(t *testing.T) {
 			t.Fatalf("键应严格升序: %s, %s", m.keys[i-1], m.keys[i])
 		}
 	}
-	if len(m.keys) != 12 || len(m.vals) != 12 {
-		t.Fatalf("应有 12 个叶子键, got keys=%d vals=%d", len(m.keys), len(m.vals))
+	if len(m.keys) != 13 || len(m.vals) != 13 {
+		t.Fatalf("应有 13 个叶子键, got keys=%d vals=%d", len(m.keys), len(m.vals))
 	}
 	for _, key := range m.keys {
 		if _, composite := webhookCompositeKind(m.vals[key]); composite {

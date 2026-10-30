@@ -23,6 +23,11 @@ GitHub CI 另允许 `cloudops-ci-<run id>`。Docker 固定通过本地 Unix sock
 
 编排子进程只继承 PATH、HOME、临时目录与区域设置等进程基础变量；不继承宿主的任何 Compose 配置覆盖。私有文件与模板默认值是唯一配置来源，宿主 `LLM_API_KEY`、通知开关、webhook、Docker/Compose 目标或镜像变量不会偷偷覆盖它。读取渲染后的实际配置时还会再次严格核验 AIOps 模型密钥为空、地址为回环 9 端口、通知关闭且 webhook 为空。
 
+Webhook 私有机器人也属于这条隔离边界：新配置显式留空 `WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_ID`、`WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET`，并把 `TENANT_ACCESS_TOKEN_API`、`PRIVATE_MESSAGE_API`、`GROUP_MESSAGE_API` 三个 `WEBHOOK_IM_FEISHU_*` 地址分别固定到 `http://127.0.0.1:9` 下原有路径。私有文件和最终渲染的 webhook environment 都精确核对这五个值，缺失、继承生产默认地址或被环境覆盖都会拒绝。私聊地址现在由实际 loader 支持的配置键控制，不再硬编码外部服务。
+
+私有机器人在 AppID 或 AppSecret 缺失/只有空白时明确处于未启用状态，周期 token 刷新静默跳过且不发 HTTP；半凭据也不会访问 token endpoint。有完整凭据的非 fresh 部署保留原轮询与缓存行为。fresh 的三地址回环隔离还覆盖误触发消息发送的情况。已有 `.env` 不会被生成器悄悄改写；旧配置必须先人工核对，不能借此入口重用已有栈。
+
+
 凭据文件使用 `O_NOFOLLOW | O_NONBLOCK` 打开后，在同一文件描述符上核验 owner、普通文件类型、权限与有界大小；读取前后的 inode 元数据必须一致。FIFO、设备、符号链接和读到一半发生变化的文件均拒绝，不会先阻塞等待 FIFO 写入者。
 
 ## 持久私有快照与镜像选择

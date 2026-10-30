@@ -26,6 +26,7 @@ var webhookLeafSpecs = []webhookLeafSpec{
 	{"webhook.fixed_workers", "WEBHOOK_FIXED_WORKERS", true},
 	{"webhook.front_domain", "WEBHOOK_FRONT_DOMAIN", false},
 	{"webhook.im_feishu.group_message_api", "WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API", false},
+	{"webhook.im_feishu.private_message_api", "WEBHOOK_IM_FEISHU_PRIVATE_MESSAGE_API", false},
 	{"webhook.im_feishu.private_robot_app_id", "WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_ID", false},
 	{"webhook.im_feishu.private_robot_app_secret", "WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET", false},
 	{"webhook.im_feishu.request_timeout_seconds", "WEBHOOK_IM_FEISHU_REQUEST_TIMEOUT_SECONDS", true},
@@ -181,8 +182,8 @@ func TestLoadWebhookParentNullOrEmptyMapAccepted(t *testing.T) {
 			if cfg.ImFeishu.RequestTimeoutSeconds != 7 || cfg.ImFeishu.GroupMessageAPI != "https://open.feishu.cn/open-apis/bot/v2/hook" {
 				t.Fatal("子键应取环境变量/默认值")
 			}
-			if n := compareWebhookCfgWithGlobal(t, reflect.ValueOf(*cfg), "webhook"); n != 12 {
-				t.Fatalf("应比对 12 个字段, got %d", n)
+			if n := compareWebhookCfgWithGlobal(t, reflect.ValueOf(*cfg), "webhook"); n != 13 {
+				t.Fatalf("应比对 13 个字段, got %d", n)
 			}
 		})
 	}
@@ -261,8 +262,8 @@ func TestLoadWebhookSamePrefixKeys(t *testing.T) {
 
 // 未知键：不发布到全局、stderr 只告警一次（只写键名）、不拒绝启动；没有未知键时不告警
 func TestLoadWebhookUnknownKeysWarnOnceNotPublished(t *testing.T) {
-	// 第二轮：仓库 webhook.yaml 已删掉 7 个没有代码读取的键（alert_receive_queue_size、http_request_global_timeout_seconds、
-	// min_workers、max_workers、scale_threshold、scale_interval、im_feishu.private_message_api），不再告警
+	// 第二轮：仓库 webhook.yaml 已删掉 6 个没有代码读取的键（alert_receive_queue_size、http_request_global_timeout_seconds、
+	// min_workers、max_workers、scale_threshold、scale_interval），不再告警
 	t.Run("repo-file", func(t *testing.T) {
 		viper.Reset()
 		t.Cleanup(viper.Reset)
@@ -281,7 +282,7 @@ func TestLoadWebhookUnknownKeysWarnOnceNotPublished(t *testing.T) {
 		got := viper.AllKeys()
 		sort.Strings(got)
 		if !reflect.DeepEqual(got, want12) {
-			t.Fatalf("全局只应发布 12 个已知叶子键, got %v", got)
+			t.Fatalf("全局只应发布 13 个已知叶子键, got %v", got)
 		}
 	})
 	t.Run("nested-unknown-map", func(t *testing.T) {
@@ -503,8 +504,8 @@ func TestLoadWebhookFailureKeepsPreviousGlobal(t *testing.T) {
 		if err != nil {
 			t.Fatalf("预置旧值应加载成功: %v", err)
 		}
-		if n := compareWebhookCfgWithGlobal(t, reflect.ValueOf(*cfg), "webhook"); n != 12 {
-			t.Fatalf("应有 12 个字段, got %d", n)
+		if n := compareWebhookCfgWithGlobal(t, reflect.ValueOf(*cfg), "webhook"); n != 13 {
+			t.Fatalf("应有 13 个字段, got %d", n)
 		}
 	})
 	snapshot := map[string]any{}

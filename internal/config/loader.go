@@ -1242,6 +1242,7 @@ func setWebhookDefaults(v *viper.Viper) {
 	v.SetDefault("webhook.common_map_renew_interval_seconds", 300)
 	// 群聊机器人 webhook 地址前缀，发送时拼成 <前缀>/<机器人 token>（见 content.SentFeishuGroup），不带尾斜杠
 	v.SetDefault("webhook.im_feishu.group_message_api", "https://open.feishu.cn/open-apis/bot/v2/hook")
+	v.SetDefault("webhook.im_feishu.private_message_api", "https://open.feishu.cn/open-apis/im/v1/messages")
 	v.SetDefault("webhook.im_feishu.request_timeout_seconds", 10)
 	v.SetDefault("webhook.im_feishu.private_robot_app_id", "")
 	v.SetDefault("webhook.im_feishu.private_robot_app_secret", "")

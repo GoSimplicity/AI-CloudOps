@@ -128,6 +128,19 @@ class ReleaseEnvTests(unittest.TestCase):
         self.assertEqual(settings["NOTIFICATION_ENABLED"], "false")
         self.assertEqual(settings["LLM_BASE_URL"], "http://127.0.0.1:9/v1")
 
+    def test_generated_webhook_bot_defaults_are_fully_isolated(self):
+        destination, result = self.generate()
+        values = read_env(destination)
+        expected = {
+            "WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_ID": "",
+            "WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET": "",
+            "WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API": "http://127.0.0.1:9/open-apis/auth/v3/tenant_access_token/internal",
+            "WEBHOOK_IM_FEISHU_PRIVATE_MESSAGE_API": "http://127.0.0.1:9/open-apis/im/v1/messages",
+            "WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API": "http://127.0.0.1:9/open-apis/bot/v2/hook",
+        }
+        self.assertEqual({key: values.get(key) for key in expected}, expected)
+        self.assertNotIn("@tcp(", result.stdout + result.stderr)
+
     def test_generated_dsn_parses_with_go_sql_driver(self):
         go = shutil.which("go")
         if go is None:

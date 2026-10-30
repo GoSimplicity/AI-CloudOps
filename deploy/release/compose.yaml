@@ -187,6 +187,12 @@ services:
       WEBHOOK_MYSQL_ADDR: ${WEBHOOK_MYSQL_ADDR:?Run python3 scripts/release-env.py (or --add-missing for an existing .env)}
       # 仅在 --profile alerting 启动 alertmanager 时可达；未启用时静默/取消静默接口返回失败，不影响告警接收
       WEBHOOK_ALERT_MANAGER_API: http://alertmanager:9093
+      WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_ID: ${WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_ID:-}
+      WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET: ${WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET:-}
+      WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API: ${WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API:-https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal}
+      WEBHOOK_IM_FEISHU_PRIVATE_MESSAGE_API: ${WEBHOOK_IM_FEISHU_PRIVATE_MESSAGE_API:-https://open.feishu.cn/open-apis/im/v1/messages}
+      WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API: ${WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API:-https://open.feishu.cn/open-apis/bot/v2/hook}
+
     depends_on:
       mysql:
         condition: service_healthy

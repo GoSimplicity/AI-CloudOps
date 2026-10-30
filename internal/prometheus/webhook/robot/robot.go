@@ -29,9 +29,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,6 +41,8 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
+
+var ErrPrivateRobotDisabled = errors.New("private robot credentials are not configured")
 
 // WebhookRobot 定义了Webhook机器人相关的接口
 type WebhookRobot interface {
@@ -73,6 +77,9 @@ func NewWebhookRobot(logger *zap.Logger) WebhookRobot {
 // RefreshPrivateRobotToken 刷新私有机器人令牌
 func (w *webhookRobot) RefreshPrivateRobotToken(ctx context.Context) {
 	token, _, err := w.getTokenFromAPI(ctx)
+	if errors.Is(err, ErrPrivateRobotDisabled) {
+		return
+	}
 	if err != nil {
 		w.logger.Error("刷新私有机器人令牌失败", zap.Error(err))
 		return
@@ -103,6 +110,9 @@ func (w *webhookRobot) GetTenantAccessToken(ctx context.Context) (string, error)
 	}
 
 	token, expire, err := w.getTokenFromAPI(ctx)
+	if errors.Is(err, ErrPrivateRobotDisabled) {
+		return "", err
+	}
 	if err != nil {
 		w.logger.Error("获取租户访问令牌失败", zap.Error(err))
 		return "", err
@@ -180,6 +190,10 @@ func (w *webhookRobot) getTokenFromAPI(ctx context.Context) (string, int, error)
 	requestData := request.RobotTenantAccessTokenReq{
 		AppID:     viper.GetString("webhook.im_feishu.private_robot_app_id"),
 		AppSecret: viper.GetString("webhook.im_feishu.private_robot_app_secret"),
+	}
+
+	if strings.TrimSpace(requestData.AppID) == "" || strings.TrimSpace(requestData.AppSecret) == "" {
+		return "", 0, ErrPrivateRobotDisabled
 	}
 
 	jsonBytes, err := json.Marshal(requestData)

@@ -199,8 +199,8 @@ func TestLoadWebhookCfgMatchesGlobalForEveryField(t *testing.T) {
 	if err != nil {
 		t.Fatalf("加载 webhook 配置失败: %v", err)
 	}
-	if n := compareWebhookCfgWithGlobal(t, reflect.ValueOf(*cfg), "webhook"); n != 12 {
-		t.Fatalf("应比对 WebhookConfig 全部 12 个字段, got %d", n)
+	if n := compareWebhookCfgWithGlobal(t, reflect.ValueOf(*cfg), "webhook"); n != 13 {
+		t.Fatalf("应比对 WebhookConfig 全部 13 个字段, got %d", n)
 	}
 	if cfg.Port != "9999" || cfg.ImFeishu.RequestTimeoutSeconds != 7 || cfg.ImFeishu.PrivateRobotAppSecret != "fake-app-secret-value" {
 		t.Fatal("环境变量（含嵌套 im_feishu）应进入 cfg")

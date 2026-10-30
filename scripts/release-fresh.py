@@ -19,6 +19,13 @@ OWNER_LABEL = "ai.cloudops.fresh.owner"
 RUNTIME_USER = "cloudops"
 MIGRATOR_USER = "cloudops_migrator"
 DATABASE = "cloudops"
+FRESH_WEBHOOK_BOT_ENV = {
+    "WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_ID": "",
+    "WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET": "",
+    "WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API": "http://127.0.0.1:9/open-apis/auth/v3/tenant_access_token/internal",
+    "WEBHOOK_IM_FEISHU_PRIVATE_MESSAGE_API": "http://127.0.0.1:9/open-apis/im/v1/messages",
+    "WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API": "http://127.0.0.1:9/open-apis/bot/v2/hook"
+}
 PROJECT_PATTERN = re.compile(r"cloudops-(?:fresh-[0-9a-f]{12,32}|ci-[0-9]{1,24})")
 PHASES = (
     "validate-empty-project", "build", "plan-roles", "start-database", "preflight-metadata",
@@ -90,6 +97,8 @@ def private_settings(path: Path) -> dict[str, str]:
             or result.get("FEISHU_WEBHOOK_URL") or result.get("LLM_API_KEY")
             or result.get("LLM_BASE_URL") != "http://127.0.0.1:9/v1"):
         raise FreshError("fresh-local-config-required")
+    if any(result.get(key) != value for key, value in FRESH_WEBHOOK_BOT_ENV.items()):
+        raise FreshError("fresh-webhook-bot-isolation-required")
     expected_dsn = f'cloudops:{result["MYSQL_PASSWORD"]}@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=UTC'
     if result.get("WEBHOOK_MYSQL_ADDR") != expected_dsn:
         raise FreshError("runtime-dsn-mismatch")
@@ -127,6 +136,9 @@ def validate_config(config: dict, settings: dict[str, str], project: str) -> tup
             or aiops.get("NOTIFICATION_ENABLED") != "false"
             or aiops.get("FEISHU_WEBHOOK") != ""):
         raise FreshError("rendered-external-capabilities-forbidden")
+    webhook = services["webhook"].get("environment", {})
+    if any(webhook.get(key) != value for key, value in FRESH_WEBHOOK_BOT_ENV.items()):
+        raise FreshError("rendered-webhook-bot-isolation-required")
     expected_dsn = settings["WEBHOOK_MYSQL_ADDR"]
     if (services["backend"]["environment"].get("MYSQL_ADDR") != expected_dsn
             or services["webhook"]["environment"].get("WEBHOOK_MYSQL_ADDR") != expected_dsn):

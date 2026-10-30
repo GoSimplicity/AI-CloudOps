@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -23,6 +24,7 @@ PROJECT = "cloudops-fresh-123456789abc"
 def settings():
     values = {name: secrets.token_hex(24) for name in ("MYSQL_PASSWORD", "MYSQL_ROOT_PASSWORD", "MYSQL_MIGRATOR_PASSWORD")}
     values.update(FRESH_STACK_OWNER=secrets.token_hex(16), BIND_ADDRESS="127.0.0.1", HTTP_PORT="18080", PUBLIC_ORIGIN="http://localhost:18080", NOTIFICATION_ENABLED="false", FEISHU_WEBHOOK_URL="", LLM_BASE_URL="http://127.0.0.1:9/v1")
+    values.update({'WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_ID': '', 'WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET': '', 'WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API': 'http://127.0.0.1:9/open-apis/auth/v3/tenant_access_token/internal', 'WEBHOOK_IM_FEISHU_PRIVATE_MESSAGE_API': 'http://127.0.0.1:9/open-apis/im/v1/messages', 'WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API': 'http://127.0.0.1:9/open-apis/bot/v2/hook'})
     values["WEBHOOK_MYSQL_ADDR"] = f'cloudops:{values["MYSQL_PASSWORD"]}@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=UTC'
     return values
 
@@ -33,6 +35,7 @@ def config(values):
     result["services"]["mysql"]["environment"] = {"MYSQL_DATABASE": "cloudops", "MYSQL_ROOT_PASSWORD": values["MYSQL_ROOT_PASSWORD"]}
     result["services"]["backend"]["environment"] = {"MYSQL_ADDR": values["WEBHOOK_MYSQL_ADDR"]}
     result["services"]["webhook"]["environment"] = {"WEBHOOK_MYSQL_ADDR": values["WEBHOOK_MYSQL_ADDR"]}
+    result["services"]["webhook"]["environment"].update({key:values[key] for key in tool.FRESH_WEBHOOK_BOT_ENV})
     result["services"]["schema"]["image"] = "cloudops-schema:fixture"
     for name, image in {"mysql": "mysql:8.4.11", "redis": "redis:7.4.11-alpine", "backend": "cloudops-backend:fixture", "webhook": "cloudops-webhook:fixture", "gateway": "nginx:1.28-alpine", "aiops": "cloudops-aiops:fixture"}.items():
         result["services"][name]["image"] = image
@@ -134,6 +137,42 @@ class FreshReleaseTests(unittest.TestCase):
         for mutate in mutations:
             data = copy.deepcopy(original); mutate(data)
             with self.assertRaises(tool.FreshError): tool.validate_config(data, values, PROJECT)
+
+    def test_webhook_bot_isolation_is_required_in_private_and_rendered_config(self):
+        values = settings()
+        for key, expected in tool.FRESH_WEBHOOK_BOT_ENV.items():
+            for change in ("missing", "changed"):
+                with self.subTest(key=key, change=change):
+                    data = copy.deepcopy(values)
+                    if change == "missing": data.pop(key)
+                    else: data[key] = "private-canary"
+                    with tempfile.TemporaryDirectory() as directory:
+                        path = Path(directory) / "settings.env"
+                        path.write_text("".join(name + "=" + value + "\n" for name, value in data.items()))
+                        path.chmod(0o600)
+                        with self.assertRaises(tool.FreshError) as failure: tool.private_settings(path)
+                        self.assertNotIn("private-canary", str(failure.exception))
+                    rendered = config(values)
+                    if change == "missing": rendered["services"]["webhook"]["environment"].pop(key)
+                    else: rendered["services"]["webhook"]["environment"][key] = "private-canary"
+                    with self.assertRaises(tool.FreshError) as failure: tool.validate_config(rendered, values, PROJECT)
+                    self.assertNotIn("private-canary", str(failure.exception))
+
+    def test_actual_compose_render_keeps_all_webhook_bot_destinations_loopback(self):
+        if not shutil.which("docker"): self.skipTest("Docker Compose unavailable")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.env"
+            generated = subprocess.run([sys.executable, str(tool.ROOT / "scripts/release-env.py"), "--env-file", str(path)], capture_output=True, timeout=30)
+            self.assertEqual(generated.returncode, 0, "fixture generation failed; output withheld")
+            values = tool.private_settings(path)
+            runner = tool.FreshRunner(tool.ROOT, PROJECT, Path("/var/run/docker.sock"), values)
+            rendered = subprocess.run(["docker", "compose", "--env-file", str(path), "--project-directory", str(tool.ROOT / "deploy/release"), "-f", str(tool.ROOT / "deploy/release/compose.yaml"), "-p", PROJECT, "--profile", "maintenance", "config", "--format", "json"], env=runner.environment, capture_output=True, timeout=30)
+            self.assertEqual(rendered.returncode, 0, "offline Compose rendering failed; private output withheld")
+            data = json.loads(rendered.stdout)
+            environment = data["services"]["webhook"]["environment"]
+            for key, expected in tool.FRESH_WEBHOOK_BOT_ENV.items():
+                self.assertTrue(environment.get(key) == expected, "rendered webhook bot boundary differs; private value withheld")
+            tool.validate_config(data, values, PROJECT)
 
     def test_role_plan_is_structured_and_never_shell_split(self):
         self.assertEqual(len(tool.role_statements(plan("runtime"), "runtime")), 1)

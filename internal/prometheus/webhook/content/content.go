@@ -350,7 +350,7 @@ func (wc *webhookContent) SentFeishuPrivate(ctx context.Context, cardContent str
 		}
 
 		// 构建 Feishu 私聊 API URL
-		url := "https://open.feishu.cn/open-apis/im/v1/messages"
+		url := viper.GetString("webhook.im_feishu.private_message_api")
 
 		headers := map[string]string{
 			"Authorization": fmt.Sprintf("Bearer %s", wc.robot.GetPrivateRobotToken()),
