@@ -24,3 +24,14 @@ condition = "AND"
 paths = ['''^internal/middleware/login_test\.go$''']
 regexTarget = "secret"
 regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''']
+
+# Exact public source-file SHA256 values at a8f1700, independently recomputed
+# with git show. Filenames containing secret/api confuse the generic key rule.
+# This exception cannot match a different value, another file or another rule.
+[[allowlists]]
+description = "Public a8f1700 source provenance digests, not credentials"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(?:^|/)internal/dbschema/known_a8f1700\.json$''']
+regexTarget = "secret"
+regexes = ['''^572a5c9b042404ad3d1a726c7d4e4420524f862b0639d39a3e686662c1b65209$''', '''^89be75a45a761e45b72d3d472a5e8d3b9bb99ab06db65c8af40ff31da2542a16$''']
