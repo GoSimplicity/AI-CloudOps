@@ -3,13 +3,13 @@ package service_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -33,13 +33,15 @@ func TestCloudAccountInitialStatusPersistsThroughHTTP(t *testing.T) {
 	if err := db.AutoMigrate(&model.CloudAccount{}, &model.CloudAccountRegion{}); err != nil {
 		t.Fatal(err)
 	}
-	old := viper.Get("tree.password_encryption_key")
-	viper.Set("tree.password_encryption_key", strings.Repeat("k", 32))
-	t.Cleanup(func() { viper.Set("tree.password_encryption_key", old) })
+	encryptionKey := strings.Repeat("k", 32)
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set("user", jwt.UserClaims{Uid: 7, Username: "fixture"}) })
-	api.NewCloudAccountHandler(service.NewCloudAccountService(zap.NewNop(), dao.NewCloudAccountDAO(db, zap.NewNop()))).RegisterRouters(r)
+	accountService, err := service.NewCloudAccountService(&config.Config{Tree: config.TreeConfig{PasswordEncryptionKey: encryptionKey}}, zap.NewNop(), dao.NewCloudAccountDAO(db, zap.NewNop()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	api.NewCloudAccountHandler(accountService).RegisterRouters(r)
 	for i, tc := range []struct {
 		field string
 		want  model.CloudAccountStatus

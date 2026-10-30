@@ -12,6 +12,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	api7 "github.com/GoSimplicity/AI-CloudOps/internal/cron/api"
 	dao5 "github.com/GoSimplicity/AI-CloudOps/internal/cron/dao"
+	"github.com/GoSimplicity/AI-CloudOps/internal/cron/executor"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/handler"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/scheduler"
 	service6 "github.com/GoSimplicity/AI-CloudOps/internal/cron/service"
@@ -229,18 +230,30 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	treeNodeService := service5.NewTreeNodeService(logger, treeNodeDAO, userDAO)
 	treeNodeHandler := api6.NewTreeNodeHandler(treeNodeService)
 	treeLocalDAO := dao2.NewTreeLocalDAO(db, logger)
-	treeLocalService := service5.NewTreeLocalService(logger, treeLocalDAO)
+	treeLocalService, err := service5.NewTreeLocalService(cfg, logger, treeLocalDAO)
+	if err != nil {
+		return nil, err
+	}
 	terminalClientFactory := InitTerminalClientFactory(logger)
 	upgrader := InitWebSocketUpgrader()
 	treeLocalHandler := api6.NewTreeLocalHandler(treeLocalService, terminalClientFactory, upgrader, logger)
 	treeCloudDAO := dao2.NewTreeCloudDAO(db, logger)
 	cloudAccountDAO := dao2.NewCloudAccountDAO(db, logger)
-	treeCloudService := service5.NewTreeCloudService(logger, treeCloudDAO, cloudAccountDAO)
+	treeCloudService, err := service5.NewTreeCloudService(cfg, logger, treeCloudDAO, cloudAccountDAO)
+	if err != nil {
+		return nil, err
+	}
 	treeCloudHandler := api6.NewTreeCloudHandler(treeCloudService, terminalClientFactory, upgrader, logger)
 	managedCloudDAO := dao2.NewManagedCloudDAO(db)
-	managedCloudService := service5.NewManagedCloudService(logger, cloudAccountDAO, treeCloudDAO, managedCloudDAO)
+	managedCloudService, err := service5.NewManagedCloudService(cfg, logger, cloudAccountDAO, treeCloudDAO, managedCloudDAO)
+	if err != nil {
+		return nil, err
+	}
 	managedCloudHandler := api6.NewManagedCloudHandler(managedCloudService)
-	cloudAccountService := service5.NewCloudAccountService(logger, cloudAccountDAO)
+	cloudAccountService, err := service5.NewCloudAccountService(cfg, logger, cloudAccountDAO)
+	if err != nil {
+		return nil, err
+	}
 	cloudAccountHandler := api6.NewCloudAccountHandler(cloudAccountService)
 	cloudAccountRegionDAO := dao2.NewCloudAccountRegionDAO(db, logger)
 	cloudAccountRegionService := service5.NewCloudAccountRegionService(logger, cloudAccountRegionDAO, cloudAccountService)
@@ -267,7 +280,11 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	engine := InitGinServer(v, userHandler, departmentHandler, apiHandler, roleHandler, systemHandler, notAuthHandler, k8sClusterHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sSvcHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sDaemonSetHandler, k8sEventHandler, k8sStatefulSetHandler, k8sServiceAccountHandler, k8sRoleHandler, k8sClusterRoleHandler, k8sRoleBindingHandler, k8sClusterRoleBindingHandler, k8sConfigMapHandler, k8sSecretHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, monitorConfigHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, workorderProcessHandler, templateHandler, instanceHandler, instanceFlowHandler, instanceCommentHandler, categoryGroupHandler, instanceTimeLineHandler, treeNodeHandler, treeLocalHandler, treeCloudHandler, managedCloudHandler, cloudAccountHandler, cloudAccountRegionHandler, notificationHandler, k8sIngressHandler, k8sPodHandler, k8sPVHandler, k8sPVCHandler, cronJobHandler)
 	applicationBootstrap := startup.NewApplicationBootstrap(clusterManager, logger)
 	builtinTaskManager := cron.NewBuiltinTaskManager(logger, cronJobDAO)
-	cronHandlers := handler.NewCronHandlers(logger, cronJobDAO, treeLocalDAO, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache)
+	sshExecutor, err := executor.NewSSHExecutor(cfg, logger, treeLocalDAO)
+	if err != nil {
+		return nil, err
+	}
+	cronHandlers := handler.NewCronHandlers(logger, cronJobDAO, sshExecutor, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache)
 	cronManager := cron.NewUnifiedCronManager(logger, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache, cronScheduler, builtinTaskManager, cronHandlers)
 	server := InitAsynqServer(cfg, notificationManager)
 	processor := notification.NewProcessor(notificationManager, logger)
@@ -303,7 +320,7 @@ var ManagerSet = wire.NewSet(manager.NewClusterManager, manager.NewDeploymentMan
 
 var JobSet = wire.NewSet(startup.NewApplicationBootstrap)
 
-var CronSet = wire.NewSet(wire.Bind(new(cron.BuiltinRunner), new(*handler.CronHandlers)), cron.NewUnifiedCronManager, cron.NewBuiltinTaskManager, handler.NewCronHandlers, scheduler.NewCronScheduler)
+var CronSet = wire.NewSet(executor.NewSSHExecutor, wire.Bind(new(cron.BuiltinRunner), new(*handler.CronHandlers)), cron.NewUnifiedCronManager, cron.NewBuiltinTaskManager, handler.NewCronHandlers, scheduler.NewCronScheduler)
 
 var Injector = wire.NewSet(
 	InitMiddlewares,

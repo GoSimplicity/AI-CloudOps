@@ -13,7 +13,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -64,14 +63,12 @@ func TestTemporaryCredentialsSQLite(t *testing.T) {
 
 func assertTemporaryCredentials(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	oldKey := viper.Get("tree.password_encryption_key")
-	viper.Set("tree.password_encryption_key", strings.Repeat("k", 32))
-	t.Cleanup(func() { viper.Set("tree.password_encryption_key", oldKey) })
+	encryptionKey := strings.Repeat("k", 32)
 	if err := db.AutoMigrate(&model.CloudAccount{}, &model.CloudAccountRegion{}, &model.TreeCloudResource{}, &model.CloudRegionSyncLease{}, &model.CloudResourceSyncHistory{}); err != nil {
 		t.Fatal(err)
 	}
 	store := dao.NewCloudAccountDAO(db, zap.NewNop())
-	svc := NewCloudAccountService(zap.NewNop(), store).(*cloudAccountService)
+	svc := mustCloudAccountService(t, encryptionKey, zap.NewNop(), store).(*cloudAccountService)
 	expiry := time.Now().UTC().Add(2 * time.Hour).Truncate(time.Second)
 	token := strings.Repeat("temporary-token-canary", 100)
 	req := &model.CreateCloudAccountReq{Name: "temporary-fixture", Provider: model.ProviderAWS, AccessKey: "ASIAFAKEKEY123456", SecretKey: "private-secret-canary", CredentialType: "temporary", SessionToken: token, CredentialExpiresAt: &expiry, Regions: []model.CreateCloudAccountRegionItem{{Region: "us-test-1", IsDefault: true}}}
@@ -110,7 +107,7 @@ func assertTemporaryCredentials(t *testing.T, db *gorm.DB) {
 	if _, err := svc.GetAvailableRegionsForAccount(context.Background(), saved.ID); err != nil || seen != 2 {
 		t.Fatalf("region query failed: %v", err)
 	}
-	syncService := &treeCloudService{logger: zap.NewNop(), cloudAccountDAO: store, dao: dao.NewTreeCloudDAO(db, zap.NewNop()), credentialFactory: svc.credentialFactory}
+	syncService := &treeCloudService{passwordEncryptionKey: encryptionKey, logger: zap.NewNop(), cloudAccountDAO: store, dao: dao.NewTreeCloudDAO(db, zap.NewNop()), credentialFactory: svc.credentialFactory}
 	if _, err := syncService.SyncTreeCloudResource(context.Background(), &model.SyncTreeCloudResourceReq{CloudAccountID: saved.ID, SyncMode: model.SyncModeIncremental}); err != nil || seen != 3 {
 		t.Fatalf("temporary sync failed: %v", err)
 	}
@@ -139,7 +136,7 @@ func assertTemporaryCredentials(t *testing.T, db *gorm.DB) {
 	if err := db.First(&rotated, saved.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	decoded, err := treeUtils.LoadCloudAccountCredentials(&rotated)
+	decoded, err := treeUtils.LoadCloudAccountCredentials(&rotated, encryptionKey)
 	if err != nil || decoded.AccessKey != rotation.AccessKey || decoded.SecretKey != rotation.SecretKey || decoded.SessionToken != rotation.SessionToken || rotated.CredentialVersion != 1 {
 		t.Fatal("rotation lost credential tuple")
 	}
@@ -176,7 +173,7 @@ func assertTemporaryCredentials(t *testing.T, db *gorm.DB) {
 
 	// 使用受控屏障构造旧读并发轮换，CAS 必须阻止新旧密钥混合。
 	paused := &pausedAccountStore{CloudAccountDAO: store, read: make(chan struct{}), resume: make(chan struct{})}
-	staleService := NewCloudAccountService(zap.NewNop(), paused)
+	staleService := mustCloudAccountService(t, encryptionKey, zap.NewNop(), paused)
 	stale := *rotation
 	stale.SessionToken = "stale-token-canary"
 	newest := *rotation
@@ -205,7 +202,7 @@ func assertTemporaryCredentials(t *testing.T, db *gorm.DB) {
 	if err := db.First(&latest, saved.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	credentials, err := treeUtils.LoadCloudAccountCredentials(&latest)
+	credentials, err := treeUtils.LoadCloudAccountCredentials(&latest, encryptionKey)
 	if err != nil || credentials.SessionToken != newest.SessionToken || latest.CredentialVersion != 2 {
 		t.Fatal("concurrent rotation lost latest tuple")
 	}
@@ -221,7 +218,7 @@ func assertTemporaryCredentials(t *testing.T, db *gorm.DB) {
 	if err := db.First(&long, saved.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	longCred, err := treeUtils.LoadCloudAccountCredentials(&long)
+	longCred, err := treeUtils.LoadCloudAccountCredentials(&long, encryptionKey)
 	if err != nil || longCred.SessionToken != "" || longCred.ExpiresAt != nil || longCred.CredentialType != "long_term" {
 		t.Fatal("switch retained temporary credential")
 	}
@@ -237,7 +234,7 @@ func assertTemporaryCredentials(t *testing.T, db *gorm.DB) {
 	if err := db.First(&legacy, saved.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	legacyCred, err := treeUtils.LoadCloudAccountCredentials(&legacy)
+	legacyCred, err := treeUtils.LoadCloudAccountCredentials(&legacy, encryptionKey)
 	if err != nil || legacyCred.SecretKey != "partial-long-secret" || legacyCred.SessionToken != "" {
 		t.Fatal("legacy credential migration failed")
 	}
@@ -255,27 +252,26 @@ func TestHuaweiUnboundedSyncRejectsBeforeProviderOrResourceDAO(t *testing.T) {
 }
 
 func TestTemporaryFullSyncAtomicAndExpiredCredentials(t *testing.T) {
-	previous := viper.Get("tree.password_encryption_key")
-	viper.Set("tree.password_encryption_key", strings.Repeat("k", 32))
-	t.Cleanup(func() { viper.Set("tree.password_encryption_key", previous) })
+	encryptionKey := strings.Repeat("k", 32)
 	for _, provider := range []model.CloudProvider{model.ProviderAWS, model.ProviderTencent} {
 		t.Run(fmt.Sprint(provider), func(t *testing.T) {
 			db, svc, account, region, _ := regionSyncFixture(t)
+			svc.passwordEncryptionKey = encryptionKey
 			key := "test-ak"
 			if provider == model.ProviderAWS {
 				key = "ASIAx"
 			} else {
 				region.Region = "ap-shanghai"
 			}
-			access, err := treeUtils.EncryptPassword(key)
+			access, err := treeUtils.EncryptPassword(key, encryptionKey)
 			if err != nil {
 				t.Fatal(err)
 			}
-			secret, err := treeUtils.EncryptPassword("test-sk")
+			secret, err := treeUtils.EncryptPassword("test-sk", encryptionKey)
 			if err != nil {
 				t.Fatal(err)
 			}
-			token, err := treeUtils.EncryptPassword("test-token")
+			token, err := treeUtils.EncryptPassword("test-token", encryptionKey)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -337,24 +333,22 @@ func TestTemporaryFullSyncAtomicAndExpiredCredentials(t *testing.T) {
 }
 
 func TestCredentialExpiryCancelsInFlightCloudRequest(t *testing.T) {
-	oldKey := viper.Get("tree.password_encryption_key")
-	viper.Set("tree.password_encryption_key", strings.Repeat("k", 32))
-	t.Cleanup(func() { viper.Set("tree.password_encryption_key", oldKey) })
-	access, err := treeUtils.EncryptPassword("ASIAFAKEKEY123456")
+	encryptionKey := strings.Repeat("k", 32)
+	access, err := treeUtils.EncryptPassword("ASIAFAKEKEY123456", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secret, err := treeUtils.EncryptPassword("secret-fixture")
+	secret, err := treeUtils.EncryptPassword("secret-fixture", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, err := treeUtils.EncryptPassword("token-fixture")
+	token, err := treeUtils.EncryptPassword("token-fixture", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	expires := time.Now().UTC().Add(500 * time.Millisecond)
 	account := &model.CloudAccount{Model: model.Model{ID: 7}, Provider: model.ProviderAWS, Status: model.CloudAccountEnabled, CredentialType: "temporary", CredentialExpiresAt: &expires, AccessKey: access, SecretKey: secret, SessionToken: token, Regions: []*model.CloudAccountRegion{{Region: "us-test", IsDefault: true}}}
-	svc := &cloudAccountService{logger: zap.NewNop(), dao: storedCloudAccount{account: account}, credentialFactory: func(model.CloudProvider, treeUtils.CloudCredentials, string, *zap.Logger) (treeUtils.CloudComputeClient, error) {
+	svc := &cloudAccountService{passwordEncryptionKey: encryptionKey, logger: zap.NewNop(), dao: storedCloudAccount{account: account}, credentialFactory: func(model.CloudProvider, treeUtils.CloudCredentials, string, *zap.Logger) (treeUtils.CloudComputeClient, error) {
 		return expiryCloudStub{}, nil
 	}}
 	if err := svc.VerifyCloudAccount(context.Background(), &model.VerifyCloudAccountReq{ID: 7}); !errors.Is(err, context.DeadlineExceeded) {
@@ -363,14 +357,12 @@ func TestCredentialExpiryCancelsInFlightCloudRequest(t *testing.T) {
 }
 
 func TestHuaweiRegionProjectsAreExplicitAndNoPartialResults(t *testing.T) {
-	oldKey := viper.Get("tree.password_encryption_key")
-	viper.Set("tree.password_encryption_key", strings.Repeat("k", 32))
-	t.Cleanup(func() { viper.Set("tree.password_encryption_key", oldKey) })
-	access, err := treeUtils.EncryptPassword("access-fixture")
+	encryptionKey := strings.Repeat("k", 32)
+	access, err := treeUtils.EncryptPassword("access-fixture", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secret, err := treeUtils.EncryptPassword("secret-fixture")
+	secret, err := treeUtils.EncryptPassword("secret-fixture", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,7 +377,7 @@ func TestHuaweiRegionProjectsAreExplicitAndNoPartialResults(t *testing.T) {
 		seen[region] = credentials.ProjectID
 		return credentialCloudStub{fail: fail && region == "cn-two", region: region}, nil
 	}
-	svc := &cloudAccountService{logger: zap.NewNop(), dao: storedCloudAccount{account: account}, credentialFactory: factory}
+	svc := &cloudAccountService{passwordEncryptionKey: encryptionKey, logger: zap.NewNop(), dao: storedCloudAccount{account: account}, credentialFactory: factory}
 	regions, err := svc.GetAvailableRegionsForAccount(context.Background(), 7)
 	if err != nil || len(regions) != 2 || seen["cn-one"] != p1 || seen["cn-two"] != p2 {
 		t.Fatalf("project mapping failed: %v", err)

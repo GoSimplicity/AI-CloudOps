@@ -6,7 +6,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"strings"
 	"testing"
@@ -36,9 +35,7 @@ func (s *initialAccountDAO) CreateRegionInTransaction(context.Context, *model.Cl
 }
 
 func TestCreateCloudAccountInitialStatusWithoutSDK(t *testing.T) {
-	old := viper.Get("tree.password_encryption_key")
-	viper.Set("tree.password_encryption_key", strings.Repeat("k", 32))
-	t.Cleanup(func() { viper.Set("tree.password_encryption_key", old) })
+	encryptionKey := strings.Repeat("k", 32)
 	for _, tc := range []struct {
 		name     string
 		supplied bool
@@ -51,7 +48,7 @@ func TestCreateCloudAccountInitialStatusWithoutSDK(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := &initialAccountDAO{}
-			service := NewCloudAccountService(zap.NewNop(), store).(*cloudAccountService)
+			service := mustCloudAccountService(t, encryptionKey, zap.NewNop(), store).(*cloudAccountService)
 			sdkCalls := 0
 			service.clientFactory = func(model.CloudProvider, string, string, string, *zap.Logger) (treeUtils.CloudComputeClient, error) {
 				sdkCalls++

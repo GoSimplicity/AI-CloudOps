@@ -33,6 +33,7 @@ import (
 	cron "github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	cronApi "github.com/GoSimplicity/AI-CloudOps/internal/cron/api"
 	cronDao "github.com/GoSimplicity/AI-CloudOps/internal/cron/dao"
+	cronExecutor "github.com/GoSimplicity/AI-CloudOps/internal/cron/executor"
 	cronHandler "github.com/GoSimplicity/AI-CloudOps/internal/cron/handler"
 	cronScheduler "github.com/GoSimplicity/AI-CloudOps/internal/cron/scheduler"
 	cronService "github.com/GoSimplicity/AI-CloudOps/internal/cron/service"
@@ -262,6 +263,7 @@ var JobSet = wire.NewSet(
 )
 
 var CronSet = wire.NewSet(
+	cronExecutor.NewSSHExecutor,
 	wire.Bind(new(cron.BuiltinRunner), new(*cronHandler.CronHandlers)),
 	cron.NewUnifiedCronManager,
 	cron.NewBuiltinTaskManager,

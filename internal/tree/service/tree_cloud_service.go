@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
@@ -57,19 +58,24 @@ type TreeCloudService interface {
 }
 
 type treeCloudService struct {
-	clientFactory     treeUtils.CloudClientFactory
-	credentialFactory treeUtils.CloudCredentialClientFactory
-	logger            *zap.Logger
-	dao               dao.TreeCloudDAO
-	cloudAccountDAO   dao.CloudAccountDAO
+	passwordEncryptionKey string
+	clientFactory         treeUtils.CloudClientFactory
+	credentialFactory     treeUtils.CloudCredentialClientFactory
+	logger                *zap.Logger
+	dao                   dao.TreeCloudDAO
+	cloudAccountDAO       dao.CloudAccountDAO
 }
 
-func NewTreeCloudService(logger *zap.Logger, dao dao.TreeCloudDAO, cloudAccountDAO dao.CloudAccountDAO) TreeCloudService {
-	return &treeCloudService{
-		logger:          logger,
-		dao:             dao,
-		cloudAccountDAO: cloudAccountDAO,
+func NewTreeCloudService(cfg *config.Config, logger *zap.Logger, dao dao.TreeCloudDAO, cloudAccountDAO dao.CloudAccountDAO) (TreeCloudService, error) {
+	if cfg == nil {
+		return nil, errors.New("配置不能为空")
 	}
+	return &treeCloudService{
+		passwordEncryptionKey: cfg.Tree.PasswordEncryptionKey,
+		logger:                logger,
+		dao:                   dao,
+		cloudAccountDAO:       cloudAccountDAO,
+	}, nil
 }
 
 func (s *treeCloudService) GetTreeCloudResourceList(ctx context.Context, req *model.GetTreeCloudResourceListReq) (model.ListResp[*model.TreeCloudResource], error) {
@@ -122,7 +128,7 @@ func (s *treeCloudService) GetTreeCloudResourceForConnection(ctx context.Context
 
 	// 解密SSH密码
 	if cloud.AuthMode == model.AuthModePassword && cloud.Password != "" {
-		plainPassword, err := treeUtils.DecryptPassword(cloud.Password)
+		plainPassword, err := treeUtils.DecryptPassword(cloud.Password, s.passwordEncryptionKey)
 		if err != nil {
 			s.logger.Error("SSH密码解密失败", zap.Int("id", req.ID), zap.Error(err))
 			return nil, fmt.Errorf("SSH密码解密失败: %w", err)
@@ -168,7 +174,7 @@ func (s *treeCloudService) UpdateTreeCloudResource(ctx context.Context, req *mod
 	}
 	if req.Password != "" {
 		// 加密SSH密码
-		encrypted, err := treeUtils.EncryptPassword(req.Password)
+		encrypted, err := treeUtils.EncryptPassword(req.Password, s.passwordEncryptionKey)
 		if err != nil {
 			s.logger.Error("密码加密失败", zap.Error(err))
 			return fmt.Errorf("密码加密失败: %w", err)
@@ -401,7 +407,7 @@ func (s *treeCloudService) SyncTreeCloudResource(ctx context.Context, req *model
 		return nil, errors.New("没有可用的区域进行同步")
 	}
 
-	credentials, err := treeUtils.LoadCloudAccountCredentials(account)
+	credentials, err := treeUtils.LoadCloudAccountCredentials(account, s.passwordEncryptionKey)
 	if err != nil {
 		return nil, err
 	}

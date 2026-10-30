@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/ssh/sshtest"
@@ -28,7 +29,7 @@ func TestSSHStructuredValuesStayLiteralInRealShell(t *testing.T) {
 	job.SSHWorkDir = directory
 	job.SSHEnvironment = model.KeyValueList{{Key: "VALUE", Value: value}}
 	job.SSHCommand = `printf '%s' "$VALUE"; printf '|'; pwd # trailing comment`
-	command, err := NewSSHExecutor(nil, nil).buildSSHCommand(job)
+	command, err := newSSHExecutorForTest(t, &config.Config{}, nil, nil).buildSSHCommand(job)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +42,7 @@ func TestSSHStructuredValuesStayLiteralInRealShell(t *testing.T) {
 	// 工作目录失败时阻止整个命令块，而不只阻止第一个分号前的命令
 	job.SSHWorkDir = filepath.Join(t.TempDir(), "missing")
 	job.SSHCommand = "true; printf should-not-run"
-	command, err = NewSSHExecutor(nil, nil).buildSSHCommand(job)
+	command, err = newSSHExecutorForTest(t, &config.Config{}, nil, nil).buildSSHCommand(job)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,16 +53,16 @@ func TestSSHStructuredValuesStayLiteralInRealShell(t *testing.T) {
 }
 
 func TestCronSSHUsesDecryptedCredentialsOverRealProtocol(t *testing.T) {
-	configureEncryption(t)
+	cfg := syntheticEncryptionConfig(t)
 	server := sshtest.Start(t, false)
 	t.Setenv("ENV", "production")
 	t.Setenv("SSH_KNOWN_HOSTS", server.KnownHosts)
-	encrypted, err := treeUtils.EncryptPassword(sshtest.Password)
+	encrypted, err := treeUtils.EncryptPassword(sshtest.Password, cfg.Tree.PasswordEncryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	resource := &model.TreeLocalResource{Status: model.RUNNING, IpAddr: server.Host, Port: server.Port, Username: "fixture", AuthMode: model.AuthModePassword, Password: encrypted}
-	executor := NewSSHExecutor(zap.NewNop(), &resourceStub{resource: resource})
+	executor := newSSHExecutorForTest(t, cfg, zap.NewNop(), &resourceStub{resource: resource})
 	output, err := executor.ExecuteSSHJob(context.Background(), testSSHJob())
 	if err != nil || output != "executed" {
 		t.Fatalf("real SSH authentication/execution failed: %v", err)
@@ -76,7 +77,7 @@ func TestCronSSHConnectCancellationOverRealProtocol(t *testing.T) {
 	t.Setenv("ENV", "production")
 	t.Setenv("SSH_KNOWN_HOSTS", server.KnownHosts)
 	resource := &model.TreeLocalResource{Status: model.RUNNING, IpAddr: server.Host, Port: server.Port, Username: "fixture", AuthMode: model.AuthModeKey, Key: server.Key}
-	executor := NewSSHExecutor(zap.NewNop(), &resourceStub{resource: resource})
+	executor := newSSHExecutorForTest(t, &config.Config{}, zap.NewNop(), &resourceStub{resource: resource})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
@@ -104,7 +105,7 @@ func TestCronSSHCancelAndTimeoutAfterRemoteExecutionStarted(t *testing.T) {
 			t.Setenv("ENV", "production")
 			t.Setenv("SSH_KNOWN_HOSTS", server.KnownHosts)
 			resource := &model.TreeLocalResource{Status: model.RUNNING, IpAddr: server.Host, Port: server.Port, Username: "fixture", AuthMode: model.AuthModeKey, Key: server.Key}
-			executor := NewSSHExecutor(zap.NewNop(), &resourceStub{resource: resource})
+			executor := newSSHExecutorForTest(t, &config.Config{}, zap.NewNop(), &resourceStub{resource: resource})
 			job := testSSHJob()
 			job.SSHCommand = "block"
 			if timeout {

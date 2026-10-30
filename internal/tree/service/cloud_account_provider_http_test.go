@@ -10,13 +10,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -33,13 +33,15 @@ func TestProviderAccountHTTPBindingAndRedaction(t *testing.T) {
 	if err := db.AutoMigrate(&model.CloudAccount{}, &model.CloudAccountRegion{}, &model.TreeCloudResource{}); err != nil {
 		t.Fatal(err)
 	}
-	old := viper.Get("tree.password_encryption_key")
-	viper.Set("tree.password_encryption_key", strings.Repeat("k", 32))
-	defer viper.Set("tree.password_encryption_key", old)
+	encryptionKey := strings.Repeat("k", 32)
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) { c.Set("user", jwt.UserClaims{Uid: 7, Username: "fixture"}); c.Next() })
-	api.NewCloudAccountHandler(service.NewCloudAccountService(zap.NewNop(), dao.NewCloudAccountDAO(db, zap.NewNop()))).RegisterRouters(engine)
+	accountService, err := service.NewCloudAccountService(&config.Config{Tree: config.TreeConfig{PasswordEncryptionKey: encryptionKey}}, zap.NewNop(), dao.NewCloudAccountDAO(db, zap.NewNop()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	api.NewCloudAccountHandler(accountService).RegisterRouters(engine)
 	credential := map[string]any{"tenant_id": "11111111-1111-1111-1111-111111111111", "client_id": "22222222-2222-2222-2222-222222222222", "subscription_id": "33333333-3333-3333-3333-333333333333", "client_secret": "private-http-canary"}
 	request := func(method, path string, body any) *httptest.ResponseRecorder {
 		t.Helper()

@@ -32,6 +32,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeSSH "github.com/GoSimplicity/AI-CloudOps/internal/tree/ssh"
@@ -46,16 +47,25 @@ type sshConnection interface {
 }
 
 type SSHExecutor struct {
-	logger       *zap.Logger
-	treeLocalDAO dao.TreeLocalDAO
-	newSSH       func() sshConnection
+	passwordEncryptionKey string
+	logger                *zap.Logger
+	treeLocalDAO          dao.TreeLocalDAO
+	newSSH                func() sshConnection
 }
 
-func NewSSHExecutor(logger *zap.Logger, treeLocalDAO dao.TreeLocalDAO) *SSHExecutor {
+func NewSSHExecutor(cfg *config.Config, logger *zap.Logger, treeLocalDAO dao.TreeLocalDAO) (*SSHExecutor, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("配置不能为空")
+	}
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-	return &SSHExecutor{logger: logger, treeLocalDAO: treeLocalDAO, newSSH: func() sshConnection { return treeSSH.NewSSH(logger) }}
+	return &SSHExecutor{
+		passwordEncryptionKey: cfg.Tree.PasswordEncryptionKey,
+		logger:                logger,
+		treeLocalDAO:          treeLocalDAO,
+		newSSH:                func() sshConnection { return treeSSH.NewSSH(logger) },
+	}, nil
 }
 
 func (s *SSHExecutor) ExecuteSSHJob(ctx context.Context, job *model.CronJob) (string, error) {
@@ -98,7 +108,7 @@ func (s *SSHExecutor) ExecuteSSHJob(ctx context.Context, job *model.CronJob) (st
 	credentials := *resource
 	switch credentials.AuthMode {
 	case model.AuthModePassword:
-		credentials.Password, err = treeUtils.DecryptPassword(credentials.Password)
+		credentials.Password, err = treeUtils.DecryptPassword(credentials.Password, s.passwordEncryptionKey)
 		if err != nil {
 			return "", fmt.Errorf("SSH密码解密失败")
 		}

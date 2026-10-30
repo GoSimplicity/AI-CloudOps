@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
-	"github.com/spf13/viper"
 	"strings"
 	"testing"
 	"time"
@@ -79,18 +78,17 @@ func (s storedCloudAccount) GetByID(context.Context, int) (*model.CloudAccount, 
 }
 
 func TestRegionQueryUsesStoredAccountWithoutReturningCredentials(t *testing.T) {
-	viper.Set("tree.password_encryption_key", strings.Repeat("a", 32))
-	defer viper.Set("tree.password_encryption_key", nil)
-	access, err := treeUtils.EncryptPassword("offline-access")
+	encryptionKey := strings.Repeat("a", 32)
+	access, err := treeUtils.EncryptPassword("offline-access", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secret, err := treeUtils.EncryptPassword("offline-secret")
+	secret, err := treeUtils.EncryptPassword("offline-secret", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	calls := 0
-	s := &cloudAccountService{dao: storedCloudAccount{account: &model.CloudAccount{Provider: model.ProviderAWS, Status: model.CloudAccountEnabled, AccessKey: access, SecretKey: secret, Regions: []*model.CloudAccountRegion{{Region: "us-west-2", IsDefault: true}}}}, clientFactory: func(provider model.CloudProvider, ak, sk, region string, _ *zap.Logger) (treeUtils.CloudComputeClient, error) {
+	s := &cloudAccountService{passwordEncryptionKey: encryptionKey, dao: storedCloudAccount{account: &model.CloudAccount{Provider: model.ProviderAWS, Status: model.CloudAccountEnabled, AccessKey: access, SecretKey: secret, Regions: []*model.CloudAccountRegion{{Region: "us-west-2", IsDefault: true}}}}, clientFactory: func(provider model.CloudProvider, ak, sk, region string, _ *zap.Logger) (treeUtils.CloudComputeClient, error) {
 		calls++
 		if provider != model.ProviderAWS || ak != "offline-access" || sk != "offline-secret" || region != "us-west-2" {
 			t.Fatal("stored account context lost")

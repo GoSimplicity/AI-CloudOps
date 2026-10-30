@@ -12,7 +12,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -61,14 +60,12 @@ func managedServiceFixture(t *testing.T) (*gorm.DB, *managedCloudService, *model
 	if err := db.AutoMigrate(&model.CloudManagedResource{}, &model.CloudManagedSyncHistory{}, &model.CloudManagedOperation{}); err != nil {
 		t.Fatal(err)
 	}
-	prior := viper.Get("tree.password_encryption_key")
-	viper.Set("tree.password_encryption_key", strings.Repeat("k", 32))
-	t.Cleanup(func() { viper.Set("tree.password_encryption_key", prior) })
-	access, err := treeUtils.EncryptPassword("test-ak")
+	encryptionKey := strings.Repeat("k", 32)
+	access, err := treeUtils.EncryptPassword("test-ak", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secret, err := treeUtils.EncryptPassword("test-sk")
+	secret, err := treeUtils.EncryptPassword("test-sk", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +76,7 @@ func managedServiceFixture(t *testing.T) (*gorm.DB, *managedCloudService, *model
 	if err := db.Model(region).Update("region", region.Region).Error; err != nil {
 		t.Fatal(err)
 	}
-	svc := NewManagedCloudService(zap.NewNop(), dao.NewCloudAccountDAO(db, zap.NewNop()), dao.NewTreeCloudDAO(db, zap.NewNop()), dao.NewManagedCloudDAO(db)).(*managedCloudService)
+	svc := mustManagedCloudService(t, encryptionKey, zap.NewNop(), dao.NewCloudAccountDAO(db, zap.NewNop()), dao.NewTreeCloudDAO(db, zap.NewNop()), dao.NewManagedCloudDAO(db)).(*managedCloudService)
 	svc.factory = func(treeUtils.CloudCredentials, string) (managedReader, error) {
 		return managedFixture{read: func(_ context.Context, ids []string, _ string) ([]string, error) {
 			return append([]string{}, ids...), nil

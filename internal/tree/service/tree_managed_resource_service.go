@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
@@ -49,20 +50,31 @@ func (s *managedCloudService) GetManaged(ctx context.Context, req *model.ListClo
 }
 
 type managedCloudService struct {
-	logger   *zap.Logger
-	accounts dao.CloudAccountDAO
-	regions  dao.TreeCloudDAO
-	store    dao.ManagedCloudDAO
-	factory  func(treeUtils.CloudCredentials, string) (managedReader, error)
+	passwordEncryptionKey string
+	logger                *zap.Logger
+	accounts              dao.CloudAccountDAO
+	regions               dao.TreeCloudDAO
+	store                 dao.ManagedCloudDAO
+	factory               func(treeUtils.CloudCredentials, string) (managedReader, error)
 }
 
-func NewManagedCloudService(logger *zap.Logger, accounts dao.CloudAccountDAO, regions dao.TreeCloudDAO, store dao.ManagedCloudDAO) ManagedCloudService {
+func NewManagedCloudService(cfg *config.Config, logger *zap.Logger, accounts dao.CloudAccountDAO, regions dao.TreeCloudDAO, store dao.ManagedCloudDAO) (ManagedCloudService, error) {
+	if cfg == nil {
+		return nil, errors.New("配置不能为空")
+	}
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-	return &managedCloudService{logger: logger, accounts: accounts, regions: regions, store: store, factory: func(c treeUtils.CloudCredentials, r string) (managedReader, error) {
-		return treeUtils.NewAliyunManagedResourceClient(c, r)
-	}}
+	return &managedCloudService{
+		passwordEncryptionKey: cfg.Tree.PasswordEncryptionKey,
+		logger:                logger,
+		accounts:              accounts,
+		regions:               regions,
+		store:                 store,
+		factory: func(c treeUtils.CloudCredentials, r string) (managedReader, error) {
+			return treeUtils.NewAliyunManagedResourceClient(c, r)
+		},
+	}, nil
 }
 
 var managedIDPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9-]{1,99}$`)
@@ -179,7 +191,7 @@ func (s *managedCloudService) syncManaged(ctx context.Context, req *model.SyncCl
 	if account.Status != model.CloudAccountEnabled || region.Status != model.CloudAccountRegionEnabled {
 		return nil, errors.New("账户或地域已禁用")
 	}
-	credentials, err := treeUtils.LoadCloudAccountCredentials(account)
+	credentials, err := treeUtils.LoadCloudAccountCredentials(account, s.passwordEncryptionKey)
 	if err != nil {
 		return nil, errors.New("账户凭据不可用")
 	}

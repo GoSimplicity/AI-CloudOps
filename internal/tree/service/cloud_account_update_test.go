@@ -13,7 +13,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	databaseLogger "github.com/GoSimplicity/AI-CloudOps/pkg/logger"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -31,14 +30,12 @@ func TestCloudAccountRegionDeltaSQLite(t *testing.T) {
 }
 func assertCloudAccountRegionDelta(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	originalKey := viper.Get("tree.password_encryption_key")
-	viper.Set("tree.password_encryption_key", strings.Repeat("k", 32))
-	t.Cleanup(func() { viper.Set("tree.password_encryption_key", originalKey) })
+	encryptionKey := strings.Repeat("k", 32)
 	if err := db.AutoMigrate(&model.CloudAccount{}, &model.CloudAccountRegion{}, &model.TreeCloudResource{}, &model.CloudManagedResource{}); err != nil {
 		t.Fatal("region fixture schema failed")
 	}
 	store := dao.NewCloudAccountDAO(db, zap.NewNop())
-	service := NewCloudAccountService(zap.NewNop(), store)
+	service := mustCloudAccountService(t, encryptionKey, zap.NewNop(), store)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	seed := func(t *testing.T, name string) (*model.CloudAccount, *model.CloudAccountRegion) {
@@ -130,7 +127,7 @@ func assertCloudAccountRegionDelta(t *testing.T, db *gorm.DB) {
 	t.Run("omitted regions preserve newer concurrent selection", func(t *testing.T) {
 		account, region := seed(t, "concurrent-account")
 		paused := &pausedAccountStore{CloudAccountDAO: store, read: make(chan struct{}), resume: make(chan struct{})}
-		staleService := NewCloudAccountService(zap.NewNop(), paused)
+		staleService := mustCloudAccountService(t, encryptionKey, zap.NewNop(), paused)
 		deadline, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		done := make(chan error, 1)

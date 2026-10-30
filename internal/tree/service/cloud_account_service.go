@@ -32,6 +32,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
@@ -55,17 +56,22 @@ type CloudAccountService interface {
 }
 
 type cloudAccountService struct {
-	clientFactory     treeUtils.CloudClientFactory
-	credentialFactory treeUtils.CloudCredentialClientFactory
-	logger            *zap.Logger
-	dao               dao.CloudAccountDAO
+	passwordEncryptionKey string
+	clientFactory         treeUtils.CloudClientFactory
+	credentialFactory     treeUtils.CloudCredentialClientFactory
+	logger                *zap.Logger
+	dao                   dao.CloudAccountDAO
 }
 
-func NewCloudAccountService(logger *zap.Logger, dao dao.CloudAccountDAO) CloudAccountService {
-	return &cloudAccountService{
-		logger: logger,
-		dao:    dao,
+func NewCloudAccountService(cfg *config.Config, logger *zap.Logger, dao dao.CloudAccountDAO) (CloudAccountService, error) {
+	if cfg == nil {
+		return nil, errors.New("配置不能为空")
 	}
+	return &cloudAccountService{
+		passwordEncryptionKey: cfg.Tree.PasswordEncryptionKey,
+		logger:                logger,
+		dao:                   dao,
+	}, nil
 }
 
 func (s *cloudAccountService) GetCloudAccountList(ctx context.Context, req *model.GetCloudAccountListReq) (model.ListResp[*model.CloudAccount], error) {
@@ -197,13 +203,13 @@ func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model
 	}
 
 	// 加密 AccessKey 和 SecretKey
-	encryptedAccessKey, err := treeUtils.EncryptPassword(req.AccessKey)
+	encryptedAccessKey, err := treeUtils.EncryptPassword(req.AccessKey, s.passwordEncryptionKey)
 	if err != nil {
 		s.logger.Error("加密AccessKey失败", zap.Error(err))
 		return fmt.Errorf("加密AccessKey失败: %w", err)
 	}
 
-	encryptedSecretKey, err := treeUtils.EncryptPassword(req.SecretKey)
+	encryptedSecretKey, err := treeUtils.EncryptPassword(req.SecretKey, s.passwordEncryptionKey)
 	if err != nil {
 		s.logger.Error("加密SecretKey失败", zap.Error(err))
 		return fmt.Errorf("加密SecretKey失败: %w", err)
@@ -213,14 +219,14 @@ func (s *cloudAccountService) CreateCloudAccount(ctx context.Context, req *model
 	}
 	var encryptedProviderCredentials string
 	if isStructured {
-		encryptedProviderCredentials, err = treeUtils.EncryptProviderCredentials(req.Provider, req.ProviderCredentials)
+		encryptedProviderCredentials, err = treeUtils.EncryptProviderCredentials(req.Provider, req.ProviderCredentials, s.passwordEncryptionKey)
 		if err != nil {
 			return err
 		}
 	}
 	var encryptedToken string
 	if req.SessionToken != "" {
-		encryptedToken, err = treeUtils.EncryptPassword(req.SessionToken)
+		encryptedToken, err = treeUtils.EncryptPassword(req.SessionToken, s.passwordEncryptionKey)
 		if err != nil || len(encryptedToken) > 16000 {
 			return errors.New("无法保存云账户令牌")
 		}
@@ -349,7 +355,7 @@ func (s *cloudAccountService) UpdateCloudAccount(ctx context.Context, req *model
 			return errors.New("该云厂商必须完整替换专用凭据")
 		}
 		if req.ProviderCredentials != nil {
-			encrypted, err := treeUtils.EncryptProviderCredentials(account.Provider, req.ProviderCredentials)
+			encrypted, err := treeUtils.EncryptProviderCredentials(account.Provider, req.ProviderCredentials, s.passwordEncryptionKey)
 			if err != nil {
 				return err
 			}
@@ -387,7 +393,7 @@ func (s *cloudAccountService) UpdateCloudAccount(ctx context.Context, req *model
 			updateAccount.CredentialType = newType
 			updateAccount.CredentialExpiresAt = req.CredentialExpiresAt
 			if req.SessionToken != "" {
-				updateAccount.SessionToken, err = treeUtils.EncryptPassword(req.SessionToken)
+				updateAccount.SessionToken, err = treeUtils.EncryptPassword(req.SessionToken, s.passwordEncryptionKey)
 				if err != nil || len(updateAccount.SessionToken) > 16000 {
 					return errors.New("无法保存云账户令牌")
 				}
@@ -419,7 +425,7 @@ func (s *cloudAccountService) UpdateCloudAccount(ctx context.Context, req *model
 
 	// 加密并更新 AccessKey
 	if req.AccessKey != "" {
-		encryptedAccessKey, err := treeUtils.EncryptPassword(req.AccessKey)
+		encryptedAccessKey, err := treeUtils.EncryptPassword(req.AccessKey, s.passwordEncryptionKey)
 		if err != nil {
 			s.logger.Error("加密AccessKey失败", zap.Error(err))
 			return fmt.Errorf("加密AccessKey失败: %w", err)
@@ -433,7 +439,7 @@ func (s *cloudAccountService) UpdateCloudAccount(ctx context.Context, req *model
 
 	// 加密并更新 SecretKey
 	if req.SecretKey != "" {
-		encryptedSecretKey, err := treeUtils.EncryptPassword(req.SecretKey)
+		encryptedSecretKey, err := treeUtils.EncryptPassword(req.SecretKey, s.passwordEncryptionKey)
 		if err != nil {
 			s.logger.Error("加密SecretKey失败", zap.Error(err))
 			return fmt.Errorf("加密SecretKey失败: %w", err)
@@ -506,7 +512,7 @@ func (s *cloudAccountService) VerifyCloudAccount(ctx context.Context, req *model
 		return errors.New("云账号已禁用")
 	}
 
-	credentials, err := treeUtils.LoadCloudAccountCredentials(account)
+	credentials, err := treeUtils.LoadCloudAccountCredentials(account, s.passwordEncryptionKey)
 	if err != nil {
 		return err
 	}
@@ -689,7 +695,7 @@ func (s *cloudAccountService) GetAvailableRegionsForAccount(ctx context.Context,
 	if account.Status != model.CloudAccountEnabled {
 		return nil, fmt.Errorf("云账号已禁用")
 	}
-	credentials, err := treeUtils.LoadCloudAccountCredentials(account)
+	credentials, err := treeUtils.LoadCloudAccountCredentials(account, s.passwordEncryptionKey)
 	if err != nil {
 		return nil, err
 	}

@@ -23,7 +23,7 @@ func ProviderCredentialsFromInput(input *model.ProviderCredentialInput) CloudCre
 
 // EncryptProviderCredentials validates and encrypts a complete tuple. The TEXT
 // column limit applies to ciphertext bytes, not to input characters.
-func EncryptProviderCredentials(provider model.CloudProvider, input *model.ProviderCredentialInput) (string, error) {
+func EncryptProviderCredentials(provider model.CloudProvider, input *model.ProviderCredentialInput, encryptionKey string) (string, error) {
 	credentials := ProviderCredentialsFromInput(input)
 	if input == nil || (provider != model.ProviderAzure && provider != model.ProviderGCP) {
 		return "", errors.New("云账户凭据类型无效")
@@ -35,7 +35,7 @@ func EncryptProviderCredentials(provider model.CloudProvider, input *model.Provi
 	if err != nil || len(raw) > 40000 {
 		return "", errors.New("云账户凭据格式无效")
 	}
-	encrypted, err := EncryptPassword(string(raw))
+	encrypted, err := EncryptPassword(string(raw), encryptionKey)
 	if err != nil || len(encrypted) > 64000 {
 		return "", errors.New("无法保存云账户凭据")
 	}
@@ -43,7 +43,7 @@ func EncryptProviderCredentials(provider model.CloudProvider, input *model.Provi
 }
 
 // LoadCloudAccountCredentials 从同一账户快照解密完整凭据，失败前不构造云客户端。
-func LoadCloudAccountCredentials(account *model.CloudAccount) (CloudCredentials, error) {
+func LoadCloudAccountCredentials(account *model.CloudAccount, encryptionKey string) (CloudCredentials, error) {
 	if account == nil {
 		return CloudCredentials{}, errors.New("云账户不存在")
 	}
@@ -51,7 +51,7 @@ func LoadCloudAccountCredentials(account *model.CloudAccount) (CloudCredentials,
 		if account.ProviderCredentials == "" || len(account.ProviderCredentials) > 64000 {
 			return CloudCredentials{}, errors.New("云账户缺少有效凭据，请重新配置")
 		}
-		plaintext, err := DecryptPassword(account.ProviderCredentials)
+		plaintext, err := DecryptPassword(account.ProviderCredentials, encryptionKey)
 		if err != nil {
 			return CloudCredentials{}, errors.New("无法读取云账户访问凭据")
 		}
@@ -65,11 +65,11 @@ func LoadCloudAccountCredentials(account *model.CloudAccount) (CloudCredentials,
 		}
 		return credentials, nil
 	}
-	access, err := DecryptPassword(account.AccessKey)
+	access, err := DecryptPassword(account.AccessKey, encryptionKey)
 	if err != nil {
 		return CloudCredentials{}, errors.New("无法读取云账户访问凭据")
 	}
-	secret, err := DecryptPassword(account.SecretKey)
+	secret, err := DecryptPassword(account.SecretKey, encryptionKey)
 	if err != nil {
 		return CloudCredentials{}, errors.New("无法读取云账户访问凭据")
 	}
@@ -82,7 +82,7 @@ func LoadCloudAccountCredentials(account *model.CloudAccount) (CloudCredentials,
 		if len(account.SessionToken) > 16000 {
 			return CloudCredentials{}, errors.New("云账户令牌密文无效")
 		}
-		credentials.SessionToken, err = DecryptPassword(account.SessionToken)
+		credentials.SessionToken, err = DecryptPassword(account.SessionToken, encryptionKey)
 		if err != nil {
 			return CloudCredentials{}, errors.New("无法读取云账户访问凭据")
 		}

@@ -17,7 +17,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
 	mysqlDriver "github.com/go-sql-driver/mysql"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -44,11 +43,9 @@ func TestMySQLManagedResourceAtomicAndFencing(t *testing.T) {
 	if err := db.AutoMigrate(&model.CloudAccount{}, &model.CloudAccountRegion{}, &model.TreeCloudResource{}, &model.CloudRegionSyncLease{}, &model.CloudManagedResource{}, &model.CloudManagedSyncHistory{}, &model.CloudManagedOperation{}); err != nil {
 		t.Fatal(err)
 	}
-	prior := viper.Get("tree.password_encryption_key")
-	viper.Set("tree.password_encryption_key", strings.Repeat("m", 32))
-	defer viper.Set("tree.password_encryption_key", prior)
-	access, _ := treeUtils.EncryptPassword("test-ak")
-	secret, _ := treeUtils.EncryptPassword("test-sk")
+	encryptionKey := strings.Repeat("m", 32)
+	access, _ := treeUtils.EncryptPassword("test-ak", encryptionKey)
+	secret, _ := treeUtils.EncryptPassword("test-sk", encryptionKey)
 	account := &model.CloudAccount{Name: "managed-fixture", Provider: model.ProviderAliyun, Status: model.CloudAccountEnabled, AccessKey: access, SecretKey: secret}
 	if err := db.Create(account).Error; err != nil {
 		t.Fatal(err)
@@ -57,7 +54,7 @@ func TestMySQLManagedResourceAtomicAndFencing(t *testing.T) {
 	if err := db.Create(region).Error; err != nil {
 		t.Fatal(err)
 	}
-	svc := NewManagedCloudService(zap.NewNop(), dao.NewCloudAccountDAO(db, zap.NewNop()), dao.NewTreeCloudDAO(db, zap.NewNop()), dao.NewManagedCloudDAO(db)).(*managedCloudService)
+	svc := mustManagedCloudService(t, encryptionKey, zap.NewNop(), dao.NewCloudAccountDAO(db, zap.NewNop()), dao.NewTreeCloudDAO(db, zap.NewNop()), dao.NewManagedCloudDAO(db)).(*managedCloudService)
 	svc.factory = func(treeUtils.CloudCredentials, string) (managedReader, error) {
 		return managedFixture{read: func(_ context.Context, ids []string, _ string) ([]string, error) { return ids, nil }}, nil
 	}

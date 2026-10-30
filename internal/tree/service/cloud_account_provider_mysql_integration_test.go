@@ -13,7 +13,6 @@ import (
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
 	databaseLogger "github.com/GoSimplicity/AI-CloudOps/pkg/logger"
 	mysqlDriver "github.com/go-sql-driver/mysql"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -46,14 +45,12 @@ func TestMySQLProviderCredentialMigration(t *testing.T) {
 	if err := db.Migrator().DropColumn(&model.CloudAccount{}, "ProviderCredentials"); err != nil {
 		t.Fatal(err)
 	}
-	old := viper.Get("tree.password_encryption_key")
-	viper.Set("tree.password_encryption_key", strings.Repeat("k", 32))
-	defer viper.Set("tree.password_encryption_key", old)
-	access, err := treeUtils.EncryptPassword("legacy-access-canary")
+	encryptionKey := strings.Repeat("k", 32)
+	access, err := treeUtils.EncryptPassword("legacy-access-canary", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secret, err := treeUtils.EncryptPassword("legacy-secret-canary")
+	secret, err := treeUtils.EncryptPassword("legacy-secret-canary", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +64,7 @@ func TestMySQLProviderCredentialMigration(t *testing.T) {
 	if err := db.Where("name = ?", "legacy-provider-fixture").First(&legacy).Error; err != nil {
 		t.Fatal(err)
 	}
-	credentials, err := treeUtils.LoadCloudAccountCredentials(&legacy)
+	credentials, err := treeUtils.LoadCloudAccountCredentials(&legacy, encryptionKey)
 	if err != nil || credentials.AccessKey != "legacy-access-canary" || credentials.SecretKey != "legacy-secret-canary" {
 		t.Fatal("legacy credentials no longer readable")
 	}

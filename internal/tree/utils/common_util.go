@@ -32,7 +32,6 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pkgUtils "github.com/GoSimplicity/AI-CloudOps/pkg/base"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -69,13 +68,13 @@ func SetSSHDefaults(port *int, username *string) {
 	}
 }
 
-// EncryptPassword 加密密码
-func EncryptPassword(password string) (string, error) {
-	if password == "" {
+// EncryptPassword encrypts plaintext with an explicit opaque 32-byte key.
+// Argument order is plaintext first, key second; no hex decoding or normalization.
+func EncryptPassword(plaintext, encryptionKey string) (string, error) {
+	if plaintext == "" {
 		return "", nil
 	}
 
-	encryptionKey := viper.GetString("tree.password_encryption_key")
 	if encryptionKey == "" {
 		return "", errors.New("未配置密码加密密钥")
 	}
@@ -83,16 +82,20 @@ func EncryptPassword(password string) (string, error) {
 		return "", errors.New("密码加密密钥长度必须为32字节")
 	}
 
-	return pkgUtils.EncryptSecretKey(password, []byte(encryptionKey))
+	encrypted, err := pkgUtils.EncryptSecretKey(plaintext, []byte(encryptionKey))
+	if err != nil {
+		return "", errors.New("密码加密失败")
+	}
+	return encrypted, nil
 }
 
-// DecryptPassword 解密密码
-func DecryptPassword(encryptedPassword string) (string, error) {
-	if encryptedPassword == "" {
+// DecryptPassword reads the existing nonce-prefixed AES-GCM/StdBase64 format.
+// Argument order is ciphertext first, key second; empty input remains a no-op.
+func DecryptPassword(ciphertext, encryptionKey string) (string, error) {
+	if ciphertext == "" {
 		return "", nil
 	}
 
-	encryptionKey := viper.GetString("tree.password_encryption_key")
 	if encryptionKey == "" {
 		return "", errors.New("未配置密码加密密钥")
 	}
@@ -100,7 +103,11 @@ func DecryptPassword(encryptedPassword string) (string, error) {
 		return "", errors.New("密码加密密钥长度必须为32字节")
 	}
 
-	return pkgUtils.DecryptSecretKey(encryptedPassword, []byte(encryptionKey))
+	plaintext, err := pkgUtils.DecryptSecretKey(ciphertext, []byte(encryptionKey))
+	if err != nil {
+		return "", errors.New("密码解密失败")
+	}
+	return plaintext, nil
 }
 
 // GetAvailableRegionsByProvider 根据云厂商获取可用区域列表（通过API动态获取）

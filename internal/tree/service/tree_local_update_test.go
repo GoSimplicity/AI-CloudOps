@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	databaseLogger "github.com/GoSimplicity/AI-CloudOps/pkg/logger"
@@ -46,7 +47,10 @@ func TestLocalMetadataUpdatePreservesCredentialsAndRuntimeFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := dao.NewTreeLocalDAO(db, zap.NewNop())
-	service := NewTreeLocalService(zap.NewNop(), rotatedLocalDAO{TreeLocalDAO: store, db: db})
+	service, err := NewTreeLocalService(&config.Config{}, zap.NewNop(), rotatedLocalDAO{TreeLocalDAO: store, db: db})
+	if err != nil {
+		t.Fatal(err)
+	}
 	var request model.UpdateTreeLocalResourceReq
 	if err := json.Unmarshal([]byte(`{"description":"","tags":[],"username":"operator"}`), &request); err != nil {
 		t.Fatal(err)

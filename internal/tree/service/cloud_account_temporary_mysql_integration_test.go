@@ -13,7 +13,6 @@ import (
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
 	databaseLogger "github.com/GoSimplicity/AI-CloudOps/pkg/logger"
 	mysqlDriver "github.com/go-sql-driver/mysql"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -53,14 +52,12 @@ func TestMySQLTemporaryCloudCredentials(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	oldKey := viper.Get("tree.password_encryption_key")
-	viper.Set("tree.password_encryption_key", strings.Repeat("k", 32))
-	defer viper.Set("tree.password_encryption_key", oldKey)
-	access, err := treeUtils.EncryptPassword("legacy-access-fixture")
+	encryptionKey := strings.Repeat("k", 32)
+	access, err := treeUtils.EncryptPassword("legacy-access-fixture", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secret, err := treeUtils.EncryptPassword("legacy-secret-fixture")
+	secret, err := treeUtils.EncryptPassword("legacy-secret-fixture", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +71,7 @@ func TestMySQLTemporaryCloudCredentials(t *testing.T) {
 	if err := db.Where("name = ?", "legacy-migration-fixture").First(&legacy).Error; err != nil {
 		t.Fatal("legacy record could not be read")
 	}
-	credential, err := treeUtils.LoadCloudAccountCredentials(&legacy)
+	credential, err := treeUtils.LoadCloudAccountCredentials(&legacy, encryptionKey)
 	if err != nil || credential.AccessKey != "legacy-access-fixture" || credential.SecretKey != "legacy-secret-fixture" || credential.SessionToken != "" {
 		t.Fatal("legacy ciphertext no longer works")
 	}

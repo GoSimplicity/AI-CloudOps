@@ -43,7 +43,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
-	treeDAO "github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 	"go.uber.org/zap"
@@ -54,10 +53,9 @@ type CronHandlers struct {
 	logger     *zap.Logger
 
 	// DAO层依赖
-	cronDAO      dao.CronJobDAO
-	treeLocalDAO treeDAO.TreeLocalDAO
-	onDutyDAO    alert.AlertManagerOnDutyDAO
-	k8sDAO       k8sDao.ClusterDAO
+	cronDAO   dao.CronJobDAO
+	onDutyDAO alert.AlertManagerOnDutyDAO
+	k8sDAO    k8sDao.ClusterDAO
 
 	k8sClient       client.K8sClient
 	clusterMgr      manager.ClusterManager
@@ -83,7 +81,7 @@ func (h *CronHandlers) allowLocalExec() bool {
 func NewCronHandlers(
 	logger *zap.Logger,
 	cronDAO dao.CronJobDAO,
-	treeLocalDAO treeDAO.TreeLocalDAO,
+	sshExecutor *executor.SSHExecutor,
 	onDutyDAO alert.AlertManagerOnDutyDAO,
 	k8sDAO k8sDao.ClusterDAO,
 	k8sClient client.K8sClient,
@@ -93,7 +91,6 @@ func NewCronHandlers(
 	return &CronHandlers{
 		logger:          logger,
 		cronDAO:         cronDAO,
-		treeLocalDAO:    treeLocalDAO,
 		onDutyDAO:       onDutyDAO,
 		k8sDAO:          k8sDAO,
 		k8sClient:       k8sClient,
@@ -102,7 +99,7 @@ func NewCronHandlers(
 		commandExecutor: NewCommandExecutor(logger),
 		httpExecutor:    NewHTTPExecutor(logger),
 		scriptExecutor:  NewScriptExecutor(logger),
-		sshExecutor:     executor.NewSSHExecutor(logger, treeLocalDAO),
+		sshExecutor:     sshExecutor,
 	}
 }
 

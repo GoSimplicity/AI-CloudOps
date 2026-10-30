@@ -30,7 +30,7 @@ func TestDisabledCloudAccountCannotVerify(t *testing.T) {
 	if err := db.Create(account).Error; err != nil {
 		t.Fatal(err)
 	}
-	svc := NewCloudAccountService(zap.NewNop(), dao.NewCloudAccountDAO(db, zap.NewNop()))
+	svc := mustCloudAccountService(t, "", zap.NewNop(), dao.NewCloudAccountDAO(db, zap.NewNop()))
 	err = svc.VerifyCloudAccount(context.Background(), &model.VerifyCloudAccountReq{ID: account.ID})
 	if err == nil || !strings.Contains(err.Error(), "禁用") {
 		t.Fatalf("disabled account must be rejected before decrypt/network: %v", err)

@@ -10,7 +10,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -30,13 +29,12 @@ func (validationHistoryDAO) FinishRegionSyncHistory(context.Context, int, string
 }
 
 func TestSyncValidatesCompleteRegionSelectionBeforeSideEffects(t *testing.T) {
-	viper.Set("tree.password_encryption_key", strings.Repeat("v", 32))
-	defer viper.Set("tree.password_encryption_key", nil)
-	access, err := treeUtils.EncryptPassword("offline-access")
+	encryptionKey := strings.Repeat("v", 32)
+	access, err := treeUtils.EncryptPassword("offline-access", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secret, err := treeUtils.EncryptPassword("offline-secret")
+	secret, err := treeUtils.EncryptPassword("offline-secret", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +61,7 @@ func TestSyncValidatesCompleteRegionSelectionBeforeSideEffects(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var called []string
-			s := &treeCloudService{logger: zap.NewNop(), cloudAccountDAO: storedCloudAccount{account: account}, dao: validationHistoryDAO{}, clientFactory: func(_ model.CloudProvider, _, _, region string, _ *zap.Logger) (treeUtils.CloudComputeClient, error) {
+			s := &treeCloudService{passwordEncryptionKey: encryptionKey, logger: zap.NewNop(), cloudAccountDAO: storedCloudAccount{account: account}, dao: validationHistoryDAO{}, clientFactory: func(_ model.CloudProvider, _, _, region string, _ *zap.Logger) (treeUtils.CloudComputeClient, error) {
 				called = append(called, region)
 				return cloudReadStub{err: errors.New("offline fixture: no provider response")}, nil
 			}}

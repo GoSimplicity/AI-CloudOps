@@ -17,7 +17,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -51,14 +50,12 @@ func TestProviderCredentialsSQLite(t *testing.T) {
 }
 func assertProviderCredentials(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	old := viper.Get("tree.password_encryption_key")
-	viper.Set("tree.password_encryption_key", strings.Repeat("k", 32))
-	t.Cleanup(func() { viper.Set("tree.password_encryption_key", old) })
+	encryptionKey := strings.Repeat("k", 32)
 	if err := db.AutoMigrate(&model.CloudAccount{}, &model.CloudAccountRegion{}, &model.TreeCloudResource{}); err != nil {
 		t.Fatal(err)
 	}
 	store := dao.NewCloudAccountDAO(db, zap.NewNop())
-	svc := NewCloudAccountService(zap.NewNop(), store).(*cloudAccountService)
+	svc := mustCloudAccountService(t, encryptionKey, zap.NewNop(), store).(*cloudAccountService)
 	azure := &model.ProviderCredentialInput{TenantID: "11111111-1111-1111-1111-111111111111", ClientID: "22222222-2222-2222-2222-222222222222", SubscriptionID: "33333333-3333-3333-3333-333333333333", ClientSecret: "azure-secret-canary"}
 	gcp := &model.ProviderCredentialInput{ProjectID: "sample-project", ServiceAccountJSON: fixtureGCPJSON(t)}
 	for _, tc := range []struct {
@@ -82,7 +79,7 @@ func assertProviderCredentials(t *testing.T, db *gorm.DB) {
 			if saved.ProviderCredentials == "" || strings.Contains(saved.ProviderCredentials, "azure-secret-canary") || strings.Contains(saved.ProviderCredentials, "PRIVATE KEY") {
 				t.Fatal("missing ciphertext or plaintext stored")
 			}
-			creds, err := treeUtils.LoadCloudAccountCredentials(&saved)
+			creds, err := treeUtils.LoadCloudAccountCredentials(&saved, encryptionKey)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -152,7 +149,7 @@ func assertProviderCredentials(t *testing.T, db *gorm.DB) {
 			if rotated.CredentialVersion != 1 || rotated.ProviderCredentials == saved.ProviderCredentials {
 				t.Fatal("credential rotation was not atomic")
 			}
-			decoded, err := treeUtils.LoadCloudAccountCredentials(&rotated)
+			decoded, err := treeUtils.LoadCloudAccountCredentials(&rotated, encryptionKey)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -191,7 +188,7 @@ func assertProviderCredentials(t *testing.T, db *gorm.DB) {
 				t.Fatal("failed transaction changed credentials")
 			}
 			paused := &pausedAccountStore{CloudAccountDAO: store, read: make(chan struct{}), resume: make(chan struct{})}
-			staleService := NewCloudAccountService(zap.NewNop(), paused)
+			staleService := mustCloudAccountService(t, encryptionKey, zap.NewNop(), paused)
 			done := make(chan error, 1)
 			go func() {
 				done <- staleService.UpdateCloudAccount(context.Background(), &model.UpdateCloudAccountReq{ID: saved.ID, ProviderCredentials: tc.credential})
@@ -218,11 +215,11 @@ func assertProviderCredentials(t *testing.T, db *gorm.DB) {
 	}
 	// Older Azure rows accepted generic AK/SK but had no working Azure client.
 	// Explicit migration must not retain those obsolete encrypted credentials.
-	legacyAccess, err := treeUtils.EncryptPassword("legacy-azure-access")
+	legacyAccess, err := treeUtils.EncryptPassword("legacy-azure-access", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	legacySecret, err := treeUtils.EncryptPassword("legacy-azure-secret")
+	legacySecret, err := treeUtils.EncryptPassword("legacy-azure-secret", encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +227,7 @@ func assertProviderCredentials(t *testing.T, db *gorm.DB) {
 	if err := db.Create(legacy).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := treeUtils.LoadCloudAccountCredentials(legacy); err == nil {
+	if _, err := treeUtils.LoadCloudAccountCredentials(legacy, encryptionKey); err == nil {
 		t.Fatal("legacy generic keys accepted as Azure credentials")
 	}
 	if err := svc.UpdateCloudAccount(context.Background(), &model.UpdateCloudAccountReq{ID: legacy.ID, ProviderCredentials: azure}); err != nil {
@@ -298,7 +295,7 @@ func TestProviderRegionAPIValidatesBeforeWrite(t *testing.T) {
 	if err := db.Create(account).Error; err != nil {
 		t.Fatal(err)
 	}
-	svc := NewCloudAccountRegionService(zap.NewNop(), dao.NewCloudAccountRegionDAO(db, zap.NewNop()), NewCloudAccountService(zap.NewNop(), dao.NewCloudAccountDAO(db, zap.NewNop())))
+	svc := NewCloudAccountRegionService(zap.NewNop(), dao.NewCloudAccountRegionDAO(db, zap.NewNop()), mustCloudAccountService(t, "", zap.NewNop(), dao.NewCloudAccountDAO(db, zap.NewNop())))
 	if err := svc.CreateCloudAccountRegion(context.Background(), &model.CreateCloudAccountRegionReq{CloudAccountID: account.ID, Region: "eastus"}); err == nil {
 		t.Fatal("GCP accepted non-zone region")
 	}

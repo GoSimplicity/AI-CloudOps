@@ -17,7 +17,6 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
 	mysqlDriver "github.com/go-sql-driver/mysql"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -164,9 +163,7 @@ func TestMySQLTemporaryFullSyncAtomic(t *testing.T) {
 	if err := db.AutoMigrate(&model.CloudAccount{}, &model.CloudAccountRegion{}, &model.TreeNode{}, &model.TreeCloudResource{}, &model.CloudResourceChangeLog{}, &model.CloudResourceSyncHistory{}, &model.CloudRegionSyncLease{}); err != nil {
 		t.Fatal(err)
 	}
-	prior := viper.Get("tree.password_encryption_key")
-	viper.Set("tree.password_encryption_key", strings.Repeat("v", 32))
-	defer viper.Set("tree.password_encryption_key", prior)
+	encryptionKey := strings.Repeat("v", 32)
 	for _, provider := range []model.CloudProvider{model.ProviderAWS, model.ProviderTencent} {
 		key := "test-ak"
 		regionCode := "ap-shanghai"
@@ -174,9 +171,9 @@ func TestMySQLTemporaryFullSyncAtomic(t *testing.T) {
 			key = "ASIAx"
 			regionCode = "us-west-2"
 		}
-		access, _ := treeUtils.EncryptPassword(key)
-		secret, _ := treeUtils.EncryptPassword("test-sk")
-		token, _ := treeUtils.EncryptPassword("test-token")
+		access, _ := treeUtils.EncryptPassword(key, encryptionKey)
+		secret, _ := treeUtils.EncryptPassword("test-sk", encryptionKey)
+		token, _ := treeUtils.EncryptPassword("test-token", encryptionKey)
 		expires := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
 		account := &model.CloudAccount{Name: fmt.Sprintf("fixture-%d", provider), Provider: provider, Status: model.CloudAccountEnabled, AccessKey: access, SecretKey: secret, CredentialType: "temporary", SessionToken: token, CredentialExpiresAt: &expires}
 		if err := db.Create(account).Error; err != nil {
@@ -191,7 +188,7 @@ func TestMySQLTemporaryFullSyncAtomic(t *testing.T) {
 		if err := db.Create(old).Error; err != nil {
 			t.Fatal(err)
 		}
-		svc := &treeCloudService{dao: dao.NewTreeCloudDAO(db, zap.NewNop()), cloudAccountDAO: dao.NewCloudAccountDAO(db, zap.NewNop()), logger: zap.NewNop()}
+		svc := &treeCloudService{passwordEncryptionKey: encryptionKey, dao: dao.NewTreeCloudDAO(db, zap.NewNop()), cloudAccountDAO: dao.NewCloudAccountDAO(db, zap.NewNop()), logger: zap.NewNop()}
 		svc.credentialFactory = func(got model.CloudProvider, c treeUtils.CloudCredentials, _ string, _ *zap.Logger) (treeUtils.CloudComputeClient, error) {
 			if got != provider || c.SessionToken != "test-token" {
 				t.Fatal("temporary token not propagated")

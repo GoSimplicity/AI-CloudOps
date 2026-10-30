@@ -30,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/dao"
 	treeUtils "github.com/GoSimplicity/AI-CloudOps/internal/tree/utils"
@@ -49,15 +50,20 @@ type TreeLocalService interface {
 }
 
 type treeLocalService struct {
-	logger *zap.Logger
-	dao    dao.TreeLocalDAO
+	passwordEncryptionKey string
+	logger                *zap.Logger
+	dao                   dao.TreeLocalDAO
 }
 
-func NewTreeLocalService(logger *zap.Logger, dao dao.TreeLocalDAO) TreeLocalService {
-	return &treeLocalService{
-		logger: logger,
-		dao:    dao,
+func NewTreeLocalService(cfg *config.Config, logger *zap.Logger, dao dao.TreeLocalDAO) (TreeLocalService, error) {
+	if cfg == nil {
+		return nil, errors.New("配置不能为空")
 	}
+	return &treeLocalService{
+		passwordEncryptionKey: cfg.Tree.PasswordEncryptionKey,
+		logger:                logger,
+		dao:                   dao,
+	}, nil
 }
 
 func (s *treeLocalService) GetTreeLocalList(ctx context.Context, req *model.GetTreeLocalResourceListReq) (model.ListResp[*model.TreeLocalResource], error) {
@@ -109,7 +115,7 @@ func (s *treeLocalService) GetTreeLocalForConnection(ctx context.Context, req *m
 
 	// 解密密码以供连接使用
 	if local.AuthMode == model.AuthModePassword && local.Password != "" {
-		plainPassword, err := treeUtils.DecryptPassword(local.Password)
+		plainPassword, err := treeUtils.DecryptPassword(local.Password, s.passwordEncryptionKey)
 		if err != nil {
 			s.logger.Error("密码解密失败", zap.Int("id", req.ID), zap.Error(err))
 			return nil, fmt.Errorf("密码解密失败: %w", err)
@@ -149,7 +155,7 @@ func (s *treeLocalService) CreateTreeLocal(ctx context.Context, req *model.Creat
 
 	// 加密
 	if local.AuthMode == model.AuthModePassword && req.Password != "" {
-		encryptedPassword, err := treeUtils.EncryptPassword(req.Password)
+		encryptedPassword, err := treeUtils.EncryptPassword(req.Password, s.passwordEncryptionKey)
 		if err != nil {
 			s.logger.Error("密码加密失败", zap.Error(err))
 			return fmt.Errorf("密码加密失败: %w", err)
@@ -210,7 +216,7 @@ func (s *treeLocalService) UpdateTreeLocal(ctx context.Context, req *model.Updat
 	}
 	// 空凭据代表保留；仅写本次主动轮换的值，避免回写旧快照覆盖并发更新
 	if authMode == model.AuthModePassword && req.Password != "" {
-		encrypted, err := treeUtils.EncryptPassword(req.Password)
+		encrypted, err := treeUtils.EncryptPassword(req.Password, s.passwordEncryptionKey)
 		if err != nil {
 			return fmt.Errorf("密码加密失败: %w", err)
 		}
