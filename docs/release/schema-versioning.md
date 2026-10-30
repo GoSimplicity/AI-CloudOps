@@ -8,7 +8,7 @@ MySQL DDL可能隐式提交，不能声明事务回滚。回调报错或panic会
 
 `Verify` 只有有界SELECT，缺记录、待迁移、源码漂移、未来版本或脏状态均拒绝通过；它验证版本历史，不检测任意手工表结构漂移。迁移回调必须只用给定连接，不自行开事务、关闭连接或转到其他数据库；实际实现及其模型/SQL必须包含在不可变校验依据中。`SQLMigration` 将有序SQL和执行内容绑定，调用者必须提供真实迁移清单。
 
-运行角色只能读取ledger；单独迁移角色执行DDL及记录迁移结果。权限分离测试已验证SELECT-only角色可以Verify但不能Migrate；实际部署GRANT、应用启动Verify与显式CLI还在后续阶段，当前不能把引擎包单独视为应用已完成版本化迁移。
+运行角色只能读取ledger；单独迁移角色执行DDL及记录迁移结果。权限分离测试已验证SELECT-only角色可以Verify但不能Migrate；离线GRANT计划、显式CLI、新栈限权编排和应用启动Verify已接入；这里只读角色的基础验证仍不能代替目标部署的分权验收。
 
 ## 已验证范围
 
@@ -19,7 +19,7 @@ go test -race ./pkg/schema
 go test -race -tags=integration ./pkg/schema -count=1 -timeout=180s
 ```
 
-后续仍需旧库升级/采用预检、显式CLI、启动只读验证、角色GRANT、失败向前修复与回退流程。旧版本AutoMigrate与新方案不可混跑后宣称受同一锁保护；这些接线完成之前，应用现有启动路径仍会自动DDL。本轮没有访问或迁移生产环境。
+已接入显式CLI、启动只读验证、最小GRANT计划、新栈编排和匹配当前结构的旧库预检/审计认领。较旧结构升级、生产数据上的向前修复及备份回退仍需独立设计与演练。旧版本AutoMigrate与新方案不可混跑后宣称受同一锁保护。本轮没有访问或迁移生产环境。
 
 ## 不可变新库基线
 
@@ -31,4 +31,4 @@ go test -race -tags=integration ./pkg/schema -count=1 -timeout=180s
 go test -race -tags=integration ./internal/dbschema -count=1 -timeout=180s
 ```
 
-显式初始化（例如通知时区登记）可复用 `WithMigrationLock` 与 `VerifyConnection`：在同一个物理连接先锁定、再验证账本与操作，避免单连接池再次取连接而死锁。锁获取仍为fail-fast，不暗中重试初始化写入；callback必须在返回前提交或回滚事务，panic会脱敏并丢弃物理会话，避免事务和锁泄漏。新测试验证单连接池内核验及panic后的再次获取锁。
+显式初始化（例如通知时区登记）可复用 `WithMigrationLock` 与 `VerifyConnection`：在同一个物理连接先锁定、再验证账本与操作，避免单连接池再次取连接而死锁。锁获取仍为fail-fast，不暗中重试初始化写入；callback必须在返回前提交或回滚事务，panic会在正确释放事务的回调展开后脱敏并丢弃物理会话；事务回调必须deferRollback及有界上下文，违反契约保留的事务可能等到其上下文取消，不能宣称可立即强制关闭。新测试验证单连接池内核验及panic后的再次获取锁。

@@ -34,7 +34,9 @@ import (
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/config"
+	"github.com/GoSimplicity/AI-CloudOps/internal/dbschema"
 	databaseLogger "github.com/GoSimplicity/AI-CloudOps/pkg/logger"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/schema"
 	mysqlDriver "github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
@@ -74,13 +76,18 @@ func InitDB(cfg *config.Config, logger *zap.Logger) (*gorm.DB, error) {
 		}
 		db.ConnPool = pool
 		db.Statement.ConnPool = pool
-		if err := CheckNotificationTimeZone(db.WithContext(ctx), zone); err != nil {
-			return nil, err
+		// Runtime startup only verifies the immutable ledger and explicit
+		// DATETIME interpretation. Schema and clock writes belong to the
+		// separately credentialed maintenance tool before any writer starts.
+		manifest, err := dbschema.Manifest()
+		if err != nil {
+			return nil, fmt.Errorf("数据库迁移清单无效")
 		}
-		// 保持迁移逻辑，使用同一启动期限限制查询
-		if err := InitTables(db.WithContext(ctx)); err != nil {
-			logger.Error("数据库表初始化失败", zap.String("error_type", databaseLogger.DatabaseErrorType(err)))
-			return nil, databaseLogger.WrapDatabaseError("数据库表初始化失败", err)
+		if err := schema.Verify(ctx, pool, manifest); err != nil {
+			return nil, fmt.Errorf("数据库版本验证失败，请先执行显式迁移并核查账本: %w", err)
+		}
+		if err := dbschema.VerifyClock(ctx, pool, zone); err != nil {
+			return nil, fmt.Errorf("通知数据库时区验证失败，请先执行显式登记或历史核对: %w", err)
 		}
 		return db, nil
 	})

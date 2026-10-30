@@ -19,7 +19,7 @@ class ReleaseTests(unittest.TestCase):
         self.root = self.parent / "AI-CloudOps"
         (self.root / "scripts").mkdir(parents=True)
         (self.root / "deploy/release").mkdir(parents=True)
-        for name in ("release-start.sh", "release-env.py"):
+        for name in ("release-start.sh", "release-env.py", "release-fresh.py"):
             shutil.copyfile(ROOT / "scripts" / name, self.root / "scripts" / name)
 
     def test_secrets_are_private_and_never_overwritten(self):
@@ -39,10 +39,11 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotEqual(again.returncode, 0)
         self.assertEqual(destination.read_text(), content)
 
-    def test_start_rejects_missing_siblings_before_docker(self):
+    def test_start_defaults_to_offline_plan_without_siblings_or_credentials(self):
         result = subprocess.run(["bash", str(self.root / "scripts/release-start.sh")], capture_output=True, text=True)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Missing sibling repository", result.stderr)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Offline fresh-stack plan", result.stdout)
+        self.assertFalse((self.root / "deploy/release/.env").exists())
 
     def test_start_accepts_exact_github_directory_names(self):
         for name in ("AI-CloudOps-web", "AI-CloudOps-aiops"):
@@ -60,11 +61,8 @@ class ReleaseTests(unittest.TestCase):
         env = {**os.environ, "PATH": str(commands) + os.pathsep + os.environ["PATH"], "RELEASE_TEST_CALLS": str(calls)}
         result = subprocess.run(["bash", str(self.root / "scripts/release-start.sh")], env=env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        lines = calls.read_text().splitlines()
-        self.assertEqual(len(lines), 3)
-        self.assertEqual(lines[0], "info")
-        self.assertTrue(lines[1].endswith("config --quiet"))
-        self.assertTrue(lines[2].endswith("up -d --build --wait --wait-timeout 300"))
+        self.assertFalse(calls.exists(), "default entry point must never call Docker")
+        self.assertIn("Offline fresh-stack plan", result.stdout)
 
     def test_smoke_rejects_unhealthy_service_in_optimized_python(self):
         import sys
@@ -107,7 +105,7 @@ class ReleaseTests(unittest.TestCase):
             thread.join()
 
     def test_release_paths_match_github_case(self):
-        for name in ("scripts/release-start.sh", "scripts/release-backup.py", "deploy/release/compose.yaml"):
+        for name in ("scripts/release-fresh.py", "scripts/release-backup.py", "deploy/release/compose.yaml"):
             content = (ROOT / name).read_text()
             self.assertIn("AI-CloudOps-aiops", content, name)
             self.assertNotIn("Ai-CloudOps-aiops", content, name)

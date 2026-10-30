@@ -8,7 +8,7 @@ import re
 import secrets
 import sys
 
-# 与 deploy/release/compose.yaml 中 mysql 服务的 MYSQL_USER / MYSQL_DATABASE 及服务名保持一致
+# Runtime account is explicitly provisioned by release-fresh.py; never MYSQL_USER/ALL.
 MYSQL_USER = "cloudops"
 MYSQL_DATABASE = "cloudops"
 DEFAULT_MYSQL_HOST = "mysql:3306"
@@ -87,7 +87,7 @@ def main():
         return add_missing(destination, args.mysql_host)
 
     names = (
-        "MYSQL_PASSWORD", "MYSQL_ROOT_PASSWORD", "REDIS_PASSWORD", "JWT_KEY1",
+        "MYSQL_PASSWORD", "MYSQL_ROOT_PASSWORD", "MYSQL_MIGRATOR_PASSWORD", "REDIS_PASSWORD", "JWT_KEY1",
         "JWT_KEY2", "TREE_PASSWORD_ENCRYPTION_KEY", "BOOTSTRAP_ADMIN_PASSWORD",
         "AIOPS_API_KEY",
     )
@@ -95,6 +95,7 @@ def main():
     values = {name: secrets.token_hex(24) for name in names}
     # Existing AES encryption requires exactly 32 bytes; preserve this key on upgrades.
     values["TREE_PASSWORD_ENCRYPTION_KEY"] = secrets.token_hex(16)
+    values["FRESH_STACK_OWNER"] = secrets.token_hex(16)
     # Webhook reads only WEBHOOK_MYSQL_ADDR (never the backend MYSQL_ADDR); same account and database.
     values["WEBHOOK_MYSQL_ADDR"] = webhook_dsn(values["MYSQL_PASSWORD"], args.mysql_host)
     content = "# Keep private. Back up encryption keys with the database.\n"
@@ -102,7 +103,9 @@ def main():
     content += "PUBLIC_ORIGIN=http://localhost:18080\nHTTP_PORT=18080\n"
     content += "BIND_ADDRESS=127.0.0.1\nRELEASE_VERSION=local\n"
     content += "# Optional AIOps custom bot; keep the webhook credential private.\n"
-    content += "NOTIFICATION_ENABLED=true\nFEISHU_WEBHOOK_URL=\n"
+    content += "NOTIFICATION_ENABLED=false\nFEISHU_WEBHOOK_URL=\n"
+    content += "# Fresh local stacks start without an external model connection.\n"
+    content += "LLM_BASE_URL=http://127.0.0.1:9/v1\n"
     try:
         descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:

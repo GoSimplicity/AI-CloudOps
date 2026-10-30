@@ -1,5 +1,7 @@
 # 启动迁移清单与 YAML 数据库门槛
 
+当前启动已改为只读schema/clock验证。下文GORM注册与自动迁移描述属于历史实现或模型合同测试；新库由不可变基线显式初始化，旧库须单独预检/认领，运行账号不应授予DDL。见 [schema-cli.md](schema-cli.md) 与 [fresh-schema-start.md](fresh-schema-start.md)。
+
 `InitTables` 补齐 `K8sYamlTemplate`、`K8sYamlTask`、`WorkorderNotificationQueue`，并显式注册原本通过云账号关联隐式迁移的 `CloudAccountRegion`。已有 MySQL 的合法索引定义保持不变，迁移仅创建缺失的表/列，不删除业务数据；重复启动仍使用 GORM 幂等迁移。回滚旧二进制不要求删除新增表，不能为了回滚清空已有 YAML 数据。
 
 原始故障是启动和健康检查成功，但 `/api/k8s/yaml_template/1/list` 与 `/api/k8s/yaml_task/1/list` 返回业务错误，底层为 MySQL 1146。启动就绪本身不能证明每个功能表均已注册。

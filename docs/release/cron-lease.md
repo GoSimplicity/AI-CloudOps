@@ -1,5 +1,7 @@
 # Cron 执行租约与崩溃恢复
 
+当前启动已改为只读schema/clock验证。下文GORM注册与自动迁移描述属于历史实现或模型合同测试；新库由不可变基线显式初始化，旧库须单独预检/认领，运行账号不应授予DDL。见 [schema-cli.md](schema-cli.md) 与 [fresh-schema-start.md](fresh-schema-start.md)。
+
 新增 `cl_cron_jobs.lease_owner VARCHAR(64) NOT NULL DEFAULT ''` 与 `lease_expires_at BIGINT NOT NULL DEFAULT 0` 两列，分别保存执行尝试的随机归属 token 和租约到期 Unix 秒，均不通过任务 JSON 返回。执行器已接入原子领取、续租与归属完成，旧的无归属结果写入入口已移除
 
 租约 30 秒，每 10 秒续租。期限判断与更新在数据库 UPDATE 内使用数据库时钟执行：MySQL `UNIX_TIMESTAMP()`，SQLite `strftime('%s','now')`，不依赖各 worker 的应用时钟，也不在读取时钟后等待行锁再写入旧期限

@@ -1,7 +1,11 @@
 name: cloudops
 
+x-owned-labels: &owned-labels
+  ai.cloudops.fresh.owner: ${FRESH_STACK_OWNER:-unmanaged}
+
 x-runtime: &runtime
   restart: unless-stopped
+  labels: *owned-labels
   logging:
     driver: json-file
     options:
@@ -14,13 +18,11 @@ services:
     image: mysql:8.4.11
     environment:
       MYSQL_DATABASE: cloudops
-      MYSQL_USER: cloudops
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Generate .env first}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Generate .env first}
     volumes:
       - mysql:/var/lib/mysql
     healthcheck:
-      test: [CMD-SHELL, 'MYSQL_PWD="$$MYSQL_PASSWORD" mysql -h 127.0.0.1 -u cloudops cloudops -e "SELECT 1" >/dev/null']
+      test: [CMD-SHELL, 'test "$$(cat /proc/1/comm)" = mysqld && MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysql --protocol=socket -u root -e "SELECT 1" >/dev/null 2>&1']
       interval: 10s
       timeout: 5s
       retries: 12
@@ -39,6 +41,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
+
+  schema:
+    profiles: [maintenance]
+    image: cloudops-schema:${RELEASE_VERSION:-local}
+    labels: *owned-labels
+    build:
+      context: ../..
+      target: schema
+      args:
+        GOPROXY: ${GO_MODULE_PROXY:-https://proxy.golang.org,direct}
+    # The orchestrator sends a dedicated DSN over stdin to a private tmpfs.
+    # Neither root nor migrator credentials belong in this service's environment.
+    command: [plan]
 
   prometheus:
     <<: *runtime
@@ -238,7 +253,16 @@ services:
 
 volumes:
   mysql:
+    labels: *owned-labels
   redis_data:
+    labels: *owned-labels
   prometheus:
+    labels: *owned-labels
   aiops:
+    labels: *owned-labels
   alertmanager:
+    labels: *owned-labels
+
+networks:
+  default:
+    labels: *owned-labels

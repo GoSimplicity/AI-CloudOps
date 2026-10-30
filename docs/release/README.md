@@ -1,6 +1,6 @@
 # 1.0 部署与验收
 
-本目录记录三个仓库的 1.0 集成交付。[当前验收](verification.md)与[固定产品源码及镜像清单](release-candidate.json)是部署依据；过程中的旧结果归档在 history/。正式上线前由部署方完成目标环境的凭据、TLS、卷备份与变更窗口准备。
+本目录包含历史1.0证据及当前开发中的迁移/验收工具。旧固定清单仅对应其记录的源码和镜像，不能据此宣称最新开发组合已经验收完成。[历史验收](verification.md)与[固定产品源码及镜像清单](release-candidate.json)是部署依据；过程中的旧结果归档在 history/。正式上线前由部署方完成目标环境的凭据、TLS、卷备份与变更窗口准备。
 
 ## 部署目录
 
@@ -13,20 +13,19 @@ project/
   AI-CloudOps-aiops/
 ```
 
-在后端仓库执行：
+在后端仓库先查看离线计划。显式入口仅支持全新的本地隔离栈，不会自动升级已有部署：
 
 ```bash
 bash scripts/release-start.sh
-```
-
-该入口检查同级仓库和 Docker，按需生成私有配置，构建并等待服务健康。需要分别执行时：
-
-```bash
 python3 scripts/release-env.py
-docker compose -f deploy/release/compose.yaml config --quiet
-docker compose -f deploy/release/compose.yaml up -d --build --wait --wait-timeout 300
+export COMPOSE_PROJECT_NAME="cloudops-fresh-$(openssl rand -hex 6)"
+bash scripts/release-start.sh --execute-new-stack --project "$COMPOSE_PROJECT_NAME"
 python3 scripts/release-smoke.py
 ```
+
+配置生成器拒绝覆盖已有文件。初始化入口要求项目没有已有容器、卷、网络、业务表和目标账号；依次创建独立迁移/运行身份、应用不可变schema、显式登记UTC、授予运行表级权限，最后启动业务进程。失败保留现场，不自动重试或删除卷；CI专属夹具最终回收另属其生命周期。后续所有Compose操作须保留同一 `COMPOSE_PROJECT_NAME`，否则可能指向其他项目。
+
+应用启动仅验证schema账本与通知时区，不执行AutoMigrate。已有未版本化旧库须先停写、备份、执行[完整预检与审计认领](schema-legacy.md)；较旧或漂移结构会拒绝，不能通过手工伪造版本解决。详见[新栈初始化](fresh-schema-start.md)、[显式CLI](schema-cli.md)及[角色分权](schema-roles.md)。不要用直接 `compose up` 代替新库初始化。
 
 在隔离验收环境增加 `--crud`，会创建唯一命名的工单分类，核验持久化、URL ID 和操作者防伪造，然后删除该测试分类。它会在审计日志中留下真实操作记录，不应当作无副作用的生产探活。
 
@@ -59,7 +58,7 @@ AIOps 飞书自定义机器人可在服务端私有 `.env` 设置 `FEISHU_WEBHOO
 
 ## 升级与回滚
 
-升级前备份 MySQL、Redis、AIOps 数据卷及 `.env`，保存三仓 commit SHA 和镜像 digest。尤其保留 `TREE_PASSWORD_ENCRYPTION_KEY`，更换它会影响已存资产密码的解密。先在数据库副本上演练升级；当前 GORM 自动迁移并不等价于可逆迁移。
+升级前备份 MySQL、Redis、AIOps 数据卷及 `.env`，保存三仓 commit SHA 和镜像 digest。尤其保留 `TREE_PASSWORD_ENCRYPTION_KEY`，更换它会影响已存资产密码的解密。先在数据库副本上演练升级；MySQL DDL可能隐式提交，版本账本也不提供DDL回滚；当前只实现明确的新库基线与匹配当前结构的旧库认领，较旧结构升级须另行设计和演练。
 
 使用固定 `RELEASE_VERSION` 构建镜像，保留上一版镜像。应用回滚可指定上一版镜像，但数据库结构变化必须依据升级前备份和演练结果处理。`docker compose down` 保留数据卷；不要在生产使用 `down -v`。
 

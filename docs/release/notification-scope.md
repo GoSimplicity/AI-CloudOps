@@ -1,5 +1,7 @@
 # 工单通知来源、范围与历史配置边界
 
+当前启动已改为只读schema/clock验证。下文GORM注册与自动迁移描述属于历史实现或模型合同测试；新库由不可变基线显式初始化，旧库须单独预检/认领，运行账号不应授予DDL。见 [schema-cli.md](schema-cli.md) 与 [fresh-schema-start.md](fresh-schema-start.md)。
+
 日期：2026-10-23
 
 ## 来源快照与迁移

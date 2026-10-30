@@ -110,7 +110,7 @@ AI 助手会话另按已登录用户隔离，内部服务身份拥有独立会�
 
 ## 快速开始
 
-三个仓库必须同级放置，目录名区分大小写。以下为已实际验证的 Docker Compose 入口，详细配置、备份与验收见 [1.0 部署指南](docs/release/README.md)。
+三个仓库必须同级放置，目录名区分大小写。以下为显式初始化全新本地隔离栈的 Docker Compose 入口，详细配置、备份与验收见 [1.0 部署指南](docs/release/README.md)。
 
 ### 获取代码与启动
 
@@ -123,10 +123,13 @@ git clone https://github.com/GoSimplicity/AI-CloudOps.git
 git clone https://github.com/GoSimplicity/AI-CloudOps-web.git
 git clone https://github.com/GoSimplicity/AI-CloudOps-aiops.git
 cd AI-CloudOps
-bash scripts/release-start.sh
+bash scripts/release-start.sh # 默认仅展示离线计划
+python3 scripts/release-env.py # 只生成新私有配置，拒绝覆盖
+export COMPOSE_PROJECT_NAME="cloudops-fresh-$(openssl rand -hex 6)"
+bash scripts/release-start.sh --execute-new-stack --project "$COMPOSE_PROJECT_NAME"
 ```
 
-入口为 <http://localhost:18080>。脚本检查同级仓库、生成私有配置、构建并等待服务健康。首次管理员为 `admin`，密码来自权限为 `0600`、已被 Git 忽略的 `deploy/release/.env` 中 `BOOTSTRAP_ADMIN_PASSWORD`。已有数据库不会重置管理员。
+入口为 <http://localhost:18080>。显式执行时检查全新项目，先用独立迁移身份初始化schema与通知时区，再授予运行账号表级权限并启动应用；默认离线计划不执行这些操作。已有卷、账号或旧库会拒绝，须先完成[旧库预检和认领](docs/release/schema-legacy.md)。首次管理员为 `admin`，密码来自权限为 `0600`、已被 Git 忽略的 `deploy/release/.env` 中 `BOOTSTRAP_ADMIN_PASSWORD`。已有数据库不会重置管理员。
 
 ```sh
 python3 scripts/release-smoke.py --crud

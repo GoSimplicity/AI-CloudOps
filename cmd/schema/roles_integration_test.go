@@ -12,9 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/dbschema"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/di"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/schema"
 	"github.com/go-sql-driver/mysql"
+	"go.uber.org/zap"
 )
 
 func TestMySQLRolePlanEnforcesRuntimeAndMigratorBoundaries(t *testing.T) {
@@ -138,11 +141,41 @@ func TestMySQLRolePlanEnforcesRuntimeAndMigratorBoundaries(t *testing.T) {
 	if err := schema.Verify(ctx, runtimeDB, manifest); err != nil {
 		t.Fatal("runtime SELECT-only ledger verification failed")
 	}
+	runtimeConfig, err := mysql.ParseDSN(adminDSN)
+	if err != nil {
+		t.Fatal("runtime fixture config failed")
+	}
+	runtimeConfig.DBName, runtimeConfig.User, runtimeConfig.Passwd = "cloudopsroles", "runtime_fixture", "isolated-runtime-only"
+	runtimeDSN := runtimeConfig.FormatDSN()
+	separator := "?"
+	if strings.Contains(runtimeDSN, "?") {
+		separator = "&"
+	}
+	runtimeDSN += separator + "loc=UTC"
+	appConfig := &config.Config{MySQL: config.MySQLConfig{Addr: runtimeDSN}}
+	if opened, err := di.InitDB(appConfig, zap.NewNop()); err == nil {
+		pool, _ := opened.DB()
+		_ = pool.Close()
+		t.Fatal("runtime startup silently initialized a missing clock")
+	}
 	if err := dbschema.InitializeFreshClock(ctx, migratorDB, "UTC"); err != nil {
 		t.Fatal("clock initialization failed under migration role")
 	}
 	if err := dbschema.VerifyClock(ctx, runtimeDB, "UTC"); err != nil {
 		t.Fatal("clock verification failed under runtime role")
+	}
+	// Exercise the actual application startup with DDL and ledger/clock writes
+	// forbidden, not merely the two lower-level verification helpers.
+	for range 2 {
+		opened, err := di.InitDB(appConfig, zap.NewNop())
+		if err != nil {
+			t.Fatal("actual application startup failed under runtime role")
+		}
+		pool, err := opened.DB()
+		if err != nil {
+			t.Fatal("runtime pool unavailable")
+		}
+		_ = pool.Close()
 	}
 	wantTables := append([]string{}, baselineBusinessTables[:]...)
 	wantTables = append(wantTables, schemaHistoryTable)

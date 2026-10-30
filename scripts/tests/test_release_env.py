@@ -52,11 +52,13 @@ def read_env(path):
 
 
 def compose_mysql_settings():
-    """从发布 compose 读取 mysql 服务的 MYSQL_USER / MYSQL_DATABASE 与 backend 的 MYSQL_ADDR 模板（纯文本解析，无需 PyYAML）"""
+    """运行角色来自显式 DSN；镜像不得通过 MYSQL_USER 生成数据库级 ALL。"""
     text = COMPOSE.read_text()
-    user = re.search(r"^\s+MYSQL_USER:\s*(\S+)\s*$", text, re.M).group(1)
+    if re.search(r"^\s+MYSQL_USER:", text, re.M):
+        raise AssertionError("MYSQL_USER would implicitly create an ALL-privilege runtime account")
     database = re.search(r"^\s+MYSQL_DATABASE:\s*(\S+)\s*$", text, re.M).group(1)
     backend = re.search(r"^\s+MYSQL_ADDR:\s*(.+?)\s*$", text, re.M).group(1)
+    user = backend.split(":", 1)[0]
     return user, database, backend
 
 
@@ -113,6 +115,18 @@ class ReleaseEnvTests(unittest.TestCase):
         # .env 不加引号：值中不能出现空白、引号或 Compose 插值字符
         self.assertIsNone(re.search(r"[\s'\"$#]", dsn))
         self.assert_no_value_leak(result, dsn, settings["MYSQL_PASSWORD"])
+
+    def test_fresh_credentials_are_separate_and_external_capabilities_start_disabled(self):
+        destination, result = self.generate()
+        settings = read_env(destination)
+        names = ("MYSQL_PASSWORD", "MYSQL_ROOT_PASSWORD", "MYSQL_MIGRATOR_PASSWORD")
+        self.assertEqual(len({settings[name] for name in names}), 3)
+        for name in names:
+            self.assertRegex(settings[name], r"^[a-f0-9]{48}$")
+            self.assertNotIn(settings[name], result.stdout + result.stderr)
+        self.assertRegex(settings["FRESH_STACK_OWNER"], r"^[a-f0-9]{32}$")
+        self.assertEqual(settings["NOTIFICATION_ENABLED"], "false")
+        self.assertEqual(settings["LLM_BASE_URL"], "http://127.0.0.1:9/v1")
 
     def test_generated_dsn_parses_with_go_sql_driver(self):
         go = shutil.which("go")

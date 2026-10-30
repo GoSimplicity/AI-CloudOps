@@ -120,18 +120,25 @@ cp env.example .env
 #   MYSQL_ROOT_PASSWORD=<random>     # root password of the Compose MySQL
 #   REDIS_PASSWORD=<random>          # Compose Redis runs with --requirepass
 #   REDIS_ADDR=localhost:36379       # Compose Redis is published on 36379
-#   MYSQL_ADDR=root:<MYSQL_ROOT_PASSWORD>@tcp(localhost:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=Local
+#   MYSQL_ADDR=root:<MYSQL_ROOT_PASSWORD>@tcp(localhost:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=UTC
 #   BOOTSTRAP_ADMIN_PASSWORD=<>= 12 chars>   # creates the `admin` user on first start
 docker compose up -d
 ```
 
 This exposes MySQL on `3306`, Redis on `36379` and Prometheus on `9090`, using the passwords from your `.env`.
 
-### 2. Run the backend
+### 2. Initialize schema explicitly, then run the backend
+
+Application startup verifies schema history and the UTC notification marker; it does not create tables. For a new isolated development database, prepare an owner-only dedicated migration DSN file, then run:
 
 ```bash
+go run ./cmd/schema plan
+go run ./cmd/schema migrate --confirm-new-database --dsn-file "$HOME/.config/ai-cloudops/schema-migrator.dsn"
+go run ./cmd/schema init-clock --confirm-no-writers --notification-timezone UTC --dsn-file "$HOME/.config/ai-cloudops/schema-migrator.dsn"
 go run main.go
 ```
+
+Keep the application DSN timezone consistent with the explicit marker. Existing unversioned databases require the reviewed legacy preflight/adoption path; these commands refuse non-empty schemas.
 
 JWT signing keys are validated in **every** environment, including development; there is no switch to relax this. `JWT_KEY1` and `JWT_KEY2` must each be at least 32 bytes (UTF-8 byte length) with at least 10 distinct characters, must not have leading/trailing whitespace or contain control characters or invisible Unicode format characters such as zero-width space (U+200B), BOM (U+FEFF) or right-to-left override (U+202E) (nothing is trimmed silently), and must differ from each other (compared case-insensitively after trimming). The sample-value check is best effort: it only matches a prefix fragment shared by the repository's historical sample keys (in any letter case) plus the hashes of registered historical defaults; the short placeholders in `env.example` are rejected by the length check. Other sample or leaked values cannot be detected, so always use freshly generated keys. Error messages name the variable and the reason only; they never print the key.
 
@@ -171,25 +178,28 @@ Place the three repositories side by side. The directory names of the frontend a
 <workspace>/
 ├── AI-CloudOps/          # this repo (any name works)
 ├── AI-CloudOps-web/
-└── Ai-CloudOps-aiops/    # note the "Ai-" spelling expected by deploy/release/compose.yaml
+└── AI-CloudOps-aiops/    # preserve this exact casing
 ```
 
 From the backend repository:
 
 ```bash
-bash scripts/release-start.sh
+bash scripts/release-start.sh # offline plan only
+python3 scripts/release-env.py
+export COMPOSE_PROJECT_NAME="cloudops-fresh-$(openssl rand -hex 6)"
+bash scripts/release-start.sh --execute-new-stack --project "$COMPOSE_PROJECT_NAME"
 ```
 
-The script checks the sibling repos and Docker, generates a private `deploy/release/.env` (mode `0600`, git-ignored, never overwritten) with random secrets, then builds and waits for all services to become healthy. The console is served at `http://localhost:18080`, bound to the loopback interface. The initial account is `admin`; its password is `BOOTSTRAP_ADMIN_PASSWORD` in `deploy/release/.env`.
+The default command is offline and does not inspect credentials or Docker. Explicit initialization requires a new local project and a separately generated private `deploy/release/.env` (mode `0600`, git-ignored, never overwritten). It migrates the schema and registers the notification timezone before granting limited runtime permissions and starting applications. Existing volumes, accounts and schemas are refused; use the reviewed legacy adoption path instead. The console is served at `http://localhost:18080`, bound to the loopback interface. The initial account is `admin`; its password is `BOOTSTRAP_ADMIN_PASSWORD` in `deploy/release/.env`.
 
-Step by step:
+Keep `COMPOSE_PROJECT_NAME` set for subsequent Compose operations. Run acceptance only against your isolated stack:
 
 ```bash
-python3 scripts/release-env.py
-docker compose -f deploy/release/compose.yaml config --quiet
-docker compose -f deploy/release/compose.yaml up -d --build --wait --wait-timeout 300
 python3 scripts/release-smoke.py
+docker compose -f deploy/release/compose.yaml ps
 ```
+
+See [fresh initialization](docs/release/fresh-schema-start.md) and [schema migration](docs/release/schema-cli.md). This local workflow does not deploy or upgrade production.
 
 For public access, put a TLS reverse proxy in front and set `PUBLIC_ORIGIN` to the real HTTPS origin. Do not expose MySQL, Redis or the AIOps service directly. Backups, upgrades, rollback and release gates are described in [docs/release/README.md](docs/release/README.md) (Chinese).
 
