@@ -156,7 +156,10 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	prometheusConfigCache := cache.NewPrometheusConfigCache(logger, scrapePoolDAO, scrapeJobDAO, monitorConfigDAO, batchConfigManager, cmdable)
 	alertManagerPoolDAO := alert.NewAlertManagerPoolDAO(db, logger)
 	alertManagerSendDAO := alert.NewAlertManagerSendDAO(db, logger)
-	alertManagerConfigCache := cache.NewAlertManagerConfigCache(logger, alertManagerPoolDAO, alertManagerSendDAO, monitorConfigDAO, batchConfigManager, cmdable)
+	alertManagerConfigCache, err := cache.NewAlertManagerConfigCache(cfg, logger, alertManagerPoolDAO, alertManagerSendDAO, monitorConfigDAO, batchConfigManager, cmdable)
+	if err != nil {
+		return nil, err
+	}
 	alertManagerRuleDAO := alert.NewAlertManagerRuleDAO(db, logger, userDAO)
 	alertRuleConfigCache := cache.NewAlertRuleConfigCache(logger, scrapePoolDAO, alertManagerRuleDAO, monitorConfigDAO, batchConfigManager, cmdable)
 	alertManagerRecordDAO := alert.NewAlertManagerRecordDAO(db, logger, userDAO)

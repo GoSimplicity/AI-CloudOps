@@ -32,6 +32,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertPoolDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	configDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
@@ -40,7 +41,6 @@ import (
 	al "github.com/prometheus/alertmanager/pkg/labels"
 	pm "github.com/prometheus/common/model"
 	"github.com/redis/go-redis/v9"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
@@ -64,6 +64,7 @@ type alertManagerConfigCache struct {
 	mu               sync.RWMutex
 	alertWebhookAddr string
 	webhookFileDir   string
+	serverPort       string
 	alertPoolDAO     alertPoolDao.AlertManagerPoolDAO
 	alertSendDAO     alertPoolDao.AlertManagerSendDAO
 	configDAO        configDao.MonitorConfigDAO
@@ -71,25 +72,30 @@ type alertManagerConfigCache struct {
 }
 
 func NewAlertManagerConfigCache(
+	cfg *config.Config,
 	logger *zap.Logger,
 	alertPoolDAO alertPoolDao.AlertManagerPoolDAO,
 	alertSendDAO alertPoolDao.AlertManagerSendDAO,
 	configDAO configDao.MonitorConfigDAO,
 	batchManager *BatchConfigManager,
 	redisClient redis.Cmdable,
-) AlertManagerConfigCache {
+) (AlertManagerConfigCache, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("配置不能为空")
+	}
 	return &alertManagerConfigCache{
 		configMap:        make(map[string]string),
 		logger:           logger,
 		redis:            redisClient,
-		alertWebhookAddr: viper.GetString("prometheus.alert_webhook_addr"),
-		webhookFileDir:   viper.GetString("prometheus.alert_webhook_file_dir"),
+		alertWebhookAddr: cfg.Prometheus.AlertWebhookAddr,
+		webhookFileDir:   cfg.Prometheus.AlertWebhookFileDir,
+		serverPort:       cfg.Server.Port,
 		mu:               sync.RWMutex{},
 		alertPoolDAO:     alertPoolDAO,
 		alertSendDAO:     alertSendDAO,
 		configDAO:        configDAO,
 		batchManager:     batchManager,
-	}
+	}, nil
 }
 
 // GetConfigByIP 根据IP地址获取AlertManager的主配置内容
@@ -484,7 +490,7 @@ func (a *alertManagerConfigCache) buildWebhookURL(sendGroupID int) string {
 	base := strings.TrimSpace(a.alertWebhookAddr)
 	if base == "" {
 		// 兜底：使用本地端口，避免生成空 URL
-		return fmt.Sprintf("http://localhost:%s/api/v1/alerts/receive?send_group_id=%d", viper.GetString("server.port"), sendGroupID)
+		return fmt.Sprintf("http://localhost:%s/api/v1/alerts/receive?send_group_id=%d", a.serverPort, sendGroupID)
 	}
 
 	// scheme 大小写不敏感（RFC 3986），HTTPS://h/x 也视为完整 URL，不能拼成 http://HTTPS://…
