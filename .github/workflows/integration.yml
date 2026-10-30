@@ -53,13 +53,25 @@ jobs:
       - name: Cross-repository cloud provider contract
         run: go run scripts/integration/cloud_provider_contract.go ../AI-CloudOps-web
       - name: Generate private isolated configuration
-        run: python scripts/release-env.py
+        run: |
+          python scripts/release-env.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('deploy/release/.env')
+          content = path.read_text()
+          if content.count('NOTIFICATION_ENABLED=true\n') != 1:
+              raise SystemExit('Unexpected generated CI configuration')
+          path.write_text(content.replace('NOTIFICATION_ENABLED=true\n', 'NOTIFICATION_ENABLED=false\n') + 'LLM_BASE_URL=http://127.0.0.1:9/v1\n')
+          path.chmod(0o600)
+          PY
       - name: Build and start isolated stack
         run: docker compose -f deploy/release/compose.yaml up -d --build --wait --wait-timeout 300
       - name: Versioned migration engine with owned MySQL fixtures
         run: go test -race -tags=integration ./pkg/schema -count=1 -timeout=180s
       - name: Immutable baseline matches all registered models
         run: go test -race -tags=integration ./internal/dbschema -count=1 -timeout=180s
+      - name: Explicit migration CLI with owned MySQL fixtures
+        run: go test -race -tags=integration ./cmd/schema -count=1 -timeout=180s
       - name: Isolated MySQL full migration and YAML persistence
         run: python scripts/integration/schema_smoke.py --mysql-migration
       - name: Isolated MySQL notification channel pagination
@@ -108,6 +120,26 @@ jobs:
           for script, arguments in [('schema_smoke.py', []), ('account_access.py', ['--rbac']), ('workorder_flow.py', [])]:
               subprocess.run(['python', 'scripts/integration/' + script, '--url', 'http://localhost:18080', *arguments], env=env, check=True)
           PY
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.9.0
+          package_json_file: AI-CloudOps-web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: AI-CloudOps-web/pnpm-lock.yaml
+      - name: Install browser acceptance dependencies
+        working-directory: AI-CloudOps-web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+      - name: Offline browser gate safety regression
+        run: python -m unittest scripts.tests.test_business_browser -v
+      - name: Real browser workorder lifecycle and Cron cancellation
+        run: python scripts/integration/business_browser.py
+        env:
+          CLOUDOPS_CI_OWNED_STACK: '1'
       - name: Internal MCP authentication and calculator
         run: docker compose -f deploy/release/compose.yaml exec -T aiops python - < scripts/integration/mcp_smoke.py
       - name: AI proxy permission catalogue matches actual HTTP and WebSocket routes
