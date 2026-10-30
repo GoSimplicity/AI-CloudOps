@@ -28,21 +28,25 @@ const credentialEnvironment = "CLOUDOPS_SCHEMA_DSN"
 var errCredentials = errors.New("dedicated schema credentials are missing or invalid")
 
 type options struct {
-	command       string
-	dsnFile       string
-	timeout       time.Duration
-	confirm       bool
-	confirmClock  bool
-	zone          string
-	database      string
-	runtimeName   string
-	runtimeHost   string
-	migratorName  string
-	migratorHost  string
-	section       string
-	format        string
-	confirmLegacy bool
-	noteFile      string
+	command              string
+	dsnFile              string
+	timeout              time.Duration
+	confirm              bool
+	confirmClock         bool
+	zone                 string
+	database             string
+	runtimeName          string
+	runtimeHost          string
+	migratorName         string
+	migratorHost         string
+	section              string
+	format               string
+	confirmLegacy        bool
+	noteFile             string
+	upgradeExecute       bool
+	upgradeNoteFile      string
+	backupProofFile      string
+	attestHistoricalTime bool
 }
 
 type schemaDatabase interface {
@@ -53,6 +57,7 @@ type schemaDatabase interface {
 	InitializeClock(context.Context, string) error
 	ValidateLegacy(context.Context) error
 	AdoptBaseline(context.Context, []schema.Migration, string) error
+	UpgradeBaseline(context.Context, []schema.Migration, schema.UpgradeEvidence) error
 	Close() error
 }
 
@@ -78,8 +83,8 @@ func parseOptions(args []string) (options, error) {
 		return result, nil
 	}
 	result.command = args[0]
-	if result.command != "plan" && result.command != "verify" && result.command != "migrate" && result.command != "init-clock" && result.command != "verify-clock" && result.command != "roles" && result.command != "preflight-legacy" && result.command != "adopt" {
-		return options{}, errors.New("expected plan, verify, migrate, init-clock, verify-clock, roles, preflight-legacy or adopt")
+	if result.command != "plan" && result.command != "verify" && result.command != "migrate" && result.command != "init-clock" && result.command != "verify-clock" && result.command != "roles" && result.command != "preflight-legacy" && result.command != "adopt" && result.command != knownUpgradeCommand {
+		return options{}, errors.New("expected plan, verify, migrate, clock, roles, legacy inspection/adoption or upgrade-a8f1700")
 	}
 	flags := flag.NewFlagSet("schema", flag.ContinueOnError)
 	// flag errors can include supplied values. Credentials must never appear in
@@ -99,6 +104,10 @@ func parseOptions(args []string) (options, error) {
 	flags.StringVar(&result.format, "format", "", "roles plan output: sql or json")
 	flags.BoolVar(&result.confirmLegacy, "confirm-legacy-schema", false, "confirm verified existing version-1 schema adoption")
 	flags.StringVar(&result.noteFile, "adoption-note-file", "", "owner-only single-line adoption audit note file")
+	flags.BoolVar(&result.upgradeExecute, "execute", false, "execute the explicit supported-source upgrade instead of its offline plan")
+	flags.StringVar(&result.upgradeNoteFile, "upgrade-note-file", "", "owner-only single-line upgrade audit note")
+	flags.StringVar(&result.backupProofFile, "backup-proof-file", "", "owner-only single-line JSON backup attestation")
+	flags.BoolVar(&result.attestHistoricalTime, "attest-historical-time", false, "explicitly attest unchanged historical DATETIME interpretation")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 {
 		return options{}, errors.New("invalid command options; use --help")
 	}
@@ -111,7 +120,7 @@ func parseOptions(args []string) (options, error) {
 	if result.command != "migrate" && result.confirm {
 		return options{}, errors.New("confirmation is only valid for migrate")
 	}
-	if result.command == "init-clock" || result.command == "verify-clock" {
+	if result.command == "init-clock" || result.command == "verify-clock" || (result.command == knownUpgradeCommand && result.upgradeExecute) {
 		if dbschema.ValidateClockZone(result.zone) != nil {
 			return options{}, errors.New("clock commands require an explicit valid notification timezone")
 		}
@@ -121,7 +130,7 @@ func parseOptions(args []string) (options, error) {
 	} else if result.zone != "" {
 		return options{}, errors.New("notification-timezone is only valid for clock commands")
 	}
-	if result.command != "init-clock" && result.command != "adopt" && result.confirmClock {
+	if result.command != "init-clock" && result.command != "adopt" && result.command != knownUpgradeCommand && result.confirmClock {
 		return options{}, errors.New("confirm-no-writers is only valid for init-clock or adopt")
 	}
 	if result.command == "plan" && result.dsnFile != "" {
@@ -133,6 +142,17 @@ func parseOptions(args []string) (options, error) {
 		}
 	} else if result.confirmLegacy || result.noteFile != "" {
 		return options{}, errors.New("adoption options are only valid for adopt")
+	}
+	if result.command == knownUpgradeCommand {
+		if result.upgradeExecute {
+			if !result.confirmClock || result.upgradeNoteFile == "" || result.backupProofFile == "" {
+				return options{}, errors.New("upgrade execution requires --confirm-no-writers, --upgrade-note-file, --backup-proof-file and --notification-timezone")
+			}
+		} else if result.confirmClock || result.upgradeNoteFile != "" || result.backupProofFile != "" || result.attestHistoricalTime || result.dsnFile != "" {
+			return options{}, errors.New("upgrade plan is offline; execution options require --execute")
+		}
+	} else if result.upgradeExecute || result.upgradeNoteFile != "" || result.backupProofFile != "" || result.attestHistoricalTime {
+		return options{}, errors.New("upgrade options are only valid for upgrade-a8f1700")
 	}
 	if result.command == "roles" {
 		if result.section == "" {
@@ -159,6 +179,7 @@ func parseOptions(args []string) (options, error) {
 func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps dependencies) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprintln(out, "Usage: schema [plan | verify | migrate --confirm-new-database | verify-clock --notification-timezone ZONE | init-clock --confirm-no-writers --notification-timezone ZONE] [--dsn-file PATH] [--timeout 2m]")
+		fmt.Fprintln(out, "Known source: upgrade-a8f1700 is an offline plan; --execute requires no-writers, private note/backup attestation and explicit notification timezone. Historical times need separate attestation.")
 		fmt.Fprintln(out, "Legacy inspection: preflight-legacy. Adoption: adopt --confirm-legacy-schema --confirm-no-writers --adoption-note-file PATH. These never convert historical timestamps.")
 		fmt.Fprintln(out, "Default plan and roles are offline. roles requires --database, --runtime-role, --runtime-role-host, --migrator-role and --migrator-role-host. Database commands use a private DSN file or CLOUDOPS_SCHEMA_DSN; no application .env is loaded.")
 		return 0
@@ -172,6 +193,17 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 	if err != nil || schema.Validate(manifest) != nil {
 		fmt.Fprintln(diagnostics, "embedded migration manifest is invalid")
 		return 1
+	}
+	if config.command == knownUpgradeCommand && !config.upgradeExecute {
+		plan, err := dbschema.KnownA8Upgrade()
+		if err != nil {
+			fmt.Fprintln(diagnostics, "immutable known-source upgrade inputs are invalid")
+			return 1
+		}
+		fmt.Fprintln(out, "Offline known-source upgrade plan only; no credentials read or database connected. 15 frozen schema/repair statements plus explicit timezone registration.")
+		fmt.Fprintf(out, "source=%s source_checksum=%s implementation_checksum=%s target_checksum=%s\n", plan.Source, plan.SourceChecksum, plan.ImplementationChecksum, manifest[0].Checksum)
+		fmt.Fprintln(out, "Backup SHA and operator attestation do not prove automatic full-stack restore. Only the exact source schema is supported.")
+		return 0
 	}
 	if config.command == "roles" {
 		plan, err := BuildRolePlan(config.database, RoleAccount{config.runtimeName, config.runtimeHost}, RoleAccount{config.migratorName, config.migratorHost})
@@ -231,6 +263,15 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 			return 2
 		}
 	}
+	var upgradeEvidence schema.UpgradeEvidence
+	if config.command == knownUpgradeCommand {
+		var err error
+		upgradeEvidence, err = readUpgradeEvidence(config)
+		if err != nil {
+			fmt.Fprintln(diagnostics, errUpgradeEvidence.Error())
+			return 2
+		}
+	}
 	dsn, err := readCredentials(config.dsnFile, deps.getenv)
 	if err != nil {
 		fmt.Fprintln(diagnostics, errCredentials.Error())
@@ -244,6 +285,26 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 	defer db.Close()
 	ctx, cancel := context.WithTimeout(ctx, config.timeout)
 	defer cancel()
+	if config.command == knownUpgradeCommand {
+		if err := db.UpgradeBaseline(ctx, manifest, upgradeEvidence); err != nil {
+			if errors.Is(err, schema.ErrPreflight) {
+				fmt.Fprintln(diagnostics, "known-source preflight rejected: inspect exact 49-table source, direct metadata privileges, disabled unsupported providers and historical-time attestation; no automatic repair is performed")
+			} else {
+				fmt.Fprintln(diagnostics, safeError(err))
+			}
+			return 1
+		}
+		if err := db.Verify(ctx, manifest); err != nil {
+			fmt.Fprintln(diagnostics, "upgrade returned but schema history verification failed; inspect before retry")
+			return 1
+		}
+		if err := db.VerifyClock(ctx, config.zone); err != nil {
+			fmt.Fprintln(diagnostics, "upgrade schema is present but notification timezone verification failed; inspect before retry")
+			return 1
+		}
+		fmt.Fprintln(out, "Version-1 schema history and explicit timezone verified. Inspect ledger upgrade provenance; backup attestation does not certify full-stack recovery. Historical timestamps and legacy queues were not converted or replayed.")
+		return 0
+	}
 	if config.command == "preflight-legacy" {
 		if err := db.ValidateLegacy(ctx); err != nil {
 			fmt.Fprintln(diagnostics, safeError(err))
@@ -418,6 +479,13 @@ func (db sqlDatabase) ValidateLegacy(ctx context.Context) error {
 }
 func (db sqlDatabase) AdoptBaseline(ctx context.Context, manifest []schema.Migration, note string) error {
 	return schema.AdoptBaseline(ctx, db.db, manifest, dbschema.ValidateLegacyCurrent, note)
+}
+func (db sqlDatabase) UpgradeBaseline(ctx context.Context, manifest []schema.Migration, evidence schema.UpgradeEvidence) error {
+	plan, err := dbschema.KnownA8Upgrade()
+	if err != nil {
+		return err
+	}
+	return schema.UpgradeBaseline(ctx, db.db, manifest, plan, evidence)
 }
 func (db sqlDatabase) Close() error { return db.db.Close() }
 

@@ -20,12 +20,14 @@ import (
 const privateCanary = "credential-error-canary"
 
 type fakeDatabase struct {
-	actions        []string
-	verifyErrors   []error
-	preflightError error
-	migrationError error
-	clockError     error
-	deadline       bool
+	actions         []string
+	verifyErrors    []error
+	preflightError  error
+	migrationError  error
+	clockError      error
+	upgradeError    error
+	upgradeEvidence schema.UpgradeEvidence
+	deadline        bool
 }
 
 func (db *fakeDatabase) Verify(ctx context.Context, _ []schema.Migration) error {
@@ -61,6 +63,11 @@ func (db *fakeDatabase) ValidateLegacy(context.Context) error {
 func (db *fakeDatabase) AdoptBaseline(context.Context, []schema.Migration, string) error {
 	db.actions = append(db.actions, "adopt")
 	return db.migrationError
+}
+func (db *fakeDatabase) UpgradeBaseline(_ context.Context, _ []schema.Migration, evidence schema.UpgradeEvidence) error {
+	db.actions = append(db.actions, "upgrade")
+	db.upgradeEvidence = evidence
+	return db.upgradeError
 }
 func (db *fakeDatabase) Close() error { db.actions = append(db.actions, "close"); return nil }
 
