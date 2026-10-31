@@ -16,11 +16,13 @@
 
 后端配置重构及配套工具测试已提交：Webhook 四模块通过构造器复制配置，Cron 显式动态 policy 保留逐次门禁；生产 Viper 导入仅留 `internal/config`。Go 全量测试/vet、相关 race、所有构建标签编译及强制 Compose 的158项脚本均通过。详见[配置边界](configuration-boundary.md)。
 
-前端当前固定来源 `dcaa59f1eb7f78131c707a97cd41b350ebdadeeb`，详情见[该提交的技术债记录](https://github.com/GoSimplicity/AI-CloudOps-web/blob/dcaa59f1eb7f78131c707a97cd41b350ebdadeeb/docs/release/eslint-debt.md)。完整 ESLint 从34750 errors/439 warnings降至**11968 errors/5 warnings**，仍未清零；后端原清单状态不代表本轮剩余 lint 已全部完成。运行逻辑阶段135文件2153测试、类型和11项构建通过；最后 Secret 空分支收尾另验11文件474项及类型，未把前一全套写成重复执行。
+前端当前固定来源 `daec9407c09270a6d2d59d0591b54ef16552bd85`，详情见[该提交的技术债记录](https://github.com/GoSimplicity/AI-CloudOps-web/blob/daec9407c09270a6d2d59d0591b54ef16552bd85/docs/release/eslint-debt.md)。完整 ESLint 从34750 errors/439 warnings降至**11962 errors/5 warnings**，仍未清零；后端原清单状态不代表本轮剩余 lint 已全部完成。运行逻辑阶段135文件2153测试、类型和11项构建通过；最后 Secret 空分支收尾另验11文件474项及类型，未把前一全套写成重复执行。
 
 新增运行边界覆盖正 safe ID、详情/提交票据、跨模态 loading、批量确认集合及旧 owner 回执；Pod 各资源关闭故障互相隔离。仅使用隔离/替身测试，未执行真实 Kubernetes、云、模型、通知或生产操作。
 
 配置兼容收尾通过12项格式回归及136文件2160项全量测试、类型检查；产品源码没有随此配置变化，11项构建仍引用此前运行逻辑阶段结果。仅Vue范围的重复闭合换行规则交由错误级Prettier校验，独立Vue规则与语义/安全/TODO约束保留。
+
+最后6处测试冗余类型标记另验7项及类型，运行JavaScript保持；完整扫描11962错误/5警告。未把前一2160项全套或构建写成此后重新执行。
 
 `integration-sources.json` 已固定该前端与 AIOps `c2de23e`。新组合的 CI 应按实际 checkout SHA 和对应 run 结果确认，不拿此前旧组合的成功代替。历史 eec9582a 镜像候选未重建，也不包含本次新增代码；未上线、未发布标签或镜像。
 
