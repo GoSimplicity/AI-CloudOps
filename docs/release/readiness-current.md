@@ -12,6 +12,16 @@
 
 状态含义：**已实现**表示原清单明确范围已有实现及回归；隔离验证与外部验收分别记录，不相互替代。本轮最终离线验证：Go `go test ./...`、`go vet ./...` 通过，脚本 156 项通过；Web 133 文件、2051 项单测、类型检查与生产构建通过；AIOps 2310 通过、33 跳过、3 条既有 SWIG 告警，Ruff 通过。跳过的外部依赖用例不算已验。另有真实隔离 MySQL/Redis、迁移/回退、race 和浏览器回归，按各专项证据判断范围。没有重测真实模型、通知、云、Kubernetes、SSH 或生产服务。
 
+## 2026-10-31 技术债续做
+
+后端配置重构及配套工具测试已提交：Webhook 四模块通过构造器复制配置，Cron 显式动态 policy 保留逐次门禁；生产 Viper 导入仅留 `internal/config`。Go 全量测试/vet、相关 race、所有构建标签编译及强制 Compose 的158项脚本均通过。详见[配置边界](configuration-boundary.md)。
+
+前端当前固定来源 `e68fb072a344373f6429b855007c26413c6a2166`，详情见[该提交的技术债记录](https://github.com/GoSimplicity/AI-CloudOps-web/blob/e68fb072a344373f6429b855007c26413c6a2166/docs/release/eslint-debt.md)。完整 ESLint 从34750 errors/439 warnings降至**12254 errors/5 warnings**，仍未清零；后端原清单状态不代表本轮剩余 lint 已全部完成。运行逻辑阶段135文件2153测试、类型和11项构建通过；最后 Secret 空分支收尾另验11文件474项及类型，未把前一全套写成重复执行。
+
+新增运行边界覆盖正 safe ID、详情/提交票据、跨模态 loading、批量确认集合及旧 owner 回执；Pod 各资源关闭故障互相隔离。仅使用隔离/替身测试，未执行真实 Kubernetes、云、模型、通知或生产操作。
+
+`integration-sources.json` 已固定该前端与 AIOps `c2de23e`。新组合的 CI 应按实际 checkout SHA 和对应 run 结果确认，不拿此前旧组合的成功代替。历史 eec9582a 镜像候选未重建，也不包含本次新增代码；未上线、未发布标签或镜像。
+
 ## F01–F14
 
 路径前缀 `Go` 为后端仓库，`Web` 为前端仓库，`AI` 为 AIOps 仓库。
