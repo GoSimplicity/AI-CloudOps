@@ -38,7 +38,7 @@ func TestReloadPreservesRunningJobsAndSharedEntries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scheduler := NewCronScheduler(zap.NewNop(), store, shared, nil)
+	scheduler := NewCronScheduler(zap.NewNop(), store, shared, nil, nil)
 	scheduler.localExecAllowed = func() bool { return true } // job_type=2 需打开本地执行开关
 	ctx := context.Background()
 	if err := scheduler.loadAndScheduleJobs(ctx); err != nil {

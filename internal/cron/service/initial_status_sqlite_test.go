@@ -37,7 +37,7 @@ func TestCronInitialStatusPersistsThroughHTTP(t *testing.T) {
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set("user", jwt.UserClaims{Uid: 7, Username: "fixture"}) })
 	store := dao.NewCronJobDAO(zap.NewNop(), db)
-	api.NewCronJobHandler(zap.NewNop(), service.NewCronService(zap.NewNop(), store, nil, nil, nil)).RegisterRouters(r)
+	api.NewCronJobHandler(zap.NewNop(), service.NewCronService(zap.NewNop(), store, nil, nil, nil, nil)).RegisterRouters(r)
 	for i, tc := range []struct {
 		field string
 		want  model.CronJobStatus

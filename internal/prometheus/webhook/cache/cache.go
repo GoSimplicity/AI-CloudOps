@@ -30,10 +30,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/robot"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -50,6 +50,7 @@ type webhookCache struct {
 	l              *zap.Logger
 	dao            dao.WebhookDao
 	robot          robot.WebhookRobot
+	renewInterval  time.Duration
 	cacheOnce      sync.Once      // 确保 cacheHasSynced 只被关闭一次
 	cacheHasSynced chan struct{}  // 用于通知缓存已同步完成
 	initWG         sync.WaitGroup // 用于等待所有缓存初次同步完成
@@ -64,9 +65,14 @@ type webhookCache struct {
 	RuleLock        sync.RWMutex
 }
 
-func NewWebhookCache(l *zap.Logger, dao dao.WebhookDao, robot robot.WebhookRobot) WebhookCache {
+func NewWebhookCache(cfg *config.WebhookConfig, l *zap.Logger, dao dao.WebhookDao, robot robot.WebhookRobot) WebhookCache {
+	var renewInterval time.Duration
+	if cfg != nil {
+		renewInterval = time.Duration(cfg.CommonMapRenewIntervalSeconds) * time.Second
+	}
 	return &webhookCache{
 		l:              l,
+		renewInterval:  renewInterval,
 		dao:            dao,
 		robot:          robot,
 		cacheHasSynced: make(chan struct{}),
@@ -79,7 +85,7 @@ func NewWebhookCache(l *zap.Logger, dao dao.WebhookDao, robot robot.WebhookRobot
 
 // RenewAllCaches 刷新所有缓存
 func (wc *webhookCache) RenewAllCaches(ctx context.Context) error {
-	renewInterval := time.Duration(viper.GetInt("webhook.common_map_renew_interval_seconds")) * time.Second
+	renewInterval := wc.renewInterval
 	if renewInterval <= 0 {
 		wc.l.Warn("刷新间隔配置无效,使用默认值60秒")
 		renewInterval = 60 * time.Second

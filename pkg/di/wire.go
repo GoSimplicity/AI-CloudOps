@@ -263,6 +263,7 @@ var JobSet = wire.NewSet(
 )
 
 var CronSet = wire.NewSet(
+	config.NewCronLocalExecPolicy,
 	cronExecutor.NewSSHExecutor,
 	wire.Bind(new(cron.BuiltinRunner), new(*cronHandler.CronHandlers)),
 	cron.NewUnifiedCronManager,

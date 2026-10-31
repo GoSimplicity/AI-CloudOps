@@ -68,8 +68,8 @@ type cronService struct {
 	userDAO       userDao.UserDAO
 	client        taskEnqueuer
 	cronScheduler *scheduler.CronScheduler
-	// localExecAllowed 读取 cron.allow_local_exec；为 nil 时读取全局配置（测试可替换）
-	localExecAllowed func() bool
+	// localExecAllowed 显式注入动态执行门禁；nil 时拒绝本地执行。
+	localExecAllowed config.CronLocalExecPolicy
 }
 
 func NewCronService(
@@ -78,22 +78,21 @@ func NewCronService(
 	userDAO userDao.UserDAO,
 	client *asynq.Client,
 	cronScheduler *scheduler.CronScheduler,
+	localExecAllowed config.CronLocalExecPolicy,
 ) CronService {
 	return &cronService{
-		logger:        logger,
-		cronDAO:       cronDAO,
-		userDAO:       userDAO,
-		client:        client,
-		cronScheduler: cronScheduler,
+		logger:           logger,
+		cronDAO:          cronDAO,
+		userDAO:          userDAO,
+		client:           client,
+		cronScheduler:    cronScheduler,
+		localExecAllowed: localExecAllowed,
 	}
 }
 
 // allowLocalExec 当前是否允许命令行/脚本任务
 func (s *cronService) allowLocalExec() bool {
-	if s.localExecAllowed != nil {
-		return s.localExecAllowed()
-	}
-	return config.CronLocalExecAllowed()
+	return s.localExecAllowed.IsAllowed()
 }
 
 // validateJobTaskEnv 只有命令行任务（JobType==Command）会把 Environment 注入子进程，因此只校验这一类；

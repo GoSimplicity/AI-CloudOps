@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/task"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -247,6 +248,35 @@ func TestCronJobEnvOnlyValidatedForCommand(t *testing.T) {
 		ureq.Environment = bad
 		if err := newLocalExecService(true, store, nil).UpdateCronJob(context.Background(), ureq); err != nil || store.updated == nil {
 			t.Fatalf("update type=%d: 不应因 Environment 被拦, got %v", jobType, err)
+		}
+	}
+}
+
+func TestConstructedCronServiceReadsRevokedPolicy(t *testing.T) {
+	for _, jobType := range []model.CronJobType{model.CronJobTypeCommand, model.CronJobTypeScript} {
+		for _, missingPolicy := range []bool{false, true} {
+			store := &localExecStore{job: &model.CronJob{Model: model.Model{ID: 1}, JobType: jobType, Status: model.CronJobStatusEnabled, Schedule: "@every 1h"}}
+			allowed := true
+			var policy config.CronLocalExecPolicy
+			if !missingPolicy {
+				policy = func() bool { return allowed }
+			}
+			svc := NewCronService(zap.NewNop(), store, nil, nil, nil, policy)
+			// 构造后撤销；保存、启用、手动入队均不能使用启动时的 true。
+			allowed = false
+			for _, invoke := range []func() error{
+				func() error { return svc.CreateCronJob(context.Background(), createReq(jobType)) },
+				func() error { return svc.UpdateCronJob(context.Background(), updateReq(jobType)) },
+				func() error { return svc.EnableCronJob(context.Background(), 1) },
+				func() error { return svc.TriggerCronJob(context.Background(), 1) },
+			} {
+				if err := invoke(); !errors.Is(err, task.ErrLocalExecDisabled) {
+					t.Fatalf("type=%d nil=%v: want revoked permission, got %v", jobType, missingPolicy, err)
+				}
+			}
+			if store.created != nil || store.updated != nil || store.status != nil {
+				t.Fatal("revoked policy allowed a persistent mutation")
+			}
 		}
 	}
 }

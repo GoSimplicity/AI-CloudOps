@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	alertDAO "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/content"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/robot"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 )
@@ -35,14 +35,13 @@ func TestAllFeishuEntrypointsRequireExplicitSuccess(t *testing.T) {
 				{"non JSON", "INVALID", false}, {"explicit zero", `"code":0,`, true},
 			} {
 				t.Run(test.name, func(t *testing.T) {
-					viper.Reset()
-					t.Cleanup(viper.Reset)
-					viper.Set("webhook.im_feishu.private_robot_app_id", canary)
-					viper.Set("webhook.im_feishu.private_robot_app_secret", canary)
-					viper.Set("webhook.im_feishu.request_timeout_seconds", 7)
+					cfg := &config.WebhookConfig{}
+					cfg.ImFeishu.PrivateRobotAppID = canary
+					cfg.ImFeishu.PrivateRobotAppSecret = canary
+					cfg.ImFeishu.RequestTimeoutSeconds = 7
 					endpoint := "https://" + canary + ":" + canary + "@fixture.invalid/path?private=" + canary
-					viper.Set("webhook.im_feishu.tenant_access_token_api", endpoint)
-					viper.Set("webhook.im_feishu.group_message_api", endpoint)
+					cfg.ImFeishu.TenantAccessTokenAPI = endpoint
+					cfg.ImFeishu.GroupMessageAPI = endpoint
 					body := "{" + test.prefix + `"tenant_access_token":"` + canary + `","expire":7200,"msg":"` + canary + `","data":{"unknown":true}}`
 					if test.prefix == "INVALID" {
 						body = canary
@@ -64,9 +63,9 @@ func TestAllFeishuEntrypointsRequireExplicitSuccess(t *testing.T) {
 					case "eventDAO":
 						err = alertDAO.NewAlertManagerEventDAO(nil, logger, nil).SendMessageToGroup(context.Background(), endpoint, canary)
 					case "content":
-						err = content.NewWebhookContent(logger, nil, nil).SentFeishuGroup(context.Background(), canary, canary)
+						err = content.NewWebhookContent(cfg, logger, nil, nil).SentFeishuGroup(context.Background(), canary, canary)
 					case "robot":
-						client := robot.NewWebhookRobot(logger)
+						client := robot.NewWebhookRobot(cfg, logger)
 						var token string
 						token, err = client.GetTenantAccessToken(context.Background())
 						if test.success && token != canary {

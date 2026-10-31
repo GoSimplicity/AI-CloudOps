@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	robotAPI "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/robot"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -15,11 +15,10 @@ type fixturePrivateRobot struct{ robotAPI.WebhookRobot }
 func (fixturePrivateRobot) GetPrivateRobotToken() string { return "fixture-token" }
 
 func TestPrivateMessageEndpointCanBeIsolated(t *testing.T) {
-	viper.Reset()
-	t.Cleanup(viper.Reset)
-	viper.Set("webhook.im_feishu.private_message_api", "http://127.0.0.1:9/open-apis/im/v1/messages")
+	cfg := &config.WebhookConfig{}
+	cfg.ImFeishu.PrivateMessageAPI = "http://127.0.0.1:9/open-apis/im/v1/messages"
 	transport := &recordTransport{}
-	content := &webhookContent{l: zap.NewNop(), robot: fixturePrivateRobot{}, client: &http.Client{Transport: transport}}
+	content := &webhookContent{frontDomain: cfg.FrontDomain, backendDomain: cfg.BackendDomain, groupMessageAPI: cfg.ImFeishu.GroupMessageAPI, privateMessageAPI: cfg.ImFeishu.PrivateMessageAPI, l: zap.NewNop(), robot: fixturePrivateRobot{}, client: &http.Client{Transport: transport}}
 	if err := content.SentFeishuPrivate(context.Background(), "{}", map[string]string{"fixture-user": ""}); err != nil {
 		t.Fatal(err)
 	}

@@ -25,8 +25,7 @@ func TestReloadKeepsSingleEntryAndRemovesDeletedJob(t *testing.T) {
 	// Register/Unregister 只操作内存，不启动调度器或访问 Redis
 	scheduler := asynq.NewScheduler(asynq.RedisClientOpt{Addr: "127.0.0.1:1"}, nil)
 	data := &jobsStub{jobs: []*model.CronJob{{Model: model.Model{ID: 1}, Name: "daily", Schedule: "@every 1h", JobType: model.CronJobTypeCommand}}}
-	cs := NewCronScheduler(zap.NewNop(), data, scheduler, nil)
-	cs.localExecAllowed = func() bool { return true } // 本用例使用命令行任务，需打开开关
+	cs := NewCronScheduler(zap.NewNop(), data, scheduler, nil, func() bool { return true }) // 本用例使用命令行任务，需打开开关
 	for i := 0; i < 3; i++ {
 		if err := cs.loadAndScheduleJobs(context.Background()); err != nil {
 			t.Fatal(err)
@@ -76,8 +75,7 @@ func TestReloadKeepsSingleEntryAndRemovesDeletedJob(t *testing.T) {
 func TestRemoveUsesSchedulerEntryID(t *testing.T) {
 	scheduler := asynq.NewScheduler(asynq.RedisClientOpt{Addr: "127.0.0.1:1"}, nil)
 	data := &jobsStub{jobs: []*model.CronJob{{Model: model.Model{ID: 5}, Name: "job", Schedule: "@every 1h", JobType: model.CronJobTypeCommand}}}
-	cs := NewCronScheduler(zap.NewNop(), data, scheduler, nil)
-	cs.localExecAllowed = func() bool { return true }
+	cs := NewCronScheduler(zap.NewNop(), data, scheduler, nil, func() bool { return true })
 	if err := cs.loadAndScheduleJobs(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -103,8 +101,7 @@ func TestSchedulerSkipsLocalExecJobsWhenDisabled(t *testing.T) {
 		{Model: model.Model{ID: 5}, Name: "system", Schedule: "@every 1h", JobType: model.CronJobTypeSystem},
 	}}
 	allowed := false
-	cs := NewCronScheduler(zap.NewNop(), data, scheduler, nil)
-	cs.localExecAllowed = func() bool { return allowed }
+	cs := NewCronScheduler(zap.NewNop(), data, scheduler, nil, func() bool { return allowed })
 	assertEntries := func(want ...int) {
 		t.Helper()
 		if len(cs.entries) != len(want) {

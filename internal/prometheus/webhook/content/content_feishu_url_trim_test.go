@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/spf13/viper"
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"go.uber.org/zap"
 )
 
@@ -17,11 +17,10 @@ func TestSentFeishuGroupURLTrimsSpace(t *testing.T) {
 		{"tab-and-newline", "\thttps://open.feishu.cn/open-apis/bot/v2/hook/\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			viper.Reset()
-			t.Cleanup(viper.Reset)
-			viper.Set("webhook.im_feishu.group_message_api", c.api)
+			cfg := &config.WebhookConfig{}
+			cfg.ImFeishu.GroupMessageAPI = c.api
 			rt := &recordTransport{}
-			wc := &webhookContent{l: zap.NewNop(), client: &http.Client{Transport: rt}}
+			wc := &webhookContent{frontDomain: cfg.FrontDomain, backendDomain: cfg.BackendDomain, groupMessageAPI: cfg.ImFeishu.GroupMessageAPI, privateMessageAPI: cfg.ImFeishu.PrivateMessageAPI, l: zap.NewNop(), client: &http.Client{Transport: rt}}
 			if err := wc.SentFeishuGroup(context.Background(), "{}", "tok123"); err != nil {
 				t.Fatalf("不应出错: %v", err)
 			}

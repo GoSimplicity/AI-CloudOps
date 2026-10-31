@@ -1,8 +1,9 @@
-package config
+package config_test
 
 import (
 	"context"
 	"errors"
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"io"
 	"net/http"
 	"os"
@@ -34,13 +35,13 @@ func TestLoadedWebhookBotIsolationAndCredentialGate(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			viper.Reset()
 			t.Cleanup(viper.Reset)
-			clearAllWebhookEnv(t)
+			config.ClearWebhookEnvForTest(t)
 			t.Setenv("WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_ID", test.id)
 			t.Setenv("WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET", test.secret)
 			t.Setenv("WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API", tokenURL)
 			t.Setenv("WEBHOOK_IM_FEISHU_PRIVATE_MESSAGE_API", privateURL)
 			t.Setenv("WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API", groupURL)
-			cfg, _, err := loadWebhookFromFile(webhookConfigFile)
+			cfg, _, err := config.LoadWebhookFromFileForTest("../../config/webhook.yaml")
 			if err != nil {
 				t.Fatal("actual webhook loader rejected fixture settings")
 			}
@@ -61,7 +62,7 @@ func TestLoadedWebhookBotIsolationAndCredentialGate(t *testing.T) {
 				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"code":0,"tenant_access_token":"fixture-token","expire":7200}`)), Header: make(http.Header), Request: request}, nil
 			})
 			core, logs := observer.New(zap.DebugLevel)
-			client := robot.NewWebhookRobot(zap.New(core))
+			client := robot.NewWebhookRobot(cfg, zap.New(core))
 			client.RefreshPrivateRobotToken(context.Background())
 			client.RefreshPrivateRobotToken(context.Background())
 			first, err := client.GetTenantAccessToken(context.Background())
@@ -86,7 +87,7 @@ func TestLoadedWebhookBotIsolationAndCredentialGate(t *testing.T) {
 func TestFreshBotEndpointsOverrideFakeCredentialFile(t *testing.T) {
 	viper.Reset()
 	t.Cleanup(viper.Reset)
-	clearAllWebhookEnv(t)
+	config.ClearWebhookEnvForTest(t)
 	endpoints := map[string]string{
 		"WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API": "http://127.0.0.1:9/open-apis/auth/v3/tenant_access_token/internal",
 		"WEBHOOK_IM_FEISHU_PRIVATE_MESSAGE_API":     "http://127.0.0.1:9/open-apis/im/v1/messages",
@@ -108,7 +109,7 @@ func TestFreshBotEndpointsOverrideFakeCredentialFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte(source), 0600); err != nil {
 		t.Fatal(err)
 	}
-	cfg, _, err := loadWebhookFromFile(path)
+	cfg, _, err := config.LoadWebhookFromFileForTest(path)
 	if err != nil {
 		t.Fatal("fake credential file failed to load")
 	}
@@ -128,9 +129,9 @@ func TestFreshBotEndpointsOverrideFakeCredentialFile(t *testing.T) {
 		observed[request.URL.Path]++
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"code":0,"tenant_access_token":"fixture-token","expire":7200}`)), Header: make(http.Header), Request: request}, nil
 	})
-	client := robot.NewWebhookRobot(zap.NewNop())
+	client := robot.NewWebhookRobot(cfg, zap.NewNop())
 	client.RefreshPrivateRobotToken(context.Background())
-	messages := content.NewWebhookContent(zap.NewNop(), nil, client)
+	messages := content.NewWebhookContent(cfg, zap.NewNop(), nil, client)
 	if err := messages.SentFeishuGroup(context.Background(), "{}", "fixture-group"); err != nil {
 		t.Fatal("fake group message failed")
 	}

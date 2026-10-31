@@ -274,8 +274,9 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	k8sPVCHandler := api3.NewK8sPVCHandler(pvcService)
 	cronJobDAO := dao5.NewCronJobDAO(logger, db)
 	asynqScheduler := InitScheduler(cfg)
-	cronScheduler := scheduler.NewCronScheduler(logger, cronJobDAO, asynqScheduler, asynqClient)
-	cronService := service6.NewCronService(logger, cronJobDAO, userDAO, asynqClient, cronScheduler)
+	cronLocalExecPolicy := config.NewCronLocalExecPolicy()
+	cronScheduler := scheduler.NewCronScheduler(logger, cronJobDAO, asynqScheduler, asynqClient, cronLocalExecPolicy)
+	cronService := service6.NewCronService(logger, cronJobDAO, userDAO, asynqClient, cronScheduler, cronLocalExecPolicy)
 	cronJobHandler := api7.NewCronJobHandler(logger, cronService)
 	engine := InitGinServer(v, userHandler, departmentHandler, apiHandler, roleHandler, systemHandler, notAuthHandler, k8sClusterHandler, k8sDeploymentHandler, k8sNamespaceHandler, k8sNodeHandler, k8sSvcHandler, k8sYamlTaskHandler, k8sYamlTemplateHandler, k8sDaemonSetHandler, k8sEventHandler, k8sStatefulSetHandler, k8sServiceAccountHandler, k8sRoleHandler, k8sClusterRoleHandler, k8sRoleBindingHandler, k8sClusterRoleBindingHandler, k8sConfigMapHandler, k8sSecretHandler, alertEventHandler, alertPoolHandler, alertRuleHandler, monitorConfigHandler, onDutyGroupHandler, recordRuleHandler, scrapePoolHandler, scrapeJobHandler, sendGroupHandler, auditHandler, formDesignHandler, workorderProcessHandler, templateHandler, instanceHandler, instanceFlowHandler, instanceCommentHandler, categoryGroupHandler, instanceTimeLineHandler, treeNodeHandler, treeLocalHandler, treeCloudHandler, managedCloudHandler, cloudAccountHandler, cloudAccountRegionHandler, notificationHandler, k8sIngressHandler, k8sPodHandler, k8sPVHandler, k8sPVCHandler, cronJobHandler)
 	applicationBootstrap := startup.NewApplicationBootstrap(clusterManager, logger)
@@ -284,7 +285,7 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	if err != nil {
 		return nil, err
 	}
-	cronHandlers := handler.NewCronHandlers(logger, cronJobDAO, sshExecutor, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache)
+	cronHandlers := handler.NewCronHandlers(logger, cronJobDAO, sshExecutor, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache, cronLocalExecPolicy)
 	cronManager := cron.NewUnifiedCronManager(logger, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache, cronScheduler, builtinTaskManager, cronHandlers)
 	server := InitAsynqServer(cfg, notificationManager)
 	processor := notification.NewProcessor(notificationManager, logger)
@@ -320,7 +321,7 @@ var ManagerSet = wire.NewSet(manager.NewClusterManager, manager.NewDeploymentMan
 
 var JobSet = wire.NewSet(startup.NewApplicationBootstrap)
 
-var CronSet = wire.NewSet(executor.NewSSHExecutor, wire.Bind(new(cron.BuiltinRunner), new(*handler.CronHandlers)), cron.NewUnifiedCronManager, cron.NewBuiltinTaskManager, handler.NewCronHandlers, scheduler.NewCronScheduler)
+var CronSet = wire.NewSet(config.NewCronLocalExecPolicy, executor.NewSSHExecutor, wire.Bind(new(cron.BuiltinRunner), new(*handler.CronHandlers)), cron.NewUnifiedCronManager, cron.NewBuiltinTaskManager, handler.NewCronHandlers, scheduler.NewCronScheduler)
 
 var Injector = wire.NewSet(
 	InitMiddlewares,

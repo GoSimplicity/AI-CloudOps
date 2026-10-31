@@ -29,10 +29,10 @@ func InitWebServer(cfg *config.WebhookConfig, dsn MySQLDSN) (*Cmd, error) {
 		return nil, err
 	}
 	engine := InitGinServer(v, webHookHandler)
-	webhookRobot := robot.NewWebhookRobot(logger)
-	webhookCache := cache.NewWebhookCache(logger, webhookDao, webhookRobot)
-	webhookContent := content.NewWebhookContent(logger, webhookDao, webhookRobot)
-	webhookConsumer := consumer.NewWebhookConsumer(logger, webhookCache, webhookDao, webhookContent, v2)
+	webhookRobot := robot.NewWebhookRobot(cfg, logger)
+	webhookCache := cache.NewWebhookCache(cfg, logger, webhookDao, webhookRobot)
+	webhookContent := content.NewWebhookContent(cfg, logger, webhookDao, webhookRobot)
+	webhookConsumer := consumer.NewWebhookConsumer(cfg, logger, webhookCache, webhookDao, webhookContent, v2)
 	v3 := InitWebHookCache(logger, webhookCache, webhookConsumer)
 	cmd := &Cmd{
 		Server: engine,

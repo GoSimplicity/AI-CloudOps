@@ -39,7 +39,7 @@ func TestInitialLoadRetriesAndReportsRecovery(t *testing.T) {
 	defer cancel()
 	store := &recoveringDAO{failures: 2}
 	actual := asynq.NewScheduler(asynq.RedisClientOpt{Addr: "127.0.0.1:1"}, nil)
-	cs := NewCronScheduler(zap.NewNop(), store, actual, nil)
+	cs := NewCronScheduler(zap.NewNop(), store, actual, nil, nil)
 	waits := make(chan time.Duration, 4)
 	proceed := make(chan struct{})
 	cs.retryWait = func(ctx context.Context, duration time.Duration) error {
@@ -96,7 +96,7 @@ func TestRetryDelayIsBoundedAndCancelable(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	store := &recoveringDAO{failures: 100}
-	cs := NewCronScheduler(zap.NewNop(), store, asynq.NewScheduler(asynq.RedisClientOpt{Addr: "127.0.0.1:1"}, nil), nil)
+	cs := NewCronScheduler(zap.NewNop(), store, asynq.NewScheduler(asynq.RedisClientOpt{Addr: "127.0.0.1:1"}, nil), nil, nil)
 	var delays []time.Duration
 	cs.retryWait = func(_ context.Context, delay time.Duration) error {
 		delays = append(delays, delay)

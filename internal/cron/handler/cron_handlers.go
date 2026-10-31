@@ -66,16 +66,13 @@ type CronHandlers struct {
 	scriptExecutor  *ScriptExecutor
 	sshExecutor     *executor.SSHExecutor
 
-	// localExecAllowed 读取 cron.allow_local_exec；为 nil 时读取全局配置（测试可替换）
-	localExecAllowed func() bool
+	// localExecAllowed 显式注入动态执行门禁；nil 时拒绝本地执行。
+	localExecAllowed config.CronLocalExecPolicy
 }
 
 // allowLocalExec 当前是否允许执行命令行/脚本任务
 func (h *CronHandlers) allowLocalExec() bool {
-	if h.localExecAllowed != nil {
-		return h.localExecAllowed()
-	}
-	return config.CronLocalExecAllowed()
+	return h.localExecAllowed.IsAllowed()
 }
 
 func NewCronHandlers(
@@ -87,19 +84,21 @@ func NewCronHandlers(
 	k8sClient client.K8sClient,
 	clusterMgr manager.ClusterManager,
 	promConfigCache cache.MonitorCache,
+	localExecAllowed config.CronLocalExecPolicy,
 ) *CronHandlers {
 	return &CronHandlers{
-		logger:          logger,
-		cronDAO:         cronDAO,
-		onDutyDAO:       onDutyDAO,
-		k8sDAO:          k8sDAO,
-		k8sClient:       k8sClient,
-		clusterMgr:      clusterMgr,
-		promConfigCache: promConfigCache,
-		commandExecutor: NewCommandExecutor(logger),
-		httpExecutor:    NewHTTPExecutor(logger),
-		scriptExecutor:  NewScriptExecutor(logger),
-		sshExecutor:     sshExecutor,
+		logger:           logger,
+		cronDAO:          cronDAO,
+		onDutyDAO:        onDutyDAO,
+		k8sDAO:           k8sDAO,
+		k8sClient:        k8sClient,
+		clusterMgr:       clusterMgr,
+		promConfigCache:  promConfigCache,
+		commandExecutor:  NewCommandExecutor(logger),
+		httpExecutor:     NewHTTPExecutor(logger),
+		scriptExecutor:   NewScriptExecutor(logger),
+		sshExecutor:      sshExecutor,
+		localExecAllowed: localExecAllowed,
 	}
 }
 

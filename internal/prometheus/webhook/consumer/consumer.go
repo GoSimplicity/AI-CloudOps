@@ -31,12 +31,12 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/content"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/dao"
 	"github.com/prometheus/alertmanager/template"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -63,7 +63,11 @@ type webhookConsumer struct {
 }
 
 // NewWebhookConsumer 创建一个新的WebhookConsumer实例
-func NewWebhookConsumer(logger *zap.Logger, cache cache.WebhookCache, dao dao.WebhookDao, content content.WebhookContent, alertReceiveQueue chan template.Alert) WebhookConsumer {
+func NewWebhookConsumer(cfg *config.WebhookConfig, logger *zap.Logger, cache cache.WebhookCache, dao dao.WebhookDao, content content.WebhookContent, alertReceiveQueue chan template.Alert) WebhookConsumer {
+	var workerCount int
+	if cfg != nil {
+		workerCount = cfg.FixedWorkers
+	}
 	return &webhookConsumer{
 		logger:            logger,
 		cache:             cache,
@@ -71,7 +75,7 @@ func NewWebhookConsumer(logger *zap.Logger, cache cache.WebhookCache, dao dao.We
 		content:           content,
 		alertReceiveQueue: alertReceiveQueue,
 		exitWorkerChan:    make(chan struct{}),
-		workerCount:       viper.GetInt("webhook.fixed_workers"), // 从配置中获取固定工作者数量
+		workerCount:       workerCount, // 从配置中获取固定工作者数量
 	}
 }
 

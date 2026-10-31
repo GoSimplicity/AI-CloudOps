@@ -37,7 +37,7 @@ func TestScheduleHTTPAndRealDAOPreserveExistingJob(t *testing.T) {
 		t.Fatal(err)
 	}
 	dao := dao.NewCronJobDAO(zap.NewNop(), db)
-	svc := service.NewCronService(zap.NewNop(), dao, nil, nil, nil)
+	svc := service.NewCronService(zap.NewNop(), dao, nil, nil, nil, nil)
 	router := gin.New()
 	router.Use(func(c *gin.Context) { c.Set("user", jwt.UserClaims{Uid: 1, Username: "fixture"}); c.Next() })
 	api.NewCronJobHandler(zap.NewNop(), svc).RegisterRouters(router)

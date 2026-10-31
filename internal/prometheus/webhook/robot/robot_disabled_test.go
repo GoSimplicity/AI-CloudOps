@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/spf13/viper"
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 )
@@ -21,13 +21,12 @@ func (transport *forbiddenTokenTransport) RoundTrip(*http.Request) (*http.Respon
 func TestPrivateRobotMissingCredentialsDoNotRequestToken(t *testing.T) {
 	for _, test := range []struct{ name, id, secret string }{{"both empty", "", ""}, {"ID only", "fixture-id", ""}, {"secret only", "", "fixture-secret"}, {"blank ID", " \t", "fixture-secret"}, {"blank secret", "fixture-id", " \n"}} {
 		t.Run(test.name, func(t *testing.T) {
-			viper.Reset()
-			t.Cleanup(viper.Reset)
-			viper.Set("webhook.im_feishu.private_robot_app_id", test.id)
-			viper.Set("webhook.im_feishu.private_robot_app_secret", test.secret)
+			cfg := &config.WebhookConfig{}
+			cfg.ImFeishu.PrivateRobotAppID = test.id
+			cfg.ImFeishu.PrivateRobotAppSecret = test.secret
 			transport := &forbiddenTokenTransport{}
 			core, logs := observer.New(zap.DebugLevel)
-			robot := &webhookRobot{logger: zap.New(core), httpClient: &http.Client{Transport: transport}}
+			robot := &webhookRobot{appID: cfg.ImFeishu.PrivateRobotAppID, appSecret: cfg.ImFeishu.PrivateRobotAppSecret, tokenAPI: cfg.ImFeishu.TenantAccessTokenAPI, logger: zap.New(core), httpClient: &http.Client{Transport: transport}}
 			if _, _, err := robot.getTokenFromAPI(context.Background()); !errors.Is(err, ErrPrivateRobotDisabled) {
 				t.Fatal("missing credential configuration was not classified as disabled")
 			}

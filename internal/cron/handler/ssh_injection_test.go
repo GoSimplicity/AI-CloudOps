@@ -13,7 +13,7 @@ func TestCronHandlersRetainInjectedSSHExecutor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handlers := NewCronHandlers(zap.NewNop(), nil, supplied, nil, nil, nil, nil, nil)
+	handlers := NewCronHandlers(zap.NewNop(), nil, supplied, nil, nil, nil, nil, nil, nil)
 	if handlers.sshExecutor != supplied {
 		t.Fatal("handler replaced its configured SSH executor")
 	}

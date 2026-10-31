@@ -6,12 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/gin-gonic/gin"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -26,10 +24,7 @@ func (s *listStore) GetCronJobList(context.Context, *model.GetCronJobListReq) ([
 
 // 方案 A 契约：GET /api/cron/job/list 的 data 在 items/total 之外附带只读字段 allow_local_exec
 func TestCronJobListExposesAllowLocalExec(t *testing.T) {
-	defer viper.Reset()
 	for _, allowed := range []bool{false, true} {
-		viper.Reset()
-		viper.Set(config.CronAllowLocalExecKey, allowed)
 		store := &listStore{jobs: []*model.CronJob{{
 			Model:         model.Model{ID: 1},
 			Name:          "http-job",
@@ -39,7 +34,7 @@ func TestCronJobListExposesAllowLocalExec(t *testing.T) {
 			CreatedBy:     7,
 			CreatedByName: "operator",
 		}}}
-		handler := NewCronJobHandler(zap.NewNop(), service.NewCronService(zap.NewNop(), store, nil, nil, nil))
+		handler := NewCronJobHandler(zap.NewNop(), service.NewCronService(zap.NewNop(), store, nil, nil, nil, func() bool { return allowed }))
 		gin.SetMode(gin.TestMode)
 		engine := gin.New()
 		handler.RegisterRouters(engine)

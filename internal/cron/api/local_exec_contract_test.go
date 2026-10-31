@@ -7,14 +7,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/task"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -37,10 +35,8 @@ func TestLocalExecDisabledResponseContract(t *testing.T) {
 			{"POST", "/api/cron/job/create", `{"name":"job","job_type":4,"schedule":"@every 1h","script_type":"bash","script_content":"true"}`},
 			{"PUT", "/api/cron/job/1/update", `{"name":"job","job_type":2,"schedule":"@every 1h","command":"true"}`},
 		} {
-			viper.Reset()
-			viper.Set(config.CronAllowLocalExecKey, allowed)
 			store := &contractStore{}
-			handler := NewCronJobHandler(zap.NewNop(), service.NewCronService(zap.NewNop(), store, nil, nil, nil))
+			handler := NewCronJobHandler(zap.NewNop(), service.NewCronService(zap.NewNop(), store, nil, nil, nil, func() bool { return allowed }))
 			gin.SetMode(gin.TestMode)
 			engine := gin.New()
 			engine.Use(func(c *gin.Context) { c.Set("user", jwt.UserClaims{Uid: 7, Username: "operator"}) })
@@ -67,5 +63,4 @@ func TestLocalExecDisabledResponseContract(t *testing.T) {
 			}
 		}
 	}
-	viper.Reset()
 }

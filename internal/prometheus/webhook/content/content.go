@@ -34,8 +34,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/utils"
-	"github.com/spf13/viper"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/constant"
@@ -63,17 +63,31 @@ type WebhookContent interface {
 }
 
 type webhookContent struct {
-	l      *zap.Logger
-	dao    dao.WebhookDao
-	robot  robot.WebhookRobot
-	client *http.Client
+	l                     *zap.Logger
+	dao                   dao.WebhookDao
+	robot                 robot.WebhookRobot
+	client                *http.Client
+	frontDomain           string
+	backendDomain         string
+	defaultUpgradeMinutes int
+	groupMessageAPI       string
+	privateMessageAPI     string
 }
 
-func NewWebhookContent(l *zap.Logger, dao dao.WebhookDao, robot robot.WebhookRobot) WebhookContent {
+func NewWebhookContent(cfg *config.WebhookConfig, l *zap.Logger, dao dao.WebhookDao, robot robot.WebhookRobot) WebhookContent {
+	var settings config.WebhookConfig
+	if cfg != nil {
+		settings = *cfg
+	}
 	return &webhookContent{
-		l:     l,
-		dao:   dao,
-		robot: robot,
+		l:                     l,
+		frontDomain:           settings.FrontDomain,
+		backendDomain:         settings.BackendDomain,
+		defaultUpgradeMinutes: settings.DefaultUpgradeMinutes,
+		groupMessageAPI:       settings.ImFeishu.GroupMessageAPI,
+		privateMessageAPI:     settings.ImFeishu.PrivateMessageAPI,
+		dao:                   dao,
+		robot:                 robot,
 		client: &http.Client{
 			Timeout: 10 * time.Second, // 设置默认超时时间
 		},
@@ -107,7 +121,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 		msgGrafana = fmt.Sprintf(`**🗳查看grafana大盘图**\n[链接地址](%s)`, rule.GrafanaLink)
 		msgExpr = fmt.Sprintf(`**🏹修改告警规则** \n[规则地址](%s) \n<font color='red'>%s</font>`,
 			fmt.Sprintf("%s/%s?ruleid=%v",
-				viper.GetString("webhook.front_domain"),
+				wc.frontDomain,
 				"monitor/rule/detail",
 				rule.ID),
 			rule.Expr,
@@ -125,7 +139,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	}
 
 	onDutyGroupUrl := fmt.Sprintf(constant.SendGroupURLTemplate,
-		viper.GetString("webhook.front_domain"),
+		wc.frontDomain,
 		"monitor/onduty/detail",
 		onDutyGroup.ID,
 	)
@@ -155,7 +169,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	if event.Status != model.MonitorAlertEventStatusClaimed && alert.Status == string(constant.AlertStatusFiring) && sendGroup.FirstUpgradeUsers != nil && len(sendGroup.FirstUpgradeUsers) > 0 {
 		upgradeMinutes := sendGroup.UpgradeMinutes
 		if upgradeMinutes == 0 {
-			upgradeMinutes = viper.GetInt("webhook.default_upgrade_minutes")
+			upgradeMinutes = wc.defaultUpgradeMinutes
 		}
 		if time.Since(alert.StartsAt) > time.Minute*time.Duration(upgradeMinutes) {
 			var upgradeUserNames, upgradeUserAtIds strings.Builder
@@ -206,7 +220,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	msgAnno := fmt.Sprintf(`**🚂注释信息：**\n%s`, utils.FormatMap(anno))
 
 	sendGroupUrl := fmt.Sprintf(constant.SendGroupURLTemplate,
-		viper.GetString("webhook.front_domain"),
+		wc.frontDomain,
 		"monitor/sendgroup/detail",
 		sendGroup.ID,
 	)
@@ -214,7 +228,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 		sendGroup.Name,
 		sendGroupUrl,
 	)
-	BackendDomain := viper.GetString("webhook.backend_domain")
+	BackendDomain := wc.backendDomain
 	// 构建各类操作的 URL
 	buttonURLs := []string{
 		fmt.Sprintf(constant.RenderingURLTemplate, BackendDomain, "renling", alert.Fingerprint),    // 认领告警
@@ -314,7 +328,7 @@ func (wc *webhookContent) SentFeishuGroup(ctx context.Context, msg string, robot
 	}
 	// 构建 Feishu 群聊机器人 URL：<group_message_api>/<token>，格式同 event_service.go 的 .../open-apis/bot/v2/hook/<token>；
 	// 先去首尾空白再去尾斜杠，避免拼出 hook//<token> 或 hook/ /<token>
-	url := fmt.Sprintf("%s/%s", strings.TrimRight(strings.TrimSpace(viper.GetString("webhook.im_feishu.group_message_api")), "/"), robotToken)
+	url := fmt.Sprintf("%s/%s", strings.TrimRight(strings.TrimSpace(wc.groupMessageAPI), "/"), robotToken)
 
 	// 发送 HTTP POST 请求
 	response, err := utils.PostWithJson(ctx, wc.client, wc.l, url, msg, nil, nil)
@@ -371,7 +385,7 @@ func (wc *webhookContent) SentFeishuPrivate(ctx context.Context, cardContent str
 		}
 
 		// 构建 Feishu 私聊 API URL
-		url := viper.GetString("webhook.im_feishu.private_message_api")
+		url := wc.privateMessageAPI
 
 		headers := map[string]string{
 			"Authorization": fmt.Sprintf("Bearer %s", token),

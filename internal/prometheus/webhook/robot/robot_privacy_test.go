@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spf13/viper"
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 )
@@ -34,15 +34,14 @@ func TestTokenFailureChainIsPrivate(t *testing.T) {
 		t.Run(entrypoint, func(t *testing.T) {
 			for _, mode := range []string{"build", "transport", "read", "http", "decode", "provider", "empty-token", "blank-token", "zero-expiry", "negative-expiry", "overflow-expiry"} {
 				t.Run(mode, func(t *testing.T) {
-					viper.Reset()
-					t.Cleanup(viper.Reset)
-					viper.Set("webhook.im_feishu.private_robot_app_id", canary)
-					viper.Set("webhook.im_feishu.private_robot_app_secret", canary)
+					cfg := &config.WebhookConfig{}
+					cfg.ImFeishu.PrivateRobotAppID = canary
+					cfg.ImFeishu.PrivateRobotAppSecret = canary
 					endpoint := "https://" + canary + ":" + canary + "@fixture.invalid/token?private=" + canary
 					if mode == "build" {
 						endpoint = "https://fixture.invalid/%zz"
 					}
-					viper.Set("webhook.im_feishu.tenant_access_token_api", endpoint)
+					cfg.ImFeishu.TenantAccessTokenAPI = endpoint
 					core, logs := observer.New(zap.DebugLevel)
 					calls := 0
 					client := &http.Client{Timeout: 7 * time.Second, Transport: tokenPrivacyTransport(func(request *http.Request) (*http.Response, error) {
@@ -84,7 +83,7 @@ func TestTokenFailureChainIsPrivate(t *testing.T) {
 						}
 						return &http.Response{StatusCode: status, Status: canary, Body: reader, Header: make(http.Header), Request: request}, nil
 					})}
-					robot := &webhookRobot{logger: zap.New(core), httpClient: client, privateRobotToken: "previous-private", tenantToken: "previous-tenant", tenantExpireAt: time.Unix(1, 0)}
+					robot := &webhookRobot{appID: cfg.ImFeishu.PrivateRobotAppID, appSecret: cfg.ImFeishu.PrivateRobotAppSecret, tokenAPI: cfg.ImFeishu.TenantAccessTokenAPI, logger: zap.New(core), httpClient: client, privateRobotToken: "previous-private", tenantToken: "previous-tenant", tenantExpireAt: time.Unix(1, 0)}
 					var err error
 					switch entrypoint {
 					case "direct":
@@ -119,13 +118,12 @@ func TestTokenFailureChainIsPrivate(t *testing.T) {
 }
 
 func TestConcurrentTenantTokenCacheRemainsSingleFetch(t *testing.T) {
-	viper.Reset()
-	t.Cleanup(viper.Reset)
-	viper.Set("webhook.im_feishu.private_robot_app_id", "fixture-id")
-	viper.Set("webhook.im_feishu.private_robot_app_secret", "fixture-secret")
-	viper.Set("webhook.im_feishu.tenant_access_token_api", "https://fixture.invalid/token")
+	cfg := &config.WebhookConfig{}
+	cfg.ImFeishu.PrivateRobotAppID = "fixture-id"
+	cfg.ImFeishu.PrivateRobotAppSecret = "fixture-secret"
+	cfg.ImFeishu.TenantAccessTokenAPI = "https://fixture.invalid/token"
 	var calls atomic.Int32
-	robot := &webhookRobot{logger: zap.NewNop(), httpClient: &http.Client{Transport: tokenPrivacyTransport(func(request *http.Request) (*http.Response, error) {
+	robot := &webhookRobot{appID: cfg.ImFeishu.PrivateRobotAppID, appSecret: cfg.ImFeishu.PrivateRobotAppSecret, tokenAPI: cfg.ImFeishu.TenantAccessTokenAPI, logger: zap.NewNop(), httpClient: &http.Client{Transport: tokenPrivacyTransport(func(request *http.Request) (*http.Response, error) {
 		calls.Add(1)
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"code":0,"tenant_access_token":"fixture-token","expire":7200}`)), Header: make(http.Header), Request: request}, nil
 	})}}

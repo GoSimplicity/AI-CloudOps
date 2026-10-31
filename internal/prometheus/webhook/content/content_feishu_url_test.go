@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spf13/viper"
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"go.uber.org/zap"
 )
 
@@ -28,11 +28,10 @@ func TestSentFeishuGroupURL(t *testing.T) {
 		{"double-trailing-slash", "https://open.feishu.cn/open-apis/bot/v2/hook//"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			viper.Reset()
-			t.Cleanup(viper.Reset)
-			viper.Set("webhook.im_feishu.group_message_api", c.api)
+			cfg := &config.WebhookConfig{}
+			cfg.ImFeishu.GroupMessageAPI = c.api
 			rt := &recordTransport{}
-			wc := &webhookContent{l: zap.NewNop(), client: &http.Client{Transport: rt}}
+			wc := &webhookContent{frontDomain: cfg.FrontDomain, backendDomain: cfg.BackendDomain, groupMessageAPI: cfg.ImFeishu.GroupMessageAPI, privateMessageAPI: cfg.ImFeishu.PrivateMessageAPI, l: zap.NewNop(), client: &http.Client{Transport: rt}}
 			if err := wc.SentFeishuGroup(context.Background(), "{}", "tok123"); err != nil {
 				t.Fatal(err)
 			}

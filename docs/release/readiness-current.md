@@ -55,7 +55,7 @@ D04/D05 的“已实现”不意味着 SDK 拥有全账号权限，也不允许�
 | E02 业务浏览器进入三仓 CI | 已实现且最终固定组合通过 | CI 自有栈包含工单生命周期、Cron 重试读取/取消、过期登录、三云停用账户 CRUD、停用 HTTP Cron 创建/编辑五场景；要求恰好 5 pass、零 skip/retry，诊断仅白名单位置/状态。固定 f195db9/d0f098e/c2de23e 已通过。 | eec9582a/d0f098e/c2de23e 最终 run 41078544655 五项通过，零 skip/retry；没有真实云、真实通知或生产业务写入。 |
 | E03 全量可恢复备份 | 已实现（隔离演练）；生产指标未验 | `recovery_backup.py` 覆盖停写、MySQL/Redis 全目录、AIOps 知识文件、实际私有配置、HMAC/sha256及新隔离卷恢复。`known_upgrade_rollback.py` 真实执行旧49表→58表→新卷恢复旧49表，12行含软删除/NULL/合成密文指纹一致，HMAC独立核验通过。 | 物理复制观测 2.472 秒，不是整站 RTO；未启动旧应用/worker，也未验证生产外部副作用。生产 RPO/RTO 和凭据权限由部署方验收。 |
 | E04 版本化迁移与分权 | 已实现（新库、严格采用、已知历史升级） | 冻结基线、迁移锁/意图/校验和、只读 Verify/clock、显式 CLI 与角色分权。a8f1700 的49表可停写备份后显式升级；safe-v2 在任何 ledger/DDL 前证明 TRIGGER 元数据可见且零触发器，隐藏/可见触发器均真实 MySQL 拒绝。 | 仅支持明确来源指纹；不自动采用未知历史、重试脏 ledger 或回滚非事务 DDL。备份 attestation 不是自动证明所有业务已停写。旧线上账号未访问/收权。 |
-| E05 可移植性与技术债 | 原清单目标已实现；渐进规范债保留 | AF_UNIX 短目录、Pydantic ConfigDict、19页 Table.slots/bodyCell 及组件回归已完成；AlertManager/Prometheus 缓存、Webhook API、资产密钥/SSHExecutor 已按 typed cfg 收敛。RAG 目录线程快照、读取/总量预算、完整 stage 校验和 revision-CAS 已提交，真实 Redis 边界回归通过。 | 原清单不要求全仓 Viper/ESLint 清零。Cron 动态本地执行门禁和其余 webhook 配置调用保持既有合同，后续按实际模块改进；既有全仓 ESLint 规范债仍在，不宣称 lint 绿。 |
+| E05 可移植性与技术债 | 原清单目标已实现；渐进规范债保留 | AF_UNIX 短目录、Pydantic ConfigDict、19页 Table.slots/bodyCell 及组件回归已完成；AlertManager/Prometheus 缓存、Webhook API、资产密钥/SSHExecutor 已按 typed cfg 收敛。RAG 目录线程快照、读取/总量预算、完整 stage 校验和 revision-CAS 已提交，真实 Redis 边界回归通过。 | 原清单不要求全仓 Viper/ESLint 清零。2026-10-31 [配置债阶段](configuration-boundary.md)已收敛其余 Webhook 配置读取及 Cron 显式动态 policy，全仓生产 Viper 导入仅留配置边界，Go 全量/vet、相关 race 和全构建标签编译通过。前端全仓 ESLint 清理另行推进，不能据此宣称 lint 绿。 |
 
 ## 当前结论与文档口径
 

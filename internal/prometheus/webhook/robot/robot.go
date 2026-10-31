@@ -37,9 +37,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/request"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -75,14 +75,24 @@ type webhookRobot struct {
 	tenantExpireAt  time.Time
 	tenantTokenMux  sync.RWMutex
 	httpClient      *http.Client
+	appID           string
+	appSecret       string
+	tokenAPI        string
 }
 
 // NewWebhookRobot 创建一个新的 webhookRobot 实例
-func NewWebhookRobot(logger *zap.Logger) WebhookRobot {
+func NewWebhookRobot(cfg *config.WebhookConfig, logger *zap.Logger) WebhookRobot {
+	var settings config.ImFeishuConfig
+	if cfg != nil {
+		settings = cfg.ImFeishu
+	}
 	return &webhookRobot{
-		logger: logger,
+		logger:    logger,
+		appID:     settings.PrivateRobotAppID,
+		appSecret: settings.PrivateRobotAppSecret,
+		tokenAPI:  settings.TenantAccessTokenAPI,
 		httpClient: &http.Client{
-			Timeout: time.Duration(viper.GetInt("webhook.im_feishu.request_timeout_seconds")) * time.Second,
+			Timeout: time.Duration(settings.RequestTimeoutSeconds) * time.Second,
 		},
 	}
 }
@@ -188,8 +198,8 @@ func (w *webhookRobot) postWithJson(ctx context.Context, url string, jsonBytes [
 // getTokenFromAPI 是一个通用函数，用于获取 token
 func (w *webhookRobot) getTokenFromAPI(ctx context.Context) (string, int, error) {
 	requestData := request.RobotTenantAccessTokenReq{
-		AppID:     viper.GetString("webhook.im_feishu.private_robot_app_id"),
-		AppSecret: viper.GetString("webhook.im_feishu.private_robot_app_secret"),
+		AppID:     w.appID,
+		AppSecret: w.appSecret,
 	}
 
 	if strings.TrimSpace(requestData.AppID) == "" || strings.TrimSpace(requestData.AppSecret) == "" {
@@ -203,7 +213,7 @@ func (w *webhookRobot) getTokenFromAPI(ctx context.Context) (string, int, error)
 	}
 
 	// 发送 HTTP POST 请求
-	url := viper.GetString("webhook.im_feishu.tenant_access_token_api")
+	url := w.tokenAPI
 	bodyBytes, err := w.postWithJson(ctx, url, jsonBytes, nil)
 	if err != nil {
 		w.logger.Error("获取令牌时发送HTTP请求失败", zap.String("operation", "token_exchange"))

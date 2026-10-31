@@ -1316,8 +1316,3 @@ func loadExternalConfig(ext *ExternalConfig) {
 
 // CronAllowLocalExecKey 是否允许本地命令/脚本任务的配置键（环境变量 CRON_ALLOW_LOCAL_EXEC）
 const CronAllowLocalExecKey = "cron.allow_local_exec"
-
-// CronLocalExecAllowed 返回当前是否允许执行命令行(2)/脚本(4)任务；未配置时为 false
-func CronLocalExecAllowed() bool {
-	return viper.GetBool(CronAllowLocalExecKey)
-}

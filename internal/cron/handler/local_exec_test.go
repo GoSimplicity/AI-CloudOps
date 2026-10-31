@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/cron/task"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/hibiken/asynq"
@@ -217,5 +218,29 @@ func TestBuildTaskEnvTrimsKeyWhitespace(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("应注入 APP_MODE=x")
+	}
+}
+
+func TestConstructedCronHandlersRejectRevokedPolicyBeforeExecution(t *testing.T) {
+	for _, jobType := range []model.CronJobType{model.CronJobTypeCommand, model.CronJobTypeScript} {
+		for _, missingPolicy := range []bool{false, true} {
+			allowed := true
+			var policy config.CronLocalExecPolicy
+			if !missingPolicy {
+				policy = func() bool { return allowed }
+			}
+			store := &localJobStore{
+				executionStore: &executionStore{status: model.CronJobStatusEnabled},
+				job:            &model.CronJob{Model: model.Model{ID: 42}, Status: model.CronJobStatusEnabled, JobType: jobType, Timeout: 10},
+			}
+			h := NewCronHandlers(zap.NewNop(), store, nil, nil, nil, nil, nil, nil, policy)
+			// 不提供执行器；已经排队的任务也必须在执行前重读撤销状态。
+			h.commandExecutor, h.scriptExecutor = nil, nil
+			allowed = false
+			err := h.ProcessTask(context.Background(), asynq.NewTask("cron:task", []byte(`{"job_id":42}`)))
+			if !errors.Is(err, task.ErrLocalExecDisabled) || !errors.Is(err, asynq.SkipRetry) || store.completeCall != 1 {
+				t.Fatalf("type=%d nil=%v: must reject and record once, err=%v", jobType, missingPolicy, err)
+			}
+		}
 	}
 }

@@ -72,8 +72,8 @@ type CronScheduler struct {
 	statusMu  sync.RWMutex
 	status    StatusSnapshot
 	retryWait func(context.Context, time.Duration) error
-	// localExecAllowed 读取 cron.allow_local_exec；为 nil 时读取全局配置（测试可替换）
-	localExecAllowed func() bool
+	// localExecAllowed 显式注入动态执行门禁；nil 时拒绝本地执行。
+	localExecAllowed config.CronLocalExecPolicy
 }
 
 // Status 返回线程安全的本地调度状态快照
@@ -121,10 +121,7 @@ func (cs *CronScheduler) wait(ctx context.Context, delay time.Duration) error {
 
 // allowLocalExec 当前是否允许调度命令行(2)/脚本(4)任务
 func (cs *CronScheduler) allowLocalExec() bool {
-	if cs.localExecAllowed != nil {
-		return cs.localExecAllowed()
-	}
-	return config.CronLocalExecAllowed()
+	return cs.localExecAllowed.IsAllowed()
 }
 
 // shouldSchedule 是否由本调度器登记该任务：系统任务由统一 Cron 管理器负责；
@@ -141,12 +138,14 @@ func NewCronScheduler(
 	cronDAO dao.CronJobDAO,
 	scheduler *asynq.Scheduler,
 	client *asynq.Client,
+	localExecAllowed config.CronLocalExecPolicy,
 ) *CronScheduler {
 	return &CronScheduler{
-		logger:    logger,
-		cronDAO:   cronDAO,
-		scheduler: scheduler,
-		client:    client,
+		logger:           logger,
+		cronDAO:          cronDAO,
+		scheduler:        scheduler,
+		client:           client,
+		localExecAllowed: localExecAllowed,
 	}
 }
 
