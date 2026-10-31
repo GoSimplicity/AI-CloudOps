@@ -397,3 +397,5 @@
 - Webhook consumer/cache/content/robot 显式接收 typed 配置并复制所需标量，移除剩余13处业务 Viper 读取；保留动态令牌刷新、既有请求合同和空凭据禁外呼。
 - Cron 服务/调度/执行器显式注入共享动态 policy，逐次读取开关与环境覆盖，nil 拒绝本地执行；删除隐式全局 fallback，保留可撤销门禁。
 - 两处 Wire 实际再生，增加生产 Viper 导入架构约束；全 Go 测试/vet、相关 race 和所有集成/冒烟标签编译通过。详见[配置依赖边界](configuration-boundary.md)。未上线，未执行真实通知或生产任务。
+
+- 推送后 Simple CI 发现发布工具仍按旧 Viper 源码取值模式匹配群通知地址；现修为识别显式 typed 字段，保留旧格式/trim/错误地址反例并增加字段变异拒绝。强制 Compose 的完整脚本158项通过、零跳过；实际 Go 配置快照到Fake HTTP请求的 race 复验通过。此修复仅调整测试合同，不恢复业务全局读取。

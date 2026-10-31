@@ -24,6 +24,7 @@ consumer、公共映射缓存、消息内容和机器人分别接收 `*config.We
 | Cron/config/main DI 相关10包 race | 通过；动态 env、同实例更新、实例隔离、nil 拒绝，以及保存/启用/触发和排队后撤销 |
 | Webhook 全包、Prometheus utils、config race | 通过；配置与 global 冲突、构造后原配置修改、空凭据禁外呼、现有消息协议/隐私/部分失败 |
 | `go test -tags=integration,smoke,schema_smoke -run '^$' ./...` | 全仓编译通过；不等于实际执行集成测试 |
+| 发布工具 | 强制 Compose 的完整脚本158项通过、零跳过；示例地址合同支持 typed 字段且拒绝错误字段/receiver |
 | Wire | main 和 Webhook 两处均实际重新生成 |
 
 本轮测试使用仓库既有替身/SQLite 等隔离设施，未调用真实通知、云或生产任务。复验使用既有 Go 模块与工具链，无新增依赖。完整回归源码位于 `internal/config/cron_config_test.go`、Cron 三包既有 local_exec 测试及 Webhook 各包 configuration 测试。源码候选 `eec9582a` 的历史镜像不包含本阶段配置重构，不能拿历史候选替代新提交验收。

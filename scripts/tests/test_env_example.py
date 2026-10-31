@@ -308,6 +308,7 @@ class WebhookPortConsistencyTests(unittest.TestCase):
 
 
 _GROUP_API_CALL = r'viper\.GetString\(\s*"webhook\.im_feishu\.group_message_api"\s*\)'
+_GROUP_API_VALUE = rf'(?:{_GROUP_API_CALL}|\bwc\.groupMessageAPI\b)'
 _GO_TRIMS = ("TrimSpace", "TrimRight", "TrimLeft", "TrimSuffix", "TrimPrefix", "Trim")
 
 
@@ -347,9 +348,9 @@ def _go_call_args(text, open_paren):
 
 
 def _group_base_transform(expr):
-    """把 Sprintf 第一个 %s 的实参解释成对 group_message_api 取值的变换（只认 viper.GetString 与 strings.Trim* 包装）。"""
+    """把 Sprintf 第一个 %s 的实参解释成对 group_message_api 取值的变换（只认历史 Viper 取值或显式 typed 字段，以及 strings.Trim* 包装）。"""
     expr = expr.strip()
-    if re.fullmatch(_GROUP_API_CALL, expr):
+    if re.fullmatch(_GROUP_API_VALUE, expr):
         return lambda s: s
     m = re.match(r"strings\.(" + "|".join(_GO_TRIMS) + r")\s*(?=\()", expr)
     if m is None:
@@ -380,14 +381,17 @@ def _group_base_transform(expr):
 def _group_format(text):
     """content.go 中用 group_message_api 拼群消息 URL 的 fmt.Sprintf：返回 (格式串, 对 base 的变换)。
 
-    兼容：fmt.Sprintf("%s/%s", viper.GetString(...), robotToken)（本分支）、
+    当前值来自构造器注入的 wc.groupMessageAPI；cfg→字段→实际请求由 Go 的
+    TestContentUsesTypedConfigurationSnapshot/FakeRoundTripper 与 Wire 编译验证。
+    本检查只验证 env.example 的值与群地址拼接合同，不再要求业务直接读取 Viper。
+    兼容：fmt.Sprintf("%s/%s", viper.GetString(...), robotToken)（历史）、
     fmt.Sprintf("%s/%s", strings.TrimRight(viper.GetString(...), "/"), robotToken)（sched/w1-mantou 2026deb）
     以及再套一层 strings.TrimSpace(...) 等 strings.Trim* 包装。
     """
     calls = []
     for m in re.finditer(r"\bfmt\.Sprintf\s*(?=\()", text):
         args, _ = _go_call_args(text, m.end())
-        if any("group_message_api" in a for a in args):
+        if any(re.search(_GROUP_API_VALUE, arg) for arg in args):
             calls.append(args)
     if len(calls) != 1:
         raise AssertionError(f"content.go 中群消息 URL 拼接应恰好 1 处，实际 {len(calls)}")
@@ -427,6 +431,21 @@ class GroupFormatParserTests(unittest.TestCase):
         self.assertEqual(self._build(snippet, " " + self.BASE + "/"), self.BASE + "/t")
         snippet = f'url := fmt.Sprintf("%s/%s", strings.TrimRight(strings.TrimSpace({self.API}), "/"), robotToken)'
         self.assertEqual(self._build(snippet, self.BASE + "/ \t"), self.BASE + "/t")
+
+    def test_typed_field_preserves_group_endpoint_transforms(self):
+        raw = 'url := fmt.Sprintf("%s/%s", wc.groupMessageAPI, robotToken)'
+        trimmed = ('url := fmt.Sprintf("%s/%s", '
+                   'strings.TrimRight(strings.TrimSpace(wc.groupMessageAPI), "/"), robotToken)')
+        self.assertEqual(self._build(raw, self.BASE), self.BASE + "/t")
+        self.assertEqual(self._build(trimmed, " \t" + self.BASE + "/// \n"), self.BASE + "/t")
+        # 同一输入删去 trim 会暴露多斜杠，不能把字段识别成功当作 URL 合同通过。
+        self.assertNotEqual(self._build(raw, self.BASE + "/"), self.BASE + "/t")
+
+    def test_typed_field_mutations_do_not_match_group_endpoint(self):
+        for value in ("wc.privateMessageAPI", "wc.groupMessageAPIFallback", "other.groupMessageAPI"):
+            snippet = f'url := fmt.Sprintf("%s/%s", {value}, robotToken)'
+            with self.subTest(value=value), self.assertRaises(AssertionError):
+                _group_format(snippet)
 
     def test_unknown_or_ambiguous_forms_fail_loudly(self):
         for snippet in (
@@ -706,16 +725,14 @@ class FeishuGroupMessageUrlTests(unittest.TestCase):
                 self.assertNotEqual(self._build(base, token), expected)
 
     def test_trailing_slash_base_follows_code_semantics(self):
-        # 带尾斜杠（config/webhook.yaml 现值）：本分支原样拼接得到 hook//<token>（错误）；
-        # sched/w1-mantou 的 strings.TrimRight(..., "/") 会去掉尾斜杠，得到正确地址
+        # 当前实现必须先去首尾空白、再去所有尾斜杠；不能接受历史上的 hook//<token>。
         token = f"r4-synthetic-{os.getpid()}"
         expected = self._reference_format() % token
-        url = self._build("https://open.feishu.cn/open-apis/bot/v2/hook/", token)
-        if self._strips_trailing_slash():
-            self.assertEqual(url, expected)
-        else:
-            self.assertNotEqual(url, expected)
-            self.assertIn("//", urlsplit(url).path)
+        self.assertTrue(self._strips_trailing_slash())
+        for base in ("https://open.feishu.cn/open-apis/bot/v2/hook/",
+                     " \thttps://open.feishu.cn/open-apis/bot/v2/hook/// \n"):
+            with self.subTest(base=base):
+                self.assertEqual(self._build(base, token), expected)
 
 
 if __name__ == "__main__":
