@@ -107,21 +107,27 @@ func (d *alertManagerPoolDAO) DeleteMonitorAlertManagerPool(ctx context.Context,
 		return fmt.Errorf("无效的 ID: %d", id)
 	}
 
-	result := d.db.WithContext(ctx).
-		Where("id = ?", id).
-		Delete(&model.MonitorAlertManagerPool{})
-
-	if result.Error != nil {
-		d.l.Error("删除 MonitorAlertManagerPool 失败", zap.Error(result.Error), zap.Int("id", id))
-		return fmt.Errorf("删除 ID 为 %d 的 MonitorAlertManagerPool 失败: %w", id, result.Error)
-	}
-
-	if result.RowsAffected == 0 {
-		d.l.Warn("尝试删除不存在的 MonitorAlertManagerPool", zap.Int("id", id))
-		return fmt.Errorf("ID 为 %d 的 MonitorAlertManagerPool 不存在", id)
-	}
-
-	return nil
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockLiveAlertManagerPool(tx, id); err != nil {
+			return err
+		}
+		var count int64
+		// Enable is irrelevant: disabled groups remain user-owned definitions.
+		if err := tx.Model(&model.MonitorSendGroup{}).Where("pool_id = ?", id).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return fmt.Errorf("AlertManager集群池存在关联发送组，无法删除")
+		}
+		result := tx.Where("id = ?", id).Delete(&model.MonitorAlertManagerPool{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("AlertManager池不存在或已删除")
+		}
+		return nil
+	})
 }
 
 // GetAlertPoolByID 通过 ID 获取 AlertManagerPool

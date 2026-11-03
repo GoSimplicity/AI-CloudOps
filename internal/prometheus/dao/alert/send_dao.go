@@ -33,6 +33,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type AlertManagerSendDAO interface {
@@ -189,11 +190,19 @@ func (d *alertManagerSendDAO) GetMonitorSendGroupByID(ctx context.Context, id in
 
 // CreateMonitorSendGroup 创建 MonitorSendGroup
 func (d *alertManagerSendDAO) CreateMonitorSendGroup(ctx context.Context, monitorSendGroup *model.MonitorSendGroup) error {
+	if monitorSendGroup == nil {
+		return fmt.Errorf("发送组不能为空")
+	}
 	// 开启事务
 	tx := d.db.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		d.l.Error("开启事务失败", zap.Error(tx.Error))
 		return tx.Error
+	}
+
+	if err := lockLiveAlertManagerPool(tx, monitorSendGroup.PoolID); err != nil {
+		tx.Rollback()
+		return err
 	}
 
 	if err := tx.Create(monitorSendGroup).Error; err != nil {
@@ -345,11 +354,39 @@ func (d *alertManagerSendDAO) UpdateMonitorSendGroup(ctx context.Context, monito
 		return fmt.Errorf("无效的 monitorSendGroup 或 ID")
 	}
 
+	if monitorSendGroup.PoolID < 0 {
+		return fmt.Errorf("AlertManager池ID无效")
+	}
+	targetID := monitorSendGroup.PoolID
+	// Struct Updates omits zero PoolID. Resolve the current target without an
+	// early transaction snapshot, then recheck it under the child lock below.
+	if targetID == 0 {
+		var observed model.MonitorSendGroup
+		if err := d.db.WithContext(ctx).Select("id", "pool_id").First(&observed, monitorSendGroup.ID).Error; err != nil {
+			return err
+		}
+		targetID = observed.PoolID
+	}
+
 	// 开启事务
 	tx := d.db.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		d.l.Error("开启事务失败", zap.Error(tx.Error))
 		return tx.Error
+	}
+
+	if err := lockLiveAlertManagerPool(tx, targetID); err != nil {
+		tx.Rollback()
+		return err
+	}
+	var stored model.MonitorSendGroup
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&stored, monitorSendGroup.ID).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	if monitorSendGroup.PoolID == 0 && stored.PoolID != targetID {
+		tx.Rollback()
+		return fmt.Errorf("发送组关联已变化，请重试")
 	}
 
 	if err := tx.Model(monitorSendGroup).Updates(monitorSendGroup).Error; err != nil {

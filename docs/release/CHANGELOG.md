@@ -577,3 +577,9 @@
 - type2全元数据严格分页发现canonical DB-only旧实例，与成员合并退休目标；sameACK不能遗漏晚出现孤儿，pending后先登记再CAS/Redis清理，失败可重建恢复。
 - current及混合custom/foreign写前保护、type5 intent保持。新27叶、原HTTP反例、独立实际DAO/HTTP race、全Go test/vet/相关完整race/标签只编译通过。
 - Web锁efd0e70/AIba1876a；本批前端186/type/编译proof通过。AM删除/空目标/schema不扩，未上线。见[AM发布合同](alertmanager-publication.md)。
+
+## 2026-11-04：AM池删除与发送组父锁
+
+- 删除最终事务锁AM父池并检查全部未删发送组；新建/迁移同事务父存活guard，省略关联锁内重检，三用户关联失败回滚，保已有disabled组保护。
+- 新14叶、原交错反例/独立SQLite race/真实MySQL四锁场景、全Go test/vet/相关race/标签只编译通过；临时测试资源清理，无演示或线上改动。
+- AM-D2生成配置退役仍待交付，不把引用保护当全部闭环。见[AM删除合同](alertmanager-pool-deletion.md)，未上线。
