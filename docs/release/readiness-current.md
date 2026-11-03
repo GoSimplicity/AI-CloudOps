@@ -8,7 +8,7 @@
 - 所有写入方冻结后的完整Web复验：146文件2867项通过，类型检查、11项生产构建通过。整合首轮2864/3failed及3个unhandled来自旧CMDB测试缺失新依赖，最小补夹具且原断言不变，随后全套重跑通过。
 - 完整ESLint实扫1094文件仍**10503 errors、5 warnings**，非全绿。四类已清规则及parser/tool失败为0并接入CI。SFC脚本仍12文件33处非空语法未受原TS规则覆盖，后续继续逐模块修复后收紧配置。
 - AIOps：环境别名与坏配置失败边界、生产别名鉴权P1、模型provider快照一致性、巡检开关/worker收停已修；全量2498通过、33项既有外部门禁跳过、3条既有SWIG告警，Ruff通过。未把跳过说成已验。
-- Go：HTTP/WS来源使用配置快照且保留legacy适配，业务代码仍是54ae55d0阶段；该阶段Go全量/vet、相关race、本地WS握手、全标签只编译及158项工具零跳过通过。本次只更新来源锁与文档，源码锁5项回归通过，未伪写为重跑全部Go检查。
+- Go：HTTP/WS来源配置快照及legacy适配的54ae55d0阶段已通过158项工具与相关回归；后续新增实体路径正数边界并保留树父0，封住URI0借body重定向，补5个工单空200。新增53场景、最终Go全量/vet、相关5包race及全标签只编译通过，详见[请求身份边界](request-identity-boundary.md)。源码锁5项回归通过；新后端源码仍需按对应CI run验收。
 
 上个中间组合[41578362287](https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41578362287)已成功：Go cb532b5d、Web7af88de、AIba1876a，日志核验完整SHA及5项浏览器业务零skip/fail/retry。本次新来源组合另行等待CI结果，不能拿中间成功冒充后续Web c8d08c3已验。未更新历史release-candidate镜像、发布tag、连接生产或上线，也未复验真实云/模型/通知/SSH。
 

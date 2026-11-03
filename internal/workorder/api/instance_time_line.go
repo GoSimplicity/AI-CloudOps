@@ -66,6 +66,7 @@ func (h *InstanceTimeLineHandler) DetailInstanceTimeLine(ctx *gin.Context) {
 
 	id, err := base.GetParamID(ctx)
 	if err != nil {
+		base.BadRequestError(ctx, "时间线ID不合法")
 		return
 	}
 

@@ -292,21 +292,36 @@ func HandleRequest(ctx *gin.Context, req interface{}, action func() (interface{}
 	}
 }
 
-// GetParamID 从查询参数中解析 ID，并进行类型转换
+// GetParamID 解析实体路径 ID；实体 ID 必须是正整数。
 func GetParamID(ctx *gin.Context) (int, error) {
-	id := ctx.Param("id")
-	if id == "" {
-		return 0, fmt.Errorf("缺少 'id' 参数")
-	}
-	paramID, err := strconv.Atoi(id)
-	if err != nil {
-		return 0, fmt.Errorf("'id' 非整数")
-	}
-	return paramID, nil
+	return GetCustomParamID(ctx, "id")
 }
 
-// GetCustomParamID 从查询参数中解析自定义字段的 ID，并进行类型转换
+// GetCustomParamID 解析自定义实体路径 ID，例如 cluster_id；不接受零或负数。
 func GetCustomParamID(ctx *gin.Context, paramID string) (int, error) {
+	value, err := parsePathInteger(ctx, paramID)
+	if err != nil {
+		return 0, err
+	}
+	if value <= 0 {
+		return 0, fmt.Errorf("'%s' 必须是正整数", paramID)
+	}
+	return value, nil
+}
+
+// GetParentParamID 保留树父节点的虚拟根 0；不能用于实体更新或删除。
+func GetParentParamID(ctx *gin.Context) (int, error) {
+	value, err := parsePathInteger(ctx, "id")
+	if err != nil {
+		return 0, err
+	}
+	if value < 0 {
+		return 0, fmt.Errorf("'id' 不能为负数")
+	}
+	return value, nil
+}
+
+func parsePathInteger(ctx *gin.Context, paramID string) (int, error) {
 	id := ctx.Param(paramID)
 	if id == "" {
 		return 0, fmt.Errorf("缺少 '%s' 参数", paramID)

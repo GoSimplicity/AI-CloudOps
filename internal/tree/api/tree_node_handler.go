@@ -67,7 +67,7 @@ func (h *TreeNodeHandler) RegisterRouters(server *gin.Engine) {
 }
 
 func (h *TreeNodeHandler) GetChildNodes(ctx *gin.Context) {
-	id, err := base.GetParamID(ctx)
+	id, err := base.GetParentParamID(ctx)
 	if err != nil {
 		base.ErrorWithMessage(ctx, "无效的父节点ID")
 		return

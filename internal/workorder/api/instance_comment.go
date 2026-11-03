@@ -75,6 +75,7 @@ func (h *InstanceCommentHandler) UpdateInstanceComment(ctx *gin.Context) {
 
 	id, err := base.GetParamID(ctx)
 	if err != nil {
+		base.BadRequestError(ctx, "评论ID不合法")
 		return
 	}
 
@@ -89,6 +90,7 @@ func (h *InstanceCommentHandler) UpdateInstanceComment(ctx *gin.Context) {
 func (h *InstanceCommentHandler) DeleteInstanceComment(ctx *gin.Context) {
 	id, err := base.GetParamID(ctx)
 	if err != nil {
+		base.BadRequestError(ctx, "评论ID不合法")
 		return
 	}
 
@@ -102,6 +104,7 @@ func (h *InstanceCommentHandler) DeleteInstanceComment(ctx *gin.Context) {
 func (h *InstanceCommentHandler) GetInstanceComment(ctx *gin.Context) {
 	id, err := base.GetParamID(ctx)
 	if err != nil {
+		base.BadRequestError(ctx, "评论ID不合法")
 		return
 	}
 
@@ -123,6 +126,7 @@ func (h *InstanceCommentHandler) GetInstanceCommentsTree(ctx *gin.Context) {
 
 	id, err := base.GetParamID(ctx)
 	if err != nil {
+		base.BadRequestError(ctx, "工单ID不合法")
 		return
 	}
 
