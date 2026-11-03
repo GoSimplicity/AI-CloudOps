@@ -1,5 +1,12 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-04：关键系统探针严格解析
+
+补底层fail-open：Linux非法/回退CPU计数不再变零，guest不重复计入；Darwin完整CPU三项及vm_stat页面/必需计数严格校验，缺测不合成合法数值。缓存v3隔离旧解析语义样本，旧值自然过期。见[严格解析合同](system-metrics-health.md)。
+
+- 原三个拒绝反例、独立数值边界、本机Darwin实采及service/utils race/vet通过；冻结后全Go test/vet、相关七包race、全标签只编译通过，v3调整后目标包再验。
+- 公式和格式参考已实时核验的Linux/Apple官方来源；不声明Linux/Windows实机验收或所有可选遥测完整。来源锁仍Web15d1572/AIba1876a，没有上线或生产连接。
+
 ## 2026-11-04：删除池生成物同步清退与恢复
 
 真实soft-delete驱动三类Scrape生成物退役；DELETE同步等待全部必要清退，失败明确pending可重复请求，周期生命周期库存支持重建恢复且不受正常生成暂停门控。先为已验证stale目标登记成员，补DB-only历史行退役后Redis失败的live/deleted共同恢复锚点。见[删除D2合同](scrape-pool-deletion.md)。

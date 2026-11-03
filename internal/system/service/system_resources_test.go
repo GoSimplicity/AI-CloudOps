@@ -133,7 +133,7 @@ func TestCriticalResourcesCommitTogetherAndRespectCancellation(t *testing.T) {
 	}
 }
 
-func TestSystemCacheOnlyAcceptsMeasuredFreshV2Snapshots(t *testing.T) {
+func TestSystemCacheOnlyAcceptsMeasuredFreshV3Snapshots(t *testing.T) {
 	for _, mode := range []string{"fresh", "empty", "future", "stale", "zero capacity", "invalid cpu", "malformed"} {
 		t.Run(mode, func(t *testing.T) {
 			info := model.System{CPUCores: 2, CPUUsage: 0, MemoryTotal: 100, DiskTotal: 100, LastUpdateTime: time.Now().Unix() - 5}
@@ -158,7 +158,7 @@ func TestSystemCacheOnlyAcceptsMeasuredFreshV2Snapshots(t *testing.T) {
 			calls := 0
 			s := &systemService{l: zap.NewNop(), redis: cache, resources: systemResourceReaders{cpu: func(context.Context) (float64, error) { calls++; return 0, errors.New("unavailable") }}}
 			result, err := s.GetCurrentSystemInfo(context.Background())
-			if cache.key != "system:info:v2" || cache.sets != 0 {
+			if cache.key != "system:info:v3" || cache.sets != 0 {
 				t.Fatal("unverified legacy cache was used or failed measurements cached")
 			}
 			if mode == "fresh" {

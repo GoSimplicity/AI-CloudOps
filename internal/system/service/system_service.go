@@ -54,7 +54,7 @@ type systemService struct {
 	resources systemResourceReaders
 }
 
-const systemInfoCacheKey = "system:info:v2"
+const systemInfoCacheKey = "system:info:v3"
 
 func NewSystemService(l *zap.Logger, redis redis.Cmdable) SystemService {
 	return &systemService{
@@ -305,81 +305,35 @@ func (s *systemService) getLinuxCPUUsage(ctx context.Context) (float64, error) {
 		return 0, err
 	}
 
-	// 计算差值
-	totalDiff := stat2.total - stat1.total
-	idleDiff := stat2.idle - stat1.idle
-
-	if totalDiff == 0 {
-		return 0, nil
-	}
-
-	usage := float64(totalDiff-idleDiff) / float64(totalDiff) * 100
-	return usage, nil
-}
-
-// cpuStat CPU统计信息结构
-type cpuStat struct {
-	total int64
-	idle  int64
+	return linuxCPUUsageBetween(stat1, stat2)
 }
 
 // readLinuxCPUStat 读取Linux CPU统计信息
 func (s *systemService) readLinuxCPUStat(ctx context.Context) (*cpuStat, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	cmd := exec.CommandContext(ctx, "cat", "/proc/stat")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}
 
-	lines := strings.Split(string(output), "\n")
-	if len(lines) == 0 {
-		return nil, fmt.Errorf("无法解析CPU信息")
-	}
-
-	// 解析第一行（总CPU信息）
-	fields := strings.Fields(lines[0])
-	if len(fields) < 5 || fields[0] != "cpu" {
-		return nil, fmt.Errorf("CPU信息格式错误")
-	}
-
-	var stat cpuStat
-	for i := 1; i < len(fields); i++ {
-		val, err := strconv.ParseInt(fields[i], 10, 64)
-		if err != nil {
-			continue
-		}
-		stat.total += val
-		if i == 4 { // idle time是第4个字段
-			stat.idle = val
-		}
-	}
-
-	return &stat, nil
+	return parseLinuxCPUStat(string(output))
 }
 
 // getMacOSCPUUsage 获取macOS CPU使用率
 func (s *systemService) getMacOSCPUUsage(ctx context.Context) (float64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	cmd := exec.CommandContext(ctx, "top", "-l", "1", "-n", "0")
 	output, err := cmd.Output()
 	if err != nil {
 		return 0, err
 	}
 
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "CPU usage") {
-			// 解析CPU使用率
-			fields := strings.Fields(line)
-			for i, field := range fields {
-				if strings.Contains(field, "%") && i > 0 {
-					usage := strings.TrimSuffix(field, "%")
-					return strconv.ParseFloat(usage, 64)
-				}
-			}
-		}
-	}
-
-	return 0, fmt.Errorf("无法解析CPU使用率")
+	return parseMacCPUUsage(string(output))
 }
 
 // getCPUModel 获取CPU型号
@@ -461,52 +415,22 @@ func (s *systemService) getLinuxMemoryInfo(ctx context.Context) (map[string]uint
 
 // getMacOSMemoryInfo 获取macOS内存信息
 func (s *systemService) getMacOSMemoryInfo(ctx context.Context) (map[string]uint64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	cmd := exec.CommandContext(ctx, "sysctl", "-n", "hw.memsize")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}
 
-	totalBytes, err := strconv.ParseUint(strings.TrimSpace(string(output)), 10, 64)
-	if err != nil {
-		return nil, err
-	}
-
+	totalOutput := string(output)
 	cmd = exec.CommandContext(ctx, "vm_stat")
 	output, err = cmd.Output()
 	if err != nil {
 		return nil, err
 	}
-
-	// 解析vm_stat输出
-	lines := strings.Split(string(output), "\n")
-	var freePages, inactivePages uint64
-
-	for _, line := range lines {
-		if strings.Contains(line, "Pages free:") {
-			fields := strings.Fields(line)
-			if len(fields) >= 3 {
-				freePages, _ = strconv.ParseUint(strings.TrimSuffix(fields[2], "."), 10, 64)
-			}
-		} else if strings.Contains(line, "Pages inactive:") {
-			fields := strings.Fields(line)
-			if len(fields) >= 3 {
-				inactivePages, _ = strconv.ParseUint(strings.TrimSuffix(fields[2], "."), 10, 64)
-			}
-		}
-	}
-
-	// 页面大小通常是4KB
-	pageSize := uint64(4096)
-	freeBytes := (freePages + inactivePages) * pageSize
-	usedBytes := totalBytes - freeBytes
-
-	result := map[string]uint64{
-		"total": totalBytes / 1024 / 1024, // 转换为MB
-		"used":  usedBytes / 1024 / 1024,  // 转换为MB
-	}
-
-	return result, nil
+	return parseMacMemoryInfo(totalOutput, string(output))
 }
 
 func (s *systemService) getDiskInfo(ctx context.Context) (map[string]uint64, error) {

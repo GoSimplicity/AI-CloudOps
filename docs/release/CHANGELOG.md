@@ -565,3 +565,9 @@
 - 真实tombstone授权主配置/告警/录制三类同步退役，部分失败明确pending且同ID可重试，周期重建可恢复；正常库存缺失不猜删除，正常生成暂停不遗失删除意图。
 - pending后SQL前可靠登记已证明stale目标，补正常关闭/清空/迁移及deleted路径的无索引DB行重建恢复，不改CAS核心或AM。
 - 累计83叶、独立真实DB/HTTP恢复、150次HTTP场景race、全Go test/vet/七包race/全标签只编译通过。未知键、custom/foreign、用户定义保持，不声称真实目标应用或上线。见[删除合同](scrape-pool-deletion.md)。
+
+## 2026-11-04：严格CPU/内存探针格式与缓存版本
+
+- Linux计数完整解析/guest不双算/无效区间拒绝，Darwin完整CPU百分比和实际页面大小vm_stat严格校验，防解析失败被当作合法测量。
+- 原3反例、独立数值边界、真实Darwin smoke、全Go test/vet/七包race/标签只编译通过；缓存v3不复用旧解析样本，目标两包再次race/vet通过。
+- 官方来源与本机格式依据见[指标合同](system-metrics-health.md)，无新依赖/schema、无生产或上线。
