@@ -476,3 +476,9 @@
 - 修复配置/成员/持久化/清理失败仍ACK、当前IP写失败被当stale删除、恢复后永久跳过；保留同一快照与原YAML哈希，成功持久化后才确认版本。
 - 真空活动job发布有效空scrape停止旧抓取，读取/生成/consumer校验错误保lastgood，错误不回显配置。
 - 新21与旧28场景共49定向race通过，全仓test/vet及全标签只编译通过；未操作真实服务或上线。见[发布边界](prometheus-publication.md)。
+
+## 2026-11-03：告警规则池实体统一
+
+- 保存、池名、前端选择/搜索统一真实ScrapePool，与规则生成实体一致；保留pool_id字段，不按同号自动映射历史AlertManager ID。
+- Alert99/Scrape7不重合替身验证拒错实体、存储与生成同实体；Go service/DI、Web164、类型和实际Wire生成通过。
+- 只处理实体关联阶段，不借此宣称规则构造/发布其它缺口已修；历史人工核对见[专项说明](alert-rule-pool.md)，未迁移或上线。

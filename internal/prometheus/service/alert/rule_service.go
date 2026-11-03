@@ -32,6 +32,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
 	"github.com/prometheus/prometheus/promql/parser"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -49,7 +50,7 @@ type AlertManagerRuleService interface {
 type alertManagerRuleService struct {
 	logger       *zap.Logger
 	ruleDAO      alert.AlertManagerRuleDAO
-	poolDAO      alert.AlertManagerPoolDAO
+	poolDAO      scrape.ScrapePoolDAO
 	sendGroupDAO alert.AlertManagerSendDAO
 	cache        cache.MonitorCache
 }
@@ -57,7 +58,7 @@ type alertManagerRuleService struct {
 func NewAlertManagerRuleService(
 	logger *zap.Logger,
 	ruleDAO alert.AlertManagerRuleDAO,
-	poolDAO alert.AlertManagerPoolDAO,
+	poolDAO scrape.ScrapePoolDAO,
 	sendGroupDAO alert.AlertManagerSendDAO,
 	cache cache.MonitorCache,
 ) AlertManagerRuleService {
@@ -83,9 +84,10 @@ func (s *alertManagerRuleService) GetMonitorAlertRuleList(ctx context.Context, r
 			rules[i].SendGroupName = sendGroup.NameZh
 		}
 
-		// 获取Prometheus实例池名称
-		pool, err := s.poolDAO.GetAlertPoolByID(ctx, rules[i].PoolID)
-		if err == nil && pool != nil {
+		// pool_id refers to a Prometheus scrape pool, never an AlertManager pool.
+		rules[i].PoolName = ""
+		pool, err := s.poolDAO.GetMonitorScrapePoolById(ctx, rules[i].PoolID)
+		if err == nil && pool != nil && pool.ID == rules[i].PoolID {
 			rules[i].PoolName = pool.Name
 		}
 	}
@@ -107,7 +109,7 @@ func (s *alertManagerRuleService) CreateMonitorAlertRule(ctx context.Context, re
 	}
 
 	// 检查Pool是否存在
-	_, err = s.poolDAO.GetAlertPoolByID(ctx, req.PoolID)
+	_, err = s.getRuleScrapePool(ctx, req.PoolID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("指定的Prometheus实例池不存在")
@@ -173,7 +175,7 @@ func (s *alertManagerRuleService) UpdateMonitorAlertRule(ctx context.Context, re
 	}
 
 	// 检查Pool是否存在
-	_, err = s.poolDAO.GetAlertPoolByID(ctx, req.PoolID)
+	_, err = s.getRuleScrapePool(ctx, req.PoolID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("指定的Prometheus实例池不存在")
@@ -245,6 +247,20 @@ func (s *alertManagerRuleService) PromqlExprCheck(ctx context.Context, req *mode
 	return true, nil
 }
 
+func (s *alertManagerRuleService) getRuleScrapePool(ctx context.Context, id int) (*model.MonitorScrapePool, error) {
+	if id <= 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	pool, err := s.poolDAO.GetMonitorScrapePoolById(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if pool == nil || pool.ID != id {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return pool, nil
+}
+
 // GetMonitorAlertRuleById 根据ID获取告警规则
 func (s *alertManagerRuleService) GetMonitorAlertRule(ctx context.Context, req *model.GetMonitorAlertRuleReq) (*model.MonitorAlertRule, error) {
 	rule, err := s.ruleDAO.GetMonitorAlertRuleByID(ctx, req.ID)
@@ -253,5 +269,11 @@ func (s *alertManagerRuleService) GetMonitorAlertRule(ctx context.Context, req *
 		return nil, err
 	}
 
+	if rule != nil {
+		rule.PoolName = ""
+		if pool, err := s.getRuleScrapePool(ctx, rule.PoolID); err == nil {
+			rule.PoolName = pool.Name
+		}
+	}
 	return rule, nil
 }

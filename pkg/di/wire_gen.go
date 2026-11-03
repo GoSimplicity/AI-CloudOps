@@ -176,7 +176,7 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	alertEventHandler := api4.NewAlertEventHandler(alertManagerEventService)
 	alertManagerPoolService := alert2.NewAlertManagerPoolService(alertManagerPoolDAO, alertManagerSendDAO, logger, monitorCache)
 	alertPoolHandler := api4.NewAlertPoolHandler(alertManagerPoolService)
-	alertManagerRuleService := alert2.NewAlertManagerRuleService(logger, alertManagerRuleDAO, alertManagerPoolDAO, alertManagerSendDAO, monitorCache)
+	alertManagerRuleService := alert2.NewAlertManagerRuleService(logger, alertManagerRuleDAO, scrapePoolDAO, alertManagerSendDAO, monitorCache)
 	alertRuleHandler := api4.NewAlertRuleHandler(alertManagerRuleService)
 	monitorConfigService := config3.NewMonitorConfigService(logger, monitorConfigDAO)
 	monitorConfigHandler := api4.NewMonitorConfigHandler(monitorConfigService)
