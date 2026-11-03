@@ -500,3 +500,9 @@
 - 启用组同快照内容hash、禁用过滤、真空blackhole、GroupByStr与SDK默认字段正确生效，保公开wrapper及duration合同。
 - artifact归属预检保护他池/自定义/歧义键；更名同正文仍更新元数据，必要失败pending不ACK且可恢复，完成键固定PoolID独立namespace。
 - 新172叶、定向race204项/子场景、vet、主线程25函数及独立反例复验通过；未连接真实服务或上线。详见[发布说明](alertmanager-publication.md)。
+
+## 2026-11-03：第五源码检查点
+
+- 固定Web9da4556/AIba1876a，纳入API目录隔离、告警实体/构造与三publisher持久pending/稳定ID。
+- 冻结基线全Go/vet/三包完整race/全标签只编译、Web3609/三类type/27demo/11build通过；普通lint10089/5仍保留。
+- 告警规则发布/hash下一阶段未包含，README补本地演示入口；不发布、不连接生产，新组合由本次CI独立验收。

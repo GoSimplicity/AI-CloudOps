@@ -12,6 +12,10 @@ This repository is the **Go backend** and the API gateway for the whole platform
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/GoSimplicity/AI-CloudOps)](https://github.com/GoSimplicity/AI-CloudOps/stargazers)
 
+## Local demonstration
+
+Use the [append-only demo seed](mock/demo/README.md) and [prepared-environment resume tool](docs/demo-local.md) with the sibling Web repository's [demo guide](https://github.com/GoSimplicity/AI-CloudOps-web/blob/main/docs/demo/README.md). Synthetic cloud, Kubernetes and AI data is explicitly marked; external execution is blocked. This is development preview, not production acceptance. The resume tool is not a fresh installer, and credentials remain in private local configuration.
+
 ## Project Components
 
 AI-CloudOps is made up of three repositories that are deployed together:

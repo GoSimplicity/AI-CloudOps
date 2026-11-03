@@ -1,5 +1,14 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-03 第五检查点：发布状态与告警构造
+
+固定Web代码检查点为9da4556b1f8cab22b970fd8c611d98953a987c8b，AI仍ba1876a8f20c3f68f30b4f9a26748d9dded03d05，后端以本提交job checkout为准。后续README仅补演示入口，不追逐文案提交更新代码锁。
+
+- 已完成record/Prom/AlertManager的持久pending、稳定PoolID完成键及失败恢复；告警规则池实体与保存/生成构造、API目录窗口隔离已交付。各专项边界见本目录说明。
+- 当前冻结基线全Go test/vet、cache/utils/alert service完整race、全标签只编译通过；前端165文件3609项、三类type、27demo、11build通过。五protected/parser0，完整lint仍10089 errors/5 warnings（1129文件/41补审），非全清零。
+- 告警规则生成器的发布/hash/空活动集合阶段仍在开发，不把此检查点当作该链全部完成。group身份首次改变可能重新等待for，发布窗口须审核，不提供状态无缝迁移承诺。
+- 演示入口、88条独立本机样例和明确合成数据保持可用；无真实模型、云、SSH、通知、生产或部署。本次新三仓组合等待CI，历史成功不外推。
+
 ## 2026-11-03 第四检查点：绑定隔离与本地演示
 
 当前锁定Web为`6cd88fed190a7d34a371251f5b11ed555e3b6c16`，AI仍`ba1876a8f20c3f68f30b4f9a26748d9dded03d05`；后端包含录制规则6e5a3032及本地演示工具6c45ac53，实际源码以后端job checkout为准。
