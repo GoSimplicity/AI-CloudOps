@@ -149,3 +149,5 @@ func TestMonitorCacheRequiresConfiguration(t *testing.T) {
 func (*monitorPromTask) ReconcileDeletedScrapePools(context.Context) error   { return nil }
 func (*monitorRuleTask) ReconcileDeletedScrapePools(context.Context) error   { return nil }
 func (*monitorRecordTask) ReconcileDeletedScrapePools(context.Context) error { return nil }
+
+func (*monitorAlertTask) ReconcileDeletedAlertManagerPools(context.Context) error { return nil }

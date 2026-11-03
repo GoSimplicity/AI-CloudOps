@@ -260,3 +260,5 @@ func TestAMConcurrentCreateAndDeleteHasOneSafeWinner(t *testing.T) {
 		t.Fatalf("unsafe outcomes create=%v delete=%v", createErr, deleteErr)
 	}
 }
+
+func (amLifecycleCache) RetireDeletedAlertManagerPool(context.Context, int) error { return nil }

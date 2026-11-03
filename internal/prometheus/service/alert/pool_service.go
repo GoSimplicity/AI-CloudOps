@@ -28,6 +28,7 @@ package alert
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
@@ -183,33 +184,34 @@ func (a *alertManagerPoolService) UpdateMonitorAlertManagerPool(ctx context.Cont
 }
 
 func (a *alertManagerPoolService) DeleteMonitorAlertManagerPool(ctx context.Context, req *model.DeleteMonitorAlertManagerPoolReq) error {
-	if req.ID <= 0 {
+	if req == nil || req.ID <= 0 {
 		return errors.New("无效的告警池ID")
 	}
 
-	sendGroups, _, err := a.sendDao.GetMonitorSendGroupByPoolID(ctx, req.ID)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		a.l.Error("删除 AlertManager 集群池失败：获取关联发送组时出错", zap.Error(err))
-		return err
+	// A real tombstone authorizes retry without consulting historical orphan
+	// groups. Live pools still use the friendly precheck and DAO transaction guard.
+	_, tombstoneErr := a.dao.GetMonitorAlertManagerPoolTombstone(ctx, req.ID)
+	if tombstoneErr != nil {
+		if !errors.Is(tombstoneErr, gorm.ErrRecordNotFound) {
+			return tombstoneErr
+		}
+		sendGroups, _, err := a.sendDao.GetMonitorSendGroupByPoolID(ctx, req.ID)
+		if err != nil {
+			return err
+		}
+		if len(sendGroups) > 0 {
+			return errors.New("AlertManager集群池存在关联发送组，无法删除")
+		}
 	}
-
-	if len(sendGroups) > 0 {
-		return errors.New("AlertManager 集群池存在关联发送组，无法删除")
-	}
-
 	if err := a.dao.DeleteMonitorAlertManagerPool(ctx, req.ID); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil
-		}
-		a.l.Error("删除 AlertManager 集群池失败", zap.Error(err))
 		return err
 	}
-
-	go func() {
-		if err := a.cache.MonitorCacheManager(context.Background()); err != nil {
-			a.l.Error("删除 AlertManager 集群池后刷新缓存失败", zap.Error(err))
-		}
-	}()
+	if a.cache == nil {
+		return errors.New("AlertManager池已删除，配置清退仍待完成，请重试删除")
+	}
+	if err := a.cache.RetireDeletedAlertManagerPool(ctx, req.ID); err != nil {
+		return fmt.Errorf("AlertManager池已删除，配置清退仍待完成，请重试删除: %w", err)
+	}
 
 	return nil
 }

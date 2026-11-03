@@ -52,6 +52,8 @@ const alertSendGroupKey = "alert_send_group"
 
 // AlertManagerConfigCache AlertManager配置缓存接口
 type AlertManagerConfigCache interface {
+	RetireDeletedAlertManagerPool(context.Context, int) error
+	ReconcileDeletedAlertManagerPools(context.Context) error
 	GetConfigByIP(ip string) string
 	GenerateMainConfig(ctx context.Context) error
 	GenerateMainConfigForPool(pool *model.MonitorAlertManagerPool) *altconfig.Config
@@ -434,28 +436,16 @@ func (a *alertManagerConfigCache) retiredAlertWebhooks(ctx context.Context, pool
 	kind := model.ConfigTypeWebhookFile
 	var retired []retiredAlertWebhook
 	rowsByKey := map[string][]*model.MonitorConfig{}
-	scanned := 0
-	for page := 1; ; page++ {
-		rows, total, err := dao.GetMonitorConfigList(ctx, &model.GetMonitorConfigListReq{ListReq: model.ListReq{Page: page, Size: 100}, ConfigType: &kind})
-		if err != nil {
-			return nil, errors.New("旧webhook配置读取失败")
-		}
-		for _, row := range rows {
-			if row == nil {
-				return nil, errors.New("旧配置快照无效")
+	rows, err := a.readAlertConfigSnapshot(ctx, kind)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		rowsByKey[row.InstanceIP] = append(rowsByKey[row.InstanceIP], row)
+		if item, ok := ownedAlertWebhook(row, poolID); ok {
+			if _, wanted := desired[row.InstanceIP]; !wanted {
+				retired = append(retired, item)
 			}
-			if row.ConfigType == kind {
-				rowsByKey[row.InstanceIP] = append(rowsByKey[row.InstanceIP], row)
-			}
-			if item, ok := ownedAlertWebhook(row, poolID); ok {
-				if _, wanted := desired[row.InstanceIP]; !wanted {
-					retired = append(retired, item)
-				}
-			}
-		}
-		scanned += len(rows)
-		if len(rows) == 0 || scanned >= int(total) {
-			break
 		}
 	}
 	for _, item := range retired {
@@ -485,46 +475,17 @@ func (a *alertManagerConfigCache) checkRetiredAlertMainOwnership(ctx context.Con
 	}
 	rowsByIP := map[string][]*model.MonitorConfig{}
 	kind := model.ConfigTypeAlertManager
-	expected, scanned := int64(-1), int64(0)
-	seenIDs := map[int]bool{}
-	for page := 1; ; page++ {
-		if err := ctx.Err(); err != nil {
-			return nil, nil, err
-		}
-		rows, total, err := a.alertConfigDAO().GetMonitorConfigList(ctx, &model.GetMonitorConfigListReq{ListReq: model.ListReq{Page: page, Size: 100}, ConfigType: &kind})
-		if err != nil || total < 0 || expected >= 0 && total != expected {
-			return fail()
-		}
-		expected = total
-		if int64(len(rows)) > expected-scanned {
-			return fail()
-		}
-		if len(rows) == 0 {
-			if scanned != expected {
+	rows, err := a.readAlertConfigSnapshot(ctx, kind)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, row := range rows {
+		rowsByIP[row.InstanceIP] = append(rowsByIP[row.InstanceIP], row)
+		if row.PoolID == poolID && row.Name == fmt.Sprintf(ConfigNameAlertManager, poolID, row.InstanceIP) && !desired[row.InstanceIP] {
+			if err := validateInstanceIPs([]string{row.InstanceIP}); err != nil {
 				return fail()
 			}
-			break
-		}
-		for _, source := range rows {
-			if source == nil || source.ID <= 0 || seenIDs[source.ID] || source.ConfigType != kind {
-				return fail()
-			}
-			seenIDs[source.ID] = true
-			row := *source
-			rowsByIP[row.InstanceIP] = append(rowsByIP[row.InstanceIP], &row)
-			if row.PoolID == poolID && row.Name == fmt.Sprintf(ConfigNameAlertManager, poolID, row.InstanceIP) && !desired[row.InstanceIP] {
-				if err := validateInstanceIPs([]string{row.InstanceIP}); err != nil {
-					return fail()
-				}
-				stale[row.InstanceIP] = true
-			}
-		}
-		scanned += int64(len(rows))
-		if scanned == expected {
-			break
-		}
-		if len(rows) < 100 {
-			return fail()
+			stale[row.InstanceIP] = true
 		}
 	}
 	owners := map[string]configDao.GeneratedConfigOwner{}
@@ -563,45 +524,52 @@ func (a *alertManagerConfigCache) checkRetiredAlertMainOwnership(ctx context.Con
 
 func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *model.MonitorAlertManagerPool) error {
 	fail := func(stage string) error { return a.alertPublicationError(pool.ID, stage) }
-	if err := validateInstanceIPs(pool.AlertManagerInstances); err != nil {
-		return fail("实例列表无效")
-	}
-	if strings.TrimSpace(pool.Name) == "" {
-		return fail("实例池名称无效")
-	}
-	groups, err := a.readEnabledAlertGroups(ctx, pool.ID)
-	if err != nil {
-		return fail("读取发送组")
-	}
-	routes, receivers, err := a.renderAlertRoutes(pool, groups)
-	if err != nil {
-		return fail("生成路由")
-	}
-	cfg := a.GenerateMainConfigForPool(pool)
-	if len(routes) == 0 {
-		cfg.Route.Receiver = "cloudops-disabled"
-		cfg.Receivers = []altconfig.Receiver{{Name: "cloudops-disabled"}}
-	} else {
-		cfg.Route.Receiver = routes[0].Receiver
-		for _, receiver := range receivers {
-			if receiver.Name == pool.Receiver {
-				cfg.Route.Receiver = pool.Receiver
-				break
-			}
+	var groups []*model.MonitorSendGroup
+	var content []byte
+	var instances []string
+	var err error
+	webhooks := map[string]ConfigData{}
+	if pool.DeletedAt == 0 {
+		if err := validateInstanceIPs(pool.AlertManagerInstances); err != nil {
+			return fail("实例列表无效")
 		}
-		cfg.Route.Routes = routes
-		cfg.Receivers = receivers
+		if strings.TrimSpace(pool.Name) == "" {
+			return fail("实例池名称无效")
+		}
+		groups, err = a.readEnabledAlertGroups(ctx, pool.ID)
+		if err != nil {
+			return fail("读取发送组")
+		}
+		routes, receivers, err := a.renderAlertRoutes(pool, groups)
+		if err != nil {
+			return fail("生成路由")
+		}
+		cfg := a.GenerateMainConfigForPool(pool)
+		if len(routes) == 0 {
+			cfg.Route.Receiver = "cloudops-disabled"
+			cfg.Receivers = []altconfig.Receiver{{Name: "cloudops-disabled"}}
+		} else {
+			cfg.Route.Receiver = routes[0].Receiver
+			for _, receiver := range receivers {
+				if receiver.Name == pool.Receiver {
+					cfg.Route.Receiver = pool.Receiver
+					break
+				}
+			}
+			cfg.Route.Routes = routes
+			cfg.Receivers = receivers
+		}
+		content, err = yaml.Marshal(cfg)
+		if err != nil {
+			return fail("序列化配置")
+		}
+		if _, err = altconfig.Load(string(content)); err != nil {
+			return fail("验证配置")
+		}
+		webhooks = a.alertWebhookConfigs(pool, groups)
+		instances = append([]string(nil), pool.AlertManagerInstances...)
+		sort.Strings(instances)
 	}
-	content, err := yaml.Marshal(cfg)
-	if err != nil {
-		return fail("序列化配置")
-	}
-	if _, err = altconfig.Load(string(content)); err != nil {
-		return fail("验证配置")
-	}
-	webhooks := a.alertWebhookConfigs(pool, groups)
-	instances := append([]string(nil), pool.AlertManagerInstances...)
-	sort.Strings(instances)
 	payload, err := json.Marshal(struct {
 		Main      string
 		Webhooks  map[string]ConfigData
@@ -611,6 +579,9 @@ func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *mo
 		return fail("生成版本")
 	}
 	hash := calculateConfigHash(string(payload))
+	if pool.DeletedAt > 0 {
+		hash = calculateConfigHash(fmt.Sprintf("deleted:alertmanager:%d:%d", pool.ID, pool.DeletedAt))
+	}
 	hashKey := alertPublicationStateKey(pool.ID)
 	oldHash, err := a.redis.Get(ctx, hashKey).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {

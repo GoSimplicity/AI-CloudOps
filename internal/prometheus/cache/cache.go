@@ -27,7 +27,9 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/config"
@@ -42,6 +44,7 @@ const (
 type MonitorCache interface {
 	MonitorCacheManager(ctx context.Context) error
 	RetireDeletedScrapePool(ctx context.Context, poolID int) error
+	RetireDeletedAlertManagerPool(ctx context.Context, poolID int) error
 }
 
 type monitorCache struct {
@@ -81,16 +84,37 @@ func (mc *monitorCache) MonitorCacheManager(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, DefaultTaskTimeout)
 	defer cancel()
 
-	g, ctx := errgroup.WithContext(ctx)
-
 	type taskDef struct {
 		name string
 		fn   func(context.Context) error
 	}
-	tasks := make([]taskDef, 0, 7)
-	// Explicit DB tombstones remain recoverable even when normal generation is
-	// paused. This does not enable generation for a disabled global feature.
-	tasks = append(tasks, taskDef{"已删采集池主配置清退", mc.PrometheusMainConfig.ReconcileDeletedScrapePools}, taskDef{"已删采集池告警规则清退", mc.AlertRuleConfig.ReconcileDeletedScrapePools}, taskDef{"已删采集池记录规则清退", mc.AlertRecordConfig.ReconcileDeletedScrapePools})
+	// Every accepted deletion gets its recovery attempt independently. A foreign
+	// owner in one domain must not cancel other retirement controllers, and a
+	// normal generator's fail-fast context must never govern deletion recovery.
+	retirements := []taskDef{
+		{"已删AlertManager池配置清退", mc.AlertManagerMainConfig.ReconcileDeletedAlertManagerPools},
+		{"已删采集池主配置清退", mc.PrometheusMainConfig.ReconcileDeletedScrapePools},
+		{"已删采集池告警规则清退", mc.AlertRuleConfig.ReconcileDeletedScrapePools},
+		{"已删采集池记录规则清退", mc.AlertRecordConfig.ReconcileDeletedScrapePools},
+	}
+	retirementErrors := make([]error, len(retirements))
+	var recovery sync.WaitGroup
+	for i, task := range retirements {
+		recovery.Add(1)
+		go func(index int, task taskDef) {
+			defer recovery.Done()
+			retirementErrors[index] = mc.executeTask(ctx, task.name, task.fn)
+		}(i, task)
+	}
+	recovery.Wait()
+	retirementErr := errors.Join(retirementErrors...)
+	if err := ctx.Err(); err != nil {
+		return errors.Join(retirementErr, err)
+	}
+
+	// Preserve the original live-generation switches and fail-fast contract.
+	g, normalCtx := errgroup.WithContext(ctx)
+	tasks := make([]taskDef, 0, 4)
 	// 主配置（Prometheus、AlertManager）始终可执行，因为其生成与开关无关
 	tasks = append(tasks, taskDef{"Prometheus主配置", mc.PrometheusMainConfig.GenerateMainConfig})
 	tasks = append(tasks, taskDef{"AlertManager主配置", mc.AlertManagerMainConfig.GenerateMainConfig})
@@ -108,11 +132,11 @@ func (mc *monitorCache) MonitorCacheManager(ctx context.Context) error {
 	for i := range tasks {
 		task := tasks[i] // 避免闭包变量问题
 		g.Go(func() error {
-			return mc.executeTask(ctx, task.name, task.fn)
+			return mc.executeTask(normalCtx, task.name, task.fn)
 		})
 	}
 
-	if err := g.Wait(); err != nil {
+	if err := errors.Join(retirementErr, g.Wait()); err != nil {
 		mc.l.Error("监控缓存更新失败",
 			zap.Error(err),
 			zap.Duration("timeout", DefaultTaskTimeout),
@@ -158,4 +182,10 @@ func (mc *monitorCache) RetireDeletedScrapePool(ctx context.Context, poolID int)
 		g.Go(func() error { return fn(ctx, poolID) })
 	}
 	return g.Wait()
+}
+
+func (mc *monitorCache) RetireDeletedAlertManagerPool(ctx context.Context, poolID int) error {
+	ctx, cancel := context.WithTimeout(ctx, DefaultTaskTimeout)
+	defer cancel()
+	return mc.AlertManagerMainConfig.RetireDeletedAlertManagerPool(ctx, poolID)
 }

@@ -27,7 +27,9 @@ package alert
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"gorm.io/gorm/clause"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -36,6 +38,8 @@ import (
 )
 
 type AlertManagerPoolDAO interface {
+	GetMonitorAlertManagerPoolLifecycleList(context.Context, *model.GetMonitorAlertManagerPoolListReq) ([]*model.MonitorAlertManagerPool, int64, error)
+	GetMonitorAlertManagerPoolTombstone(context.Context, int) (*model.MonitorAlertManagerPool, error)
 	GetMonitorAlertManagerPoolList(ctx context.Context, req *model.GetMonitorAlertManagerPoolListReq) ([]*model.MonitorAlertManagerPool, int64, error)
 	CreateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
 	UpdateMonitorAlertManagerPool(ctx context.Context, monitorAlertManagerPool *model.MonitorAlertManagerPool) error
@@ -109,7 +113,11 @@ func (d *alertManagerPoolDAO) DeleteMonitorAlertManagerPool(ctx context.Context,
 
 	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := lockLiveAlertManagerPool(tx, id); err != nil {
-			return err
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			var tombstone model.MonitorAlertManagerPool
+			return tx.Unscoped().Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND deleted_at > 0", id).First(&tombstone).Error
 		}
 		var count int64
 		// Enable is irrelevant: disabled groups remain user-owned definitions.
@@ -221,4 +229,31 @@ func (d *alertManagerPoolDAO) CheckAlertIpExists(ctx context.Context, req *model
 	}
 
 	return nil
+}
+
+// Lifecycle queries belong to controllers; ordinary HTTP lists remain scoped.
+func (d *alertManagerPoolDAO) GetMonitorAlertManagerPoolLifecycleList(ctx context.Context, req *model.GetMonitorAlertManagerPoolListReq) ([]*model.MonitorAlertManagerPool, int64, error) {
+	if req == nil || req.Page <= 0 || req.Size <= 0 {
+		return nil, 0, fmt.Errorf("无效的AM生命周期分页")
+	}
+	var rows []*model.MonitorAlertManagerPool
+	var total int64
+	query := d.db.WithContext(ctx).Unscoped().Model(&model.MonitorAlertManagerPool{})
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := query.Order("id ASC").Offset((req.Page - 1) * req.Size).Limit(req.Size).Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}
+func (d *alertManagerPoolDAO) GetMonitorAlertManagerPoolTombstone(ctx context.Context, id int) (*model.MonitorAlertManagerPool, error) {
+	if id <= 0 {
+		return nil, fmt.Errorf("无效的AlertManager池ID")
+	}
+	var row model.MonitorAlertManagerPool
+	if err := d.db.WithContext(ctx).Unscoped().Where("id = ? AND deleted_at > 0", id).First(&row).Error; err != nil {
+		return nil, err
+	}
+	return &row, nil
 }

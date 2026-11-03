@@ -10,6 +10,16 @@
 
 本机新建专属MySQL空库与最小权限测试账号，实际运行创建/迁移分别先于删除或晚于删除的4个锁顺序场景，全通过且零skip。临时库、账号和DSN清理，演示数据未改；最终全Go test/vet、相关三包完整race、全标签只编译通过。
 
-## AM-D2待完成
+## AM-D2：持久删除意图与同步退役
 
-本阶段没有修改AM发布器、配置CAS、schema或Scrape删除。已确认无发送组AM池被删除后，type2/5已生成配置仍可能保留；必须以真实AM tombstone驱动可重试退役、同步完成或明确pending，周期/重启恢复不能依赖一次goroutine。AM-D2尚未交付，不能把引用保护当作全部删除闭环，也不能按Scrape同号池、普通缺失或读取错误猜测删除。未上线。
+真实AM软删除记录现在提供持久退役授权。普通活动列表不变，专用生命周期查询完整读取并复制所有页，验证总数、唯一ID与删除状态；只有真实AM tombstone可授权，Scrape同号池、普通缺失、旧poolName或读取失败都不能代替。
+
+删除服务在D1最终事务后，同步等待AM type2主配置及type5已证明owned的Webhook输出清退，全部完成才返回成功；部分失败明确pending，同ID重复DELETE可从真实tombstone继续。已删除分支跳过坏历史发送组/渲染，保留用户定义和custom/foreign。publisher mutex等待旧inflight结束再验证授权，删除状态进入独立版本。
+
+主配置成员与owner-only Webhook intent在pending后可靠登记，SQL CAS先于Redis清理，最后移除恢复定位并确认SHA。DB-only历史行、取消/重建、旧intent与新owned同键二次ABA继续遵守已交归属合同；未知无DB/索引Redis键不猜删。
+
+周期管理器先完成四类独立退休批次，各任务使用父超时上下文而不互相取消；随后运行原有正常生成组，enable条件不变，退休与正常错误汇总返回。正常fail-fast不能持续取消退休，AM某个foreign冲突也不能阻断其它Scrape退休；父上下文取消/超时仍生效，没有开启被暂停的正常生成。
+
+新增54叶及相关四包race/vet通过；实际文件SQLite+Gin三场景连续50次race通过，覆盖重复DELETE、周期重建、DB-only type2/5、历史孤儿组及同号Scrape保护。原审计断言仅为新增同步接口补fake适配后保持预期，未谎称旧接口fixture无变也可运行。独立真实DB/HTTP取消→重建且正常Prom错误仍完成2/5清退、原4个二次ABA场景均通过race。最终全Go test/vet、相关四包完整race、全标签只编译通过。
+
+本阶段没有新增schema、修改CAS核心或Scrape发布器，不声称SQL COUNT为一致快照、跨存储事务、多进程exactly-once或真实目标已应用；没有外部重载、通知、生产访问或上线。

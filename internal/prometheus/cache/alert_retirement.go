@@ -134,3 +134,52 @@ func (a *alertManagerConfigCache) readAlertRetirementIntents(ctx context.Context
 	})
 	return result, nil
 }
+
+// Clone and validate the complete metadata inventory before any visible write.
+// This detects observed COUNT/OFFSET drift; it is not a SQL snapshot transaction.
+func (a *alertManagerConfigCache) readAlertConfigSnapshot(ctx context.Context, kind int8) ([]*model.MonitorConfig, error) {
+	if kind != model.ConfigTypeAlertManager && kind != model.ConfigTypeWebhookFile {
+		return nil, errors.New("AM元数据类型无效")
+	}
+	if a.alertConfigDAO() == nil {
+		return nil, errors.New("AM元数据存储不可用")
+	}
+	var result []*model.MonitorConfig
+	expected, scanned := int64(-1), int64(0)
+	seen := map[int]bool{}
+	for page := 1; ; page++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		rows, total, err := a.alertConfigDAO().GetMonitorConfigList(ctx, &model.GetMonitorConfigListReq{ListReq: model.ListReq{Page: page, Size: 100}, ConfigType: &kind})
+		if err != nil || total < 0 || expected >= 0 && total != expected {
+			return nil, errors.Join(errors.New("AM元数据分页读取失败"), ctx.Err())
+		}
+		expected = total
+		if int64(len(rows)) > expected-scanned {
+			return nil, errors.New("AM元数据分页计数无效")
+		}
+		if len(rows) == 0 {
+			if scanned != expected {
+				return nil, errors.New("AM元数据分页提前结束")
+			}
+			break
+		}
+		for _, source := range rows {
+			if source == nil || source.ID <= 0 || seen[source.ID] || source.ConfigType != kind {
+				return nil, errors.New("AM元数据标识无效")
+			}
+			seen[source.ID] = true
+			copy := *source
+			result = append(result, &copy)
+		}
+		scanned += int64(len(rows))
+		if scanned == expected {
+			break
+		}
+		if len(rows) < 100 {
+			return nil, errors.New("AM元数据分页不完整")
+		}
+	}
+	return result, nil
+}

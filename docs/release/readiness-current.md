@@ -1,5 +1,13 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-04：AM删除的同步清退与独立恢复批次
+
+真实AM tombstone驱动type2/5同步退役、重复DELETE和周期重建恢复，坏源不阻止已授权删除。四类退休独立于正常生成且互不取消，正常错误与退休错误汇总，避免恢复被饿死；原enable条件保持。见[AM-D2合同](alertmanager-pool-deletion.md)。
+
+- 新54叶、文件SQLite/HTTP场景150次race运行、独立取消/normal故障恢复及原ABA对照通过；最终全Go test/vet、相关四包race、全标签只编译通过。custom/foreign、同号Scrape、用户定义和未知Redis-only保持，无外部执行或schema变化。
+- Web锁更新`23f18d8629bd2a05b986e2c8213977479f800662`，AI仍ba1876a。自有映射查询硬化后再排序24局部字典，保原fallback惰性；166文件3619测试、应用类型、11构建及完整边界通过。
+- 最新前端1129文件、保护规则/parser0、41补审，普通lint仍9682 errors/5 warnings，非全清。新后端组合CI另验，不能用旧成功替代；未上线或连接生产。
+
 ## 2026-11-04：AM发送组引用与删除并发保护
 
 保留原服务层禁用组保护，在最终DAO事务增加AM父锁/全部未删发送组检查，组创建和迁移同事务验证存活AM父，关联写失败回滚。见[AM删除D1合同](alertmanager-pool-deletion.md)。

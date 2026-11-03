@@ -230,3 +230,5 @@ func TestAlertRuleSavedScrapeSevenIsReachableByRealGenerator(t *testing.T) {
 }
 
 func (namespaceMonitorCache) RetireDeletedScrapePool(context.Context, int) error { return nil }
+
+func (namespaceMonitorCache) RetireDeletedAlertManagerPool(context.Context, int) error { return nil }

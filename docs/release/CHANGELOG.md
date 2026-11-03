@@ -583,3 +583,9 @@
 - 删除最终事务锁AM父池并检查全部未删发送组；新建/迁移同事务父存活guard，省略关联锁内重检，三用户关联失败回滚，保已有disabled组保护。
 - 新14叶、原交错反例/独立SQLite race/真实MySQL四锁场景、全Go test/vet/相关race/标签只编译通过；临时测试资源清理，无演示或线上改动。
 - AM-D2生成配置退役仍待交付，不把引用保护当全部闭环。见[AM删除合同](alertmanager-pool-deletion.md)，未上线。
+
+## 2026-11-04：AM删除配置清退与恢复任务隔离
+
+- 真实AM tombstone授权type2/5同步退役和幂等重试，失败明确pending，周期/重建不靠一次goroutine。保owned CAS/主成员及Webhook意图，当前/foreign/custom/同号Scrape隔离。
+- 四类退休在独立父ctx批次完整等待后执行原normal组，错误汇总，不因某类或正常生成失败取消其它退休；正常enable语义不变。
+- 新54叶、独立实际DB/HTTP与ABA对照、150次HTTP race、全Go test/vet/四包race/标签只编译通过；Web23f18d8/AIba1876a锁定，前端3619/类型/11构建/边界过，源lint9682/5仍未全清。见[AM-D2合同](alertmanager-pool-deletion.md)，未上线。

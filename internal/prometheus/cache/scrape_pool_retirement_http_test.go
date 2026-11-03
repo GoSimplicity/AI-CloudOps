@@ -244,3 +244,5 @@ func TestDeletedPoolHTTPAndDatabaseRetirementRecoverFromPersistentTombstone(t *t
 		})
 	}
 }
+
+func (retirementHTTPAM) ReconcileDeletedAlertManagerPools(context.Context) error { return nil }
