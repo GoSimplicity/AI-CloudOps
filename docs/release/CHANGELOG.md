@@ -494,3 +494,9 @@
 - record/Prom发布前持久pending，完成后SHA，修复A→失败B→回A旧ACK跳过；同实例锁实际接入，取消后不继续操作。
 - 内部完成键改为独立publication前缀+pool.ID，修复池改名回退和旧名称碰撞；旧Name键不删/不信任，首次升级重发一次。
 - 新30叶与旧76纯内存共106定向race、vet及主线程新增用例复验通过；其它发布阶段仍在独立整合，不冒称当前全部全仓集成通过。
+
+## 2026-11-03：AlertManager快照与安全发布
+
+- 启用组同快照内容hash、禁用过滤、真空blackhole、GroupByStr与SDK默认字段正确生效，保公开wrapper及duration合同。
+- artifact归属预检保护他池/自定义/歧义键；更名同正文仍更新元数据，必要失败pending不ACK且可恢复，完成键固定PoolID独立namespace。
+- 新172叶、定向race204项/子场景、vet、主线程25函数及独立反例复验通过；未连接真实服务或上线。详见[发布说明](alertmanager-publication.md)。

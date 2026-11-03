@@ -14,7 +14,7 @@ import (
 type configSendGroups struct{ alertDAO.AlertManagerSendDAO }
 
 func (configSendGroups) GetMonitorSendGroupByPoolID(context.Context, int) ([]*model.MonitorSendGroup, int64, error) {
-	return []*model.MonitorSendGroup{{Model: model.Model{ID: 3}, Name: "fixture-group", RepeatInterval: "1h"}}, 1, nil
+	return []*model.MonitorSendGroup{{Model: model.Model{ID: 3}, Name: "fixture-group", Enable: 1, RepeatInterval: "1h"}}, 1, nil
 }
 
 func TestAlertCacheUsesInjectedConfiguration(t *testing.T) {
