@@ -30,8 +30,11 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/netip"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -370,6 +373,37 @@ func (p *prometheusConfigCache) CreateBaseConfig(pool *model.MonitorScrapePool) 
 	return config, nil
 }
 
+// staticScrapeAddress keeps legacy embedded ports authoritative and applies the
+// separate port only when the persisted address has no port of its own.
+func staticScrapeAddress(address string, port int) (string, error) {
+	if address == "" || address != strings.TrimSpace(address) {
+		return "", fmt.Errorf("静态采集地址不能为空或包含首尾空白")
+	}
+	if _, _, err := net.SplitHostPort(address); err == nil {
+		return address, nil
+	}
+	if port < 0 || port > 65535 {
+		return "", fmt.Errorf("静态采集端口超出有效范围")
+	}
+	host := address
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = host[1 : len(host)-1]
+		if _, err := netip.ParseAddr(host); err != nil {
+			return "", fmt.Errorf("静态采集IP字面量无效")
+		}
+	}
+	if host == "" {
+		return "", fmt.Errorf("静态采集主机不能为空")
+	}
+	if port > 0 {
+		return net.JoinHostPort(host, strconv.Itoa(port)), nil
+	}
+	if ip, err := netip.ParseAddr(host); err == nil && ip.Is6() {
+		return "[" + host + "]", nil
+	}
+	return address, nil
+}
+
 // GenerateScrapeConfigs 生成Prometheus采集配置
 func (p *prometheusConfigCache) GenerateScrapeConfigs(ctx context.Context, pool *model.MonitorScrapePool) []*pc.ScrapeConfig {
 	scrapeJobs, err := p.scrapeJobDAO.GetMonitorScrapeJobsByPoolId(ctx, pool.ID)
@@ -441,12 +475,17 @@ func (p *prometheusConfigCache) GenerateScrapeConfigs(ctx context.Context, pool 
 				},
 			}
 		case model.ServiceDiscoveryTypeStatic:
+			address, err := staticScrapeAddress(job.IpAddress, job.Port)
+			if err != nil {
+				p.logger.Error(LogModuleMonitor+"静态采集地址配置无效", zap.Int("job_id", job.ID))
+				continue
+			}
 			sc.ServiceDiscoveryConfigs = discovery.Configs{
 				discovery.StaticConfig{
 					{
 						Targets: []pm.LabelSet{
 							{
-								pm.AddressLabel: pm.LabelValue(job.IpAddress),
+								pm.AddressLabel: pm.LabelValue(address),
 							},
 						},
 					},

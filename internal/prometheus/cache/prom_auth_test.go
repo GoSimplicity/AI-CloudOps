@@ -5,17 +5,21 @@ import (
 	"encoding/pem"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	pcc "github.com/prometheus/common/config"
+	pm "github.com/prometheus/common/model"
 	pc "github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/discovery"
 	httpSD "github.com/prometheus/prometheus/discovery/http"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -118,5 +122,72 @@ func TestConflictingScrapeCredentialsDoNotGenerateUnauthenticatedJob(t *testing.
 		if len(cache.GenerateScrapeConfigs(context.Background(), &model.MonitorScrapePool{})) != 0 {
 			t.Fatal("conflicting credential sources accepted")
 		}
+	}
+}
+
+func TestBareStaticTargetUsesConfiguredPortWithTrustedTLS(t *testing.T) {
+	const token = "fixture-static-port-token"
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+token || r.URL.Path != "/metrics" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+	parsed, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host, rawPort, err := net.SplitHostPort(parsed.Host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, err := strconv.Atoi(rawPort)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: upstream.Certificate().Raw}))
+	job := &model.MonitorScrapeJob{
+		Name: "static-port", ServiceDiscoveryType: model.ServiceDiscoveryTypeStatic,
+		IpAddress: host, Port: port, Scheme: "https", MetricsPath: "/metrics",
+		ScrapeInterval: 30, ScrapeTimeout: 10, BearerToken: token, TlsCaContent: ca,
+	}
+	cache := &prometheusConfigCache{logger: zap.NewNop(), scrapeJobDAO: scrapeJobsStub{jobs: []*model.MonitorScrapeJob{job}}}
+	pool := &model.MonitorScrapePool{ScrapeInterval: 30, ScrapeTimeout: 10}
+	config, err := cache.CreateBaseConfig(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.ScrapeConfigs = cache.GenerateScrapeConfigs(context.Background(), pool)
+	data, err := marshalPrometheusConfig(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := pc.Load(string(data), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil || len(loaded.ScrapeConfigs) != 1 {
+		t.Fatal("generated bare-host target must survive the real Prometheus parser")
+	}
+	scrape := loaded.ScrapeConfigs[0]
+	groups, ok := scrape.ServiceDiscoveryConfigs[0].(discovery.StaticConfig)
+	if !ok || len(groups) != 1 || len(groups[0].Targets) != 1 {
+		t.Fatal("static job did not produce exactly one target")
+	}
+	address := string(groups[0].Targets[0][pm.AddressLabel])
+	if address != parsed.Host {
+		t.Fatal("generated target lost the separately configured port")
+	}
+	client, err := pcc.NewClientFromConfig(scrape.HTTPClientConfig, "static-port-roundtrip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.CloseIdleConnections()
+	response, err := client.Get(scrape.Scheme + "://" + address + scrape.MetricsPath)
+	if err != nil {
+		t.Fatal("generated static target could not reach its owned TLS fixture")
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatal("generated static target lost its authentication or metrics path")
 	}
 }
