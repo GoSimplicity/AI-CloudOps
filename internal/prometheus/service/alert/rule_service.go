@@ -33,6 +33,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/utils"
 	"github.com/prometheus/prometheus/promql/parser"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -99,14 +100,10 @@ func (s *alertManagerRuleService) GetMonitorAlertRuleList(ctx context.Context, r
 }
 
 func (s *alertManagerRuleService) CreateMonitorAlertRule(ctx context.Context, req *model.CreateMonitorAlertRuleReq) error {
-	// 验证PromQL表达式
-	_, err := s.PromqlExprCheck(ctx, &model.PromqlAlertRuleExprCheckReq{
-		PromqlExpr: req.Expr,
-	})
-
-	if err != nil {
-		return errors.New("PromQL表达式语法错误: " + err.Error())
+	if _, err := utils.BuildAlertingRule(req.Name, req.Expr, req.ForTime, req.Labels, req.Annotations); err != nil {
+		return err
 	}
+	var err error
 
 	// 检查Pool是否存在
 	_, err = s.getRuleScrapePool(ctx, req.PoolID)
@@ -158,13 +155,10 @@ func (s *alertManagerRuleService) CreateMonitorAlertRule(ctx context.Context, re
 }
 
 func (s *alertManagerRuleService) UpdateMonitorAlertRule(ctx context.Context, req *model.UpdateMonitorAlertRuleReq) error {
-	// 验证PromQL表达式
-	_, err := s.PromqlExprCheck(ctx, &model.PromqlAlertRuleExprCheckReq{
-		PromqlExpr: req.Expr,
-	})
-	if err != nil {
+	if _, err := utils.BuildAlertingRule(req.Name, req.Expr, req.ForTime, req.Labels, req.Annotations); err != nil {
 		return err
 	}
+	var err error
 
 	_, err = s.ruleDAO.GetMonitorAlertRuleByID(ctx, req.ID)
 	if err != nil {

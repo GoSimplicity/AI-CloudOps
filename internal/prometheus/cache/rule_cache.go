@@ -38,6 +38,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/utils"
 	pm "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/rulefmt"
+	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -211,28 +212,31 @@ func (r *alertRuleConfigCache) GenerateConfigForPool(ctx context.Context, pool *
 
 	var ruleGroups RuleGroups
 
+	seenIDs := make(map[int]struct{}, len(rules))
 	for _, rule := range rules {
-		ft, err := pm.ParseDuration(rule.ForTime)
+		if rule == nil || rule.ID <= 0 {
+			r.logger.Warn(LogModuleMonitor + "跳过缺少有效ID的告警规则")
+			continue
+		}
+		if _, duplicate := seenIDs[rule.ID]; duplicate {
+			r.logger.Warn(LogModuleMonitor+"跳过重复ID告警规则", zap.Int("rule_id", rule.ID))
+			continue
+		}
+		built, err := utils.BuildAlertingRule(rule.Name, rule.Expr, rule.ForTime, rule.Labels, rule.Annotations)
 		if err != nil {
-			r.logger.Warn(LogModuleMonitor+"解析告警规则持续时间失败，使用默认值",
-				zap.Error(err),
-				zap.String("rule_name", rule.Name))
-			ft, _ = pm.ParseDuration("5s")
+			r.logger.Warn(LogModuleMonitor+"跳过无效告警规则", zap.Int("rule_id", rule.ID))
+			continue
 		}
-
-		oneRule := rulefmt.Rule{
-			Alert:       rule.Name,
-			Expr:        rule.Expr,
-			For:         ft,
-			Labels:      utils.FromSliceTuMap(rule.Labels),
-			Annotations: utils.FromSliceTuMap(rule.Annotations),
-		}
-
-		ruleGroup := RuleGroup{
-			Name:  rule.Name,
-			Rules: []rulefmt.Rule{oneRule},
-		}
-		ruleGroups.Groups = append(ruleGroups.Groups, ruleGroup)
+		seenIDs[rule.ID] = struct{}{}
+		ruleGroups.Groups = append(ruleGroups.Groups, RuleGroup{
+			Name:  fmt.Sprintf("alert-rule-%d", rule.ID),
+			Rules: []rulefmt.Rule{built},
+		})
+	}
+	// Invalid-only historical rows are not a successfully generated empty snapshot.
+	// Empty publication and cache cleanup are handled separately from construction.
+	if len(ruleGroups.Groups) == 0 {
+		return nil
 	}
 
 	numInstances := len(pool.PrometheusInstances)
@@ -264,6 +268,12 @@ func (r *alertRuleConfigCache) GenerateConfigForPool(ctx context.Context, pool *
 				zap.Error(err),
 				zap.String("pool_name", pool.Name),
 				zap.String("instance_ip", ip))
+			success = false
+			break
+		}
+
+		if _, validationErrors := rulefmt.Parse(yamlData, false, pm.UTF8Validation, parser.NewParser(parser.Options{})); len(validationErrors) > 0 {
+			r.logger.Error(LogModuleMonitor+"生成的告警规则YAML校验失败", zap.Int("pool_id", pool.ID), zap.String("instance_ip", ip))
 			success = false
 			break
 		}

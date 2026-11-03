@@ -482,3 +482,9 @@
 - 保存、池名、前端选择/搜索统一真实ScrapePool，与规则生成实体一致；保留pool_id字段，不按同号自动映射历史AlertManager ID。
 - Alert99/Scrape7不重合替身验证拒错实体、存储与生成同实体；Go service/DI、Web164、类型和实际Wire生成通过。
 - 只处理实体关联阶段，不借此宣称规则构造/发布其它缺口已修；历史人工核对见[专项说明](alert-rule-pool.md)，未迁移或上线。
+
+## 2026-11-03：告警规则构造与标签协议
+
+- 保存/生成共用真实UTF-8、PromQL结果类型、duration、label/annotation/template合同，保0s及合法{}告警名；首个等号后的内容和合法空值保持，坏历史不猜测转换。
+- 同名告警按数据库ID分组，完整文件真实parser校验。首次group身份变化可能重新等待for/firing不直接继承，发布人需审核窗口，未重载真实实例。
+- Go构造三包专项/race/vet、Web169/类型及独立映射复验通过；发布/hash循环未改，另阶段处理。见[构造合同](alert-rule-construction.md)。
