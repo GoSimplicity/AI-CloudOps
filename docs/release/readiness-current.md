@@ -2,6 +2,14 @@
 
 ## 2026-11-03 技术债整合检查点
 
+最新第二检查点固定Web来源为`8daf2bec8deadec56fdcc6f4fd36bb1be2678f06`，AI仍`ba1876a`。旧c8d08c3检查点证据按下文保留，不能冒充新来源已验：
+
+- Web阶段29—32：响应式会话epoch与旧历史loading收停、流程真实校验/深复制与无structuredClone兼容、采集表单/Token动作/Static旧格式、地域查询独立确认owner与只读标记/节点/CSV边界已实现。
+- 所有源码冻结后149文件**3069项全量**、应用类型检查及11项构建通过；完整ESLint1097文件**10443 errors/5 warnings**，四protected及parser0，仍非full lint通过。SFC脚本剩11处，继续逐模块验证后才收紧规则。
+- Go实体路径修复18f8f376及Static目标端口修复1e206fea已各自完成全量test/vet与相关race；Static17表组+真正生成地址→Prom解析→本地CA/Bearer/TLS请求通过，保留旧嵌入端口原文及0语义，不作数据迁移。
+- [d477c366组合41584919135](https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41584919135)已成功，日志完整SHA+5浏览器零skip/fail/retry已核对；该组合Web为c8d08c3，后续代码仍等待新来源CI。所有验证限本地/CI隔离设施，没有上线或真实云/模型/通知调用。
+
+
 当前固定Web来源为`c8d08c3fc2d855f64ba85d570a420d75e7ad27dc`，AIOps为`ba1876a8f20c3f68f30b4f9a26748d9dded03d05`；后端由本提交实际job checkout确定。以下2026-10-30/31基线和历史镜像收据保留作历史证据，不能当成本轮最终版本。
 
 - 前端阶段10—28：应用测试及E2E已启用范围非空诊断清零，SFC原规则盲点另行盘点；修复监控表单真实验证、告警/角色/分类/云账户操作与回执隔离、K8s回滚及历史链、设计器非法索引丢字段，统一有语义证明的组件/列配置样式与同色盘头像。详细边界见[固定Web技术债记录](https://github.com/GoSimplicity/AI-CloudOps-web/blob/c8d08c3fc2d855f64ba85d570a420d75e7ad27dc/docs/release/eslint-debt.md)。

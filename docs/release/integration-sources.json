@@ -2,7 +2,7 @@
   "schema_version": 1,
   "web": {
     "repository": "GoSimplicity/AI-CloudOps-web",
-    "revision": "c8d08c3fc2d855f64ba85d570a420d75e7ad27dc"
+    "revision": "8daf2bec8deadec56fdcc6f4fd36bb1be2678f06"
   },
   "aiops": {
     "repository": "GoSimplicity/AI-CloudOps-aiops",
