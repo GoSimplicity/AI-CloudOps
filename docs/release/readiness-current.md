@@ -1,8 +1,19 @@
 # 当前开发完成度与验收边界
 
-## 2026-11-03 技术债整合检查点
+## 2026-11-03 第三技术债检查点
 
-最新第二检查点固定Web来源为`8daf2bec8deadec56fdcc6f4fd36bb1be2678f06`，AI仍`ba1876a`。旧c8d08c3检查点证据按下文保留，不能冒充新来源已验：
+当前固定Web为`8be2a2c5a8f497766c2a9baeba8745c799a8d9cd`，AIOps仍为`ba1876a8f20c3f68f30b4f9a26748d9dded03d05`；Go包含`bc2a86d3`移根修复，组合以后端实际job checkout为准。本次来源锁不更新历史候选镜像或表示已发布。
+
+- Web阶段33—46已交付：调班、通知配置与发送、采集通知组、记录规则与告警实例池的实际验证及账号/窗口归属；清理模板可空写入、兼容测试Promise、纯类型/数字格式债，并加入真实SFC第五保护规则及完整指令补审。
+- 源码冻结后的整合：**160文件3389项全量测试**、应用/Vite配置/ESLint配置包三类类型检查通过。11项构建全部通过（无缓存）；仍有既有大chunk提示，未通过调高阈值隐藏。
+- 当前完整门禁**1111文件、5类protected0、parser/tool0**，仅41文件需要额外指令审计；普通lint仍**10177 errors/5 warnings**，尚未清零。没有靠关闭规则、扩大ignore或隐藏旧诊断通过。
+- 通知组已改用真实AlertManager池目录；旧界面可能写入采集池ID，**发布前必须人工核对历史pool_id**，不按数字相同自动迁移。窗口隔离不等于撤销已发出的远端操作。
+- [旧bc2组合41602391719](https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41602391719)已成功，完整三仓SHA及5浏览器零skip/fail/retry收据已核验；它的Web是8daf2be，不能代替本次8be2a2c。新组合等待本提交CI验收。
+- AIOps代码本轮未改，保留既有2498通过/33外部门禁跳过的验证边界；本轮未复验真实模型、通知、云、K8s、SSH或生产，没有上线。
+
+## 历史：2026-11-03 第二技术债检查点
+
+第二检查点固定Web来源为`8daf2bec8deadec56fdcc6f4fd36bb1be2678f06`，AI仍`ba1876a`。旧c8d08c3检查点证据按下文保留，不能冒充新来源已验：
 
 - Web阶段29—32：响应式会话epoch与旧历史loading收停、流程真实校验/深复制与无structuredClone兼容、采集表单/Token动作/Static旧格式、地域查询独立确认owner与只读标记/节点/CSV边界已实现。
 - 所有源码冻结后149文件**3069项全量**、应用类型检查及11项构建通过；完整ESLint1097文件**10443 errors/5 warnings**，四protected及parser0，仍非full lint通过。SFC脚本剩11处，继续逐模块验证后才收紧规则。
@@ -10,7 +21,7 @@
 - [d477c366组合41584919135](https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41584919135)已成功，日志完整SHA+5浏览器零skip/fail/retry已核对；该组合Web为c8d08c3，后续代码仍等待新来源CI。所有验证限本地/CI隔离设施，没有上线或真实云/模型/通知调用。
 
 
-当前固定Web来源为`c8d08c3fc2d855f64ba85d570a420d75e7ad27dc`，AIOps为`ba1876a8f20c3f68f30b4f9a26748d9dded03d05`；后端由本提交实际job checkout确定。以下2026-10-30/31基线和历史镜像收据保留作历史证据，不能当成本轮最终版本。
+第一检查点固定Web来源为`c8d08c3fc2d855f64ba85d570a420d75e7ad27dc`，AIOps为`ba1876a8f20c3f68f30b4f9a26748d9dded03d05`；后端由本提交实际job checkout确定。以下2026-10-30/31基线和历史镜像收据保留作历史证据，不能当成本轮最终版本。
 
 - 前端阶段10—28：应用测试及E2E已启用范围非空诊断清零，SFC原规则盲点另行盘点；修复监控表单真实验证、告警/角色/分类/云账户操作与回执隔离、K8s回滚及历史链、设计器非法索引丢字段，统一有语义证明的组件/列配置样式与同色盘头像。详细边界见[固定Web技术债记录](https://github.com/GoSimplicity/AI-CloudOps-web/blob/c8d08c3fc2d855f64ba85d570a420d75e7ad27dc/docs/release/eslint-debt.md)。
 - 所有写入方冻结后的完整Web复验：146文件2867项通过，类型检查、11项生产构建通过。整合首轮2864/3failed及3个unhandled来自旧CMDB测试缺失新依赖，最小补夹具且原断言不变，随后全套重跑通过。
