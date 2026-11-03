@@ -520,3 +520,10 @@
 - 持久pending先于所有可见写入，分页及canonical归属预检拒绝不确定快照，保护custom/他池数据，收回无成员索引的本池旧生成物；非规范名称不猜测来源。
 - 新16主/85子、独立4个race反例、全Go test/vet/相关完整race/全标签只编译通过。Web165文件3609全量及11构建通过，来源锁固定10dbbfd/AIba1876a，5项锁定测试通过。
 - 后续继续Prometheus主配置与support开关生命周期；不提供多进程原子性，不上线。详见[录制规则合同](recording-rule-config.md)。
+
+## 2026-11-03：Prometheus主配置空目标与漂移恢复
+
+- 全池分页库存预读失败零发布；合法空目标仍读真实任务并执行原生config.Load，通过后才精准清退本池生成物。
+- 同源ACK下缺缓存/成员或元数据漂移重新修复，canonical归属预检保护未归属配置，pending/成员/元数据/Redis/清退/ACK完整可重试。
+- 新18主/88子、独立4个race反例、全Go test/vet/相关完整race/全标签只编译通过。来源锁更新Web2cc9269/AIba1876a，Web CI全量3609/27demo/类型/11构建已验；普通源码lint仍9998/5。
+- support生命周期后续继续；不改其它三个publisher，不提供跨进程事务，不上线。见[发布合同](prometheus-publication.md)。
