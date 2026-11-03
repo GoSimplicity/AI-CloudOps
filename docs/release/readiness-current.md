@@ -1,5 +1,15 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-03 第四检查点：绑定隔离与本地演示
+
+当前锁定Web为`6cd88fed190a7d34a371251f5b11ed555e3b6c16`，AI仍`ba1876a8f20c3f68f30b4f9a26748d9dded03d05`；后端包含录制规则6e5a3032及本地演示工具6c45ac53，实际源码以后端job checkout为准。
+
+- Web阶段47—50：值班CRUD、本地资源表单/绑定解绑的目标与回执隔离已实现；显式本地demo不改变普通dev/build/preview，合成数据常驻标识，未知与外部执行明确拒绝。
+- 冻结复验：163文件3560项全量、三类类型检查、11项构建通过；额外27项Node演示测试进入CI。57静态页巡检无JS异常，一次鉴权401刷新后恢复；动态终端和真实执行不在验收范围。
+- 五类protected/parser0、1128文件、指令补审41；普通lint仍10164 errors/5 warnings，不是全lint完成。后续纯格式阶段不冒用该快照作为新逻辑全量证据。
+- 88条业务样例只写独立本机演示库，重复导入不重复创建；内置/用户Cron关闭、无主机凭据/云账号/集群配置/投递队列，4条Inbox在独立演示进程内存。prepared-resume工具13隔离测试过，健康路径两次start实测PID不变；停服恢复未实际执行，非fresh安装器。
+- [录制规则组合41623940913](https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41623940913)已核对Go6e5a3032/Web8be2a2c/AIba1876a完整SHA及5浏览器零skip/fail/retry成功；它不能替代本次新Web来源，新组合等待本提交CI。
+
 ## 2026-11-03 录制规则配置续修
 
 本提交后端补齐录制规则的保存/生成校验、Labels及哈希快照、失败发布重试边界；新增108叶场景、全Go test/vet、相关3包race、全标签只编译通过，见[专项合同](recording-rule-config.md)。Web来源锁仍为8be2a2c，AIOps仍ba1876a；源码CI以本提交实际checkout为准，未发布镜像或上线。
