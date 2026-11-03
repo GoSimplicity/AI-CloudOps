@@ -1,5 +1,11 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-03 录制规则配置续修
+
+本提交后端补齐录制规则的保存/生成校验、Labels及哈希快照、失败发布重试边界；新增108叶场景、全Go test/vet、相关3包race、全标签只编译通过，见[专项合同](recording-rule-config.md)。Web来源锁仍为8be2a2c，AIOps仍ba1876a；源码CI以本提交实际checkout为准，未发布镜像或上线。
+
+[第三组合41615904232](https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41615904232)已成功，已核对Go45d64768/Web8be2a2c/AIba1876a完整SHA及5浏览器零skip/fail/retry；它不证明本次后端续修已验，新CI结果单独记录。
+
 ## 2026-11-03 第三技术债检查点
 
 当前固定Web为`8be2a2c5a8f497766c2a9baeba8745c799a8d9cd`，AIOps仍为`ba1876a8f20c3f68f30b4f9a26748d9dded03d05`；Go包含`bc2a86d3`移根修复，组合以后端实际job checkout为准。本次来源锁不更新历史候选镜像或表示已发布。

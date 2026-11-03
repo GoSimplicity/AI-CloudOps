@@ -34,7 +34,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
-	"github.com/prometheus/prometheus/promql/parser"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/utils"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -97,6 +97,17 @@ func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context,
 		return errors.New("无效的实例池ID")
 	}
 
+	if req.Enable != 0 && req.Enable != 1 && req.Enable != 2 {
+		return errors.New("无效的记录规则状态")
+	}
+	if _, err := utils.BuildRecordingRule(req.Name, req.Expr, req.Labels); err != nil {
+		return err
+	}
+
+	enable := req.Enable
+	if enable == 0 {
+		enable = 1 // Preserve the existing ORM default for omitted create status.
+	}
 	monitorRecordRule := &model.MonitorRecordRule{
 		Name:           req.Name,
 		PoolID:         req.PoolID,
@@ -104,7 +115,7 @@ func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context,
 		UserID:         req.UserID,
 		CreateUserName: req.CreateUserName,
 		IpAddress:      req.IpAddress,
-		Enable:         req.Enable,
+		Enable:         enable,
 		Labels:         req.Labels,
 	}
 
@@ -116,16 +127,6 @@ func (a *alertManagerRecordService) CreateMonitorRecordRule(ctx context.Context,
 
 	if exists {
 		return errors.New("记录规则已存在")
-	}
-
-	// 如果存在表达式，则检查 PromQL 语法是否合法
-	if req.Expr != "" {
-		if _, err := parser.NewParser(parser.Options{}).ParseExpr(req.Expr); err != nil {
-			a.l.Error("创建记录规则失败：PromQL 语法错误", zap.Error(err))
-			return fmt.Errorf("PromQL 语法错误: %v", err)
-		}
-	} else {
-		return errors.New("表达式不能为空")
 	}
 
 	if err := a.dao.CreateMonitorRecordRule(ctx, monitorRecordRule); err != nil {
@@ -153,6 +154,13 @@ func (a *alertManagerRecordService) UpdateMonitorRecordRule(ctx context.Context,
 
 	if req.PoolID <= 0 {
 		return errors.New("无效的实例池ID")
+	}
+
+	if req.Enable != 0 && req.Enable != 1 && req.Enable != 2 {
+		return errors.New("无效的记录规则状态")
+	}
+	if _, err := utils.BuildRecordingRule(req.Name, req.Expr, req.Labels); err != nil {
+		return err
 	}
 
 	rule, err := a.dao.GetMonitorRecordRuleById(ctx, req.ID)
@@ -184,16 +192,6 @@ func (a *alertManagerRecordService) UpdateMonitorRecordRule(ctx context.Context,
 		if exists {
 			return errors.New("记录规则名称已存在")
 		}
-	}
-
-	// 如果存在表达式，则检查 PromQL 语法是否合法
-	if req.Expr != "" {
-		if _, err := parser.NewParser(parser.Options{}).ParseExpr(req.Expr); err != nil {
-			a.l.Error("更新记录规则失败：PromQL 语法错误", zap.Error(err))
-			return fmt.Errorf("PromQL 语法错误: %v", err)
-		}
-	} else {
-		return errors.New("表达式不能为空")
 	}
 
 	if err := a.dao.UpdateMonitorRecordRule(ctx, monitorRecordRule); err != nil {

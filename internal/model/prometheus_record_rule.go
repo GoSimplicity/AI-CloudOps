@@ -53,7 +53,7 @@ type CreateMonitorRecordRuleReq struct {
 	UserID         int        `json:"user_id"`
 	PoolID         int        `json:"pool_id" binding:"required"`
 	IpAddress      string     `json:"ip_address"`
-	Enable         int8       `json:"enable"`
+	Enable         int8       `json:"enable" binding:"omitempty,oneof=1 2"`
 	Expr           string     `json:"expr" binding:"required"`
 	Labels         StringList `json:"labels"`
 	CreateUserName string     `json:"create_user_name"`
