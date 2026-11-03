@@ -1,5 +1,12 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-04：Record/Prom完整元数据读取责任
+
+两publisher共用新鲜完整分页与每页复制，保原类型策略、归属及发布次序；取消不返回部分快照。见[读取合同与量化](config-metadata-snapshot.md)。
+
+- 新25叶、原调用数probe、独立分页缓冲复用及取消反例、全Go test/vet/cache+DAO race/全标签只编译通过。
+- 稳态N²返回行量没有减少，本阶段不是性能优化；未引入跨池缓存、统一发布器或接口/schema变更。来源锁仅更新已测试Web源码，后端新CI另验，未上线。
+
 ## 2026-11-04：AM同版本缓存自愈
 
 主配置与启用组Webhook真实Redis字节现在也参与快路径判断。missing/drift即使源ACK、DB和成员不变也会修复；真实GET错误或取消写前拒绝，禁用/删除empty desired不越界读旧键。见[AM自愈合同](alertmanager-publication.md)。

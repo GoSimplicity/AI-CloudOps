@@ -595,3 +595,9 @@
 - desired主配置与启用Webhook真实Redis内容比较后才允许快路径；丢失/漂移重发，GET错误/取消在pending前拒绝，body/secret不记录日志。
 - 新27叶、原反例和独立3case race、全Go test/vet/cacheDAO race/全标签只编译通过；原删除、意图、blackhole和回退合同保持。
 - Web锁75576e7/AIba1876a，工单纯回调260和映射补全270项/type通过；新组合CI另验，没有上线。见[AM发布合同](alertmanager-publication.md)。
+
+## 2026-11-04：Record/Prom元数据完整读取责任
+
+- 复用完整分页/身份/取消/逐页clone，保持每池fresh读取、类型策略和owner/CAS/hash/写入状态机。
+- 新25叶、独立边界与原调用量probe、全Go test/vet/cacheDAO race/标签只编译通过；N²行量未减少，不夸为性能优化。
+- 不扩Rule/AM、不改schema或公共接口，未上线。见[读取合同](config-metadata-snapshot.md)。

@@ -74,53 +74,21 @@ func (r *recordRuleConfigCache) planRecordPublication(ctx context.Context, poolI
 			stale[ip] = true
 		}
 	}
-	scanned := int64(0)
-	expectedTotal := int64(-1)
-	seenRowIDs := map[int]bool{}
-	for page := 1; ; page++ {
-		if err := ctx.Err(); err != nil {
-			return plan, err
+	rows, err := readConfigMetadataSnapshot(ctx, dao, kind)
+	if err != nil {
+		return plan, err
+	}
+	for _, row := range rows {
+		// Retain the existing publisher policy: unexpected kinds are ignored only
+		// after the complete inventory has passed identity/pagination validation.
+		if row.ConfigType != kind {
+			continue
 		}
-		rows, total, err := dao.GetMonitorConfigList(ctx, &model.GetMonitorConfigListReq{ListReq: model.ListReq{Page: page, Size: 100}, ConfigType: &kind})
-		if err != nil {
-			return plan, errors.New("读取规则配置失败")
-		}
-		// COUNT/OFFSET is not a transactional snapshot. Reject observable drift
-		// rather than treating a truncated page as proof that a key has no owner.
-		if total < 0 || expectedTotal >= 0 && total != expectedTotal {
-			return plan, errors.New("规则配置分页总数不一致")
-		}
-		expectedTotal = total
-		if int64(len(rows)) > expectedTotal-scanned {
-			return plan, errors.New("规则配置分页超出总数")
-		}
-		if len(rows) == 0 {
-			if scanned != expectedTotal {
-				return plan, errors.New("规则配置分页提前结束")
+		byKey[row.InstanceIP] = append(byKey[row.InstanceIP], row)
+		if ownedRecordArtifact(row, poolID) {
+			if _, wanted := desired[row.InstanceIP]; !wanted {
+				stale[row.InstanceIP] = true
 			}
-			break
-		}
-		for _, row := range rows {
-			if row == nil || row.ID <= 0 || seenRowIDs[row.ID] {
-				return plan, errors.New("规则配置快照标识无效或重复")
-			}
-			seenRowIDs[row.ID] = true
-			if row.ConfigType != kind {
-				continue
-			}
-			byKey[row.InstanceIP] = append(byKey[row.InstanceIP], row)
-			if ownedRecordArtifact(row, poolID) {
-				if _, wanted := desired[row.InstanceIP]; !wanted {
-					stale[row.InstanceIP] = true
-				}
-			}
-		}
-		scanned += int64(len(rows))
-		if scanned == expectedTotal {
-			break
-		}
-		if len(rows) < 100 {
-			return plan, errors.New("规则配置分页数量不足")
 		}
 	}
 	keys := make([]string, 0, len(desired))
