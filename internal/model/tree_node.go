@@ -109,8 +109,8 @@ type DeleteTreeNodeReq struct {
 }
 
 type MoveTreeNodeReq struct {
-	ID          int `json:"id" form:"id" binding:"required"`
-	NewParentID int `json:"new_parent_id" form:"new_parent_id" binding:"required"` // 新父节点ID，必填
+	ID          int  `json:"id" form:"id" binding:"required"`
+	NewParentID *int `json:"new_parent_id" form:"new_parent_id" binding:"required,gte=0"` // 必填，显式0表示虚拟根
 }
 
 type GetTreeNodeMembersReq struct {

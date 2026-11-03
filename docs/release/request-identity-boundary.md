@@ -4,7 +4,7 @@
 
 `GetParamID`及`GetCustomParamID`现在只接受正整数。独立审查基线134处普通调用和183处自定义调用，后者均为`cluster_id`；它们指向真实实体。原有非零路径的authoritative绑定规则不变，body/query仍不能覆盖URI目标。缺失、零、负数、非整数及溢出在绑定/业务执行前失败；保留合法正数和带前导零的正数旧格式。
 
-树子节点查询的父0是真实虚拟根，改为显式`GetParentParamID`，允许非负整数；不能把该例外用于实体更新/删除。部门根、用户解绑部门等body/query零值合同未改变。树Move.NewParentID=0的required绑定矛盾属于已发现的另一个独立问题，本阶段未顺带修改DTO或权限。
+树子节点查询的父0是真实虚拟根，改为显式`GetParentParamID`，允许非负整数；不能把该例外用于实体更新/删除。部门根、用户解绑部门等body/query零值合同未改变。树Move.NewParentID=0的required绑定矛盾在后续独立阶段已闭合，详见[移根存在性边界](tree-move-root.md)；实体正数与虚拟父0仍是两个明确合同。
 
 另补5处工单解析失败只return的分支：评论Update/Delete/Get/Tree和时间线Detail现在返回规范HTTP400，不再空200。其它handler沿用原有失败envelope/status合同，未以本阶段统一改写全仓HTTP协议。
 

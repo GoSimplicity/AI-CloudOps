@@ -26,11 +26,14 @@
 package api
 
 import (
+	"strings"
+
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/tree/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 )
 
 type TreeNodeHandler struct {
@@ -153,13 +156,36 @@ func (h *TreeNodeHandler) MoveNode(ctx *gin.Context) {
 
 	id, err := base.GetParamID(ctx)
 	if err != nil {
-		base.ErrorWithMessage(ctx, "无效的节点ID")
+		base.BadRequestWithDetails(ctx, nil, "无效的节点ID")
 		return
 	}
 	req.ID = id
+	contentType := ctx.ContentType()
+	if contentType == binding.MIMEPOSTForm || contentType == binding.MIMEMultipartPOSTForm || contentType == "" {
+		// 保留解析错误，避免Gin缓存读取忽略坏编码后使后续绑定误接受。
+		var parseErr error
+		if contentType == binding.MIMEMultipartPOSTForm {
+			_, parseErr = ctx.MultipartForm()
+		} else {
+			parseErr = ctx.Request.ParseForm()
+		}
+		if parseErr != nil {
+			base.BadRequestWithDetails(ctx, "无效的表单参数", "绑定数据失败")
+			return
+		}
+		values, present := ctx.GetPostFormArray("new_parent_id")
+		if !present && contentType != binding.MIMEMultipartPOSTForm {
+			values, present = ctx.GetQueryArray("new_parent_id")
+		}
+		// Gin会把空串转成0；只有明确提供的整数0才表示虚拟根。
+		if !present || len(values) == 0 || strings.TrimSpace(values[0]) == "" {
+			base.BadRequestWithDetails(ctx, "新父节点ID不能为空", "绑定数据失败")
+			return
+		}
+	}
 
 	base.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.service.MoveNode(ctx.Request.Context(), req.ID, req.NewParentID)
+		return nil, h.service.MoveNode(ctx.Request.Context(), req.ID, *req.NewParentID)
 	})
 }
 
