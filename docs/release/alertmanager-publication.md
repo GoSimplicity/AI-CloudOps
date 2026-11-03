@@ -19,3 +19,11 @@ Alert专用元数据保存比较Name/PoolID/Type/正文hash/content/status，修
 本阶段新增172叶场景，定向race共204项测试/子场景、cache vet及差异检查通过；主线程提取并执行全部25个新增测试函数通过。独立审查发现并转绿的混合归属、源回退及更名反例均保留，覆盖冷启动pending失败零写、当前/退休歧义键、分页、pool改名同正文元数据更新、启用/禁用与blackhole、稳定排序、并发、取消等。
 
 测试使用内存DAO/Redis/FakeDB与真实SDK解析，不连接真实AlertManager、SMTP、数据库、Redis或生产服务。完整Go整合将与其它发布补修冻结后独立执行，不能把本定向结果冒称所有集成链已验。
+
+## 2026-11-04：主配置无索引历史行退役
+
+主配置退役现在完整、严格分页读取type2元数据，复制每页记录，检查总数、唯一正ID、提前空页及类型一致性。在任何写入前，以PoolID/type/IP及`alertmanager_pool_<ID>_<IP>.yaml`规范名称确认归属；pool显示名称变化不作为所有权依据。
+
+已验证的非desired数据库地址与可信成员索引合并为stale集合，当前和旧地址都检查混合归属冲突。即使源ACK未变，新增DB-only规范孤儿也不能走快速完成分支。pending可靠后先把stale地址登记成员，再经SQL条件退役、Redis删除、成员移除，避免DB已软删而Redis失败时失去恢复定位。当前目标、custom/foreign和type5 intent保持，未知Redis-only键不扫描猜删。
+
+新增7主/24子、27叶测试及原始Fake/真实SQLite+HTTP反例全部通过；独立实际DAO/HTTP race验证迁移和更名失败重建、同ACK晚出现的DB-only孤儿及foreign混合零写保护。最终全Go test/vet、cache/DAO完整race、全标签只编译通过。没有修改schema、空AM目标政策、AM池删除或公开构造合同，没有连接真实AlertManager或上线。

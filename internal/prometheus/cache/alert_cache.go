@@ -467,35 +467,98 @@ func (a *alertManagerConfigCache) retiredAlertWebhooks(ctx context.Context, pool
 	return retired, nil
 }
 
-// Membership alone cannot authorize deletion of a single Redis key when its
-// database projection also belongs to a custom config or another pool.
-func (a *alertManagerConfigCache) checkRetiredAlertMainOwnership(ctx context.Context, poolID int, oldIPs []string, desired map[string]bool) (map[string]configDao.GeneratedConfigOwner, error) {
-	var stale []string
+// Discover canonical DB-only artifacts as well as indexed targets. Complete
+// the metadata scan before any writes; counters detect drift, not SQL snapshot
+// isolation. A mutable pool name is never evidence of main-file ownership.
+func (a *alertManagerConfigCache) checkRetiredAlertMainOwnership(ctx context.Context, poolID int, oldIPs []string, desired map[string]bool) (map[string]configDao.GeneratedConfigOwner, []string, error) {
+	fail := func() (map[string]configDao.GeneratedConfigOwner, []string, error) {
+		return nil, nil, errors.New("旧主配置快照或归属无效")
+	}
+	stale := map[string]bool{}
 	for _, ip := range oldIPs {
+		if err := validateInstanceIPs([]string{ip}); err != nil {
+			return fail()
+		}
 		if !desired[ip] {
-			stale = append(stale, ip)
+			stale[ip] = true
 		}
 	}
-	if len(stale) == 0 {
-		return map[string]configDao.GeneratedConfigOwner{}, nil
+	rowsByIP := map[string][]*model.MonitorConfig{}
+	kind := model.ConfigTypeAlertManager
+	expected, scanned := int64(-1), int64(0)
+	seenIDs := map[int]bool{}
+	for page := 1; ; page++ {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		rows, total, err := a.alertConfigDAO().GetMonitorConfigList(ctx, &model.GetMonitorConfigListReq{ListReq: model.ListReq{Page: page, Size: 100}, ConfigType: &kind})
+		if err != nil || total < 0 || expected >= 0 && total != expected {
+			return fail()
+		}
+		expected = total
+		if int64(len(rows)) > expected-scanned {
+			return fail()
+		}
+		if len(rows) == 0 {
+			if scanned != expected {
+				return fail()
+			}
+			break
+		}
+		for _, source := range rows {
+			if source == nil || source.ID <= 0 || seenIDs[source.ID] || source.ConfigType != kind {
+				return fail()
+			}
+			seenIDs[source.ID] = true
+			row := *source
+			rowsByIP[row.InstanceIP] = append(rowsByIP[row.InstanceIP], &row)
+			if row.PoolID == poolID && row.Name == fmt.Sprintf(ConfigNameAlertManager, poolID, row.InstanceIP) && !desired[row.InstanceIP] {
+				if err := validateInstanceIPs([]string{row.InstanceIP}); err != nil {
+					return fail()
+				}
+				stale[row.InstanceIP] = true
+			}
+		}
+		scanned += int64(len(rows))
+		if scanned == expected {
+			break
+		}
+		if len(rows) < 100 {
+			return fail()
+		}
 	}
-	rows, err := a.alertConfigDAO().GetMonitorConfigsByInstances(ctx, stale, model.ConfigTypeAlertManager)
-	if err != nil {
-		return nil, errors.New("旧主配置读取失败")
-	}
-	seen := map[string]bool{}
 	owners := map[string]configDao.GeneratedConfigOwner{}
-	for _, row := range rows {
-		if row == nil {
-			return nil, errors.New("旧主配置快照无效")
+	// Current target conflicts must also fail before pending or any unrelated
+	// artifact writes, even when the old membership index was missing.
+	for ip := range desired {
+		rows := rowsByIP[ip]
+		if len(rows) > 1 {
+			return fail()
 		}
-		if row.PoolID != poolID || row.ConfigType != model.ConfigTypeAlertManager || row.Name != fmt.Sprintf(ConfigNameAlertManager, poolID, row.InstanceIP) || seen[row.InstanceIP] {
-			return nil, errors.New("旧主配置归属冲突")
+		if len(rows) == 1 {
+			row := rows[0]
+			if row.PoolID != poolID || row.Name != fmt.Sprintf(ConfigNameAlertManager, poolID, ip) {
+				return fail()
+			}
 		}
-		seen[row.InstanceIP] = true
-		owners[row.InstanceIP] = configDao.GeneratedConfigOwnerOf(row)
 	}
-	return owners, nil
+	ips := make([]string, 0, len(stale))
+	for ip := range stale {
+		rows := rowsByIP[ip]
+		if len(rows) > 1 {
+			return fail()
+		}
+		if len(rows) == 1 {
+			row := rows[0]
+			if row.PoolID != poolID || row.Name != fmt.Sprintf(ConfigNameAlertManager, poolID, ip) {
+				return fail()
+			}
+			owners[ip] = configDao.GeneratedConfigOwnerOf(row)
+		}
+		ips = append(ips, ip)
+	}
+	sort.Strings(ips)
+	return owners, ips, nil
 }
 
 func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *model.MonitorAlertManagerPool) error {
@@ -582,7 +645,7 @@ func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *mo
 	if err != nil {
 		return fail("检查主配置归属")
 	}
-	retiredMains, err := a.checkRetiredAlertMainOwnership(ctx, pool.ID, oldIPs, desired)
+	retiredMains, staleMainIPs, err := a.checkRetiredAlertMainOwnership(ctx, pool.ID, oldIPs, desired)
 	if err != nil {
 		return fail("检查旧实例配置归属")
 	}
@@ -596,7 +659,7 @@ func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *mo
 			sameMembers = false
 		}
 	}
-	if oldHash == hash && len(webhookWrites.create) == 0 && len(webhookWrites.update) == 0 && len(mainWrites.create) == 0 && len(mainWrites.update) == 0 && len(intents) == 0 && sameMembers {
+	if oldHash == hash && len(webhookWrites.create) == 0 && len(webhookWrites.update) == 0 && len(mainWrites.create) == 0 && len(mainWrites.update) == 0 && len(intents) == 0 && len(staleMainIPs) == 0 && sameMembers {
 		return nil
 	}
 	// An old ACK must stop being usable before the first artifact can change.
@@ -604,6 +667,16 @@ func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *mo
 	// serving B. A failed invalidation forbids all following artifact writes.
 	if err := a.redis.Set(ctx, hashKey, "pending:"+hash, 0).Err(); err != nil {
 		return fail("标记待发布版本")
+	}
+	// Retiring a DB-only row must not erase the sole locator before Redis
+	// deletion succeeds. Pending is durable before this member/artifact write.
+	for _, ip := range staleMainIPs {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := a.redis.SAdd(ctx, setKey, ip).Err(); err != nil {
+			return fail("登记待清退主配置实例")
+		}
 	}
 	for _, intent := range intents {
 		if err := a.redis.SAdd(ctx, alertRetirementIntentKey(pool.ID), intent.encoded).Err(); err != nil {
@@ -632,7 +705,7 @@ func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *mo
 		}
 	}
 	// Desired active IPs are never retired, even when one of their SETs fails.
-	for _, ip := range oldIPs {
+	for _, ip := range staleMainIPs {
 		if !desired[ip] {
 			if owner, exists := retiredMains[ip]; exists {
 				if err := a.alertConfigDAO().DeleteGeneratedMonitorConfig(ctx, owner); err != nil {

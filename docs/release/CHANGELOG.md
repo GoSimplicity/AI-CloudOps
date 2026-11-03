@@ -571,3 +571,9 @@
 - Linux计数完整解析/guest不双算/无效区间拒绝，Darwin完整CPU百分比和实际页面大小vm_stat严格校验，防解析失败被当作合法测量。
 - 原3反例、独立数值边界、真实Darwin smoke、全Go test/vet/七包race/标签只编译通过；缓存v3不复用旧解析样本，目标两包再次race/vet通过。
 - 官方来源与本机格式依据见[指标合同](system-metrics-health.md)，无新依赖/schema、无生产或上线。
+
+## 2026-11-04：AM无索引主配置清退
+
+- type2全元数据严格分页发现canonical DB-only旧实例，与成员合并退休目标；sameACK不能遗漏晚出现孤儿，pending后先登记再CAS/Redis清理，失败可重建恢复。
+- current及混合custom/foreign写前保护、type5 intent保持。新27叶、原HTTP反例、独立实际DAO/HTTP race、全Go test/vet/相关完整race/标签只编译通过。
+- Web锁efd0e70/AIba1876a；本批前端186/type/编译proof通过。AM删除/空目标/schema不扩，未上线。见[AM发布合同](alertmanager-publication.md)。

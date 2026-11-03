@@ -1,5 +1,13 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-04：AlertManager主配置历史无索引行清退
+
+修复合法实例迁移后已ACK但无成员索引的旧type2行继续Active的问题。完整元数据发现、写前混合归属预检及pending后成员锚点，使同ACK晚出现的规范孤儿和失败重建都能收敛；不猜删未知Redis键。见[AM主配置补漏](alertmanager-publication.md)。
+
+- 新27叶、原Fake/真实SQLite+HTTP红例保持预期转绿、独立实际DAO/HTTP race及完整Go test/vet/cache+DAO race/全标签只编译通过。current/custom/foreign/type5 intent保持，无AM删除或schema扩写。
+- Web锁更新`efd0e70f8b872955604315fc0dc6011b782e7e47`，AI仍ba1876a；三页面纯声明批次186测试/应用类型及编译绑定、DOM/SSR proof通过，定向净减15。此前15d的3609/11构建是上一来源证据，不冒充本次已重跑；新组合CI另验。
+- 其余前端债和已列并发/性能边界仍在推进，没有上线或生产连接。
+
 ## 2026-11-04：关键系统探针严格解析
 
 补底层fail-open：Linux非法/回退CPU计数不再变零，guest不重复计入；Darwin完整CPU三项及vm_stat页面/必需计数严格校验，缺测不合成合法数值。缓存v3隔离旧解析语义样本，旧值自然过期。见[严格解析合同](system-metrics-health.md)。
