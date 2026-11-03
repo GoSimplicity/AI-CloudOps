@@ -57,15 +57,16 @@ func ownedPromArtifact(row *model.MonitorConfig, poolID int) bool {
 }
 
 type promPublicationPlan struct {
-	create, update []*model.MonitorConfig
-	stale          []string
-	retired        map[string]*model.MonitorConfig
+	create  []*model.MonitorConfig
+	update  []configDao.GeneratedConfigUpdate
+	stale   []string
+	retired map[string]configDao.GeneratedConfigOwner
 }
 
 // Inspect every metadata page before any write. This also discovers canonical
 // rows left without membership by an older failed publication.
 func (p *prometheusConfigCache) planPromPublication(ctx context.Context, poolID int, desired map[string]string, oldIPs []string) (promPublicationPlan, error) {
-	plan := promPublicationPlan{retired: map[string]*model.MonitorConfig{}}
+	plan := promPublicationPlan{retired: map[string]configDao.GeneratedConfigOwner{}}
 	dao := p.promConfigDAO()
 	if dao == nil {
 		return plan, errors.New("配置存储不可用")
@@ -153,7 +154,7 @@ func (p *prometheusConfigCache) planPromPublication(ctx context.Context, poolID 
 			copy := *row
 			copy.ConfigContent, copy.ConfigHash, copy.Status = content, hash, model.ConfigStatusActive
 			copy.LastGeneratedTime = time.Now().Unix()
-			plan.update = append(plan.update, &copy)
+			plan.update = append(plan.update, configDao.GeneratedConfigUpdate{Expected: configDao.GeneratedConfigOwnerOf(row), Desired: copy})
 		}
 	}
 	for ip := range stale {
@@ -162,7 +163,7 @@ func (p *prometheusConfigCache) planPromPublication(ctx context.Context, poolID 
 			return plan, errors.New("旧配置归属冲突")
 		}
 		if len(rows) == 1 {
-			plan.retired[ip] = rows[0]
+			plan.retired[ip] = configDao.GeneratedConfigOwnerOf(rows[0])
 		}
 		plan.stale = append(plan.stale, ip)
 	}
@@ -321,7 +322,7 @@ func (p *prometheusConfigCache) publishPromPool(ctx context.Context, sourcePool 
 		return err
 	}
 	if len(plan.update) > 0 {
-		if err := dao.BatchUpdateMonitorConfigs(ctx, plan.update); err != nil {
+		if err := dao.UpdateGeneratedMonitorConfigs(ctx, plan.update); err != nil {
 			return fail("更新配置")
 		}
 	}
@@ -337,13 +338,13 @@ func (p *prometheusConfigCache) publishPromPool(ctx context.Context, sourcePool 
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if expected, ok := plan.retired[ip]; ok {
+			if err := dao.DeleteGeneratedMonitorConfig(ctx, expected); err != nil {
+				return fail("清理旧配置归属")
+			}
+		}
 		if err := p.redis.Del(ctx, buildRedisKeyPrometheusMain(ip)).Err(); err != nil {
 			return fail("清理旧配置缓存")
-		}
-		if row := plan.retired[ip]; row != nil {
-			if err := dao.DeleteMonitorConfig(ctx, row.ID); err != nil {
-				return fail("清理旧配置")
-			}
 		}
 		if err := p.redis.SRem(ctx, membersKey, ip).Err(); err != nil {
 			return fail("清理旧实例成员")

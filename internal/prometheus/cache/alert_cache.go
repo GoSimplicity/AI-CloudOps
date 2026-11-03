@@ -324,7 +324,8 @@ func (a *alertManagerConfigCache) planAlertConfigs(ctx context.Context, desired 
 		}
 		owned[row.InstanceIP] = row
 	}
-	var create, update []*model.MonitorConfig
+	var create []*model.MonitorConfig
+	var update []configDao.GeneratedConfigUpdate
 	for _, key := range keys {
 		row := desired[key]
 		hash := calculateConfigHash(row.Content)
@@ -347,7 +348,7 @@ func (a *alertManagerConfigCache) planAlertConfigs(ctx context.Context, desired 
 		copy.ConfigHash = hash
 		copy.Status = model.ConfigStatusActive
 		copy.LastGeneratedTime = time.Now().Unix()
-		update = append(update, &copy)
+		update = append(update, configDao.GeneratedConfigUpdate{Expected: configDao.GeneratedConfigOwnerOf(previous), Desired: copy})
 	}
 	if err := ctx.Err(); err != nil {
 		return alertArtifactWrites{}, err
@@ -357,7 +358,7 @@ func (a *alertManagerConfigCache) planAlertConfigs(ctx context.Context, desired 
 
 type alertArtifactWrites struct {
 	create []*model.MonitorConfig
-	update []*model.MonitorConfig
+	update []configDao.GeneratedConfigUpdate
 }
 
 func (a *alertManagerConfigCache) applyAlertWrites(ctx context.Context, writes alertArtifactWrites) error {
@@ -374,7 +375,7 @@ func (a *alertManagerConfigCache) applyAlertWrites(ctx context.Context, writes a
 		}
 	}
 	if len(writes.update) > 0 {
-		if err := dao.BatchUpdateMonitorConfigs(ctx, writes.update); err != nil {
+		if err := dao.UpdateGeneratedMonitorConfigs(ctx, writes.update); err != nil {
 			return errors.New("配置更新失败")
 		}
 	}
@@ -468,7 +469,7 @@ func (a *alertManagerConfigCache) retiredAlertWebhooks(ctx context.Context, pool
 
 // Membership alone cannot authorize deletion of a single Redis key when its
 // database projection also belongs to a custom config or another pool.
-func (a *alertManagerConfigCache) checkRetiredAlertMainOwnership(ctx context.Context, poolID int, oldIPs []string, desired map[string]bool) error {
+func (a *alertManagerConfigCache) checkRetiredAlertMainOwnership(ctx context.Context, poolID int, oldIPs []string, desired map[string]bool) (map[string]configDao.GeneratedConfigOwner, error) {
 	var stale []string
 	for _, ip := range oldIPs {
 		if !desired[ip] {
@@ -476,23 +477,25 @@ func (a *alertManagerConfigCache) checkRetiredAlertMainOwnership(ctx context.Con
 		}
 	}
 	if len(stale) == 0 {
-		return nil
+		return map[string]configDao.GeneratedConfigOwner{}, nil
 	}
 	rows, err := a.alertConfigDAO().GetMonitorConfigsByInstances(ctx, stale, model.ConfigTypeAlertManager)
 	if err != nil {
-		return errors.New("旧主配置读取失败")
+		return nil, errors.New("旧主配置读取失败")
 	}
 	seen := map[string]bool{}
+	owners := map[string]configDao.GeneratedConfigOwner{}
 	for _, row := range rows {
 		if row == nil {
-			return errors.New("旧主配置快照无效")
+			return nil, errors.New("旧主配置快照无效")
 		}
 		if row.PoolID != poolID || row.ConfigType != model.ConfigTypeAlertManager || row.Name != fmt.Sprintf(ConfigNameAlertManager, poolID, row.InstanceIP) || seen[row.InstanceIP] {
-			return errors.New("旧主配置归属冲突")
+			return nil, errors.New("旧主配置归属冲突")
 		}
 		seen[row.InstanceIP] = true
+		owners[row.InstanceIP] = configDao.GeneratedConfigOwnerOf(row)
 	}
-	return nil
+	return owners, nil
 }
 
 func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *model.MonitorAlertManagerPool) error {
@@ -579,8 +582,13 @@ func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *mo
 	if err != nil {
 		return fail("检查主配置归属")
 	}
-	if err := a.checkRetiredAlertMainOwnership(ctx, pool.ID, oldIPs, desired); err != nil {
+	retiredMains, err := a.checkRetiredAlertMainOwnership(ctx, pool.ID, oldIPs, desired)
+	if err != nil {
 		return fail("检查旧实例配置归属")
+	}
+	intents, err := a.readAlertRetirementIntents(ctx, pool.ID, webhooks, retired)
+	if err != nil {
+		return fail("检查退役配置归属")
 	}
 	sameMembers := len(oldIPs) == len(desired)
 	for _, ip := range oldIPs {
@@ -588,7 +596,7 @@ func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *mo
 			sameMembers = false
 		}
 	}
-	if oldHash == hash && len(webhookWrites.create) == 0 && len(webhookWrites.update) == 0 && len(mainWrites.create) == 0 && len(mainWrites.update) == 0 && len(retired) == 0 && sameMembers {
+	if oldHash == hash && len(webhookWrites.create) == 0 && len(webhookWrites.update) == 0 && len(mainWrites.create) == 0 && len(mainWrites.update) == 0 && len(intents) == 0 && sameMembers {
 		return nil
 	}
 	// An old ACK must stop being usable before the first artifact can change.
@@ -596,6 +604,11 @@ func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *mo
 	// serving B. A failed invalidation forbids all following artifact writes.
 	if err := a.redis.Set(ctx, hashKey, "pending:"+hash, 0).Err(); err != nil {
 		return fail("标记待发布版本")
+	}
+	for _, intent := range intents {
+		if err := a.redis.SAdd(ctx, alertRetirementIntentKey(pool.ID), intent.encoded).Err(); err != nil {
+			return fail("登记退役配置")
+		}
 	}
 	if err := a.applyAlertWrites(ctx, webhookWrites); err != nil {
 		return fail("持久化webhook配置")
@@ -621,6 +634,11 @@ func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *mo
 	// Desired active IPs are never retired, even when one of their SETs fails.
 	for _, ip := range oldIPs {
 		if !desired[ip] {
+			if owner, exists := retiredMains[ip]; exists {
+				if err := a.alertConfigDAO().DeleteGeneratedMonitorConfig(ctx, owner); err != nil {
+					return fail("退役旧主配置")
+				}
+			}
 			if err := a.redis.Del(ctx, buildRedisKeyAlertManagerMain(ip)).Err(); err != nil {
 				return fail("清理旧实例缓存")
 			}
@@ -629,14 +647,22 @@ func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *mo
 			}
 		}
 	}
-	for _, item := range retired {
-		if err := a.redis.Del(ctx, buildRedisKeyWebhookFile(item.ip, item.groupID)).Err(); err != nil {
-			return fail("清理旧webhook缓存")
+	for _, intent := range intents {
+		// ABA: a wanted key has already been restored by the normal owned write path.
+		// Its obsolete tombstone must never authorize deleting the restored key.
+		if _, wanted := webhooks[intent.owner.InstanceIP]; !wanted {
+			if err := a.alertConfigDAO().DeleteGeneratedMonitorConfig(ctx, intent.retireOwner); err != nil {
+				return fail("退役旧webhook配置")
+			}
+			if err := a.redis.Del(ctx, buildRedisKeyWebhookFile(intent.ip, intent.groupID)).Err(); err != nil {
+				return fail("清理旧webhook缓存")
+			}
 		}
-		if err := a.alertConfigDAO().DeleteMonitorConfig(ctx, item.row.ID); err != nil {
-			return fail("清理旧webhook配置")
+		if err := a.redis.SRem(ctx, alertRetirementIntentKey(pool.ID), intent.encoded).Err(); err != nil {
+			return fail("清理退役配置索引")
 		}
 	}
+
 	if err := ctx.Err(); err != nil {
 		return err
 	}

@@ -540,3 +540,10 @@
 - 创建省略/0继续默认禁用2，更新必须明确两项1/2；JSON绑定及服务入口拒绝非法值，拒绝路径不触DAO或缓存。
 - 新5主/64子及model/scrape service完整race/vet通过，普通CRUD、删除、publisher和schema不变；创建默认回调是无I/O MySQL DryRun，不冒称真实数据库写入。
 - 已有未知值不猜测迁移，发布器原子归属写保护另阶段整合；没有上线。见[开关输入合同](support-lifecycle.md)。
+
+## 2026-11-04：生成配置的原子归属更新与退役
+
+- 四个publisher按不可变expected owner做条件SQL更新/删除，byte-exact匹配Name/IP，批次冲突回滚，0行仅在严格幂等条件下成功；普通CRUD不变。
+- 条件归属闸门先于Redis清理，AM旧主行软退役，Webhook owner-only持久意图补重建/ABA/更名/删除或索引故障恢复，保护foreign/custom替代行。
+- 原真实HTTP+SQLite两反例转绿，独立恢复对照通过；全Go test/vet、相关六包完整race、全标签只编译及隔离真实MySQL changed/found两模式通过，临时测试资源已清理。
+- Web来源锁41095cd/AIba1876a，普通源码lint9895/5仍未清零。creation键位、池删除和跨进程保证未混入；未上线。见[归属写合同](generated-config-ownership.md)。

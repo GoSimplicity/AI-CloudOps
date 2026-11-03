@@ -1,5 +1,15 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-04：生成配置的原子归属写保护
+
+四个发布器新增不可变归属快照与数据库条件更新/删除，阻止预检后被普通配置更新接口改变归属的行遭旧快照覆盖或删除。AlertManager旧主配置也条件退役，Webhook owner-only intent保证数据库已退役后的Redis清理仍可重试。见[原子归属写合同](generated-config-ownership.md)。
+
+- 完整cache/DAO旧新测试、原HTTP反例及独立ABA/归属/更名race复验通过；最终全Go test/vet、六包完整race、全标签只编译通过。输入枚举阶段也纳入此次冻结后整合。
+- 独立本机MySQL库实际验证changed/found rows、字节比较、幂等及tombstone，2种模式零skip通过；未触演示数据，临时库/账号/DSN已清理。没有把SQLite或MySQL DryRun冒充真实MySQL。
+- 来源锁更新Web `41095cdc1cace226c618ecbb449fc7e30a3cec2a`、AI仍`ba1876a8f20c3f68f30b4f9a26748d9dded03d05`。Web新17模块依赖顺序批次1203项及Pod递归入口72项、应用类型和完整边界通过；1127文件、保护规则/parser0、41补审，普通lint仍9895 errors/5 warnings，非全清。
+- [上一3a85组合41676600387](https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41676600387)已成功，Go3a85a03a/Web9f3b00f/AIba1876a完整SHA及5浏览器零跳过/失败/重试已核；不覆盖本次owner保护或新Web来源，新提交CI另验。
+- create-if-none键位竞争、池删除/引用保护与真实实例应用确认仍分别处理；SQL闸门不是跨系统事务。没有上线或生产连接。
+
 ## 2026-11-04：支持状态输入校验
 
 采集池创建保留省略/0默认禁用2，非法非零拒绝；更新两个字段均严格1/2。JSON绑定和直接服务调用都在任何DAO或缓存动作前拒绝非法值，既有未知数据不自动迁移。见[输入边界](support-lifecycle.md)。

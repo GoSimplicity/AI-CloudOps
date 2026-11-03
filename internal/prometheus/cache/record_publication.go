@@ -49,15 +49,16 @@ func ownedRecordArtifact(row *model.MonitorConfig, poolID int) bool {
 }
 
 type recordPublicationPlan struct {
-	create, update []*model.MonitorConfig
-	stale          []string
-	retired        map[string]*model.MonitorConfig
+	create  []*model.MonitorConfig
+	update  []configDao.GeneratedConfigUpdate
+	stale   []string
+	retired map[string]configDao.GeneratedConfigOwner
 }
 
 // Inspect every metadata page before any write. This also discovers canonical
 // rows left without membership by an older failed publication.
 func (r *recordRuleConfigCache) planRecordPublication(ctx context.Context, poolID int, desired map[string]string, oldIPs []string) (recordPublicationPlan, error) {
-	plan := recordPublicationPlan{retired: map[string]*model.MonitorConfig{}}
+	plan := recordPublicationPlan{retired: map[string]configDao.GeneratedConfigOwner{}}
 	dao := r.recordConfigDAO()
 	if dao == nil {
 		return plan, errors.New("配置存储不可用")
@@ -145,7 +146,7 @@ func (r *recordRuleConfigCache) planRecordPublication(ctx context.Context, poolI
 			copy := *row
 			copy.ConfigContent, copy.ConfigHash, copy.Status = content, hash, model.ConfigStatusActive
 			copy.LastGeneratedTime = time.Now().Unix()
-			plan.update = append(plan.update, &copy)
+			plan.update = append(plan.update, configDao.GeneratedConfigUpdate{Expected: configDao.GeneratedConfigOwnerOf(row), Desired: copy})
 		}
 	}
 	for ip := range stale {
@@ -154,7 +155,7 @@ func (r *recordRuleConfigCache) planRecordPublication(ctx context.Context, poolI
 			return plan, errors.New("旧规则配置归属冲突")
 		}
 		if len(rows) == 1 {
-			plan.retired[ip] = rows[0]
+			plan.retired[ip] = configDao.GeneratedConfigOwnerOf(rows[0])
 		}
 		plan.stale = append(plan.stale, ip)
 	}
@@ -294,7 +295,7 @@ func (r *recordRuleConfigCache) publishRecordPool(ctx context.Context, sourcePoo
 		return err
 	}
 	if len(plan.update) > 0 {
-		if err := dao.BatchUpdateMonitorConfigs(ctx, plan.update); err != nil {
+		if err := dao.UpdateGeneratedMonitorConfigs(ctx, plan.update); err != nil {
 			return fail("更新规则配置")
 		}
 	}
@@ -310,13 +311,13 @@ func (r *recordRuleConfigCache) publishRecordPool(ctx context.Context, sourcePoo
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if expected, ok := plan.retired[ip]; ok {
+			if err := dao.DeleteGeneratedMonitorConfig(ctx, expected); err != nil {
+				return fail("清理旧规则配置归属")
+			}
+		}
 		if err := r.redis.Del(ctx, buildRedisKeyRecordRule(ip)).Err(); err != nil {
 			return fail("清理旧规则缓存")
-		}
-		if row := plan.retired[ip]; row != nil {
-			if err := dao.DeleteMonitorConfig(ctx, row.ID); err != nil {
-				return fail("清理旧规则配置")
-			}
 		}
 		if err := r.redis.SRem(ctx, membersKey, ip).Err(); err != nil {
 			return fail("清理旧实例成员")

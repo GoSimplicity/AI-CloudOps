@@ -124,6 +124,7 @@ func (s *alertContractRedis) Del(_ context.Context, keys ...string) *redis.IntCm
 }
 
 type alertContractConfigs struct {
+	retiredOwners map[int]configDAO.GeneratedConfigOwner
 	configDAO.MonitorConfigDAO
 	rows    map[int]*model.MonitorConfig
 	next    int

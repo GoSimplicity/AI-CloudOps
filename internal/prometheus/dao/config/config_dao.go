@@ -36,6 +36,9 @@ import (
 )
 
 type MonitorConfigDAO interface {
+	UpdateGeneratedMonitorConfigs(context.Context, []GeneratedConfigUpdate) error
+	DeleteGeneratedMonitorConfig(context.Context, GeneratedConfigOwner) error
+	GetGeneratedMonitorConfigByID(context.Context, int) (*model.MonitorConfig, error)
 	GetMonitorConfigList(ctx context.Context, req *model.GetMonitorConfigListReq) ([]*model.MonitorConfig, int64, error)
 	GetMonitorConfigByID(ctx context.Context, id int) (*model.MonitorConfig, error)
 	CreateMonitorConfig(ctx context.Context, config *model.MonitorConfig) error
