@@ -47,6 +47,8 @@ import (
 type RecordRuleConfigCache interface {
 	GetConfigByIP(ip string) string
 	GenerateMainConfig(ctx context.Context) error
+	RetireDeletedScrapePool(ctx context.Context, poolID int) error
+	ReconcileDeletedScrapePools(ctx context.Context) error
 	GenerateConfigForPool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string
 }
 

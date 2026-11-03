@@ -293,37 +293,17 @@ func (s *scrapePoolService) DeleteMonitorScrapePool(ctx context.Context, req *mo
 		return errors.New("无效的抓取池ID")
 	}
 
-	pool, err := s.dao.GetMonitorScrapePoolById(ctx, req.ID)
-	if err != nil {
-		s.l.Error("删除抓取池失败：获取抓取池信息出错", zap.Int("id", req.ID), zap.Error(err))
-		return err
-	}
-
-	if pool == nil {
-		return errors.New("抓取池不存在")
-	}
-
-	// 检查抓取池是否有相关的抓取作业
-	jobs, err := s.jobDao.GetMonitorScrapeJobsByPoolId(ctx, req.ID)
-	if err != nil {
-		s.l.Error("删除抓取池失败：获取抓取作业时出错", zap.Int("id", req.ID), zap.Error(err))
-		return err
-	}
-
-	if len(jobs) > 0 {
-		return errors.New("抓取池存在相关抓取作业，无法删除")
-	}
-
+	// The DAO owns the parent lock/reference check. A true tombstone makes
+	// retries durable even when the first retirement only partially completed.
 	if err := s.dao.DeleteMonitorScrapePool(ctx, req.ID); err != nil {
-		s.l.Error("删除抓取池失败", zap.Int("id", req.ID), zap.Error(err))
 		return err
 	}
-
-	go func() {
-		if err := s.cache.MonitorCacheManager(context.Background()); err != nil {
-			s.l.Error("删除抓取池后刷新缓存失败", zap.Error(err))
-		}
-	}()
+	if s.cache == nil {
+		return errors.New("采集池已删除，生成配置清退仍待完成，请重试删除")
+	}
+	if err := s.cache.RetireDeletedScrapePool(ctx, req.ID); err != nil {
+		return fmt.Errorf("采集池已删除，生成配置清退仍待完成，请重试删除: %w", err)
+	}
 
 	return nil
 }

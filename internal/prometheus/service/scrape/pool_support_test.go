@@ -145,3 +145,5 @@ func TestScrapePoolServiceUpdateRequiresBothExplicitFlags(t *testing.T) {
 		}
 	}
 }
+
+func (*poolSupportCache) RetireDeletedScrapePool(context.Context, int) error { return nil }

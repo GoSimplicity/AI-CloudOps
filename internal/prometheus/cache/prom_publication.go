@@ -205,6 +205,9 @@ func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
 func (p *prometheusConfigCache) publishPromPool(ctx context.Context, sourcePool *model.MonitorScrapePool) error {
 	pool, _ := detachedPromInput(sourcePool, nil)
 	fail := func(stage string) error { return p.promPublicationError(pool.ID, stage) }
+	if pool.DeletedAt > 0 {
+		pool.PrometheusInstances = nil
+	}
 	if len(pool.PrometheusInstances) > 0 {
 		if err := validateInstanceIPs(pool.PrometheusInstances); err != nil {
 			return fail("实例地址")
@@ -218,51 +221,55 @@ func (p *prometheusConfigCache) publishPromPool(ctx context.Context, sourcePool 
 		desiredIPs[ip] = true
 	}
 
-	jobs, err := p.scrapeJobDAO.GetMonitorScrapeJobsByPoolId(ctx, pool.ID)
-	if err != nil {
-		return fail("读取采集任务")
-	}
-	pool, jobs = detachedPromInput(pool, jobs)
-	base, err := p.CreateBaseConfig(pool)
-	if err != nil {
-		return fail("生成基础配置")
-	}
-	scrapes, err := p.renderScrapeJobSnapshot(jobs)
-	if err != nil {
-		return fail("生成采集配置")
-	}
-	base.ScrapeConfigs = scrapes
-	// Validate even when there are no targets. An invalid source must never be
-	// mistaken for an authoritative request to retire its last-good artifacts.
-	raw, err := marshalPrometheusConfig(base)
-	if err != nil {
-		return fail("序列化基础配置")
-	}
-	if _, err := pc.Load(string(raw), slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
-		return fail("校验基础配置")
-	}
-	generated := make(map[string]string, len(pool.PrometheusInstances))
-	for index, ip := range pool.PrometheusInstances {
-		config := base
-		if len(pool.PrometheusInstances) > 1 {
-			config.ScrapeConfigs = p.ApplyHashMod(scrapes, len(pool.PrometheusInstances), index)
-		}
-		content, err := marshalPrometheusConfig(config)
+	generated := map[string]string{}
+	targetHash := calculateConfigHash(fmt.Sprintf("deleted:%d:%d", pool.ID, pool.DeletedAt))
+	if pool.DeletedAt == 0 {
+		jobs, err := p.scrapeJobDAO.GetMonitorScrapeJobsByPoolId(ctx, pool.ID)
 		if err != nil {
-			return fail("序列化配置")
+			return fail("读取采集任务")
 		}
-		if _, err := pc.Load(string(content), slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
-			return fail("校验可执行配置")
+		pool, jobs = detachedPromInput(pool, jobs)
+		base, err := p.CreateBaseConfig(pool)
+		if err != nil {
+			return fail("生成基础配置")
 		}
-		generated[ip] = string(content)
+		scrapes, err := p.renderScrapeJobSnapshot(jobs)
+		if err != nil {
+			return fail("生成采集配置")
+		}
+		base.ScrapeConfigs = scrapes
+		// Validate even when there are no targets. An invalid source must never be
+		// mistaken for an authoritative request to retire its last-good artifacts.
+		raw, err := marshalPrometheusConfig(base)
+		if err != nil {
+			return fail("序列化基础配置")
+		}
+		if _, err := pc.Load(string(raw), slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
+			return fail("校验基础配置")
+		}
+		generated = make(map[string]string, len(pool.PrometheusInstances))
+		for index, ip := range pool.PrometheusInstances {
+			config := base
+			if len(pool.PrometheusInstances) > 1 {
+				config.ScrapeConfigs = p.ApplyHashMod(scrapes, len(pool.PrometheusInstances), index)
+			}
+			content, err := marshalPrometheusConfig(config)
+			if err != nil {
+				return fail("序列化配置")
+			}
+			if _, err := pc.Load(string(content), slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
+				return fail("校验可执行配置")
+			}
+			generated[ip] = string(content)
+		}
+		serialized, err := json.Marshal(generated)
+		if err != nil {
+			return fail("生成配置摘要")
+		}
+		// The bytes include operational credentials, discovery and per-instance
+		// sharding. Public/redacted job JSON is not an adequate version fingerprint.
+		targetHash = fmt.Sprintf("%x", sha256.Sum256(append([]byte(utils.CalculatePromHash(pool)), serialized...)))
 	}
-	serialized, err := json.Marshal(generated)
-	if err != nil {
-		return fail("生成配置摘要")
-	}
-	// The bytes include operational credentials, discovery and per-instance
-	// sharding. Public/redacted job JSON is not an adequate version fingerprint.
-	targetHash := fmt.Sprintf("%x", sha256.Sum256(append([]byte(utils.CalculatePromHash(pool)), serialized...)))
 	key := promPublicationKey(pool.ID)
 	previous, err := p.redis.Get(ctx, key).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
@@ -301,6 +308,17 @@ func (p *prometheusConfigCache) publishPromPool(ctx context.Context, sourcePool 
 	}
 	if err := p.redis.Set(ctx, key, "pending:"+targetHash, 0).Err(); err != nil {
 		return fail("标记待发布")
+	}
+	// A historical owned DB row may have no member index. Every retirement,
+	// including live target removal or feature-off, must remain discoverable after
+	// SQL soft-delete succeeds but Redis deletion fails.
+	for _, ip := range plan.stale {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := p.redis.SAdd(ctx, membersKey, ip).Err(); err != nil {
+			return fail("登记待清退实例成员")
+		}
 	}
 	// Register all intended targets before DB or configuration writes. Failed
 	// attempts remain discoverable even when no configuration row was created.

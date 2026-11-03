@@ -60,6 +60,8 @@ const hashTmpKey = "__tmp_hash"
 type PrometheusConfigCache interface {
 	GetConfigByIP(ip string) string
 	GenerateMainConfig(ctx context.Context) error
+	RetireDeletedScrapePool(ctx context.Context, poolID int) error
+	ReconcileDeletedScrapePools(ctx context.Context) error
 	CreateBaseConfig(pool *model.MonitorScrapePool) (pc.Config, error)
 	GenerateScrapeConfigs(ctx context.Context, pool *model.MonitorScrapePool) []*pc.ScrapeConfig
 	ApplyHashMod(scrapeConfigs []*pc.ScrapeConfig, modNum, index int) []*pc.ScrapeConfig

@@ -196,6 +196,9 @@ func (r *recordRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 func (r *recordRuleConfigCache) publishRecordPool(ctx context.Context, sourcePool *model.MonitorScrapePool) error {
 	pool, _ := detachedRecordRules(sourcePool, nil)
 	fail := func(stage string) error { return r.recordPublicationError(pool.ID, stage) }
+	if pool.DeletedAt > 0 {
+		pool.SupportRecord = 2
+	}
 	if pool.SupportRecord != 1 && pool.SupportRecord != 2 {
 		return fail("功能状态无效")
 	}
@@ -236,6 +239,9 @@ func (r *recordRuleConfigCache) publishRecordPool(ctx context.Context, sourcePoo
 		}
 	}
 	targetHash := calculateConfigHash(fmt.Sprintf("record-support-v1:%d:%s", pool.SupportRecord, calculateRecordPoolHash(pool, rows)))
+	if pool.DeletedAt > 0 {
+		targetHash = calculateConfigHash(fmt.Sprintf("deleted:%d:%d", pool.ID, pool.DeletedAt))
+	}
 	key := recordPublicationKey(pool.ID)
 	previous, err := r.redis.Get(ctx, key).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
@@ -274,6 +280,17 @@ func (r *recordRuleConfigCache) publishRecordPool(ctx context.Context, sourcePoo
 	}
 	if err := r.redis.Set(ctx, key, "pending:"+targetHash, 0).Err(); err != nil {
 		return fail("标记待发布")
+	}
+	// A historical owned DB row may have no member index. Every retirement,
+	// including live target removal or feature-off, must remain discoverable after
+	// SQL soft-delete succeeds but Redis deletion fails.
+	for _, ip := range plan.stale {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := r.redis.SAdd(ctx, membersKey, ip).Err(); err != nil {
+			return fail("登记待清退实例成员")
+		}
 	}
 	// Register all intended targets before DB or configuration writes. Failed
 	// attempts remain discoverable even when no configuration row was created.

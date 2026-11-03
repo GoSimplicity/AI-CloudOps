@@ -21,6 +21,20 @@ func readScrapePoolSnapshot(ctx context.Context, dao scrapedao.ScrapePoolDAO) ([
 	if dao == nil {
 		return nil, errors.New("采集池存储不可用")
 	}
+	return readScrapePoolPages(ctx, dao.GetMonitorScrapePoolList)
+}
+
+func readScrapePoolLifecycleSnapshot(ctx context.Context, dao scrapedao.ScrapePoolDAO) ([]*model.MonitorScrapePool, error) {
+	if dao == nil {
+		return nil, errors.New("采集池存储不可用")
+	}
+	return readScrapePoolPages(ctx, dao.GetMonitorScrapePoolLifecycleList)
+}
+
+func readScrapePoolPages(ctx context.Context, readPage func(context.Context, *model.GetMonitorScrapePoolListReq) ([]*model.MonitorScrapePool, int64, error)) ([]*model.MonitorScrapePool, error) {
+	if readPage == nil {
+		return nil, errors.New("采集池存储不可用")
+	}
 	var pools []*model.MonitorScrapePool
 	expected, scanned := int64(-1), int64(0)
 	seen := map[int]bool{}
@@ -28,7 +42,7 @@ func readScrapePoolSnapshot(ctx context.Context, dao scrapedao.ScrapePoolDAO) ([
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		rows, total, err := dao.GetMonitorScrapePoolList(ctx, &model.GetMonitorScrapePoolListReq{ListReq: model.ListReq{Page: page, Size: 100}})
+		rows, total, err := readPage(ctx, &model.GetMonitorScrapePoolListReq{ListReq: model.ListReq{Page: page, Size: 100}})
 		if err != nil || total < 0 || expected >= 0 && total != expected {
 			return nil, errors.New("采集池分页读取失败")
 		}

@@ -239,3 +239,5 @@ func TestPoolDeleteHTTPRejectsDisabledDefinitions(t *testing.T) {
 		})
 	}
 }
+
+func (lifecycleCache) RetireDeletedScrapePool(context.Context, int) error { return nil }

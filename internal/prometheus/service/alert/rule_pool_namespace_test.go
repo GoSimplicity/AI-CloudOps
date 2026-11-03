@@ -228,3 +228,5 @@ func TestAlertRuleSavedScrapeSevenIsReachableByRealGenerator(t *testing.T) {
 		t.Fatalf("generated rule invalid: %v", errs)
 	}
 }
+
+func (namespaceMonitorCache) RetireDeletedScrapePool(context.Context, int) error { return nil }

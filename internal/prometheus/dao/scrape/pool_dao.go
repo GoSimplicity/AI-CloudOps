@@ -27,7 +27,9 @@ package scrape
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"gorm.io/gorm/clause"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
@@ -36,6 +38,8 @@ import (
 )
 
 type ScrapePoolDAO interface {
+	GetMonitorScrapePoolLifecycleList(ctx context.Context, req *model.GetMonitorScrapePoolListReq) ([]*model.MonitorScrapePool, int64, error)
+	GetMonitorScrapePoolTombstone(ctx context.Context, id int) (*model.MonitorScrapePool, error)
 	GetMonitorScrapePoolList(ctx context.Context, req *model.GetMonitorScrapePoolListReq) ([]*model.MonitorScrapePool, int64, error)
 	CreateMonitorScrapePool(ctx context.Context, pool *model.MonitorScrapePool) error
 	GetMonitorScrapePoolById(ctx context.Context, id int) (*model.MonitorScrapePool, error)
@@ -171,7 +175,15 @@ func (d *scrapePoolDAO) DeleteMonitorScrapePool(ctx context.Context, poolId int)
 
 	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := LockLiveScrapePool(tx, poolId); err != nil {
-			return err
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			// A repeated DELETE may resume retirement only from a real DB tombstone.
+			var tombstone model.MonitorScrapePool
+			if err := tx.Unscoped().Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND deleted_at > 0", poolId).First(&tombstone).Error; err != nil {
+				return err
+			}
+			return nil
 		}
 		// Disabled definitions are still user definitions. Default scopes exclude
 		// only soft-deleted rows; generated configs are retired separately.
@@ -256,4 +268,32 @@ func (d *scrapePoolDAO) CheckMonitorScrapePoolExists(ctx context.Context, scrape
 	}
 
 	return count > 0, nil
+}
+
+// Lifecycle inventory is private to controllers, never exposed by list HTTP.
+// Ordinary absence is not deletion authorization; callers inspect DeletedAt.
+func (d *scrapePoolDAO) GetMonitorScrapePoolLifecycleList(ctx context.Context, req *model.GetMonitorScrapePoolListReq) ([]*model.MonitorScrapePool, int64, error) {
+	if req == nil || req.Page <= 0 || req.Size <= 0 {
+		return nil, 0, fmt.Errorf("无效的生命周期分页")
+	}
+	var rows []*model.MonitorScrapePool
+	var total int64
+	query := d.db.WithContext(ctx).Unscoped().Model(&model.MonitorScrapePool{})
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := query.Order("id ASC").Offset((req.Page - 1) * req.Size).Limit(req.Size).Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}
+func (d *scrapePoolDAO) GetMonitorScrapePoolTombstone(ctx context.Context, id int) (*model.MonitorScrapePool, error) {
+	if id <= 0 {
+		return nil, fmt.Errorf("无效的采集池ID")
+	}
+	var row model.MonitorScrapePool
+	if err := d.db.WithContext(ctx).Unscoped().Where("id = ? AND deleted_at > 0", id).First(&row).Error; err != nil {
+		return nil, err
+	}
+	return &row, nil
 }
