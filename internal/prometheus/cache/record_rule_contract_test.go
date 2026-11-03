@@ -42,9 +42,9 @@ func newRecordingContractCache(rows []*model.MonitorRecordRule) (*recordRuleConf
 	storage := &refreshRedis{values: map[string]string{}}
 	logger := zap.NewNop()
 	cache := &recordRuleConfigCache{
-		logger: logger, redis: storage, alertRecordDAO: rules,
+		logger: logger, redis: &recordingPublicationRedis{refreshRedis: storage, members: map[string]bool{}}, alertRecordDAO: rules,
 		scrapePoolDAO: recordingContractPools{pool: pool},
-		batchManager:  NewBatchConfigManager(refreshConfigs{}, logger),
+		batchManager:  NewBatchConfigManager(&recordingPublicationConfigs{rows: map[string]*model.MonitorConfig{}}, logger),
 	}
 	return cache, rules, storage, pool
 }

@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -81,6 +82,7 @@ type recordingPublicationConfigs struct {
 	rows     map[string]*model.MonitorConfig
 	failure  bool
 	attempts int
+	next     int
 }
 
 func (s *recordingPublicationConfigs) GetMonitorConfigsByInstances(_ context.Context, ips []string, _ int8) ([]*model.MonitorConfig, error) {
@@ -101,6 +103,10 @@ func (s *recordingPublicationConfigs) save(rows []*model.MonitorConfig) error {
 	}
 	for _, row := range rows {
 		copy := *row
+		if copy.ID == 0 {
+			s.next++
+			copy.ID = s.next
+		}
 		s.rows[row.InstanceIP] = &copy
 	}
 	return nil
@@ -112,6 +118,39 @@ func (s *recordingPublicationConfigs) BatchCreateMonitorConfigs(_ context.Contex
 
 func (s *recordingPublicationConfigs) BatchUpdateMonitorConfigs(_ context.Context, rows []*model.MonitorConfig) error {
 	return s.save(rows)
+}
+
+func (s *recordingPublicationConfigs) GetMonitorConfigList(_ context.Context, req *model.GetMonitorConfigListReq) ([]*model.MonitorConfig, int64, error) {
+	var rows []*model.MonitorConfig
+	for _, row := range s.rows {
+		if req.ConfigType == nil || row.ConfigType == *req.ConfigType {
+			copy := *row
+			rows = append(rows, &copy)
+		}
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].ID < rows[j].ID })
+	total := len(rows)
+	start := (req.Page - 1) * req.Size
+	if start >= total {
+		return nil, int64(total), nil
+	}
+	end := start + req.Size
+	if end > total {
+		end = total
+	}
+	return rows[start:end], int64(total), nil
+}
+func (s *recordingPublicationConfigs) DeleteMonitorConfig(_ context.Context, id int) error {
+	s.attempts++
+	if s.failure {
+		return errors.New("fixture configuration persistence failure")
+	}
+	for ip, row := range s.rows {
+		if row.ID == id {
+			delete(s.rows, ip)
+		}
+	}
+	return nil
 }
 
 func TestRecordingPublicationRetriesFailedSnapshot(t *testing.T) {

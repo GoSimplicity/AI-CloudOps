@@ -27,7 +27,6 @@ package cache
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -111,165 +110,11 @@ func recordPublicationKey(poolID int) string {
 	return fmt.Sprintf("%s:publication:record_rule:pool:%d", redisPrefix, poolID)
 }
 
-// GenerateMainConfig 生成并更新所有Prometheus的预聚合规则配置YAML，并同步入库
-func (r *recordRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	// Serializes this instance only; consumers can still observe partial artifacts.
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	startTime := time.Now()
-	pools, _, err := r.scrapePoolDAO.GetMonitorScrapePoolSupportedRecord(ctx)
-	if err != nil {
-		return err
-	}
-	type pendingCommit struct {
-		poolID   int
-		hashKey  string
-		hash     string
-		staleIPs []string
-	}
-	var pending []pendingCommit
-	var failures []error
-	reportFailure := func(poolID int, stage string) {
-		// Do not include YAML, expressions, labels or backend error contents.
-		r.logger.Error(LogModuleMonitor+"预聚合配置发布未完成", zap.Int("pool_id", poolID), zap.String("stage", stage))
-		failures = append(failures, fmt.Errorf("预聚合配置发布未完成，池%d，阶段%s", poolID, stage))
-	}
-	allConfigsToSave := make(map[string]ConfigData)
-	processedCount := 0
-	for _, pool := range pools {
-		if err := ctx.Err(); err != nil {
-			return errors.Join(append(failures, err)...)
-		}
-		if pool == nil || pool.ID <= 0 {
-			reportFailure(0, "采集池缺失")
-			continue
-		}
-		if len(pool.PrometheusInstances) == 0 {
-			continue
-		}
-		if err := validateInstanceIPs(pool.PrometheusInstances); err != nil {
-			reportFailure(pool.ID, "实例地址无效")
-			continue
-		}
-		rules, _, err := r.alertRecordDAO.GetMonitorRecordRuleByPoolId(ctx, pool.ID)
-		if err != nil {
-			reportFailure(pool.ID, "读取规则")
-			continue
-		}
-		currentHash := calculateRecordPoolHash(pool, rules)
-		hashKey := recordPublicationKey(pool.ID)
-		cachedHash, err := r.redis.Get(ctx, hashKey).Result()
-		if err != nil && !errors.Is(err, redis.Nil) {
-			reportFailure(pool.ID, "读取缓存版本")
-			continue
-		}
-		if err == nil && cachedHash == currentHash {
-			continue
-		}
-		oneMap := r.generateConfigForRules(pool, rules)
-		if oneMap == nil {
-			reportFailure(pool.ID, "生成规则")
-			continue
-		}
-		// Desired membership is independent of whether this attempt can write.
-		// A failed write for a current IP must never turn it into a stale IP.
-		desired := make(map[string]struct{}, len(pool.PrometheusInstances))
-		complete := true
-		for _, ip := range pool.PrometheusInstances {
-			desired[ip] = struct{}{}
-			if _, exists := oneMap[ip]; !exists {
-				complete = false
-			}
-		}
-		if !complete {
-			reportFailure(pool.ID, "生成结果不完整")
-			continue
-		}
-		setKey := buildRedisSetKeyRecordRulePoolIPs(pool.ID)
-		oldIPs, err := r.redis.SMembers(ctx, setKey).Result()
-		if err != nil {
-			reportFailure(pool.ID, "读取实例成员")
-			continue
-		}
-		commit := pendingCommit{poolID: pool.ID, hashKey: hashKey, hash: currentHash}
-		for _, oldIP := range oldIPs {
-			if _, wanted := desired[oldIP]; !wanted {
-				commit.staleIPs = append(commit.staleIPs, oldIP)
-			}
-		}
-		// Invalidate the previous ACK before the first visible mutation. Retaining
-		// it after a failed B write would incorrectly skip a later source reversion to A.
-		if err := r.redis.Set(ctx, hashKey, "pending:"+currentHash, 0).Err(); err != nil {
-			reportFailure(pool.ID, "标记发布中")
-			continue
-		}
-		for ip, yamlContent := range oneMap {
-			if err := r.redis.Set(ctx, buildRedisKeyRecordRule(ip), yamlContent, 0).Err(); err != nil {
-				reportFailure(pool.ID, "写入规则缓存")
-				complete = false
-				continue
-			}
-			if err := r.redis.SAdd(ctx, setKey, ip).Err(); err != nil {
-				reportFailure(pool.ID, "写入实例成员")
-				complete = false
-				continue
-			}
-			allConfigsToSave[ip] = ConfigData{
-				Name: fmt.Sprintf(ConfigNameRecordRule, pool.ID, ip), PoolID: pool.ID,
-				ConfigType: model.ConfigTypeRecordRule, Content: yamlContent,
-			}
-		}
-		if complete {
-			pending = append(pending, commit)
-		}
-		processedCount++
-	}
-	if err := ctx.Err(); err != nil {
-		return errors.Join(append(failures, err)...)
-	}
-	if len(allConfigsToSave) > 0 {
-		if err := batchSaveConfigsToDatabase(ctx, r.batchManager, allConfigsToSave); err != nil {
-			reportFailure(0, "持久化规则配置")
-			// Cache contents may already be visible, but no pool is acknowledged.
-			return errors.Join(failures...)
-		}
-	}
-	for _, commit := range pending {
-		if err := ctx.Err(); err != nil {
-			return errors.Join(append(failures, err)...)
-		}
-		complete := true
-		setKey := buildRedisSetKeyRecordRulePoolIPs(commit.poolID)
-		for _, staleIP := range commit.staleIPs {
-			if err := r.redis.Del(ctx, buildRedisKeyRecordRule(staleIP)).Err(); err != nil {
-				reportFailure(commit.poolID, "清理旧实例缓存")
-				complete = false
-				continue
-			}
-			// Keep the index until deletion succeeds so a failed deletion is retryable.
-			if err := r.redis.SRem(ctx, setKey, staleIP).Err(); err != nil {
-				reportFailure(commit.poolID, "清理旧实例成员")
-				complete = false
-			}
-		}
-		if complete {
-			if err := r.redis.Set(ctx, commit.hashKey, commit.hash, 0).Err(); err != nil {
-				reportFailure(commit.poolID, "确认缓存版本")
-			}
-		}
-	}
-	logBatchOperation(r.logger, "生成预聚合规则配置", processedCount, len(pools), startTime)
-	return errors.Join(failures...)
-}
-
 // GenerateConfigForPool 根据单个采集池生成Prometheus的预聚合规则配置YAML
 func (r *recordRuleConfigCache) GenerateConfigForPool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string {
+	if pool == nil || ctx.Err() != nil {
+		return nil
+	}
 	poolStartTime := time.Now()
 
 	rules, _, err := r.alertRecordDAO.GetMonitorRecordRuleByPoolId(ctx, pool.ID)
@@ -278,17 +123,12 @@ func (r *recordRuleConfigCache) GenerateConfigForPool(ctx context.Context, pool 
 		return nil
 	}
 
-	return r.generateConfigForRules(pool, rules)
+	snapshot, rules := detachedRecordRules(pool, rules)
+	return r.generateConfigForRules(snapshot, rules)
 }
 
 func (r *recordRuleConfigCache) generateConfigForRules(pool *model.MonitorScrapePool, rules []*model.MonitorRecordRule) map[string]string {
 	poolStartTime := time.Now()
-	numInstances := len(pool.PrometheusInstances)
-	if numInstances == 0 {
-		r.logger.Warn(LogModuleMonitor+"采集池中没有Prometheus实例", zap.String("pool_name", pool.Name))
-		return nil
-	}
-
 	ruleMap := make(map[string]string)
 
 	// 优化：如果没有规则，返回空groups
