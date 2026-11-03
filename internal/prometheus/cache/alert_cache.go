@@ -630,7 +630,39 @@ func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *mo
 			sameMembers = false
 		}
 	}
-	if oldHash == hash && len(webhookWrites.create) == 0 && len(webhookWrites.update) == 0 && len(mainWrites.create) == 0 && len(mainWrites.update) == 0 && len(intents) == 0 && len(staleMainIPs) == 0 && sameMembers {
+	// An ACK and metadata describe intent, not the bytes currently served by
+	// Redis. Compare only this publication's desired keys; never log their bodies.
+	sameArtifacts := true
+	for _, ip := range instances {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		body, err := a.redis.Get(ctx, buildRedisKeyAlertManagerMain(ip)).Result()
+		if err != nil && !errors.Is(err, redis.Nil) {
+			return errors.Join(fail("读取当前主配置缓存"), ctx.Err())
+		}
+		if err != nil || body != string(content) {
+			sameArtifacts = false
+		}
+	}
+	for _, group := range groups {
+		for _, ip := range instances {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			body, err := a.redis.Get(ctx, buildRedisKeyWebhookFile(ip, group.ID)).Result()
+			if err != nil && !errors.Is(err, redis.Nil) {
+				return errors.Join(fail("读取当前webhook缓存"), ctx.Err())
+			}
+			if err != nil || body != webhooks[fmt.Sprintf("%s_%d", ip, group.ID)].Content {
+				sameArtifacts = false
+			}
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if oldHash == hash && len(webhookWrites.create) == 0 && len(webhookWrites.update) == 0 && len(mainWrites.create) == 0 && len(mainWrites.update) == 0 && len(intents) == 0 && len(staleMainIPs) == 0 && sameMembers && sameArtifacts {
 		return nil
 	}
 	// An old ACK must stop being usable before the first artifact can change.

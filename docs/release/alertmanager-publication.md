@@ -27,3 +27,11 @@ Alert专用元数据保存比较Name/PoolID/Type/正文hash/content/status，修
 已验证的非desired数据库地址与可信成员索引合并为stale集合，当前和旧地址都检查混合归属冲突。即使源ACK未变，新增DB-only规范孤儿也不能走快速完成分支。pending可靠后先把stale地址登记成员，再经SQL条件退役、Redis删除、成员移除，避免DB已软删而Redis失败时失去恢复定位。当前目标、custom/foreign和type5 intent保持，未知Redis-only键不扫描猜删。
 
 新增7主/24子、27叶测试及原始Fake/真实SQLite+HTTP反例全部通过；独立实际DAO/HTTP race验证迁移和更名失败重建、同ACK晚出现的DB-only孤儿及foreign混合零写保护。最终全Go test/vet、cache/DAO完整race、全标签只编译通过。没有修改schema、空AM目标政策、AM池删除或公开构造合同，没有连接真实AlertManager或上线。
+
+## 2026-11-04：同版本缓存自愈
+
+ACK、元数据和成员集合一致不再足以跳过发布。快路径前读取所有当前desired主配置和启用组Webhook的真实Redis字节，与本次已验证渲染结果比较；缺失或漂移走原pending和必要写入流程，保留失败重建、源回退、更名及意图恢复。
+
+Redis.Nil按缺失处理；真实读取错误或取消在任何pending/生成物写入前拒绝，不能把错误当空成功。禁用组不新增Webhook，blackhole和deleted空desired不读取未知旧键；比较内容及URL、凭据不进入日志。
+
+新增6主/26子、27叶及原两条sameACK反例保持预期全部通过，完整cache/DAO race、全Go test/vet、全标签只编译通过。独立额外race验证主key缺失与跨IP Webhook漂移组合、修复后二次零写，以及late GET错误/取消全局零写。未修改元数据/CAS/schema/interface或执行真实重载、通知、上线。

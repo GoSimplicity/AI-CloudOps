@@ -1,5 +1,13 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-04：AM同版本缓存自愈
+
+主配置与启用组Webhook真实Redis字节现在也参与快路径判断。missing/drift即使源ACK、DB和成员不变也会修复；真实GET错误或取消写前拒绝，禁用/删除empty desired不越界读旧键。见[AM自愈合同](alertmanager-publication.md)。
+
+- 新27叶、原两条反例、独立3场景race及全Go test/vet/cache+DAO race/全标签只编译通过；原type5意图、更名/回退、secret字节、blackhole保持，无外部执行。
+- Web锁更新`75576e7dc1ab349d349f14fdfdd381a0e5c0f20b`，AI仍ba1876a。工单5SFC纯回调批次260项及映射补全270项、应用类型和逐规则诊断无增通过；未把此前3619全量挪作这两个新来源已重跑。
+- 来源锁5项测试通过，后端新组合CI另验；前端仍有已记录技术债，未全清。没有上线或生产连接。
+
 ## 2026-11-04：AM删除的同步清退与独立恢复批次
 
 真实AM tombstone驱动type2/5同步退役、重复DELETE和周期重建恢复，坏源不阻止已授权删除。四类退休独立于正常生成且互不取消，正常错误与退休错误汇总，避免恢复被饿死；原enable条件保持。见[AM-D2合同](alertmanager-pool-deletion.md)。

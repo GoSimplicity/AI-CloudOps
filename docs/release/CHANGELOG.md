@@ -589,3 +589,9 @@
 - 真实AM tombstone授权type2/5同步退役和幂等重试，失败明确pending，周期/重建不靠一次goroutine。保owned CAS/主成员及Webhook意图，当前/foreign/custom/同号Scrape隔离。
 - 四类退休在独立父ctx批次完整等待后执行原normal组，错误汇总，不因某类或正常生成失败取消其它退休；正常enable语义不变。
 - 新54叶、独立实际DB/HTTP与ABA对照、150次HTTP race、全Go test/vet/四包race/标签只编译通过；Web23f18d8/AIba1876a锁定，前端3619/类型/11构建/边界过，源lint9682/5仍未全清。见[AM-D2合同](alertmanager-pool-deletion.md)，未上线。
+
+## 2026-11-04：AM sameACK缓存自愈
+
+- desired主配置与启用Webhook真实Redis内容比较后才允许快路径；丢失/漂移重发，GET错误/取消在pending前拒绝，body/secret不记录日志。
+- 新27叶、原反例和独立3case race、全Go test/vet/cacheDAO race/全标签只编译通过；原删除、意图、blackhole和回退合同保持。
+- Web锁75576e7/AIba1876a，工单纯回调260和映射补全270项/type通过；新组合CI另验，没有上线。见[AM发布合同](alertmanager-publication.md)。
