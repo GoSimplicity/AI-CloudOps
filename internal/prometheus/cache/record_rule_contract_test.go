@@ -132,7 +132,7 @@ func TestRecordingContractInvalidSnapshotPreservesLastGood(t *testing.T) {
 			if err := cache.GenerateMainConfig(context.Background()); err != nil {
 				t.Fatal(err)
 			}
-			configKey, hashKey := buildRedisKeyRecordRule("127.0.0.1"), buildRedisHashKeyRecordRule(pool.Name)
+			configKey, hashKey := buildRedisKeyRecordRule("127.0.0.1"), recordPublicationKey(pool.ID)
 			previousConfig, previousHash, previousWrites := storage.values[configKey], storage.values[hashKey], storage.writes
 			parseRecordingContract(t, previousConfig)
 			source.rows, source.err = test.rows, test.err
@@ -154,7 +154,7 @@ func TestRecordingContractEmptyActiveListClearsRules(t *testing.T) {
 	if err := cache.GenerateMainConfig(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	previousHash := storage.values[buildRedisHashKeyRecordRule(pool.Name)]
+	previousHash := storage.values[recordPublicationKey(pool.ID)]
 	source.rows = nil
 	if err := cache.GenerateMainConfig(context.Background()); err != nil {
 		t.Fatal(err)
@@ -166,7 +166,7 @@ func TestRecordingContractEmptyActiveListClearsRules(t *testing.T) {
 	if len(errs) != 0 || groups == nil || groups.Groups == nil || len(groups.Groups) != 0 {
 		t.Fatal("empty active list must publish an explicit groups array")
 	}
-	if storage.values[buildRedisHashKeyRecordRule(pool.Name)] == previousHash {
+	if storage.values[recordPublicationKey(pool.ID)] == previousHash {
 		t.Fatal("empty active list did not advance the published snapshot hash")
 	}
 }
@@ -176,7 +176,7 @@ func TestRecordingContractLabelsOnlyRefreshAndUnchangedNoWrite(t *testing.T) {
 	if err := cache.GenerateMainConfig(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	oldHash, oldWrites := storage.values[buildRedisHashKeyRecordRule(pool.Name)], storage.writes
+	oldHash, oldWrites := storage.values[recordPublicationKey(pool.ID)], storage.writes
 	if err := cache.GenerateMainConfig(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestRecordingContractLabelsOnlyRefreshAndUnchangedNoWrite(t *testing.T) {
 	}
 	rules := parseRecordingContract(t, storage.values[buildRedisKeyRecordRule("127.0.0.1")])
 	want := map[string]string{"team": "after", "url": "a=b", "empty": ""}
-	if len(rules) != 1 || !reflect.DeepEqual(rules[0].Labels, want) || storage.writes <= oldWrites || storage.values[buildRedisHashKeyRecordRule(pool.Name)] == oldHash {
+	if len(rules) != 1 || !reflect.DeepEqual(rules[0].Labels, want) || storage.writes <= oldWrites || storage.values[recordPublicationKey(pool.ID)] == oldHash {
 		t.Fatalf("labels-only change was not published: %+v", rules)
 	}
 }
@@ -199,13 +199,13 @@ func TestRecordingContractHashSeparatorsDoNotCollide(t *testing.T) {
 	if err := cache.GenerateMainConfig(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	oldHash := storage.values[buildRedisHashKeyRecordRule(pool.Name)]
+	oldHash := storage.values[recordPublicationKey(pool.ID)]
 	source.rows = []*model.MonitorRecordRule{{Name: "a|up|b", Expr: "up", Enable: 1}}
 	if err := cache.GenerateMainConfig(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	rules := parseRecordingContract(t, storage.values[buildRedisKeyRecordRule("127.0.0.1")])
-	if len(rules) != 1 || rules[0].Record != "a|up|b" || storage.values[buildRedisHashKeyRecordRule(pool.Name)] == oldHash {
+	if len(rules) != 1 || rules[0].Record != "a|up|b" || storage.values[recordPublicationKey(pool.ID)] == oldHash {
 		t.Fatalf("distinct snapshots collided: %+v", rules)
 	}
 }

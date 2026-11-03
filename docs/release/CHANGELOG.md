@@ -488,3 +488,9 @@
 - 保存/生成共用真实UTF-8、PromQL结果类型、duration、label/annotation/template合同，保0s及合法{}告警名；首个等号后的内容和合法空值保持，坏历史不猜测转换。
 - 同名告警按数据库ID分组，完整文件真实parser校验。首次group身份变化可能重新等待for/firing不直接继承，发布人需审核窗口，未重载真实实例。
 - Go构造三包专项/race/vet、Web169/类型及独立映射复验通过；发布/hash循环未改，另阶段处理。见[构造合同](alert-rule-construction.md)。
+
+## 2026-11-03：发布ACK回退与稳定身份
+
+- record/Prom发布前持久pending，完成后SHA，修复A→失败B→回A旧ACK跳过；同实例锁实际接入，取消后不继续操作。
+- 内部完成键改为独立publication前缀+pool.ID，修复池改名回退和旧名称碰撞；旧Name键不删/不信任，首次升级重发一次。
+- 新30叶与旧76纯内存共106定向race、vet及主线程新增用例复验通过；其它发布阶段仍在独立整合，不冒称当前全部全仓集成通过。

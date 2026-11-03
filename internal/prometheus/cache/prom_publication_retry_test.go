@@ -33,8 +33,13 @@ func (s *promPublicationJobs) GetMonitorScrapeJobsByPoolId(context.Context, int)
 type promPublicationRedis struct{ *recordingPublicationRedis }
 
 func (s *promPublicationRedis) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) *redis.StatusCmd {
+	hashKey := promPublicationKey(1)
+	pending := strings.HasPrefix(value.(string), "pending:")
+	if key != hashKey {
+		s.artifactCalls++
+	}
 	if (s.failure == "set" && key == buildRedisKeyPrometheusMain("127.0.0.1")) ||
-		(s.failure == "hash" && key == buildRedisHashKeyPrometheus("fixture")) {
+		(key == hashKey && (s.failure == "hash" && !pending || s.failure == "pending" && pending)) {
 		return redis.NewStatusResult("", errors.New("fixture main configuration write failure"))
 	}
 	return s.refreshRedis.Set(ctx, key, value, ttl)
@@ -119,7 +124,7 @@ func TestPromPublicationRetriesFailedSnapshot(t *testing.T) {
 			if err := fixture.cache.GenerateMainConfig(ctx); err != nil {
 				t.Fatal(err)
 			}
-			configKey, hashKey := buildRedisKeyPrometheusMain("127.0.0.1"), buildRedisHashKeyPrometheus(fixture.pool.Name)
+			configKey, hashKey := buildRedisKeyPrometheusMain("127.0.0.1"), promPublicationKey(fixture.pool.ID)
 			previousConfig, previousHash := fixture.storage.values[configKey], fixture.storage.values[hashKey]
 			parsePublishedPromConfig(t, previousConfig)
 			if previousHash == "" || fixture.configs.rows["127.0.0.1"] == nil || !fixture.storage.members["127.0.0.1"] {
@@ -138,8 +143,12 @@ func TestPromPublicationRetriesFailedSnapshot(t *testing.T) {
 			if err := fixture.cache.GenerateMainConfig(ctx); err == nil {
 				t.Error("failed publication must report incomplete delivery")
 			}
-			if fixture.storage.values[hashKey] != previousHash {
-				t.Error("failed publication advanced its completion marker")
+			if test.failure == "get" || test.failure == "smembers" {
+				if fixture.storage.values[hashKey] != previousHash {
+					t.Error("preflight read failure changed the acknowledged generation")
+				}
+			} else if !strings.HasPrefix(fixture.storage.values[hashKey], "pending:") {
+				t.Error("partial publication retained a trusted completion marker")
 			}
 			if test.failure == "set" && fixture.storage.values[configKey] != previousConfig {
 				t.Error("failed current-IP write destroyed last-good configuration")
@@ -186,7 +195,7 @@ func TestPromPublicationEmptyActiveJobsStopsOldScraping(t *testing.T) {
 	if err := fixture.cache.GenerateMainConfig(ctx); err != nil {
 		t.Fatal(err)
 	}
-	hashKey := buildRedisHashKeyPrometheus(fixture.pool.Name)
+	hashKey := promPublicationKey(fixture.pool.ID)
 	oldHash := fixture.storage.values[hashKey]
 	fixture.jobs.jobs = nil
 	if err := fixture.cache.GenerateMainConfig(ctx); err != nil {
@@ -209,7 +218,7 @@ func TestPromPublicationInvalidSnapshotRetainsLastGood(t *testing.T) {
 			if err := fixture.cache.GenerateMainConfig(ctx); err != nil {
 				t.Fatal(err)
 			}
-			configKey, hashKey := buildRedisKeyPrometheusMain("127.0.0.1"), buildRedisHashKeyPrometheus(fixture.pool.Name)
+			configKey, hashKey := buildRedisKeyPrometheusMain("127.0.0.1"), promPublicationKey(fixture.pool.ID)
 			config, hash, writes := fixture.storage.values[configKey], fixture.storage.values[hashKey], fixture.storage.writes
 			switch kind {
 			case "DAO error":

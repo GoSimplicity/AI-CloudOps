@@ -16,3 +16,9 @@ go test -tags=integration,smoke,schema_smoke -run '^$' ./...
 ```
 
 全仓test/vet与最后一条只编译已通过；race执行范围以上述49个定向场景为准，不冒称所有集成网络用例跑过。全仓原有本机HTTP/TLS夹具仍由普通test覆盖；没有真实Prometheus、云、通知、主机或生产操作。
+
+## 完成标记补修
+
+首个可见artifact写前先可靠持久化pending:目标哈希，失败不开始发布；只有所有步骤完成后才写纯SHA。失败B已部分可见时，源回A也会重新修复，而不会命中旧A标记误跳过。可信键固定pool.ID且使用独立publication前缀，不与旧Name可控hash键重叠；旧键不删除也不再信任，首次升级重新发布。
+
+record/Prom新增30场景和既有76纯内存场景共106个race、vet通过；覆盖源回退、更名、重建实例、旧键碰撞、pending失败及本实例串行。前置读/生成失败仍保持原完成态，部分写失败必须保持非可信pending；不声称跨系统或跨进程原子性。

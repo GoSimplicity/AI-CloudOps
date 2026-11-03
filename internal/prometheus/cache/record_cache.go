@@ -106,8 +106,19 @@ func (r *recordRuleConfigCache) GetConfigByIP(ip string) string {
 	return val
 }
 
+// Keep publication identity separate from mutable names and legacy name-keyed hashes.
+func recordPublicationKey(poolID int) string {
+	return fmt.Sprintf("%s:publication:record_rule:pool:%d", redisPrefix, poolID)
+}
+
 // GenerateMainConfig 生成并更新所有Prometheus的预聚合规则配置YAML，并同步入库
 func (r *recordRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	// Serializes this instance only; consumers can still observe partial artifacts.
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -135,7 +146,7 @@ func (r *recordRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return errors.Join(append(failures, err)...)
 		}
-		if pool == nil {
+		if pool == nil || pool.ID <= 0 {
 			reportFailure(0, "采集池缺失")
 			continue
 		}
@@ -152,7 +163,7 @@ func (r *recordRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 			continue
 		}
 		currentHash := calculateRecordPoolHash(pool, rules)
-		hashKey := buildRedisHashKeyRecordRule(pool.Name)
+		hashKey := recordPublicationKey(pool.ID)
 		cachedHash, err := r.redis.Get(ctx, hashKey).Result()
 		if err != nil && !errors.Is(err, redis.Nil) {
 			reportFailure(pool.ID, "读取缓存版本")
@@ -191,6 +202,12 @@ func (r *recordRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 			if _, wanted := desired[oldIP]; !wanted {
 				commit.staleIPs = append(commit.staleIPs, oldIP)
 			}
+		}
+		// Invalidate the previous ACK before the first visible mutation. Retaining
+		// it after a failed B write would incorrectly skip a later source reversion to A.
+		if err := r.redis.Set(ctx, hashKey, "pending:"+currentHash, 0).Err(); err != nil {
+			reportFailure(pool.ID, "标记发布中")
+			continue
 		}
 		for ip, yamlContent := range oneMap {
 			if err := r.redis.Set(ctx, buildRedisKeyRecordRule(ip), yamlContent, 0).Err(); err != nil {

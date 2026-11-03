@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,11 +15,20 @@ import (
 // independent so a failure cannot appear successful through a shared fake state.
 type recordingPublicationRedis struct {
 	*refreshRedis
-	members map[string]bool
-	failure string
+	members       map[string]bool
+	failure       string
+	artifactCalls int
 }
 
 func (s *recordingPublicationRedis) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) *redis.StatusCmd {
+	hashKey := recordPublicationKey(7)
+	pending := strings.HasPrefix(value.(string), "pending:")
+	if key != hashKey {
+		s.artifactCalls++
+	}
+	if key == hashKey && (s.failure == "pending" && pending || s.failure == "hash" && !pending) {
+		return redis.NewStatusResult("", errors.New("fixture publication marker failure"))
+	}
 	if s.failure == "set" && key == buildRedisKeyRecordRule("127.0.0.1") {
 		return redis.NewStatusResult("", errors.New("fixture configuration write failure"))
 	}
@@ -34,6 +44,7 @@ func (s *recordingPublicationRedis) SMembers(context.Context, string) *redis.Str
 }
 
 func (s *recordingPublicationRedis) SAdd(_ context.Context, _ string, values ...interface{}) *redis.IntCmd {
+	s.artifactCalls++
 	if s.failure == "sadd" {
 		return redis.NewIntResult(0, errors.New("fixture membership write failure"))
 	}
@@ -44,6 +55,7 @@ func (s *recordingPublicationRedis) SAdd(_ context.Context, _ string, values ...
 }
 
 func (s *recordingPublicationRedis) Del(_ context.Context, keys ...string) *redis.IntCmd {
+	s.artifactCalls++
 	if s.failure == "del" {
 		return redis.NewIntResult(0, errors.New("fixture stale configuration deletion failure"))
 	}
@@ -54,6 +66,7 @@ func (s *recordingPublicationRedis) Del(_ context.Context, keys ...string) *redi
 }
 
 func (s *recordingPublicationRedis) SRem(_ context.Context, _ string, values ...interface{}) *redis.IntCmd {
+	s.artifactCalls++
 	if s.failure == "srem" {
 		return redis.NewIntResult(0, errors.New("fixture stale membership deletion failure"))
 	}
@@ -126,7 +139,7 @@ func TestRecordingPublicationRetriesFailedSnapshot(t *testing.T) {
 				t.Fatal(err)
 			}
 			configKey := buildRedisKeyRecordRule("127.0.0.1")
-			hashKey := buildRedisHashKeyRecordRule(pool.Name)
+			hashKey := recordPublicationKey(pool.ID)
 			previousConfig, previousHash := storage.values[configKey], storage.values[hashKey]
 			if previousConfig == "" || previousHash == "" || configs.rows["127.0.0.1"] == nil || !client.members["127.0.0.1"] {
 				t.Fatal("initial publication did not establish independent last-good states")
@@ -143,8 +156,8 @@ func TestRecordingPublicationRetriesFailedSnapshot(t *testing.T) {
 			configs.failure = test.failure == "database"
 			// A failed publication may be logged or returned, but cannot be acknowledged.
 			_ = cache.GenerateMainConfig(ctx)
-			if storage.values[hashKey] != previousHash {
-				t.Fatal("failed publication advanced the snapshot hash")
+			if !strings.HasPrefix(storage.values[hashKey], "pending:") {
+				t.Fatal("failed publication retained a trusted completion marker")
 			}
 			if test.failure == "set" && storage.values[configKey] != previousConfig {
 				t.Fatal("failed configuration write deleted or replaced current last-good")

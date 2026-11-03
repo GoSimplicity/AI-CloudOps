@@ -151,8 +151,22 @@ func (p *prometheusConfigCache) GetCacheStats() (hits, misses int64) {
 	return p.cacheStats.hits, p.cacheStats.misses
 }
 
+// Legacy name-keyed hashes remain untouched and are never trusted as completion markers.
+func promPublicationKey(poolID int) string {
+	return fmt.Sprintf("%s:publication:prometheus:pool:%d", redisPrefix, poolID)
+}
+
 // GenerateMainConfig 生成Prometheus主配置并入库
 func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	// Serializes this instance only; this is not a distributed atomic publication.
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	startTime := time.Now()
 	type pendingCommit struct {
 		poolID        int
@@ -184,7 +198,7 @@ func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
 			break
 		}
 		for _, pool := range pools {
-			if pool == nil {
+			if pool == nil || pool.ID <= 0 {
 				reportFailure(0, "采集池缺失")
 				continue
 			}
@@ -192,7 +206,7 @@ func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
 				reportFailure(pool.ID, "实例地址无效")
 				continue
 			}
-			hashKey := buildRedisHashKeyPrometheus(pool.Name)
+			hashKey := promPublicationKey(pool.ID)
 			cachedHash, err := p.redis.Get(ctx, hashKey).Result()
 			if err != nil && !errors.Is(err, redis.Nil) {
 				reportFailure(pool.ID, "读取缓存版本")
@@ -254,6 +268,12 @@ func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
 				if _, wanted := instanceConfigs[oldIP]; !wanted {
 					commit.staleIPs = append(commit.staleIPs, oldIP)
 				}
+			}
+			// A pending value cannot match any completed SHA, even when inputs
+			// return to an older successfully published generation after a partial write.
+			if err := p.redis.Set(ctx, hashKey, "pending:"+currentHash, 0).Err(); err != nil {
+				reportFailure(pool.ID, "标记发布中")
+				continue
 			}
 			for ip, content := range instanceConfigs {
 				if err := p.redis.Set(ctx, buildRedisKeyPrometheusMain(ip), content, 0).Err(); err != nil {
