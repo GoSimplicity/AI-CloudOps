@@ -49,9 +49,12 @@ type SystemService interface {
 }
 
 type systemService struct {
-	l     *zap.Logger
-	redis redis.Cmdable
+	l         *zap.Logger
+	redis     redis.Cmdable
+	resources systemResourceReaders
 }
+
+const systemInfoCacheKey = "system:info:v2"
 
 func NewSystemService(l *zap.Logger, redis redis.Cmdable) SystemService {
 	return &systemService{
@@ -61,16 +64,25 @@ func NewSystemService(l *zap.Logger, redis redis.Cmdable) SystemService {
 }
 
 func (s *systemService) GetCurrentSystemInfo(ctx context.Context) (*model.System, error) {
-	const cacheKey = "system:info"
 	const cacheExpiry = 5 * time.Minute
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	// 首先尝试从Redis获取
-	cached, err := s.redis.Get(ctx, cacheKey).Result()
+	cached, err := s.redis.Get(ctx, systemInfoCacheKey).Result()
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if err == nil {
 		var systemInfo model.System
 		if err := json.Unmarshal([]byte(cached), &systemInfo); err == nil {
 			// 检查缓存是否过期（额外检查，防止Redis过期时间不准确）
-			if time.Now().Unix()-systemInfo.LastUpdateTime < 300 {
+			age := time.Now().Unix() - systemInfo.LastUpdateTime
+			if age >= 0 && age < 300 && utils.HasValidResourceMetrics(&systemInfo) {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
 				return &systemInfo, nil
 			}
 		}
@@ -81,12 +93,12 @@ func (s *systemService) GetCurrentSystemInfo(ctx context.Context) (*model.System
 	systemInfo, err := s.collectSystemInfo(ctx)
 	if err != nil {
 		s.l.Error("采集系统信息失败", zap.Error(err))
-		return nil, fmt.Errorf("采集系统信息失败: %v", err)
+		return nil, fmt.Errorf("采集系统信息失败: %w", err)
 	}
 
 	// 保存到Redis
 	if data, err := json.Marshal(systemInfo); err == nil {
-		if err := s.redis.Set(ctx, cacheKey, data, cacheExpiry).Err(); err != nil {
+		if err := s.redis.Set(ctx, systemInfoCacheKey, data, cacheExpiry).Err(); err != nil {
 			s.l.Error("保存系统信息到Redis失败", zap.Error(err))
 		}
 	}
@@ -99,25 +111,24 @@ func (s *systemService) GetSystemMetrics(ctx context.Context) (*model.System, er
 	systemInfo, err := s.collectSystemInfo(ctx)
 	if err != nil {
 		s.l.Error("采集系统指标失败", zap.Error(err))
-		return nil, fmt.Errorf("采集系统指标失败: %v", err)
+		return nil, fmt.Errorf("采集系统指标失败: %w", err)
 	}
 
 	return systemInfo, nil
 }
 
 func (s *systemService) RefreshSystemInfo(ctx context.Context) (*model.System, error) {
-	const cacheKey = "system:info"
 	const cacheExpiry = 5 * time.Minute
 
 	systemInfo, err := s.collectSystemInfo(ctx)
 	if err != nil {
 		s.l.Error("刷新系统信息失败", zap.Error(err))
-		return nil, fmt.Errorf("刷新系统信息失败: %v", err)
+		return nil, fmt.Errorf("刷新系统信息失败: %w", err)
 	}
 
 	// 保存到Redis
 	if data, err := json.Marshal(systemInfo); err == nil {
-		if err := s.redis.Set(ctx, cacheKey, data, cacheExpiry).Err(); err != nil {
+		if err := s.redis.Set(ctx, systemInfoCacheKey, data, cacheExpiry).Err(); err != nil {
 			s.l.Error("保存系统信息到Redis失败", zap.Error(err))
 		}
 	}
@@ -159,9 +170,12 @@ func (s *systemService) collectSystemInfo(ctx context.Context) (*model.System, e
 			return nil, err
 		}
 	default:
-		s.l.Warn("不支持的操作系统", zap.String("os", runtime.GOOS))
+		return nil, fmt.Errorf("当前平台不支持系统指标采集: %s", runtime.GOOS)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return systemInfo, nil
 }
 
@@ -173,9 +187,8 @@ func (s *systemService) collectUnixSystemInfo(ctx context.Context, systemInfo *m
 	default:
 	}
 
-	// CPU使用率
-	if cpuUsage, err := s.getCPUUsage(ctx); err == nil {
-		systemInfo.CPUUsage = cpuUsage
+	if err := s.collectCriticalResources(ctx, systemInfo); err != nil {
+		return err
 	}
 
 	select {
@@ -187,30 +200,6 @@ func (s *systemService) collectUnixSystemInfo(ctx context.Context, systemInfo *m
 	// CPU型号
 	if cpuModel, err := s.getCPUModel(ctx); err == nil {
 		systemInfo.CPUModel = cpuModel
-	}
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
-	if memInfo, err := s.getMemoryInfo(ctx); err == nil {
-		systemInfo.MemoryTotal = memInfo["total"]
-		systemInfo.MemoryUsed = memInfo["used"]
-		systemInfo.MemoryUsage = utils.GetMemoryUsagePercentage(systemInfo)
-	}
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
-	if diskInfo, err := s.getDiskInfo(ctx); err == nil {
-		systemInfo.DiskTotal = diskInfo["total"]
-		systemInfo.DiskUsed = diskInfo["used"]
-		systemInfo.DiskUsage = utils.GetDiskUsagePercentage(systemInfo)
 	}
 
 	select {
@@ -280,10 +269,7 @@ func (s *systemService) collectWindowsSystemInfo(ctx context.Context, systemInfo
 	default:
 	}
 
-	// Windows系统信息采集实现
-	// 这里可以使用WMI或者其他Windows API来获取系统信息
-	s.l.Info("Windows系统信息采集功能待实现")
-	return nil
+	return fmt.Errorf("当前平台不支持系统指标采集: windows")
 }
 
 // getCPUUsage 获取CPU使用率

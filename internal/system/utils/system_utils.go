@@ -27,6 +27,7 @@ package utils
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -78,7 +79,17 @@ func FormatBytes(bytes uint64, unit string) string {
 	return fmt.Sprintf("%.2f GB", gb)
 }
 
+// HasValidResourceMetrics rejects incomplete snapshots before health classification.
+func HasValidResourceMetrics(s *model.System) bool {
+	return s != nil && s.CPUCores > 0 && !math.IsNaN(s.CPUUsage) && !math.IsInf(s.CPUUsage, 0) &&
+		s.CPUUsage >= 0 && s.CPUUsage <= 100 && s.MemoryTotal > 0 && s.MemoryUsed <= s.MemoryTotal &&
+		s.DiskTotal > 0 && s.DiskUsed <= s.DiskTotal
+}
+
 func ToResponse(s *model.System) *model.SystemInfoResponse {
+	if !HasValidResourceMetrics(s) {
+		return &model.SystemInfoResponse{MemoryUsageFormatted: "不可用", DiskUsageFormatted: "不可用", UptimeFormatted: "不可用", SystemStatus: "未知"}
+	}
 	status := "健康"
 	if s.CPUUsage > 80 || GetMemoryUsagePercentage(s) > 85 || GetDiskUsagePercentage(s) > 90 {
 		status = "告警"
