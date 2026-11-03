@@ -28,6 +28,8 @@ package alert
 import (
 	"context"
 	"fmt"
+	scrapeDAO "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
+	"gorm.io/gorm/clause"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
@@ -133,7 +135,15 @@ func (d *alertManagerRecordDAO) GetMonitorRecordRuleList(ctx context.Context, re
 
 // CreateMonitorRecordRule 创建 MonitorRecordRule
 func (d *alertManagerRecordDAO) CreateMonitorRecordRule(ctx context.Context, recordRule *model.MonitorRecordRule) error {
-	if err := d.db.WithContext(ctx).Create(recordRule).Error; err != nil {
+	if recordRule == nil {
+		return fmt.Errorf("定义不能为空")
+	}
+	if err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := scrapeDAO.LockLiveScrapePool(tx, recordRule.PoolID); err != nil {
+			return err
+		}
+		return tx.Create(recordRule).Error
+	}); err != nil {
 		d.l.Error("创建 MonitorRecordRule 失败", zap.Error(err))
 		return err
 	}
@@ -160,20 +170,32 @@ func (d *alertManagerRecordDAO) GetMonitorRecordRuleById(ctx context.Context, id
 
 // UpdateMonitorRecordRule 更新 MonitorRecordRule
 func (d *alertManagerRecordDAO) UpdateMonitorRecordRule(ctx context.Context, recordRule *model.MonitorRecordRule) error {
-	if recordRule.ID == 0 {
-		d.l.Error("UpdateMonitorRecordRule 失败: ID 为 0", zap.Any("recordRule", recordRule))
-		return fmt.Errorf("monitorRecordRule 的 ID 必须设置且非零")
+	if recordRule == nil || recordRule.ID <= 0 || recordRule.PoolID < 0 {
+		return fmt.Errorf("记录规则 ID/采集池 ID 无效")
 	}
-
-	if err := d.db.WithContext(ctx).
-		Model(&model.MonitorRecordRule{}).
-		Where("id = ?", recordRule.ID).
-		Updates(recordRule).Error; err != nil {
-		d.l.Error("更新 MonitorRecordRule 失败", zap.Error(err), zap.Int("id", recordRule.ID))
-		return err
+	targetID := recordRule.PoolID
+	// Struct Updates historically omits zero PoolID. Resolve it without opening
+	// a transaction snapshot, then verify it under the child lock after parent.
+	if targetID == 0 {
+		var observed model.MonitorRecordRule
+		if err := d.db.WithContext(ctx).Select("id", "pool_id").First(&observed, recordRule.ID).Error; err != nil {
+			return err
+		}
+		targetID = observed.PoolID
 	}
-
-	return nil
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := scrapeDAO.LockLiveScrapePool(tx, targetID); err != nil {
+			return err
+		}
+		var stored model.MonitorRecordRule
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&stored, recordRule.ID).Error; err != nil {
+			return err
+		}
+		if recordRule.PoolID == 0 && stored.PoolID != targetID {
+			return fmt.Errorf("记录规则关联已变化，请重试")
+		}
+		return tx.Model(&model.MonitorRecordRule{}).Where("id = ?", recordRule.ID).Updates(recordRule).Error
+	})
 }
 
 // DeleteMonitorRecordRule 删除 MonitorRecordRule

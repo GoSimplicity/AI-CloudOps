@@ -169,20 +169,30 @@ func (d *scrapePoolDAO) DeleteMonitorScrapePool(ctx context.Context, poolId int)
 		return fmt.Errorf("无效的 poolId: %d", poolId)
 	}
 
-	result := d.db.WithContext(ctx).
-		Where("id = ?", poolId).
-		Delete(&model.MonitorScrapePool{})
-
-	if result.Error != nil {
-		d.l.Error("删除 MonitorScrapePool 失败", zap.Error(result.Error), zap.Int("poolId", poolId))
-		return fmt.Errorf("删除 ID 为 %d 的 MonitorScrapePool 失败: %w", poolId, result.Error)
-	}
-
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("未找到 ID 为 %d 的 MonitorScrapePool 或已被删除", poolId)
-	}
-
-	return nil
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := LockLiveScrapePool(tx, poolId); err != nil {
+			return err
+		}
+		// Disabled definitions are still user definitions. Default scopes exclude
+		// only soft-deleted rows; generated configs are retired separately.
+		for _, definition := range []interface{}{&model.MonitorScrapeJob{}, &model.MonitorAlertRule{}, &model.MonitorRecordRule{}} {
+			var count int64
+			if err := tx.Model(definition).Where("pool_id = ?", poolId).Count(&count).Error; err != nil {
+				return err
+			}
+			if count != 0 {
+				return fmt.Errorf("采集池仍有关联的采集任务、告警规则或记录规则，请先删除或迁移定义")
+			}
+		}
+		result := tx.Where("id = ?", poolId).Delete(&model.MonitorScrapePool{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("采集池已删除或不存在")
+		}
+		return nil
+	})
 }
 
 func (d *scrapePoolDAO) GetMonitorScrapePoolSupportedAlert(ctx context.Context) ([]*model.MonitorScrapePool, int64, error) {

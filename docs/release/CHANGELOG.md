@@ -547,3 +547,9 @@
 - 条件归属闸门先于Redis清理，AM旧主行软退役，Webhook owner-only持久意图补重建/ABA/更名/删除或索引故障恢复，保护foreign/custom替代行。
 - 原真实HTTP+SQLite两反例转绿，独立恢复对照通过；全Go test/vet、相关六包完整race、全标签只编译及隔离真实MySQL changed/found两模式通过，临时测试资源已清理。
 - Web来源锁41095cd/AIba1876a，普通源码lint9895/5仍未清零。creation键位、池删除和跨进程保证未混入；未上线。见[归属写合同](generated-config-ownership.md)。
+
+## 2026-11-04：删除采集池的定义引用与父锁
+
+- 最终DAO事务锁父池并检查全部未删除job/alert/record定义（含禁用），三类创建/迁移同事务验证存活父池；record省略关联锁内重检，保凭据和普通更新合同。
+- 新7主/27子、独立4个race场景、隔离真实MySQL6个锁先后场景、全Go test/vet/相关race/全标签只编译通过，临时测试资源清理。
+- Web锁15d1572/AIba1876a，Web全量3609/类型/11构建通过；D2生成配置退役明确未完成，不把D1当全部删除闭环。见[删除合同](scrape-pool-deletion.md)。

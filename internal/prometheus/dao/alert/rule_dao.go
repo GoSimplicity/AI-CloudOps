@@ -28,6 +28,8 @@ package alert
 import (
 	"context"
 	"fmt"
+	scrapeDAO "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/scrape"
+	"gorm.io/gorm/clause"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	userDao "github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
@@ -124,7 +126,15 @@ func (d *alertManagerRuleDAO) GetMonitorAlertRuleList(ctx context.Context, req *
 
 // CreateMonitorAlertRule 创建 MonitorAlertRule
 func (d *alertManagerRuleDAO) CreateMonitorAlertRule(ctx context.Context, monitorAlertRule *model.MonitorAlertRule) error {
-	if err := d.db.WithContext(ctx).Create(monitorAlertRule).Error; err != nil {
+	if monitorAlertRule == nil {
+		return fmt.Errorf("定义不能为空")
+	}
+	if err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := scrapeDAO.LockLiveScrapePool(tx, monitorAlertRule.PoolID); err != nil {
+			return err
+		}
+		return tx.Create(monitorAlertRule).Error
+	}); err != nil {
 		d.l.Error("创建 MonitorAlertRule 失败", zap.Error(err))
 		return err
 	}
@@ -151,15 +161,20 @@ func (d *alertManagerRuleDAO) GetMonitorAlertRuleByID(ctx context.Context, id in
 
 // UpdateMonitorAlertRule 更新 MonitorAlertRule
 func (d *alertManagerRuleDAO) UpdateMonitorAlertRule(ctx context.Context, req *model.UpdateMonitorAlertRuleReq) error {
-	if req.ID <= 0 {
-		d.l.Error("UpdateMonitorAlertRule 失败: ID 为 0", zap.Any("req", req))
+	if req == nil || req.ID <= 0 {
+		d.l.Error("UpdateMonitorAlertRule 失败: ID 为 0", zap.Int("invalidID", 0))
 		return fmt.Errorf("MonitorAlertRule 的 ID 必须设置且非零")
 	}
 
-	if err := d.db.WithContext(ctx).
-		Model(&model.MonitorAlertRule{}).
-		Where("id = ?", req.ID).
-		Updates(map[string]interface{}{
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := scrapeDAO.LockLiveScrapePool(tx, req.PoolID); err != nil {
+			return err
+		}
+		var stored model.MonitorAlertRule
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&stored, req.ID).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.MonitorAlertRule{}).Where("id = ?", req.ID).Updates(map[string]interface{}{
 			"name":          req.Name,
 			"pool_id":       req.PoolID,
 			"send_group_id": req.SendGroupID,
@@ -171,12 +186,9 @@ func (d *alertManagerRuleDAO) UpdateMonitorAlertRule(ctx context.Context, req *m
 			"for_time":      req.ForTime,
 			"labels":        req.Labels,
 			"annotations":   req.Annotations,
-		}).Error; err != nil {
-		d.l.Error("更新 MonitorAlertRule 失败", zap.Error(err), zap.Int("id", req.ID))
-		return err
-	}
+		}).Error
+	})
 
-	return nil
 }
 
 // DeleteMonitorAlertRule 删除 MonitorAlertRule

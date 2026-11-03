@@ -93,7 +93,15 @@ func (d *scrapeJobDAO) GetMonitorScrapeJobList(ctx context.Context, req *model.G
 }
 
 func (d *scrapeJobDAO) CreateMonitorScrapeJob(ctx context.Context, monitorScrapeJob *model.MonitorScrapeJob) error {
-	if err := d.db.WithContext(ctx).Create(monitorScrapeJob).Error; err != nil {
+	if monitorScrapeJob == nil {
+		return fmt.Errorf("定义不能为空")
+	}
+	if err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := LockLiveScrapePool(tx, monitorScrapeJob.PoolID); err != nil {
+			return err
+		}
+		return tx.Create(monitorScrapeJob).Error
+	}); err != nil {
 		d.l.Error("创建 MonitorScrapeJob 失败", zap.Error(err))
 		return err
 	}
@@ -125,6 +133,9 @@ func (d *scrapeJobDAO) UpdateMonitorScrapeJob(ctx context.Context, job *model.Mo
 		return fmt.Errorf("monitorScrapeJob 的 ID 必须大于 0")
 	}
 	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := LockLiveScrapePool(tx, job.PoolID); err != nil {
+			return err
+		}
 		var stored model.MonitorScrapeJob
 		// MySQL行锁内合并当前凭据，省略字段不会把并发轮换覆盖为旧快照
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&stored, job.ID).Error; err != nil {

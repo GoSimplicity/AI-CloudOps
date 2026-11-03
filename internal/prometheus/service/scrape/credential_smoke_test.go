@@ -30,7 +30,10 @@ func credentialDatabase(t *testing.T) (*gorm.DB, ScrapeJobService, scrapeDAO.Scr
 	}
 	pool.SetMaxOpenConns(1)
 	t.Cleanup(func() { pool.Close() })
-	if err := db.AutoMigrate(&model.MonitorScrapeJob{}); err != nil {
+	if err := db.AutoMigrate(&model.MonitorScrapeJob{}, &model.MonitorScrapePool{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.MonitorScrapePool{Model: model.Model{ID: 1}, Name: "credential-fixture-pool"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	dao := scrapeDAO.NewScrapeJobDAO(db, zap.NewNop())
