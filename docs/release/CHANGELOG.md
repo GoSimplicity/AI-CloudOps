@@ -534,3 +534,9 @@
 - 开关进入稳定PoolID发布版本，pending/归属预检/清退/ACK恢复合同保持，跨类型互不影响。Prometheus只复用库存读取器。
 - 新9主/80子、独立4个race反例、完整旧缓存及全Go test/vet/相关完整race/全标签只编译通过。来源锁固定Web9f3b00f/AIba1876a，Web全量3609/27demo/类型/11构建远端成功。
 - 不将池缺失推断为关闭、不盲删未知Redis-only键，不声称真实实例已应用或上线。见[支持开关合同](support-lifecycle.md)。
+
+## 2026-11-04：采集池支持状态输入校验
+
+- 创建省略/0继续默认禁用2，更新必须明确两项1/2；JSON绑定及服务入口拒绝非法值，拒绝路径不触DAO或缓存。
+- 新5主/64子及model/scrape service完整race/vet通过，普通CRUD、删除、publisher和schema不变；创建默认回调是无I/O MySQL DryRun，不冒称真实数据库写入。
+- 已有未知值不猜测迁移，发布器原子归属写保护另阶段整合；没有上线。见[开关输入合同](support-lifecycle.md)。

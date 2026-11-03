@@ -60,8 +60,8 @@ type CreateMonitorScrapePoolReq struct {
 	ScrapeInterval       int        `json:"scrape_interval"`
 	ScrapeTimeout        int        `json:"scrape_timeout"`
 	RemoteTimeoutSeconds int        `json:"remote_timeout_seconds"`
-	SupportAlert         int8       `json:"support_alert"`
-	SupportRecord        int8       `json:"support_record"`
+	SupportAlert         int8       `json:"support_alert" binding:"omitempty,oneof=1 2"`
+	SupportRecord        int8       `json:"support_record" binding:"omitempty,oneof=1 2"`
 	PrometheusInstances  StringList `json:"prometheus_instances"`
 	Tags                 StringList `json:"tags"`
 	RemoteWriteUrl       string     `json:"remote_write_url"`
@@ -79,8 +79,8 @@ type UpdateMonitorScrapePoolReq struct {
 	ScrapeInterval       int        `json:"scrape_interval"`
 	ScrapeTimeout        int        `json:"scrape_timeout"`
 	RemoteTimeoutSeconds int        `json:"remote_timeout_seconds"`
-	SupportAlert         int8       `json:"support_alert"`
-	SupportRecord        int8       `json:"support_record"`
+	SupportAlert         int8       `json:"support_alert" binding:"required,oneof=1 2"`
+	SupportRecord        int8       `json:"support_record" binding:"required,oneof=1 2"`
 	PrometheusInstances  StringList `json:"prometheus_instances"`
 	Tags                 StringList `json:"tags"`
 	RemoteWriteUrl       string     `json:"remote_write_url"`

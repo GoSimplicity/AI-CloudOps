@@ -96,7 +96,21 @@ func (s *scrapePoolService) GetMonitorScrapePoolDetail(ctx context.Context, req 
 	return pool, nil
 }
 
+// Zero remains the create-only omitted/default value; it never enables a feature.
+func createScrapePoolSupport(value int8) int8 {
+	if value == 0 {
+		return 2
+	}
+	return value
+}
+func validScrapePoolSupport(value int8) bool { return value == 1 || value == 2 }
+
 func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, req *model.CreateMonitorScrapePoolReq) error {
+	supportAlert := createScrapePoolSupport(req.SupportAlert)
+	supportRecord := createScrapePoolSupport(req.SupportRecord)
+	if !validScrapePoolSupport(supportAlert) || !validScrapePoolSupport(supportRecord) {
+		return errors.New("告警与预聚合支持状态只允许1（启用）或2（禁用）")
+	}
 	if req.Name == "" {
 		return errors.New("抓取池名称不能为空")
 	}
@@ -142,8 +156,8 @@ func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, req *mo
 		ScrapeInterval:       req.ScrapeInterval,
 		ScrapeTimeout:        req.ScrapeTimeout,
 		RemoteTimeoutSeconds: req.RemoteTimeoutSeconds,
-		SupportAlert:         req.SupportAlert,
-		SupportRecord:        req.SupportRecord,
+		SupportAlert:         supportAlert,
+		SupportRecord:        supportRecord,
 		Tags:                 req.Tags,
 		RemoteWriteUrl:       req.RemoteWriteUrl,
 		RemoteReadUrl:        req.RemoteReadUrl,
@@ -178,6 +192,9 @@ func (s *scrapePoolService) CreateMonitorScrapePool(ctx context.Context, req *mo
 }
 
 func (s *scrapePoolService) UpdateMonitorScrapePool(ctx context.Context, req *model.UpdateMonitorScrapePoolReq) error {
+	if !validScrapePoolSupport(req.SupportAlert) || !validScrapePoolSupport(req.SupportRecord) {
+		return errors.New("告警与预聚合支持状态只允许1（启用）或2（禁用）")
+	}
 	// 检查 ID 是否有效
 	if req.ID <= 0 {
 		return errors.New("无效的抓取池ID")
