@@ -29,7 +29,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net"
 	"net/netip"
 	"net/url"
@@ -151,154 +154,167 @@ func (p *prometheusConfigCache) GetCacheStats() (hits, misses int64) {
 // GenerateMainConfig 生成Prometheus主配置并入库
 func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
 	startTime := time.Now()
-	p.logger.Info(LogModuleMonitor + "开始生成Prometheus主配置")
-
-	validIPs := make(map[string]struct{})
-	processedCount := 0
+	type pendingCommit struct {
+		poolID        int
+		hashKey, hash string
+		staleIPs      []string
+	}
+	var pending []pendingCommit
+	var failures []error
+	reportFailure := func(poolID int, stage string) {
+		// Consumer and backend errors can contain credentials or whole configuration fragments.
+		p.logger.Error(LogModuleMonitor+"Prometheus配置发布未完成", zap.Int("pool_id", poolID), zap.String("stage", stage))
+		failures = append(failures, fmt.Errorf("Prometheus配置发布未完成，池%d，阶段%s", poolID, stage))
+	}
 	allConfigsToSave := make(map[string]ConfigData)
-
-	page := 1
-	batchSize := 100
-
-	for {
+	processedCount := 0
+	const batchSize = 100
+	for page := 1; ; page++ {
+		if err := ctx.Err(); err != nil {
+			return errors.Join(append(failures, err)...)
+		}
 		pools, total, err := p.scrapePoolDAO.GetMonitorScrapePoolList(ctx, &model.GetMonitorScrapePoolListReq{
-			ListReq: model.ListReq{
-				Page: page,
-				Size: batchSize,
-			},
+			ListReq: model.ListReq{Page: page, Size: batchSize},
 		})
 		if err != nil {
-			p.logger.Error(LogModuleMonitor+"获取采集池失败", zap.Error(err), zap.Int("page", page))
-			return fmt.Errorf("获取采集池失败: %w", err)
+			reportFailure(0, "读取采集池")
+			return errors.Join(failures...)
 		}
-
 		if len(pools) == 0 {
-			p.logger.Info(LogModuleMonitor+"当前批次未找到采集池", zap.Int("page", page))
 			break
 		}
-
-		p.logger.Info(LogModuleMonitor+"开始处理采集池批次", zap.Int("batch", page), zap.Int("count", len(pools)))
-
 		for _, pool := range pools {
-			if err := validateInstanceIPs(pool.PrometheusInstances); err != nil {
-				p.logger.Error(LogModuleMonitor+"Prometheus实例IP验证失败",
-					zap.String("pool_name", pool.Name),
-					zap.Error(err))
+			if pool == nil {
+				reportFailure(0, "采集池缺失")
 				continue
 			}
-
-			currentHash := utils.CalculatePromHash(pool)
-			// 从 Redis 读取池哈希，判断是否需要更新
+			if err := validateInstanceIPs(pool.PrometheusInstances); err != nil {
+				reportFailure(pool.ID, "实例地址无效")
+				continue
+			}
 			hashKey := buildRedisHashKeyPrometheus(pool.Name)
-			cachedHash, _ := p.redis.Get(ctx, hashKey).Result()
-
+			cachedHash, err := p.redis.Get(ctx, hashKey).Result()
+			if err != nil && !errors.Is(err, redis.Nil) {
+				reportFailure(pool.ID, "读取缓存版本")
+				continue
+			}
 			baseConfig, err := p.CreateBaseConfig(pool)
 			if err != nil {
-				p.logger.Error(LogModuleMonitor+"创建基础配置失败", zap.String("pool_name", pool.Name), zap.Error(err))
+				reportFailure(pool.ID, "生成基础配置")
 				continue
 			}
-
-			scrapeConfigs := p.GenerateScrapeConfigs(ctx, pool)
-			if len(scrapeConfigs) == 0 {
-				p.logger.Info(LogModuleMonitor+"未生成采集配置", zap.String("pool_name", pool.Name))
+			// One DAO read distinguishes an explicit empty active list from a failed snapshot.
+			scrapeConfigs, err := p.generateScrapeConfigs(ctx, pool)
+			if err != nil {
+				reportFailure(pool.ID, "读取或生成采集配置")
 				continue
 			}
 			baseConfig.ScrapeConfigs = scrapeConfigs
-
-			instanceConfigs := make(map[string]string)
-			success := true
-
+			instanceConfigs := make(map[string]string, len(pool.PrometheusInstances))
+			complete := true
 			for idx, ip := range pool.PrometheusInstances {
 				configCopy := baseConfig
 				if len(pool.PrometheusInstances) > 1 {
 					configCopy.ScrapeConfigs = p.ApplyHashMod(scrapeConfigs, len(pool.PrometheusInstances), idx)
 				}
-
-				yamlData, err := marshalPrometheusConfig(configCopy)
+				content, err := marshalPrometheusConfig(configCopy)
 				if err != nil {
-					p.logger.Error(LogModuleMonitor+"配置序列化失败", zap.String("pool_name", pool.Name), zap.Error(err))
-					success = false
+					reportFailure(pool.ID, "序列化配置")
+					complete = false
 					break
 				}
-
-				instanceConfigs[ip] = string(yamlData)
-			}
-
-			if success {
-				// 作业、认证、服务发现地址也参与摘要，避免只改作业时被池缓存跳过
-				serialized, err := json.Marshal(instanceConfigs)
-				if err != nil {
-					return fmt.Errorf("配置摘要生成失败: %w", err)
+				if _, err := pc.Load(string(content), slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
+					reportFailure(pool.ID, "校验可执行配置")
+					complete = false
+					break
 				}
-				currentHash = fmt.Sprintf("%x", sha256.Sum256(append([]byte(currentHash), serialized...)))
-				if cachedHash == currentHash {
-					for _, ip := range pool.PrometheusInstances {
-						validIPs[ip] = struct{}{}
-					}
+				instanceConfigs[ip] = string(content)
+			}
+			if !complete {
+				continue
+			}
+			serialized, err := json.Marshal(instanceConfigs)
+			if err != nil {
+				reportFailure(pool.ID, "生成配置摘要")
+				continue
+			}
+			// Keep job-only credentials, discovery, and actual per-instance sharding in the hash.
+			currentHash := fmt.Sprintf("%x", sha256.Sum256(append([]byte(utils.CalculatePromHash(pool)), serialized...)))
+			if cachedHash == currentHash {
+				continue
+			}
+			setKey := buildRedisSetKeyPrometheusMainPoolIPs(pool.ID)
+			oldIPs, err := p.redis.SMembers(ctx, setKey).Result()
+			if err != nil {
+				reportFailure(pool.ID, "读取实例成员")
+				continue
+			}
+			commit := pendingCommit{poolID: pool.ID, hashKey: hashKey, hash: currentHash}
+			for _, oldIP := range oldIPs {
+				if _, wanted := instanceConfigs[oldIP]; !wanted {
+					commit.staleIPs = append(commit.staleIPs, oldIP)
+				}
+			}
+			for ip, content := range instanceConfigs {
+				if err := p.redis.Set(ctx, buildRedisKeyPrometheusMain(ip), content, 0).Err(); err != nil {
+					reportFailure(pool.ID, "写入配置缓存")
+					complete = false
 					continue
 				}
-				// 清理上一次该池的实例集合中已不存在的IP
-				setKey := buildRedisSetKeyPrometheusMainPoolIPs(pool.ID)
-				oldIPs, _ := p.redis.SMembers(ctx, setKey).Result()
-				oldIPSet := map[string]struct{}{}
-				for _, old := range oldIPs {
-					oldIPSet[old] = struct{}{}
+				if err := p.redis.SAdd(ctx, setKey, ip).Err(); err != nil {
+					reportFailure(pool.ID, "写入实例成员")
+					complete = false
+					continue
 				}
-
-				// 写入新的配置到 Redis，并更新集合
-				for ip, cfg := range instanceConfigs {
-					configName := fmt.Sprintf(ConfigNamePrometheus, pool.ID, ip)
-					validIPs[ip] = struct{}{}
-
-					allConfigsToSave[ip] = ConfigData{
-						Name:       configName,
-						PoolID:     pool.ID,
-						ConfigType: model.ConfigTypePrometheus,
-						Content:    cfg,
-					}
-
-					// 保存到 Redis
-					key := buildRedisKeyPrometheusMain(ip)
-					if err := p.redis.Set(ctx, key, cfg, 0).Err(); err != nil {
-						p.logger.Error(LogModuleMonitor+"写入Redis失败", zap.String("pool_name", pool.Name), zap.String("ip", ip), zap.Error(err))
-						continue
-					}
-					// 更新池IP集合
-					_ = p.redis.SAdd(ctx, setKey, ip).Err()
-					// 从旧集合标记中移除，剩余的是待删除
-					delete(oldIPSet, ip)
+				allConfigsToSave[ip] = ConfigData{
+					Name: fmt.Sprintf(ConfigNamePrometheus, pool.ID, ip), PoolID: pool.ID,
+					ConfigType: model.ConfigTypePrometheus, Content: content,
 				}
-
-				// 删除已失效IP对应的 Redis 键并从集合移除
-				for staleIP := range oldIPSet {
-					key := buildRedisKeyPrometheusMain(staleIP)
-					_ = p.redis.Del(ctx, key).Err()
-					_ = p.redis.SRem(ctx, setKey, staleIP).Err()
-					p.logger.Debug(LogModuleMonitor+"删除无效IP配置", zap.String("ip", staleIP))
-				}
-
-				_ = p.redis.Set(ctx, hashKey, currentHash, 0).Err()
+			}
+			if complete {
+				pending = append(pending, commit)
 			}
 		}
-
 		processedCount += len(pools)
 		if processedCount >= int(total) {
 			break
 		}
-		page++
 	}
-
+	if err := ctx.Err(); err != nil {
+		return errors.Join(append(failures, err)...)
+	}
 	if len(allConfigsToSave) > 0 {
 		if err := batchSaveConfigsToDatabase(ctx, p.batchManager, allConfigsToSave); err != nil {
-			p.logger.Error(LogModuleMonitor+"批量保存Prometheus配置失败", zap.Error(err))
-			// 不返回错误，继续执行后续逻辑
+			reportFailure(0, "持久化配置")
+			return errors.Join(failures...)
 		}
 	}
-
-	// 不再维护本地内存缓存，无需清理本地 map
-
+	for _, commit := range pending {
+		if err := ctx.Err(); err != nil {
+			return errors.Join(append(failures, err)...)
+		}
+		complete := true
+		setKey := buildRedisSetKeyPrometheusMainPoolIPs(commit.poolID)
+		for _, staleIP := range commit.staleIPs {
+			if err := p.redis.Del(ctx, buildRedisKeyPrometheusMain(staleIP)).Err(); err != nil {
+				reportFailure(commit.poolID, "清理旧实例缓存")
+				complete = false
+				continue
+			}
+			// Keep membership until deletion succeeds so a retry can still find the stale key.
+			if err := p.redis.SRem(ctx, setKey, staleIP).Err(); err != nil {
+				reportFailure(commit.poolID, "清理旧实例成员")
+				complete = false
+			}
+		}
+		if complete {
+			if err := p.redis.Set(ctx, commit.hashKey, commit.hash, 0).Err(); err != nil {
+				reportFailure(commit.poolID, "确认缓存版本")
+			}
+		}
+	}
 	logBatchOperation(p.logger, "生成Prometheus主配置", processedCount, processedCount, startTime)
-	return nil
+	return errors.Join(failures...)
 }
 
 // CreateBaseConfig 创建基础Prometheus配置
@@ -321,8 +337,8 @@ func (p *prometheusConfigCache) CreateBaseConfig(pool *model.MonitorScrapePool) 
 	if pool.RemoteWriteUrl != "" {
 		remoteWriteURL, err := utils.ParseURL(pool.RemoteWriteUrl)
 		if err != nil {
-			p.logger.Error(LogModuleMonitor+"解析RemoteWriteUrl失败", zap.Error(err), zap.String("pool_name", pool.Name))
-			return pc.Config{}, fmt.Errorf("解析RemoteWriteUrl失败: %w", err)
+			p.logger.Error(LogModuleMonitor+"解析RemoteWriteUrl失败", zap.Int("pool_id", pool.ID))
+			return pc.Config{}, errors.New("解析RemoteWriteUrl失败")
 		}
 		config.RemoteWriteConfigs = []*pc.RemoteWriteConfig{
 			{
@@ -335,8 +351,8 @@ func (p *prometheusConfigCache) CreateBaseConfig(pool *model.MonitorScrapePool) 
 	if pool.RemoteReadUrl != "" {
 		remoteReadURL, err := utils.ParseURL(pool.RemoteReadUrl)
 		if err != nil {
-			p.logger.Error(LogModuleMonitor+"解析RemoteReadUrl失败", zap.Error(err), zap.String("pool_name", pool.Name))
-			return pc.Config{}, fmt.Errorf("解析RemoteReadUrl失败: %w", err)
+			p.logger.Error(LogModuleMonitor+"解析RemoteReadUrl失败", zap.Int("pool_id", pool.ID))
+			return pc.Config{}, errors.New("解析RemoteReadUrl失败")
 		}
 		config.RemoteReadConfigs = []*pc.RemoteReadConfig{
 			{
@@ -406,19 +422,27 @@ func staticScrapeAddress(address string, port int) (string, error) {
 
 // GenerateScrapeConfigs 生成Prometheus采集配置
 func (p *prometheusConfigCache) GenerateScrapeConfigs(ctx context.Context, pool *model.MonitorScrapePool) []*pc.ScrapeConfig {
+	configs, _ := p.generateScrapeConfigs(ctx, pool)
+	return configs
+}
+
+func (p *prometheusConfigCache) generateScrapeConfigs(ctx context.Context, pool *model.MonitorScrapePool) ([]*pc.ScrapeConfig, error) {
 	scrapeJobs, err := p.scrapeJobDAO.GetMonitorScrapeJobsByPoolId(ctx, pool.ID)
 	if err != nil {
-		p.logger.Error(LogModuleMonitor+"获取采集任务失败", zap.Error(err), zap.String("pool_name", pool.Name))
-		return nil
+		p.logger.Error(LogModuleMonitor+"获取采集任务失败", zap.Int("pool_id", pool.ID))
+		return nil, errors.New("读取采集任务失败")
 	}
 	if len(scrapeJobs) == 0 {
-		p.logger.Info(LogModuleMonitor+"没有找到任何采集任务", zap.String("pool_name", pool.Name))
-		return nil
+		return []*pc.ScrapeConfig{}, nil
 	}
 
 	var scrapeConfigs []*pc.ScrapeConfig
 
 	for _, job := range scrapeJobs {
+		if job == nil {
+			p.logger.Warn(LogModuleMonitor + "采集任务为空，已跳过")
+			continue
+		}
 		sc := &pc.ScrapeConfig{
 			JobName:        job.Name,
 			Scheme:         job.Scheme,
@@ -429,14 +453,14 @@ func (p *prometheusConfigCache) GenerateScrapeConfigs(ctx context.Context, pool 
 
 		clientConfig, err := utils.ScrapeHTTPClientConfig(job)
 		if err != nil {
-			p.logger.Error(LogModuleMonitor+"采集认证或TLS配置无效", zap.Int("job_id", job.ID), zap.Error(err))
+			p.logger.Error(LogModuleMonitor+"采集认证或TLS配置无效", zap.Int("job_id", job.ID))
 			continue
 		}
 		sc.HTTPClientConfig = clientConfig
 
 		if job.RelabelConfigsYamlString != "" {
 			if err := yaml.Unmarshal([]byte(job.RelabelConfigsYamlString), &sc.RelabelConfigs); err != nil {
-				p.logger.Error(LogModuleMonitor+"解析Relabel配置失败", zap.Error(err), zap.String("job_name", job.Name))
+				p.logger.Error(LogModuleMonitor+"解析Relabel配置失败", zap.Int("job_id", job.ID))
 				continue
 			}
 		}
@@ -499,7 +523,10 @@ func (p *prometheusConfigCache) GenerateScrapeConfigs(ctx context.Context, pool 
 		scrapeConfigs = append(scrapeConfigs, sc)
 	}
 
-	return scrapeConfigs
+	if len(scrapeConfigs) == 0 {
+		return nil, errors.New("采集任务快照均无效")
+	}
+	return scrapeConfigs, nil
 }
 
 // ApplyHashMod 根据哈希取模操作对Prometheus采集配置进行分组
