@@ -47,6 +47,16 @@ func (s *alertRulePubPools) GetMonitorScrapePoolSupportedAlert(context.Context) 
 	return []*model.MonitorScrapePool{s.pool}, 1, nil
 }
 
+func (s *alertRulePubPools) GetMonitorScrapePoolList(_ context.Context, req *model.GetMonitorScrapePoolListReq) ([]*model.MonitorScrapePool, int64, error) {
+	if s.failure {
+		return nil, 0, errors.New("fixture pool failure")
+	}
+	if req.Page > 1 {
+		return nil, 1, nil
+	}
+	return []*model.MonitorScrapePool{s.pool}, 1, nil
+}
+
 type alertRulePubRedis struct {
 	redis.Cmdable
 	values  map[string]string
@@ -193,7 +203,7 @@ func (s *alertRulePubDB) DeleteMonitorConfig(_ context.Context, id int) error {
 }
 func newAlertRulePublication(t *testing.T) (*alertRuleConfigCache, *alertRulePubSource, *alertRulePubRedis, *alertRulePubDB, *model.MonitorScrapePool) {
 	t.Helper()
-	pool := &model.MonitorScrapePool{Model: model.Model{ID: 7}, Name: "rule-pool-A", PrometheusInstances: model.StringList{"127.0.0.1", "127.0.0.2"}}
+	pool := &model.MonitorScrapePool{Model: model.Model{ID: 7}, Name: "rule-pool-A", SupportAlert: 1, PrometheusInstances: model.StringList{"127.0.0.1", "127.0.0.2"}}
 	source := &alertRulePubSource{rows: []*model.MonitorAlertRule{alertingContractRow(31)}}
 	store := &alertRulePubRedis{values: map[string]string{}, members: map[string]bool{}}
 	db := &alertRulePubDB{rows: map[int]*model.MonitorConfig{}}

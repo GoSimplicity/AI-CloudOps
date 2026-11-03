@@ -36,8 +36,15 @@ func (s recordingContractPools) GetMonitorScrapePoolSupportedRecord(context.Cont
 	return []*model.MonitorScrapePool{s.pool}, 1, nil
 }
 
+func (s recordingContractPools) GetMonitorScrapePoolList(_ context.Context, req *model.GetMonitorScrapePoolListReq) ([]*model.MonitorScrapePool, int64, error) {
+	if req.Page > 1 {
+		return nil, 1, nil
+	}
+	return []*model.MonitorScrapePool{s.pool}, 1, nil
+}
+
 func newRecordingContractCache(rows []*model.MonitorRecordRule) (*recordRuleConfigCache, *recordingContractRules, *refreshRedis, *model.MonitorScrapePool) {
-	pool := &model.MonitorScrapePool{Model: model.Model{ID: 7}, Name: "recording-fixture", PrometheusInstances: model.StringList{"127.0.0.1"}}
+	pool := &model.MonitorScrapePool{Model: model.Model{ID: 7}, Name: "recording-fixture", SupportRecord: 1, PrometheusInstances: model.StringList{"127.0.0.1"}}
 	rules := &recordingContractRules{rows: rows}
 	storage := &refreshRedis{values: map[string]string{}}
 	logger := zap.NewNop()

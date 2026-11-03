@@ -50,6 +50,16 @@ func (s *recordReconcilePools) GetMonitorScrapePoolSupportedRecord(context.Conte
 	return []*model.MonitorScrapePool{s.pool}, 1, nil
 }
 
+func (s *recordReconcilePools) GetMonitorScrapePoolList(_ context.Context, req *model.GetMonitorScrapePoolListReq) ([]*model.MonitorScrapePool, int64, error) {
+	if s.failure {
+		return nil, 0, errors.New("fixture pool failure")
+	}
+	if req.Page > 1 {
+		return nil, 1, nil
+	}
+	return []*model.MonitorScrapePool{s.pool}, 1, nil
+}
+
 type recordReconcileRedis struct {
 	redis.Cmdable
 	values  map[string]string

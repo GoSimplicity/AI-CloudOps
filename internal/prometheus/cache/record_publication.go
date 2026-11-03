@@ -172,7 +172,7 @@ func (r *recordRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	pools, _, err := r.scrapePoolDAO.GetMonitorScrapePoolSupportedRecord(ctx)
+	pools, err := readScrapePoolSnapshot(ctx, r.scrapePoolDAO)
 	if err != nil {
 		return errors.Join(r.recordPublicationError(0, "读取采集池"), ctx.Err())
 	}
@@ -195,6 +195,14 @@ func (r *recordRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 func (r *recordRuleConfigCache) publishRecordPool(ctx context.Context, sourcePool *model.MonitorScrapePool) error {
 	pool, _ := detachedRecordRules(sourcePool, nil)
 	fail := func(stage string) error { return r.recordPublicationError(pool.ID, stage) }
+	if pool.SupportRecord != 1 && pool.SupportRecord != 2 {
+		return fail("功能状态无效")
+	}
+	// Explicit off is authoritative. Its potentially stale target fields and rule
+	// contents cannot authorize new keys or block retiring previously owned keys.
+	if pool.SupportRecord == 2 {
+		pool.PrometheusInstances = nil
+	}
 	if len(pool.PrometheusInstances) > 0 {
 		if err := validateInstanceIPs(pool.PrometheusInstances); err != nil {
 			return fail("实例地址")
@@ -207,21 +215,26 @@ func (r *recordRuleConfigCache) publishRecordPool(ctx context.Context, sourcePoo
 		}
 		desiredIPs[ip] = true
 	}
-	rows, _, err := r.alertRecordDAO.GetMonitorRecordRuleByPoolId(ctx, pool.ID)
-	if err != nil {
-		return fail("读取规则")
-	}
-	pool, rows = detachedRecordRules(pool, rows)
-	generated := r.generateConfigForRules(pool, rows)
-	if generated == nil {
-		return fail("构造规则")
+	var rows []*model.MonitorRecordRule
+	var err error
+	generated := map[string]string{}
+	if pool.SupportRecord == 1 {
+		rows, _, err = r.alertRecordDAO.GetMonitorRecordRuleByPoolId(ctx, pool.ID)
+		if err != nil {
+			return fail("读取规则")
+		}
+		pool, rows = detachedRecordRules(pool, rows)
+		generated = r.generateConfigForRules(pool, rows)
+		if generated == nil {
+			return fail("构造规则")
+		}
 	}
 	for _, ip := range pool.PrometheusInstances {
 		if _, ok := generated[ip]; !ok {
 			return fail("规则文件不完整")
 		}
 	}
-	targetHash := calculateRecordPoolHash(pool, rows)
+	targetHash := calculateConfigHash(fmt.Sprintf("record-support-v1:%d:%s", pool.SupportRecord, calculateRecordPoolHash(pool, rows)))
 	key := recordPublicationKey(pool.ID)
 	previous, err := r.redis.Get(ctx, key).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {

@@ -148,11 +148,12 @@ func alertRuleSnapshotHash(pool *model.MonitorScrapePool, rows []*model.MonitorA
 	}
 	// Preserve ordering: target and rule order are inputs to the existing sharding.
 	data, err := json.Marshal(struct {
-		PoolID    int
-		PoolName  string
-		Instances model.StringList
-		Rules     []*ruleVersion
-	}{PoolID: pool.ID, PoolName: pool.Name, Instances: pool.PrometheusInstances, Rules: versions})
+		PoolID       int
+		SupportAlert int8
+		PoolName     string
+		Instances    model.StringList
+		Rules        []*ruleVersion
+	}{PoolID: pool.ID, SupportAlert: pool.SupportAlert, PoolName: pool.Name, Instances: pool.PrometheusInstances, Rules: versions})
 	if err != nil {
 		return "", err
 	}
@@ -298,7 +299,7 @@ func (r *alertRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	pools, _, err := r.scrapePoolDAO.GetMonitorScrapePoolSupportedAlert(ctx)
+	pools, err := readScrapePoolSnapshot(ctx, r.scrapePoolDAO)
 	if err != nil {
 		return errors.Join(r.alertRulePublicationError(0, "读取采集池"), ctx.Err())
 	}
@@ -321,6 +322,14 @@ func (r *alertRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 func (r *alertRuleConfigCache) publishAlertRulePool(ctx context.Context, sourcePool *model.MonitorScrapePool) error {
 	pool, _ := detachedAlertRules(sourcePool, nil)
 	fail := func(stage string) error { return r.alertRulePublicationError(pool.ID, stage) }
+	if pool.SupportAlert != 1 && pool.SupportAlert != 2 {
+		return fail("功能状态无效")
+	}
+	// Explicit off is authoritative. Its potentially stale target fields and rule
+	// contents cannot authorize new keys or block retiring previously owned keys.
+	if pool.SupportAlert == 2 {
+		pool.PrometheusInstances = nil
+	}
 	if len(pool.PrometheusInstances) > 0 {
 		if err := validateInstanceIPs(pool.PrometheusInstances); err != nil {
 			return fail("实例地址")
@@ -333,14 +342,19 @@ func (r *alertRuleConfigCache) publishAlertRulePool(ctx context.Context, sourceP
 		}
 		desiredIPs[ip] = true
 	}
-	rows, _, err := r.alertRuleDAO.GetMonitorAlertRuleByPoolID(ctx, pool.ID)
-	if err != nil {
-		return fail("读取规则")
-	}
-	pool, rows = detachedAlertRules(pool, rows)
-	generated := r.generateAlertRuleSnapshot(pool, rows)
-	if generated == nil {
-		return fail("构造规则")
+	var rows []*model.MonitorAlertRule
+	var err error
+	generated := map[string]string{}
+	if pool.SupportAlert == 1 {
+		rows, _, err = r.alertRuleDAO.GetMonitorAlertRuleByPoolID(ctx, pool.ID)
+		if err != nil {
+			return fail("读取规则")
+		}
+		pool, rows = detachedAlertRules(pool, rows)
+		generated = r.generateAlertRuleSnapshot(pool, rows)
+		if generated == nil {
+			return fail("构造规则")
+		}
 	}
 	for _, ip := range pool.PrometheusInstances {
 		if _, ok := generated[ip]; !ok {

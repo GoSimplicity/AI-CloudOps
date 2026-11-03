@@ -173,45 +173,9 @@ func (p *prometheusConfigCache) planPromPublication(ctx context.Context, poolID 
 // Collect the complete pool inventory before publication; incomplete pages do not
 // authorize any writes. Count checks detect observed drift, not SQL snapshot isolation.
 func (p *prometheusConfigCache) readPromPoolSnapshot(ctx context.Context) ([]*model.MonitorScrapePool, error) {
-	var pools []*model.MonitorScrapePool
-	expected, scanned := int64(-1), int64(0)
-	seen := map[int]bool{}
-	for page := 1; ; page++ {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		rows, total, err := p.scrapePoolDAO.GetMonitorScrapePoolList(ctx, &model.GetMonitorScrapePoolListReq{ListReq: model.ListReq{Page: page, Size: 100}})
-		if err != nil || total < 0 || expected >= 0 && total != expected {
-			return nil, errors.New("采集池分页读取失败")
-		}
-		expected = total
-		if int64(len(rows)) > expected-scanned {
-			return nil, errors.New("采集池分页总数无效")
-		}
-		if len(rows) == 0 {
-			if scanned != expected {
-				return nil, errors.New("采集池分页提前结束")
-			}
-			break
-		}
-		for _, row := range rows {
-			if row == nil || row.ID <= 0 || seen[row.ID] {
-				return nil, errors.New("采集池快照标识无效")
-			}
-			seen[row.ID] = true
-			snapshot, _ := detachedPromInput(row, nil)
-			pools = append(pools, snapshot)
-		}
-		scanned += int64(len(rows))
-		if scanned == expected {
-			break
-		}
-		if len(rows) < 100 {
-			return nil, errors.New("采集池分页数量不足")
-		}
-	}
-	return pools, nil
+	return readScrapePoolSnapshot(ctx, p.scrapePoolDAO)
 }
+
 func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
