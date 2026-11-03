@@ -98,3 +98,36 @@ func TestLoadWithoutConfigFileAcceptsReleaseEnvironment(t *testing.T) {
 		t.Fatalf("release environment should supply every required field: %v", err)
 	}
 }
+
+func TestServerAllowedOriginsLoadPrecedence(t *testing.T) {
+	t.Setenv("ENV", "development")
+	t.Setenv("JWT_KEY1", randomTestKey())
+	t.Setenv("JWT_KEY2", randomTestKey())
+	t.Setenv("TREE_PASSWORD_ENCRYPTION_KEY", randomTestKey()[:32])
+	t.Setenv("JWT_ISSUER", "origin-test-issuer")
+	t.Setenv("MYSQL_ADDR", "fixture:fixture@tcp(mysql:3306)/cloudops?parseTime=True")
+	t.Setenv("REDIS_ADDR", "redis:6379")
+	path := filepath.Join(t.TempDir(), "origins.yaml")
+	if err := os.WriteFile(path, []byte("server:\n  allowed_origins: https://yaml.example.com\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		env  string
+		want string
+	}{
+		{"yaml", "", "https://yaml.example.com"},
+		{"environment", "https://env.example.com", "https://env.example.com"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("SERVER_ALLOWED_ORIGINS", tc.env)
+			cfg, _, err := callLoadIsolated(t, "--config", path)
+			if err != nil {
+				t.Fatal("fixture configuration did not load")
+			}
+			if cfg.Server.AllowedOrigins != tc.want {
+				t.Fatal("allowed origins must follow environment > YAML, with empty environment falling back to YAML")
+			}
+		})
+	}
+}

@@ -35,3 +35,20 @@ go vet ./...
 go test -race ./internal/config ./internal/cron/... ./pkg/di ./internal/prometheus/webhook/... ./internal/prometheus/utils
 go test -tags=integration,smoke,schema_smoke -run '^$' ./...
 ```
+
+## HTTP/WebSocket 来源配置（2026-11-03）
+
+主程序的HTTP CORS和注入的WebSocket升级器现在都接收`*config.Config`，使用`Server.AllowedOrigins`的构造时快照。`SERVER_ALLOWED_ORIGINS`仍通过配置加载边界按环境变量>YAML生效；空环境值沿用既有Viper回退YAML合同。构造后修改原配置或进程环境不会更改这些实例。YAML示例新增空的`server.allowed_origins`，空或nil配置拒绝跨域；WebSocket同源及无Origin客户端的既有合同保留。
+
+通用`pkg/websocket.CheckOrigin`仍作为既有独立调用方的动态环境适配器，不冒称整个代码库已消除所有环境读取。主应用DI改用显式`NewOriginChecker`，没有调用这一适配器；通用库旧API未破坏。配置修改需要重建主应用实例。
+
+| 场景 | 检查 | 结果 |
+| --- | --- | --- |
+| YAML来源/环境覆盖/空环境回退 | 真实Load路径配置测试 | 通过 |
+| 来源精确匹配、端口/子域混淆、nil/空配置 | 真实Gin CORS及WS checker | 通过 |
+| 构造后环境/配置改变 | 已构造实例保持快照；legacy adapter仍读取当前env | 通过 |
+| 单元与并发 | `go test ./...`、`go vet ./...`；最终配置/DI/WS三包`-race` | 通过；真实加载新增用例首次因夹具缺必需密钥/issuer失败，补足随机测试配置后复验通过 |
+| 真实本地WebSocket握手 | `go test -tags=smoke ./pkg/di -run '^TestWebSocketNegotiatesPublicProtocolOnly$'` | 通过，固定公开子协议且不回传凭据 |
+| 构建标签与工具 | integration/smoke/schema_smoke全仓只编译；强制Compose脚本158项 | 通过，脚本零跳过 |
+
+使用既有Go 1.26.10、Gin/cors/Gorilla与仓库测试设施，无新依赖；main Wire实际重新生成。未运行生产环境、云请求或上线。完整测试源码见`pkg/di/origin_config_test.go`、`internal/config/load_test.go`及`pkg/websocket/origin_test.go`。

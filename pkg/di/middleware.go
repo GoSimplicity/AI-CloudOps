@@ -26,10 +26,10 @@
 package di
 
 import (
-	"os"
 	"strings"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/middleware"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/service"
 	ijwt "github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
@@ -38,7 +38,15 @@ import (
 	"go.uber.org/zap"
 )
 
-func InitMiddlewares(ih ijwt.Handler, l *zap.Logger, roleSvc service.RoleService, auditSvc service.AuditService, userSvc service.UserService) []gin.HandlerFunc {
+func InitMiddlewares(cfg *config.Config, ih ijwt.Handler, l *zap.Logger, roleSvc service.RoleService, auditSvc service.AuditService, userSvc service.UserService) []gin.HandlerFunc {
+	allowedOrigins := make(map[string]struct{})
+	if cfg != nil {
+		for _, origin := range strings.Split(cfg.Server.AllowedOrigins, ",") {
+			if origin = strings.TrimSpace(origin); origin != "" {
+				allowedOrigins[origin] = struct{}{}
+			}
+		}
+	}
 	return []gin.HandlerFunc{
 		cors.New(cors.Config{
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
@@ -46,12 +54,8 @@ func InitMiddlewares(ih ijwt.Handler, l *zap.Logger, roleSvc service.RoleService
 			AllowHeaders:     []string{"Content-Type", "Authorization", "X-Refresh-Token"},
 			ExposeHeaders:    []string{"x-jwt-token", "x-refresh-token"},
 			AllowOriginFunc: func(origin string) bool {
-				for _, allowed := range strings.Split(os.Getenv("SERVER_ALLOWED_ORIGINS"), ",") {
-					if strings.TrimSpace(allowed) == origin {
-						return true
-					}
-				}
-				return false
+				_, allowed := allowedOrigins[origin]
+				return allowed
 			},
 			MaxAge: 12 * time.Hour,
 		}),

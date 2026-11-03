@@ -23,3 +23,22 @@ func TestCheckOrigin(t *testing.T) {
 		})
 	}
 }
+
+func TestConfiguredOriginCheckerIsIndependentOfLegacyEnvironment(t *testing.T) {
+	checker := NewOriginChecker("https://snapshot.example.com")
+	for _, origin := range []string{"https://first.example.com", "https://second.example.com"} {
+		t.Setenv("SERVER_ALLOWED_ORIGINS", origin)
+		request := httptest.NewRequest("GET", "https://api.example.com/ws", nil)
+		request.Header.Set("Origin", origin)
+		if !CheckOrigin(request) {
+			t.Fatal("legacy standalone checker must preserve current environment behavior")
+		}
+		if checker(request) {
+			t.Fatal("configured checker must not read the legacy environment")
+		}
+		request.Header.Set("Origin", "https://snapshot.example.com")
+		if !checker(request) || CheckOrigin(request) {
+			t.Fatal("configured and legacy checkers must retain independent allowlists")
+		}
+	}
+}

@@ -79,7 +79,7 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	auditService := service.NewAuditService(auditDAO, logger)
 	userDAO := dao.NewUserDAO(db, logger)
 	userService := service.NewUserService(userDAO, roleDAO, logger)
-	v := InitMiddlewares(jwtHandler, logger, roleService, auditService, userService)
+	v := InitMiddlewares(cfg, jwtHandler, logger, roleService, auditService, userService)
 	userHandler := api.NewUserHandler(userService, jwtHandler)
 	departmentDAO := dao.NewDepartmentDAO(db)
 	departmentService := service.NewDepartmentService(departmentDAO)
@@ -235,7 +235,7 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 		return nil, err
 	}
 	terminalClientFactory := InitTerminalClientFactory(logger)
-	upgrader := InitWebSocketUpgrader()
+	upgrader := InitWebSocketUpgrader(cfg)
 	treeLocalHandler := api6.NewTreeLocalHandler(treeLocalService, terminalClientFactory, upgrader, logger)
 	treeCloudDAO := dao2.NewTreeCloudDAO(db, logger)
 	cloudAccountDAO := dao2.NewCloudAccountDAO(db, logger)

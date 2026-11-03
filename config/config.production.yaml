@@ -1,4 +1,6 @@
 server:
+  # 精确匹配的跨域来源列表，逗号分隔；SERVER_ALLOWED_ORIGINS 可覆盖，空值拒绝跨域
+  allowed_origins: ""
   port: "8889"
 log:
   dir: "./logs"

@@ -13,7 +13,7 @@ import (
 )
 
 func TestWebSocketNegotiatesPublicProtocolOnly(t *testing.T) {
-	upgrader := InitWebSocketUpgrader()
+	upgrader := InitWebSocketUpgrader(nil)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
