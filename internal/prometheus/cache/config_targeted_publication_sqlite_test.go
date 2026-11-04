@@ -16,7 +16,7 @@ import (
 // Exercise the publisher boundary with the real DAO: filtering to owned/active
 // rows would incorrectly authorize these colliding desired or retired keys.
 func TestGeneratedPublicationNamespaceConflictsWithRealSQLite(t *testing.T) {
-	for _, kind := range []int8{model.ConfigTypePrometheus, model.ConfigTypeRecordRule} {
+	for _, kind := range []int8{model.ConfigTypePrometheus, model.ConfigTypeRecordRule, model.ConfigTypeAlertRule} {
 		for _, target := range []string{"desired", "stale"} {
 			for _, mode := range []string{"foreign", "custom", "inactive foreign", "duplicate"} {
 				t.Run(fmt.Sprintf("kind%d/%s/%s", kind, target, mode), func(t *testing.T) {
@@ -38,6 +38,8 @@ func TestGeneratedPublicationNamespaceConflictsWithRealSQLite(t *testing.T) {
 					pattern := ConfigNamePrometheus
 					if kind == model.ConfigTypeRecordRule {
 						pattern = ConfigNameRecordRule
+					} else if kind == model.ConfigTypeAlertRule {
+						pattern = ConfigNameAlertRule
 					}
 					row := model.MonitorConfig{PoolID: 7, ConfigType: kind, InstanceIP: ip, Name: fmt.Sprintf(pattern, 7, ip), Status: model.ConfigStatusActive, ConfigContent: "preserved"}
 					switch mode {
@@ -71,6 +73,10 @@ func TestGeneratedPublicationNamespaceConflictsWithRealSQLite(t *testing.T) {
 						if _, err := cache.planPromPublication(context.Background(), 7, desired, old); err == nil {
 							t.Fatal("ambiguous namespace authorized publication")
 						}
+					} else if kind == model.ConfigTypeAlertRule {
+						if _, err := planScrapeRulePublication(context.Background(), scrapeAlertScope, dao, 7, desired, old); err == nil {
+							t.Fatal("ambiguous Alert namespace authorized publication")
+						}
 					} else {
 						cache := &recordRuleConfigCache{configDAO: dao}
 						if _, err := cache.planRecordPublication(context.Background(), 7, desired, old); err == nil {
@@ -93,7 +99,7 @@ func TestGeneratedPublicationNamespaceConflictsWithRealSQLite(t *testing.T) {
 // A canonical orphan has no Redis membership. It must still be discovered, and
 // every row sharing its address must be considered before authorizing retirement.
 func TestGeneratedPublicationUnindexedOrphanNamespaceWithRealSQLite(t *testing.T) {
-	for _, kind := range []int8{model.ConfigTypePrometheus, model.ConfigTypeRecordRule} {
+	for _, kind := range []int8{model.ConfigTypePrometheus, model.ConfigTypeRecordRule, model.ConfigTypeAlertRule} {
 		for _, mode := range []string{"owned only", "foreign collision", "custom collision", "inactive collision"} {
 			t.Run(fmt.Sprintf("kind%d/%s", kind, mode), func(t *testing.T) {
 				db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -114,6 +120,8 @@ func TestGeneratedPublicationUnindexedOrphanNamespaceWithRealSQLite(t *testing.T
 				pattern := ConfigNamePrometheus
 				if kind == model.ConfigTypeRecordRule {
 					pattern = ConfigNameRecordRule
+				} else if kind == model.ConfigTypeAlertRule {
+					pattern = ConfigNameAlertRule
 				}
 				row := model.MonitorConfig{PoolID: 7, ConfigType: kind, InstanceIP: ip, Name: fmt.Sprintf(pattern, 7, ip), Status: model.ConfigStatusActive, ConfigContent: "preserved orphan"}
 				if err := db.Create(&row).Error; err != nil {
@@ -137,6 +145,9 @@ func TestGeneratedPublicationUnindexedOrphanNamespaceWithRealSQLite(t *testing.T
 				if kind == model.ConfigTypePrometheus {
 					cache := &prometheusConfigCache{configDAO: dao}
 					plan, planErr := cache.planPromPublication(context.Background(), 7, nil, nil)
+					stale, retired, err = plan.stale, plan.retired, planErr
+				} else if kind == model.ConfigTypeAlertRule {
+					plan, planErr := planScrapeRulePublication(context.Background(), scrapeAlertScope, dao, 7, nil, nil)
 					stale, retired, err = plan.stale, plan.retired, planErr
 				} else {
 					cache := &recordRuleConfigCache{configDAO: dao}
@@ -187,7 +198,7 @@ func (d *countedPublicationQueryDAO) GetMonitorConfigList(ctx context.Context, r
 // Count actual DAO results rather than assuming that a pool filter is applied.
 // This measures transferred metadata, not physical DB scan cost or wall time.
 func TestGeneratedPublicationReturnedRowsScaleWithRealSQLite(t *testing.T) {
-	for _, kind := range []int8{model.ConfigTypePrometheus, model.ConfigTypeRecordRule} {
+	for _, kind := range []int8{model.ConfigTypePrometheus, model.ConfigTypeRecordRule, model.ConfigTypeAlertRule} {
 		for _, pools := range []int{5, 10} {
 			t.Run(fmt.Sprintf("kind%d/pools%d", kind, pools), func(t *testing.T) {
 				db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -207,6 +218,8 @@ func TestGeneratedPublicationReturnedRowsScaleWithRealSQLite(t *testing.T) {
 				pattern := ConfigNamePrometheus
 				if kind == model.ConfigTypeRecordRule {
 					pattern = ConfigNameRecordRule
+				} else if kind == model.ConfigTypeAlertRule {
+					pattern = ConfigNameAlertRule
 				}
 				for poolID := 1; poolID <= pools; poolID++ {
 					ip := fmt.Sprintf("127.0.0.%d", poolID)
@@ -222,6 +235,11 @@ func TestGeneratedPublicationReturnedRowsScaleWithRealSQLite(t *testing.T) {
 						plan, err := cache.planPromPublication(context.Background(), poolID, map[string]string{ip: "owned"}, []string{ip})
 						if err != nil || len(plan.create)+len(plan.update)+len(plan.stale) != 0 {
 							t.Fatal("stable Prom metadata did not produce an empty plan", err)
+						}
+					} else if kind == model.ConfigTypeAlertRule {
+						plan, err := planScrapeRulePublication(context.Background(), scrapeAlertScope, dao, poolID, map[string]string{ip: "owned"}, []string{ip})
+						if err != nil || len(plan.create)+len(plan.update)+len(plan.stale) != 0 {
+							t.Fatal("stable Alert metadata did not produce an empty plan", err)
 						}
 					} else {
 						cache := &recordRuleConfigCache{configDAO: dao}

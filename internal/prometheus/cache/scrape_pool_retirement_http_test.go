@@ -142,7 +142,8 @@ func TestDeletedPoolHTTPAndDatabaseRetirementRecoverFromPersistentTombstone(t *t
 				if err != nil {
 					t.Fatal(err)
 				}
-				rule := cache.NewAlertRuleConfigCache(log, pools, nil, configs, nil, store)
+				alertJournal, alertHistory, alertProjection := cache.AlertRuleProjectionDependenciesForTest(db, store)
+				rule := cache.NewAlertRuleConfigCache(log, pools, nil, configs, nil, store, alertJournal, alertHistory, alertProjection)
 				journal, history, projection := cache.RecordProjectionDependenciesForTest(db, store)
 				record := cache.NewRecordRuleConfigCache(log, pools, nil, configs, nil, store, journal, history, projection)
 				manager, err := cache.NewMonitorCache(&config.Config{}, prom, retirementHTTPAM{}, rule, record, log)

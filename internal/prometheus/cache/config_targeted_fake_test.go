@@ -120,15 +120,25 @@ func (d *configSnapshotPages) GetGeneratedConfigNamespacePage(ctx context.Contex
 
 // Support-lifecycle fixtures intentionally share this stateful metadata store
 // across domains; implement the private query contract for those consumers too.
-func (s *alertRulePubDB) GetGeneratedConfigPoolCandidates(_ context.Context, req configdao.GeneratedConfigPoolQuery) ([]*model.MonitorConfig, int64, error) {
+func (s *alertRulePubDB) GetGeneratedConfigPoolCandidates(ctx context.Context, req configdao.GeneratedConfigPoolQuery) ([]*model.MonitorConfig, int64, error) {
+	if s.projection != nil {
+		return s.projection.base.GetGeneratedConfigPoolCandidates(ctx, req)
+	}
 	if s.failure == "db read" {
 		return nil, 0, errors.New("fixture metadata failure")
 	}
 	return targetedFakePage(targetedFakeMapRows(s.rows), &req.PoolID, req.ConfigType, nil, false, req.Page, req.Size)
 }
-func (s *alertRulePubDB) GetGeneratedConfigNamespacePage(_ context.Context, req configdao.GeneratedConfigKeysQuery) ([]*model.MonitorConfig, int64, error) {
+func (s *alertRulePubDB) GetGeneratedConfigNamespacePage(ctx context.Context, req configdao.GeneratedConfigKeysQuery) ([]*model.MonitorConfig, int64, error) {
+	if s.projection != nil {
+		return s.projection.base.GetGeneratedConfigNamespacePage(ctx, req)
+	}
 	if s.failure == "db read" {
 		return nil, 0, errors.New("fixture metadata failure")
 	}
 	return targetedFakePage(targetedFakeMapRows(s.rows), nil, req.ConfigType, req.InstanceKeys, true, req.Page, req.Size)
+}
+
+func (d alertRuleIncompleteMetadata) GetGeneratedConfigPoolCandidates(ctx context.Context, req configdao.GeneratedConfigPoolQuery) ([]*model.MonitorConfig, int64, error) {
+	return d.GetMonitorConfigList(ctx, &model.GetMonitorConfigListReq{ListReq: model.ListReq{Page: req.Page, Size: req.Size}, ConfigType: &req.ConfigType})
 }

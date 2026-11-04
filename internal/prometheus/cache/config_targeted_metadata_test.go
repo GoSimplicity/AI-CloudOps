@@ -229,7 +229,7 @@ func TestTargetedMetadataClonesReusedPagesAndRespectsCancellation(t *testing.T) 
 	}
 }
 func TestTargetedPublisherRejectsLocatorOwnerDriftButUsesFreshOwnedContent(t *testing.T) {
-	for _, domain := range []string{"record", "prom"} {
+	for _, domain := range []string{"record", "prom", "alert"} {
 		for _, change := range []string{"pool", "name", "kind", "IP", "missing", "body", "status"} {
 			t.Run(domain+"/"+change, func(t *testing.T) {
 				h := newRetirementFixture(t, domain)
@@ -242,6 +242,8 @@ func TestTargetedPublisherRejectsLocatorOwnerDriftButUsesFreshOwnedContent(t *te
 				case *recordRuleConfigCache:
 					base = c.configDAO
 				case *prometheusConfigCache:
+					base = c.configDAO
+				case *alertRuleConfigCache:
 					base = c.configDAO
 				}
 				var target *model.MonitorConfig
@@ -274,7 +276,7 @@ func TestTargetedPublisherRejectsLocatorOwnerDriftButUsesFreshOwnedContent(t *te
 						case "status":
 							target.Status = 2
 						}
-						if domain == "record" {
+						if domain == "record" || domain == "alert" {
 							fixture := base.(*recordProjectionFixture)
 							seed := fixture.db.Session(&gorm.Session{SkipHooks: true}).Unscoped()
 							if change == "missing" {
@@ -296,6 +298,8 @@ func TestTargetedPublisherRejectsLocatorOwnerDriftButUsesFreshOwnedContent(t *te
 				case *recordRuleConfigCache:
 					c.configDAO = d
 				case *prometheusConfigCache:
+					c.configDAO = d
+				case *alertRuleConfigCache:
 					c.configDAO = d
 				}
 				writes := h.writes()

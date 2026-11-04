@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"sync/atomic"
 	"testing"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -22,14 +23,16 @@ import (
 // atomic business writes, journal receipts and lease authority come from SQLite.
 type recordProjectionFixture struct {
 	configdao.MonitorConfigDAO
-	db      *gorm.DB
-	journal configdao.RecordProjectionJournalDAO
-	history configdao.GeneratedConfigHistoryReader
-	seeds   func() []*model.MonitorConfig
-	observe func([]*model.MonitorConfig)
-	failure func() string
-	write   func()
-	seeding bool
+	db              *gorm.DB
+	journal         configdao.RecordProjectionJournalDAO
+	history         configdao.GeneratedConfigHistoryReader
+	seeds           func() []*model.MonitorConfig
+	observe         func([]*model.MonitorConfig)
+	failure         func() string
+	write           func()
+	seeding         bool
+	observationKind int8
+	commits         atomic.Uint64
 }
 
 func newRecordProjectionFixture(t *testing.T, seeds func() []*model.MonitorConfig, observe func([]*model.MonitorConfig), failure func() string, write func()) *recordProjectionFixture {
@@ -112,7 +115,11 @@ func (f *recordProjectionFixture) refresh() error {
 		return nil
 	}
 	var rows []*model.MonitorConfig
-	if err := f.db.Where("config_type = ?", model.ConfigTypeRecordRule).Order("id").Find(&rows).Error; err != nil {
+	kind := f.observationKind
+	if kind == 0 {
+		kind = model.ConfigTypeRecordRule
+	}
+	if err := f.db.Where("config_type = ?", kind).Order("id").Find(&rows).Error; err != nil {
 		return err
 	}
 	f.observe(rows)
@@ -157,6 +164,11 @@ func (r *recordFixtureRunner) Project(ctx context.Context, lease configdao.Proje
 	if snapshot.Pool == nil || !snapshot.Pool.CompleteControls {
 		return errors.New("fixture missing durable full plan")
 	}
+	family := snapshot.Pool.Reservation.Family
+	if family != model.ConfigTypeAlertRule && family != model.ConfigTypeRecordRule {
+		return errors.New("fixture only accepts sealed scrape-rule families")
+	}
+
 	if recordFixtureRedisFailure(r.store) == "pending" || recordFixtureRedisFailure(r.store) == "sadd" {
 		return errors.New("fixture prepare failure")
 	}
@@ -181,7 +193,10 @@ func (r *recordFixtureRunner) Project(ctx context.Context, lease configdao.Proje
 		if control.Members == nil {
 			continue
 		}
-		key := buildRedisSetKeyRecordRulePoolIPs(snapshot.Pool.Reservation.PoolID)
+		key, err := projectionMemberKey(family, snapshot.Pool.Reservation.PoolID)
+		if err != nil {
+			return err
+		}
 		old, err := r.store.SMembers(ctx, key).Result()
 		if err != nil {
 			return err
@@ -215,7 +230,11 @@ func (r *recordFixtureRunner) Project(ctx context.Context, lease configdao.Proje
 	if !found {
 		return errors.New("fixture missing full ACK control")
 	}
-	if err := r.store.Set(ctx, recordPublicationKey(proof.Reservation.PoolID), hex.EncodeToString(proof.SourceHash[:]), 0).Err(); err != nil {
+	legacyKey, err := projectionLegacyKey(family, proof.Reservation.PoolID)
+	if err != nil {
+		return err
+	}
+	if err := r.store.Set(ctx, legacyKey, hex.EncodeToString(proof.SourceHash[:]), 0).Err(); err != nil {
 		return err
 	}
 	// Store persists its prepared wire proof before Acknowledge returns a
@@ -227,7 +246,7 @@ func (r *recordFixtureRunner) Project(ctx context.Context, lease configdao.Proje
 	if err != nil {
 		return err
 	}
-	if err := r.store.Set(ctx, projectionPoolKey(4, proof.Reservation.PoolID, "ack"), string(raw), 0).Err(); err != nil {
+	if err := r.store.Set(ctx, projectionPoolKey(family, proof.Reservation.PoolID, "ack"), string(raw), 0).Err(); err != nil {
 		return err
 	}
 	marked, err := lease.MarkComplete(proof)
@@ -246,6 +265,8 @@ func recordFixtureRedisFailure(store redis.Cmdable) string {
 	case *recordingPublicationRedis:
 		return s.failure
 	case *supportRedis:
+		return s.failure
+	case *alertRulePubRedis:
 		return s.failure
 	}
 	return ""
@@ -300,6 +321,7 @@ func (tx *recordFixtureTx) Commit() error {
 	if tx.fixture.seeding {
 		return nil
 	}
+	tx.fixture.commits.Add(1)
 	return tx.fixture.refresh()
 }
 

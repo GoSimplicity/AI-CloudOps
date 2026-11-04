@@ -100,6 +100,12 @@ func (s *ownerHTTPRedis) Del(_ context.Context, keys ...string) *redis.IntCmd {
 }
 
 func TestGeneratedPublicationOwnerGuardThroughRealConfigCRUD(t *testing.T) {
+	runPublicationOwnerHTTPContract(t, model.ConfigTypeRecordRule)
+}
+func TestAlertRulePublicationOwnerGuardThroughRealConfigCRUD(t *testing.T) {
+	runPublicationOwnerHTTPContract(t, model.ConfigTypeAlertRule)
+}
+func runPublicationOwnerHTTPContract(t *testing.T, family int8) {
 	for _, mode := range []string{"delete", "update"} {
 		t.Run(mode, func(t *testing.T) {
 			db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -117,17 +123,8 @@ func TestGeneratedPublicationOwnerGuardThroughRealConfigCRUD(t *testing.T) {
 			}
 			dao := configdao.NewMonitorConfigDAO(zap.NewNop(), db)
 			pool := &model.MonitorScrapePool{Model: model.Model{ID: 7}, Name: "ownerHTTP-fixture", SupportAlert: 2, SupportRecord: 1, PrometheusInstances: model.StringList{"127.0.0.1", "127.0.0.2"}}
-			rule := &model.MonitorRecordRule{Model: model.Model{ID: 31}, PoolID: 7, Name: "fixture:up", Expr: "up", Enable: 1}
 			storage := &ownerHTTPRedis{values: map[string]string{}, sets: map[string]map[string]bool{}}
-			journal, history, projection := cachepkg.RecordProjectionDependenciesForTest(db, storage)
-			journal = &ownerHTTPJournal{RecordProjectionJournalDAO: journal, before: func() {
-				if storage.pendingHook != nil {
-					hook := storage.pendingHook
-					storage.pendingHook = nil
-					hook()
-				}
-			}}
-			cache := cachepkg.NewRecordRuleConfigCache(zap.NewNop(), ownerHTTPPools{pool: pool}, ownerHTTPRecordSource{rule: rule}, dao, cachepkg.NewBatchConfigManager(dao, zap.NewNop()), storage, journal, history, projection)
+			cache, setExpression := ownerHTTPPublisherForFamily(t, family, db, dao, pool, storage)
 			if err := cache.GenerateMainConfig(context.Background()); err != nil {
 				t.Fatal(err)
 			}
@@ -135,7 +132,7 @@ func TestGeneratedPublicationOwnerGuardThroughRealConfigCRUD(t *testing.T) {
 			if mode == "delete" {
 				victimIP = "127.0.0.2"
 			}
-			rows, err := dao.GetMonitorConfigsByInstances(context.Background(), []string{victimIP}, model.ConfigTypeRecordRule)
+			rows, err := dao.GetMonitorConfigsByInstances(context.Background(), []string{victimIP}, family)
 			if err != nil || len(rows) != 1 {
 				t.Fatal("baseline canonical metadata missing")
 			}
@@ -144,8 +141,12 @@ func TestGeneratedPublicationOwnerGuardThroughRealConfigCRUD(t *testing.T) {
 			router := gin.New()
 			monitorapi.NewMonitorConfigHandler(configservice.NewMonitorConfigService(zap.NewNop(), dao)).RegisterRouters(router)
 			edited := false
+			movedKind := model.ConfigTypeAlertRule
+			if family == model.ConfigTypeAlertRule {
+				movedKind = model.ConfigTypeRecordRule
+			}
 			storage.pendingHook = func() {
-				body, _ := json.Marshal(model.UpdateMonitorConfigReq{ID: id, Name: "operator-custom", PoolID: 99, InstanceIP: "127.0.0.9", ConfigType: model.ConfigTypeAlertRule, ConfigContent: "operator preserved body", Status: model.ConfigStatusInactive})
+				body, _ := json.Marshal(model.UpdateMonitorConfigReq{ID: id, Name: "operator-custom", PoolID: 99, InstanceIP: "127.0.0.9", ConfigType: movedKind, ConfigContent: "operator preserved body", Status: model.ConfigStatusInactive})
 				request := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/monitor/configs/update/%d", id), bytes.NewReader(body))
 				request.Header.Set("Content-Type", "application/json")
 				response := httptest.NewRecorder()
@@ -161,11 +162,11 @@ func TestGeneratedPublicationOwnerGuardThroughRealConfigCRUD(t *testing.T) {
 			if mode == "delete" {
 				pool.PrometheusInstances = model.StringList{"127.0.0.1"}
 			} else {
-				rule.Expr = "sum(up)"
+				setExpression("sum(up)")
 			}
 			publishErr := cache.GenerateMainConfig(context.Background())
 			after, readErr := dao.GetMonitorConfigByID(context.Background(), id)
-			preserved := readErr == nil && after.Name == "operator-custom" && after.PoolID == 99 && after.InstanceIP == "127.0.0.9" && after.ConfigType == model.ConfigTypeAlertRule && after.ConfigContent == "operator preserved body"
+			preserved := readErr == nil && after.Name == "operator-custom" && after.PoolID == 99 && after.InstanceIP == "127.0.0.9" && after.ConfigType == movedKind && after.ConfigContent == "operator preserved body"
 			t.Logf("mode=%s real CRUD accepted=%v publisher error=%v row still visible=%v ownership/body preserved=%v", mode, edited, publishErr != nil, readErr == nil, preserved)
 			if !edited || !preserved {
 				t.Fatal("publisher removed or overwrote metadata whose ownership changed through the real HTTP API after preflight")
@@ -186,4 +187,51 @@ func (j *ownerHTTPJournal) CommitRecordProjectionPlan(ctx context.Context, req c
 		j.before()
 	}
 	return j.RecordProjectionJournalDAO.CommitRecordProjectionPlan(ctx, req)
+}
+
+type ownerHTTPPublisher interface{ GenerateMainConfig(context.Context) error }
+type ownerHTTPAlertSource struct {
+	alertdao.AlertManagerRuleDAO
+	rule *model.MonitorAlertRule
+}
+
+func (s ownerHTTPAlertSource) GetMonitorAlertRuleByPoolID(context.Context, int) ([]*model.MonitorAlertRule, int64, error) {
+	return []*model.MonitorAlertRule{s.rule}, 1, nil
+}
+
+type ownerHTTPAlertJournal struct {
+	configdao.AlertRuleProjectionJournalDAO
+	before func()
+}
+
+func (j *ownerHTTPAlertJournal) CommitAlertRuleProjectionPlan(ctx context.Context, req configdao.ScrapeRuleProjectionPlanRequest) (configdao.ProjectionReceipt, error) {
+	if j.before != nil {
+		j.before()
+	}
+	return j.AlertRuleProjectionJournalDAO.CommitAlertRuleProjectionPlan(ctx, req)
+}
+func ownerHTTPPublisherForFamily(t *testing.T, family int8, db *gorm.DB, dao configdao.MonitorConfigDAO, pool *model.MonitorScrapePool, storage *ownerHTTPRedis) (ownerHTTPPublisher, func(string)) {
+	t.Helper()
+	before := func() {
+		if storage.pendingHook != nil {
+			hook := storage.pendingHook
+			storage.pendingHook = nil
+			hook()
+		}
+	}
+	if family == model.ConfigTypeAlertRule {
+		pool.SupportAlert = 1
+		pool.SupportRecord = 2
+		rule := &model.MonitorAlertRule{Model: model.Model{ID: 31}, PoolID: 7, Name: "fixture alert", Expr: "up", ForTime: "0s", Enable: 1}
+		journal, history, projection := cachepkg.AlertRuleProjectionDependenciesForTest(db, storage)
+		journal = &ownerHTTPAlertJournal{AlertRuleProjectionJournalDAO: journal, before: before}
+		return cachepkg.NewAlertRuleConfigCache(zap.NewNop(), ownerHTTPPools{pool: pool}, ownerHTTPAlertSource{rule: rule}, dao, cachepkg.NewBatchConfigManager(dao, zap.NewNop()), storage, journal, history, projection), func(expr string) { rule.Expr = expr }
+	}
+	if family != model.ConfigTypeRecordRule {
+		t.Fatal("unsupported HTTP fixture family")
+	}
+	rule := &model.MonitorRecordRule{Model: model.Model{ID: 31}, PoolID: 7, Name: "fixture:up", Expr: "up", Enable: 1}
+	journal, history, projection := cachepkg.RecordProjectionDependenciesForTest(db, storage)
+	journal = &ownerHTTPJournal{RecordProjectionJournalDAO: journal, before: before}
+	return cachepkg.NewRecordRuleConfigCache(zap.NewNop(), ownerHTTPPools{pool: pool}, ownerHTTPRecordSource{rule: rule}, dao, cachepkg.NewBatchConfigManager(dao, zap.NewNop()), storage, journal, history, projection), func(expr string) { rule.Expr = expr }
 }

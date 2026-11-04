@@ -218,7 +218,7 @@ func TestAlertRuleSavedScrapeSevenIsReachableByRealGenerator(t *testing.T) {
 	if err := service.CreateMonitorAlertRule(context.Background(), namespaceCreate(7)); err != nil {
 		t.Fatal(err)
 	}
-	generator := cache.NewAlertRuleConfigCache(zap.NewNop(), pools, rules, nil, nil, nil)
+	generator := cache.NewAlertRuleConfigCache(zap.NewNop(), pools, rules, nil, nil, nil, nil, nil, nil)
 	content := generator.GenerateConfigForPool(context.Background(), pools.rows[7])["127.0.0.1"]
 	if rules.requestedPool != 7 || content == "" {
 		t.Fatal("saved scrape ID did not reach actual generator")

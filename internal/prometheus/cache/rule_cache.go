@@ -30,7 +30,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"sync"
 	"time"
 
@@ -64,6 +63,9 @@ type alertRuleConfigCache struct {
 	alertRuleDAO  alertRuleDao.AlertManagerRuleDAO
 	configDAO     configDao.MonitorConfigDAO
 	batchManager  *BatchConfigManager
+	journal       configDao.ProjectionPlanJournalDAO
+	history       configDao.AlertRuleHistoryReader
+	projection    AlertRuleProjectionRunner
 }
 
 type RuleGroup struct {
@@ -82,6 +84,9 @@ func NewAlertRuleConfigCache(
 	configDAO configDao.MonitorConfigDAO,
 	batchManager *BatchConfigManager,
 	redisClient redis.Cmdable,
+	journal configDao.ProjectionPlanJournalDAO,
+	history configDao.AlertRuleHistoryReader,
+	projection AlertRuleProjectionRunner,
 ) AlertRuleConfigCache {
 	return &alertRuleConfigCache{
 		logger:        logger,
@@ -91,6 +96,7 @@ func NewAlertRuleConfigCache(
 		alertRuleDAO:  alertRuleDAO,
 		configDAO:     configDAO,
 		batchManager:  batchManager,
+		journal:       journal, history: history, projection: projection,
 	}
 }
 
@@ -172,127 +178,16 @@ func (r *alertRuleConfigCache) ruleConfigDAO() configDao.MonitorConfigDAO {
 	return nil
 }
 
-func ownedAlertRuleArtifact(row *model.MonitorConfig, poolID int) bool {
-	return row != nil && row.ID > 0 && row.PoolID == poolID && row.ConfigType == model.ConfigTypeAlertRule &&
-		validateInstanceIPs([]string{row.InstanceIP}) == nil && row.Name == fmt.Sprintf(ConfigNameAlertRule, poolID, row.InstanceIP)
-}
+type alertRulePublicationPlan = scrapeRulePublicationPlan
 
-type alertRulePublicationPlan struct {
-	create  []*model.MonitorConfig
-	update  []configDao.GeneratedConfigUpdate
-	stale   []string
-	retired map[string]configDao.GeneratedConfigOwner
-}
-
-// Inspect every metadata page before any write. This also discovers canonical
-// rows left without membership by an older failed publication.
 func (r *alertRuleConfigCache) planAlertRulePublication(ctx context.Context, poolID int, desired map[string]string, oldIPs []string) (alertRulePublicationPlan, error) {
-	plan := alertRulePublicationPlan{retired: map[string]configDao.GeneratedConfigOwner{}}
-	dao := r.ruleConfigDAO()
-	if dao == nil {
-		return plan, errors.New("配置存储不可用")
-	}
-	kind := model.ConfigTypeAlertRule
-	byKey := map[string][]*model.MonitorConfig{}
-	stale := map[string]bool{}
-	for _, ip := range oldIPs {
-		if err := validateInstanceIPs([]string{ip}); err != nil {
-			return plan, errors.New("实例成员无效")
-		}
-		if _, wanted := desired[ip]; !wanted {
-			stale[ip] = true
-		}
-	}
-	scanned := int64(0)
-	expectedTotal := int64(-1)
-	seenRowIDs := map[int]bool{}
-	for page := 1; ; page++ {
-		if err := ctx.Err(); err != nil {
-			return plan, err
-		}
-		rows, total, err := dao.GetMonitorConfigList(ctx, &model.GetMonitorConfigListReq{ListReq: model.ListReq{Page: page, Size: 100}, ConfigType: &kind})
-		if err != nil {
-			return plan, errors.New("读取规则配置失败")
-		}
-		// COUNT/OFFSET is not a transactional snapshot. Reject observable drift
-		// rather than treating a truncated page as proof that a key has no owner.
-		if total < 0 || expectedTotal >= 0 && total != expectedTotal {
-			return plan, errors.New("规则配置分页总数不一致")
-		}
-		expectedTotal = total
-		if int64(len(rows)) > expectedTotal-scanned {
-			return plan, errors.New("规则配置分页超出总数")
-		}
-		if len(rows) == 0 {
-			if scanned != expectedTotal {
-				return plan, errors.New("规则配置分页提前结束")
-			}
-			break
-		}
-		for _, row := range rows {
-			if row == nil || row.ID <= 0 || seenRowIDs[row.ID] {
-				return plan, errors.New("规则配置快照标识无效或重复")
-			}
-			seenRowIDs[row.ID] = true
-			if row.ConfigType != kind {
-				continue
-			}
-			byKey[row.InstanceIP] = append(byKey[row.InstanceIP], row)
-			if ownedAlertRuleArtifact(row, poolID) {
-				if _, wanted := desired[row.InstanceIP]; !wanted {
-					stale[row.InstanceIP] = true
-				}
-			}
-		}
-		scanned += int64(len(rows))
-		if scanned == expectedTotal {
-			break
-		}
-		if len(rows) < 100 {
-			return plan, errors.New("规则配置分页数量不足")
-		}
-	}
-	keys := make([]string, 0, len(desired))
-	for ip := range desired {
-		keys = append(keys, ip)
-	}
-	sort.Strings(keys)
-	for _, ip := range keys {
-		rows := byKey[ip]
-		if len(rows) > 1 || len(rows) == 1 && !ownedAlertRuleArtifact(rows[0], poolID) {
-			return plan, errors.New("规则配置归属冲突")
-		}
-		content := desired[ip]
-		hash := calculateConfigHash(content)
-		name := fmt.Sprintf(ConfigNameAlertRule, poolID, ip)
-		if len(rows) == 0 {
-			plan.create = append(plan.create, &model.MonitorConfig{Name: name, PoolID: poolID, InstanceIP: ip, ConfigType: kind, ConfigContent: content, ConfigHash: hash, Status: model.ConfigStatusActive, LastGeneratedTime: time.Now().Unix()})
-		} else {
-			row := rows[0]
-			if row.ConfigContent == content && row.ConfigHash == hash && row.Status == model.ConfigStatusActive {
-				continue
-			}
-			copy := *row
-			copy.ConfigContent, copy.ConfigHash, copy.Status = content, hash, model.ConfigStatusActive
-			copy.LastGeneratedTime = time.Now().Unix()
-			plan.update = append(plan.update, configDao.GeneratedConfigUpdate{Expected: configDao.GeneratedConfigOwnerOf(row), Desired: copy})
-		}
-	}
-	for ip := range stale {
-		rows := byKey[ip]
-		if len(rows) > 1 || len(rows) == 1 && !ownedAlertRuleArtifact(rows[0], poolID) {
-			return plan, errors.New("旧规则配置归属冲突")
-		}
-		if len(rows) == 1 {
-			plan.retired[ip] = configDao.GeneratedConfigOwnerOf(rows[0])
-		}
-		plan.stale = append(plan.stale, ip)
-	}
-	sort.Strings(plan.stale)
-	return plan, nil
+	return planScrapeRulePublication(ctx, scrapeAlertScope, r.ruleConfigDAO(), poolID, desired, oldIPs)
 }
 
 func (r *alertRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
+	if err := r.alertRulePublicationReady(); err != nil {
+		return err
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -300,6 +195,10 @@ func (r *alertRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+	versions, err := r.alertRuleSourceVersions(ctx)
+	if err != nil {
 		return err
 	}
 	pools, err := readScrapePoolSnapshot(ctx, r.scrapePoolDAO)
@@ -315,14 +214,17 @@ func (r *alertRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 			failures = append(failures, r.alertRulePublicationError(0, "采集池标识"))
 			continue
 		}
-		if err := r.publishAlertRulePool(ctx, pool); err != nil {
+		if err := r.publishAlertRulePool(ctx, pool, versions[pool.ID]); err != nil {
 			failures = append(failures, err)
 		}
 	}
 	return errors.Join(append(failures, ctx.Err())...)
 }
 
-func (r *alertRuleConfigCache) publishAlertRulePool(ctx context.Context, sourcePool *model.MonitorScrapePool) error {
+func (r *alertRuleConfigCache) publishAlertRulePool(ctx context.Context, sourcePool *model.MonitorScrapePool, version uint64) error {
+	if err := r.alertRulePublicationReady(); err != nil {
+		return err
+	}
 	pool, _ := detachedAlertRules(sourcePool, nil)
 	fail := func(stage string) error { return r.alertRulePublicationError(pool.ID, stage) }
 	if pool.DeletedAt > 0 {
@@ -352,6 +254,9 @@ func (r *alertRuleConfigCache) publishAlertRulePool(ctx context.Context, sourceP
 	var err error
 	generated := map[string]string{}
 	if pool.SupportAlert == 1 {
+		if r.alertRuleDAO == nil {
+			return fail("规则存储不可用")
+		}
 		rows, _, err = r.alertRuleDAO.GetMonitorAlertRuleByPoolID(ctx, pool.ID)
 		if err != nil {
 			return fail("读取规则")
@@ -374,116 +279,12 @@ func (r *alertRuleConfigCache) publishAlertRulePool(ctx context.Context, sourceP
 	if err != nil {
 		return fail("计算版本")
 	}
-	key := alertRulePublicationKey(pool.ID)
-	previous, err := r.redis.Get(ctx, key).Result()
-	if err != nil && !errors.Is(err, redis.Nil) {
-		return fail("读取发布版本")
-	}
-	membersKey := buildRedisSetKeyAlertRulePoolIPs(pool.ID)
-	oldIPs, err := r.redis.SMembers(ctx, membersKey).Result()
-	if err != nil {
-		return fail("读取实例成员")
-	}
-	plan, err := r.planAlertRulePublication(ctx, pool.ID, generated, oldIPs)
-	if err != nil {
-		return fail("检查配置归属")
-	}
-	sameMembers := len(oldIPs) == len(desiredIPs)
-	for _, ip := range oldIPs {
-		if !desiredIPs[ip] {
-			sameMembers = false
-		}
-	}
-	sameArtifacts := true
-	for _, ip := range pool.PrometheusInstances {
-		body, err := r.redis.Get(ctx, buildRedisKeyAlertRule(ip)).Result()
-		if err != nil && !errors.Is(err, redis.Nil) {
-			return fail("读取规则缓存")
-		}
-		if body != generated[ip] {
-			sameArtifacts = false
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if previous == targetHash && sameMembers && sameArtifacts && len(plan.create) == 0 && len(plan.update) == 0 && len(plan.stale) == 0 {
-		return nil
-	}
-	if err := r.redis.Set(ctx, key, "pending:"+targetHash, 0).Err(); err != nil {
-		return fail("标记待发布")
-	}
-	// A historical owned DB row may have no member index. Every retirement,
-	// including live target removal or feature-off, must remain discoverable after
-	// SQL soft-delete succeeds but Redis deletion fails.
-	for _, ip := range plan.stale {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := r.redis.SAdd(ctx, membersKey, ip).Err(); err != nil {
-			return fail("登记待清退实例成员")
-		}
-	}
-	// Register all intended targets before DB or configuration writes. Failed
-	// attempts remain discoverable even when no configuration row was created.
-	for _, ip := range pool.PrometheusInstances {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := r.redis.SAdd(ctx, membersKey, ip).Err(); err != nil {
-			return fail("登记实例成员")
-		}
-	}
-	dao := r.ruleConfigDAO()
-	if len(plan.create) > 0 {
-		if err := dao.BatchCreateMonitorConfigs(ctx, plan.create); err != nil {
-			return fail("创建规则配置")
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if len(plan.update) > 0 {
-		if err := dao.UpdateGeneratedMonitorConfigs(ctx, plan.update); err != nil {
-			return fail("更新规则配置")
-		}
-	}
-	for _, ip := range pool.PrometheusInstances {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := r.redis.Set(ctx, buildRedisKeyAlertRule(ip), generated[ip], 0).Err(); err != nil {
-			return fail("写入规则缓存")
-		}
-	}
-	for _, ip := range plan.stale {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if expected, ok := plan.retired[ip]; ok {
-			if err := dao.DeleteGeneratedMonitorConfig(ctx, expected); err != nil {
-				return fail("清理旧规则配置归属")
-			}
-		}
-		if err := r.redis.Del(ctx, buildRedisKeyAlertRule(ip)).Err(); err != nil {
-			return fail("清理旧规则缓存")
-		}
-		if err := r.redis.SRem(ctx, membersKey, ip).Err(); err != nil {
-			return fail("清理旧实例成员")
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if err := r.redis.Set(ctx, key, targetHash, 0).Err(); err != nil {
-		return fail("确认发布版本")
-	}
-	return nil
+	return r.publishAlertRuleProjection(ctx, pool, generated, targetHash, version, fail)
 }
 
 // GenerateConfigForPool 为单个采集池生成告警规则配置
 func (r *alertRuleConfigCache) GenerateConfigForPool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string {
-	if pool == nil || ctx.Err() != nil {
+	if pool == nil || ctx.Err() != nil || r.alertRuleDAO == nil {
 		return nil
 	}
 	rows, _, err := r.alertRuleDAO.GetMonitorAlertRuleByPoolID(ctx, pool.ID)

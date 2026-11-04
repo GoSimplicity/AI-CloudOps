@@ -119,7 +119,7 @@ func newRetirementFixture(t *testing.T, kind string) *retirementFixture {
 		h.writes = func() int { return store.writes + db.writes }
 		h.onRead = func(fn func()) { store.onRead = fn }
 		h.rebuild = func() {
-			c = &alertRuleConfigCache{logger: c.logger, redis: store, scrapePoolDAO: h.inventory, alertRuleDAO: source, configDAO: db, batchManager: c.batchManager}
+			c = &alertRuleConfigCache{logger: c.logger, redis: store, scrapePoolDAO: h.inventory, alertRuleDAO: source, configDAO: c.configDAO, batchManager: c.batchManager, journal: c.journal, history: c.history, projection: c.projection}
 			h.publisher = c
 		}
 	case "record":
@@ -239,8 +239,14 @@ func TestDeletedScrapePoolPartialFailuresRecoverAfterRebuild(t *testing.T) {
 							t.Fatal("failed pending write changed visible artifact")
 						}
 					}
-					if kind == "record" {
-						if !recordFixturePending(h.publisher.(*recordRuleConfigCache)) || len(h.members) != 2 {
+					if kind == "record" || kind == "alert" {
+						pending := false
+						if kind == "record" {
+							pending = recordFixturePending(h.publisher.(*recordRuleConfigCache))
+						} else {
+							pending = alertFixturePending(h.publisher.(*alertRuleConfigCache))
+						}
+						if !pending || len(h.members) != 2 {
 							t.Fatal("failed prepare lost durable retirement or changed members")
 						}
 					} else if len(h.rows) != 2 || len(h.members) != 2 {
@@ -417,8 +423,14 @@ func TestLiveScrapePoolRetirementAnchorsDBOnlyArtifactsBeforeSQLDelete(t *testin
 						t.Fatal("injected retirement failure reported complete")
 					}
 					if stage == "sadd" {
-						if kind == "record" {
-							if !recordFixturePending(h.publisher.(*recordRuleConfigCache)) {
+						if kind == "record" || kind == "alert" {
+							pending := false
+							if kind == "record" {
+								pending = recordFixturePending(h.publisher.(*recordRuleConfigCache))
+							} else {
+								pending = alertFixturePending(h.publisher.(*alertRuleConfigCache))
+							}
+							if !pending {
 								t.Fatal("failed projection control lost durable retirement")
 							}
 						} else if len(h.rows) != 2 {

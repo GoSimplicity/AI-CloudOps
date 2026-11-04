@@ -683,3 +683,11 @@
 - 新narrow历史定位覆盖无member/manifest墓碑；同tx全历史guard防create/delete ABA，live owner可观察已deleted foreign/custom而退自己，未授权旧墓碑仍严格消歧。
 - accepted render/retire与显式legacy provenance持久记录替代完成事实，A只回收自身empty bookkeeping不碰B；B后更新/退役及多次重建不忘解决结果。已有permit可在原sealed lease恢复，但新增stale必须新guarded plan。
 - 全Go/vet/tag与cache/DAO/DI race通过；owned原生20叶0skip/fail含真实TCP/SQL/Redis，实例清理0。Wire实际生成并接pool cleanup。Web锁cd4f757已独立Verify成功，AIba187；新CI另验，未上线。
+
+
+## 2026-11-05：AlertRule 真正接线与共享投影核心
+
+- AlertRule正常/off/empty/deleted全部走typed持久计划、原SQL租约与Store；按固定family3/4复用实际第二消费者的source CAS、history guard、legacy/accepted disposition与完整permit重放，未复制两份状态机或保留unsafe fallback。
+- Record public API/DTO/hash/record_superseded保持；Alert独立rule_superseded并严格cross/mixed拒。UTF8、for0s、首个等号、稳定DB-ID group和目标原序分片renderer未动，两family共用一个有生命周期cleanup的Store。
+- Root真实owned27叶0skip/fail、旧Record与新Alert全部回归、全Go/vet/tag、173工具/actionlint通过；clean db65五金样对当前原字节兼容通过。同数据库/Redis双family启停互不跨写，实例清理0。
+- 来源锁Web955cbf7独立Verify成功/AIba187，新组合CI另验。其它发布器/worker/性能/剩余lint后续继续，无上线或生产连接。

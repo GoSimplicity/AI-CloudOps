@@ -71,28 +71,51 @@ func (p *recordRuleReadBarrier) GetMonitorRecordRuleByPoolId(ctx context.Context
 }
 
 func TestRecordProjectionOlderSourceCannotReplaceNewerCompletedGeneration(t *testing.T) {
+	runScrapeRuleOlderSourceContract(t, model.ConfigTypeRecordRule)
+}
+func runScrapeRuleOlderSourceContract(t *testing.T, family int8) {
+	if family != model.ConfigTypeAlertRule && family != model.ConfigTypeRecordRule {
+		t.Fatal("unsupported source test family")
+	}
 	for _, mode := range []string{"pool", "rule", "lifecycle", "tombstone"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newRecordProjectionFixture(t, nil, nil, nil, nil)
 			db := f.db
-			if err := db.AutoMigrate(&model.MonitorScrapePool{}, &model.MonitorRecordRule{}); err != nil {
+			var sourceModel any = &model.MonitorRecordRule{}
+			var sourceSeed any = &model.MonitorRecordRule{Model: model.Model{ID: 31}, PoolID: 7, Name: "snapshot:up", Expr: "up", Enable: 1}
+			if family == model.ConfigTypeAlertRule {
+				sourceModel = &model.MonitorAlertRule{}
+				sourceSeed = &model.MonitorAlertRule{Model: model.Model{ID: 31}, PoolID: 7, Name: "snapshot alert", Expr: "up", ForTime: "0s", Enable: 1}
+			}
+			if err := db.AutoMigrate(&model.MonitorScrapePool{}, sourceModel); err != nil {
 				t.Fatal("real source tables unavailable")
 			}
 			pool := &model.MonitorScrapePool{Model: model.Model{ID: 7}, Name: "source-snapshot", SupportRecord: 1, PrometheusInstances: model.StringList{"127.0.0.41"}}
-			rule := &model.MonitorRecordRule{Model: model.Model{ID: 31}, PoolID: 7, Name: "snapshot:up", Expr: "up", Enable: 1}
+			if family == model.ConfigTypeAlertRule {
+				pool.SupportAlert = 1
+			}
 			deleted := mode == "lifecycle" || mode == "tombstone"
 			if deleted {
 				pool.DeletedAt = 17
-				pool.SupportRecord = 2
+				if family == model.ConfigTypeAlertRule {
+					pool.SupportAlert = 2
+				} else {
+					pool.SupportRecord = 2
+				}
 			}
-			if db.Create(pool).Error != nil || db.Create(rule).Error != nil {
+			if db.Create(pool).Error != nil || db.Create(sourceSeed).Error != nil {
 				t.Fatal("source seed failed")
 			}
 			log := zap.NewNop()
 			pools := scrapedao.NewScrapePoolDAO(db, log, nil)
 			rules := alertdao.NewAlertManagerRecordDAO(db, log, nil)
+			alerts := alertdao.NewAlertManagerRuleDAO(db, log, nil)
 			store := &supportRedis{values: map[string]string{}, sets: map[string]map[string]bool{}}
-			makeCache := func(p scrapedao.ScrapePoolDAO, r alertdao.AlertManagerRecordDAO) *recordRuleConfigCache {
+			makeCache := func(p scrapedao.ScrapePoolDAO, r alertdao.AlertManagerRecordDAO, a alertdao.AlertManagerRuleDAO) scrapeRuleTestPublisher {
+				if family == model.ConfigTypeAlertRule {
+					journal, history, projection := AlertRuleProjectionDependenciesForTest(db, store)
+					return NewAlertRuleConfigCache(log, p, a, f, NewBatchConfigManager(f, log), store, journal, history, projection)
+				}
 				c := &recordRuleConfigCache{logger: log, redis: store, scrapePoolDAO: p, alertRecordDAO: r}
 				f.attach(c)
 				return c
@@ -103,12 +126,17 @@ func TestRecordProjectionOlderSourceCannotReplaceNewerCompletedGeneration(t *tes
 			unblock := func() { releaseOnce.Do(func() { close(release) }) }
 			var aPools scrapedao.ScrapePoolDAO = pools
 			var aRules alertdao.AlertManagerRecordDAO = rules
+			var aAlerts alertdao.AlertManagerRuleDAO = alerts
 			if mode == "rule" {
-				aRules = &recordRuleReadBarrier{AlertManagerRecordDAO: rules, barrier: barrier}
+				if family == model.ConfigTypeAlertRule {
+					aAlerts = &alertRuleReadBarrier{AlertManagerRuleDAO: alerts, barrier: barrier}
+				} else {
+					aRules = &recordRuleReadBarrier{AlertManagerRecordDAO: rules, barrier: barrier}
+				}
 			} else {
 				aPools = &recordPoolReadBarrier{ScrapePoolDAO: pools, mode: mode, barrier: barrier}
 			}
-			a, b := makeCache(aPools, aRules), makeCache(pools, rules)
+			a, b := makeCache(aPools, aRules, aAlerts), makeCache(pools, rules, alerts)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			result := make(chan error, 1)
@@ -147,7 +175,7 @@ func TestRecordProjectionOlderSourceCannotReplaceNewerCompletedGeneration(t *tes
 					t.Fatal("source target update failed")
 				}
 			} else {
-				if db.Model(&model.MonitorRecordRule{}).Where("id=31").Update("expr", "sum(up)").Error != nil {
+				if db.Model(sourceModel).Where("id=31").Update("expr", "sum(up)").Error != nil {
 					t.Fatal("source rule update failed")
 				}
 			}
@@ -160,11 +188,11 @@ func TestRecordProjectionOlderSourceCannotReplaceNewerCompletedGeneration(t *tes
 			if err != nil {
 				t.Fatal("newer B source did not fully publish", err)
 			}
-			committed, err := f.journal.LoadLastCommittedProjection(ctx, 4, 7)
+			committed, err := f.journal.LoadLastCommittedProjection(ctx, family, 7)
 			if err != nil || committed == nil || committed.Phase != model.ConfigPublicationProjected {
 				t.Fatal("B has no durable completed generation")
 			}
-			projected, err := f.journal.LoadLastProjectedProjection(ctx, 4, 7)
+			projected, err := f.journal.LoadLastProjectedProjection(ctx, family, 7)
 			if err != nil || projected == nil || projected.Reservation != committed.Reservation {
 				t.Fatal("B last-good pointer missing")
 			}
@@ -179,8 +207,8 @@ func TestRecordProjectionOlderSourceCannotReplaceNewerCompletedGeneration(t *tes
 			case <-ctx.Done():
 				t.Fatal("older A did not return after releasing source snapshot")
 			}
-			after, loadErr := f.journal.LoadLastCommittedProjection(ctx, 4, 7)
-			lastGood, goodErr := f.journal.LoadLastProjectedProjection(ctx, 4, 7)
+			after, loadErr := f.journal.LoadLastCommittedProjection(ctx, family, 7)
+			lastGood, goodErr := f.journal.LoadLastProjectedProjection(ctx, family, 7)
 			var afterRows []model.MonitorConfig
 			if db.Unscoped().Order("id ASC").Find(&afterRows).Error != nil {
 				t.Fatal("metadata recheck failed")

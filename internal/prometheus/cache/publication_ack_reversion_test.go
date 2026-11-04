@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"go.uber.org/zap"
 	"strings"
 	"sync"
 	"testing"
@@ -111,7 +112,7 @@ func TestPublicationAckRebuildRepairsCurrentSource(t *testing.T) {
 	for _, generator := range []struct {
 		name string
 		make func(*testing.T) publicationAckHarness
-	}{{"record", recordPublicationAckHarness}, {"prometheus", promPublicationAckHarness}} {
+	}{{"record", recordPublicationAckHarness}, {"prometheus", promPublicationAckHarness}, {"alert", alertRulePublicationAckHarness}} {
 		for _, stage := range []string{"set", "sadd", "database", "hash"} {
 			for _, resume := range []string{"A", "B"} {
 				t.Run(generator.name+"/"+stage+"/resume-"+resume, func(t *testing.T) {
@@ -159,7 +160,7 @@ func TestPublicationAckStablePoolIdentityAcrossRename(t *testing.T) {
 	for _, generator := range []struct {
 		name string
 		make func(*testing.T) publicationAckHarness
-	}{{"record", recordPublicationAckHarness}, {"prometheus", promPublicationAckHarness}} {
+	}{{"record", recordPublicationAckHarness}, {"prometheus", promPublicationAckHarness}, {"alert", alertRulePublicationAckHarness}} {
 		for _, stage := range []string{"sadd", "hash"} {
 			for _, resume := range []string{"A", "B"} {
 				t.Run(generator.name+"/"+stage+"/resume-"+resume, func(t *testing.T) {
@@ -203,7 +204,7 @@ func TestPublicationLegacyNameHashCannotImpersonateStableIdentity(t *testing.T) 
 	for _, generator := range []struct {
 		name string
 		make func(*testing.T) publicationAckHarness
-	}{{"record", recordPublicationAckHarness}, {"prometheus", promPublicationAckHarness}} {
+	}{{"record", recordPublicationAckHarness}, {"prometheus", promPublicationAckHarness}, {"alert", alertRulePublicationAckHarness}} {
 		t.Run(generator.name, func(t *testing.T) {
 			fixture := generator.make(t)
 			fixture.setName(fmt.Sprintf("pool:%d", fixture.poolID))
@@ -237,7 +238,7 @@ func TestPublicationPendingFailureMakesNoArtifactWrites(t *testing.T) {
 	for _, generator := range []struct {
 		name string
 		make func(*testing.T) publicationAckHarness
-	}{{"record", recordPublicationAckHarness}, {"prometheus", promPublicationAckHarness}} {
+	}{{"record", recordPublicationAckHarness}, {"prometheus", promPublicationAckHarness}, {"alert", alertRulePublicationAckHarness}} {
 		t.Run(generator.name, func(t *testing.T) {
 			fixture := generator.make(t)
 			if err := fixture.publish(); err != nil {
@@ -283,7 +284,7 @@ func TestPublicationAckSerializesOneCacheInstance(t *testing.T) {
 	for _, generator := range []struct {
 		name string
 		make func(*testing.T) publicationAckHarness
-	}{{"record", recordPublicationAckHarness}, {"prometheus", promPublicationAckHarness}} {
+	}{{"record", recordPublicationAckHarness}, {"prometheus", promPublicationAckHarness}, {"alert", alertRulePublicationAckHarness}} {
 		t.Run(generator.name, func(t *testing.T) {
 			fixture := generator.make(t)
 			const callers = 4
@@ -311,4 +312,45 @@ func TestPublicationAckSerializesOneCacheInstance(t *testing.T) {
 			}
 		})
 	}
+}
+
+func alertRulePublicationAckHarness(t *testing.T) publicationAckHarness {
+	t.Helper()
+	cache, source, store, db, pool := newAlertRulePublication(t)
+	// Match the existing one-artifact harness: one actual row write is one
+	// first publication, so the unchanged concurrent-call assertion stays exact.
+	pool.PrometheusInstances = model.StringList{"127.0.0.1"}
+	return publicationAckHarness{poolID: pool.ID, pending: func() bool { return alertFixturePending(cache) }, valueA: "up", valueB: "sum(up)", publish: func() error { return cache.GenerateMainConfig(context.Background()) }, setValue: func(value string) { source.rows[0].Expr = value }, setName: func(name string) { pool.Name = name }, setFailure: func(stage string) {
+		store.failure = stage
+		if stage == "hash" {
+			store.failure = "ack"
+		}
+		db.failure = ""
+		if stage == "database" {
+			db.failure = "database"
+		}
+	}, legacyOnly: func() string {
+		ack := store.values[alertRulePublicationKey(pool.ID)]
+		delete(store.values, alertRulePublicationKey(pool.ID))
+		store.values[buildRedisHashKeyAlertRule(pool.Name)] = ack
+		return ack
+	}, legacyMarker: func() string { return store.values[buildRedisHashKeyAlertRule(pool.Name)] }, restart: func() {
+		cache = NewAlertRuleConfigCache(zap.NewNop(), cache.scrapePoolDAO, source, cache.configDAO, cache.batchManager, store, cache.journal, cache.history, cache.projection).(*alertRuleConfigCache)
+	}, state: func() (string, string, string) {
+		raw := alertingContractParse(t, store.values[buildRedisKeyAlertRule("127.0.0.1")])
+		var saved *model.MonitorConfig
+		for _, row := range db.rows {
+			if row.InstanceIP == "127.0.0.1" && row.ConfigType == 3 {
+				saved = row
+			}
+		}
+		if saved == nil {
+			t.Fatal("Alert SQL view missing")
+		}
+		stored := alertingContractParse(t, saved.ConfigContent)
+		if len(raw.Groups) != 1 || len(stored.Groups) != 1 || len(raw.Groups[0].Rules) != 1 || len(stored.Groups[0].Rules) != 1 {
+			t.Fatal("Alert fixture lost its rule")
+		}
+		return raw.Groups[0].Rules[0].Expr, stored.Groups[0].Rules[0].Expr, store.values[alertRulePublicationKey(pool.ID)]
+	}, writeCounts: func() (int, int) { return store.writes, db.writes }}
 }

@@ -23,6 +23,7 @@ type projectionManifestEnvelope struct {
 	Controls         []IssuedProjectionControl  `json:"controls"`
 	PlanDigest       string                     `json:"plan_digest"`
 	RecordSuperseded []RecordSupersededArtifact `json:"record_superseded,omitempty"`
+	RuleSuperseded   []RecordSupersededArtifact `json:"rule_superseded,omitempty"`
 }
 type preparedProjectionPlan struct {
 	request    GeneratedProjectionPlanRequest
@@ -425,6 +426,9 @@ func decodeProjectionManifest(raw *string) (projectionManifestEnvelope, error) {
 			return envelope, ErrJournalConflict
 		}
 	}
+	if envelope.RecordSuperseded != nil && envelope.RuleSuperseded != nil {
+		return envelope, ErrJournalConflict
+	}
 	if err := validateIssuedControlShape(envelope.Controls, envelope.Artifacts); err != nil {
 		return envelope, err
 	}
@@ -596,15 +600,19 @@ func (d *monitorConfigDAO) loadProjectionReceipt(tx *gorm.DB, op model.MonitorCo
 			}
 		}
 	}
-	if len(envelope.RecordSuperseded) > 0 {
-		check := RecordProjectionPlanRequest{GeneratedProjectionPlanRequest: GeneratedProjectionPlanRequest{GeneratedPlanRequest: GeneratedPlanRequest{Reservation: result.Reservation}}, Superseded: envelope.RecordSuperseded}
+	proofs, err := scopedRuleSuperseded(envelope, op.Family)
+	if err != nil {
+		return ProjectionReceipt{}, err
+	}
+	if len(proofs) > 0 {
+		check := RecordProjectionPlanRequest{GeneratedProjectionPlanRequest: GeneratedProjectionPlanRequest{GeneratedPlanRequest: GeneratedPlanRequest{Reservation: result.Reservation}}, Superseded: proofs}
 		for _, artifact := range result.Artifacts {
 			check.Items = append(check.Items, GeneratedPlanItem{Desired: &model.MonitorConfig{InstanceIP: artifact.InstanceKey}})
 		}
-		if _, err := prepareRecordReplacements(check); err != nil {
+		if _, err := prepareScrapeRuleReplacements(check); err != nil {
 			return ProjectionReceipt{}, err
 		}
-		if err := d.validateRecordReplacementHistory(tx, op, envelope.RecordSuperseded); err != nil {
+		if err := d.validateScrapeRuleReplacementHistory(tx, op, proofs); err != nil {
 			return ProjectionReceipt{}, err
 		}
 	}
@@ -660,4 +668,17 @@ func (d *monitorConfigDAO) LoadLastProjectedProjection(ctx context.Context, fami
 		return nil, err
 	}
 	return &receipt, nil
+}
+
+func scopedRuleSuperseded(envelope projectionManifestEnvelope, family int8) ([]RecordSupersededArtifact, error) {
+	if envelope.RecordSuperseded != nil && family != 4 {
+		return nil, ErrJournalConflict
+	}
+	if envelope.RuleSuperseded != nil && family != 3 {
+		return nil, ErrJournalConflict
+	}
+	if family == 3 {
+		return envelope.RuleSuperseded, nil
+	}
+	return envelope.RecordSuperseded, nil
 }

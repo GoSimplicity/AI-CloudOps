@@ -90,6 +90,9 @@ func (s *alertRulePubRedis) Set(_ context.Context, key string, value interface{}
 	return redis.NewStatusResult("OK", nil)
 }
 func (s *alertRulePubRedis) SMembers(context.Context, string) *redis.StringSliceCmd {
+	if s.onRead != nil {
+		s.onRead()
+	}
 	if s.failure == "members read" {
 		return redis.NewStringSliceResult(nil, errors.New("fixture membership read failure"))
 	}
@@ -132,6 +135,7 @@ func (s *alertRulePubRedis) Del(_ context.Context, keys ...string) *redis.IntCmd
 }
 
 type alertRulePubDB struct {
+	projection *alertRuleProjectionFixture
 	configdao.MonitorConfigDAO
 	rows         map[int]*model.MonitorConfig
 	next, writes int
@@ -209,6 +213,7 @@ func newAlertRulePublication(t *testing.T) (*alertRuleConfigCache, *alertRulePub
 	db := &alertRulePubDB{rows: map[int]*model.MonitorConfig{}}
 	logger := zap.NewNop()
 	cache := &alertRuleConfigCache{logger: logger, redis: store, alertRuleDAO: source, scrapePoolDAO: &alertRulePubPools{pool: pool}, configDAO: db, batchManager: NewBatchConfigManager(db, logger)}
+	attachAlertRuleProjection(t, cache, db, nil)
 	return cache, source, store, db, pool
 }
 func alertRuleACK(poolID int) string {
@@ -325,7 +330,8 @@ func TestAlertRulePublicationFailureThenReturnToEitherSnapshot(t *testing.T) {
 						pool.PrometheusInstances = model.StringList{"127.0.0.1", "127.0.0.2"}
 					}
 					if restart {
-						c = NewAlertRuleConfigCache(zap.NewNop(), c.scrapePoolDAO, source, db, NewBatchConfigManager(db, zap.NewNop()), store).(*alertRuleConfigCache)
+						c = NewAlertRuleConfigCache(zap.NewNop(), c.scrapePoolDAO, source, db, NewBatchConfigManager(db, zap.NewNop()), store, db.projection.journal, db.projection.history, nil).(*alertRuleConfigCache)
+						db.projection.attach(c)
 					}
 					if err := c.GenerateMainConfig(ctx); err != nil {
 						t.Fatal(err)
@@ -372,8 +378,8 @@ func TestAlertRulePublicationPendingFailureIsZeroArtifact(t *testing.T) {
 	if c.GenerateMainConfig(context.Background()) == nil {
 		t.Fatal("pending failure acknowledged")
 	}
-	if len(store.values) != 0 || len(store.members) != 0 || len(db.rows) != 0 || db.writes != 0 {
-		t.Fatal("artifact appeared before reliable pending marker")
+	if len(store.values) != 0 || len(store.members) != 0 || len(db.rows) != 2 || !alertFixturePending(c) {
+		t.Fatal("failed prepare published raw/ACK or lost its durable unprojected SQL plan")
 	}
 }
 func TestAlertRulePublicationIgnoresLegacyNameKeys(t *testing.T) {
@@ -533,7 +539,8 @@ func TestAlertRulePublicationEmptyTargetFailureRecovery(t *testing.T) {
 						pool.PrometheusInstances = model.StringList{"127.0.0.1", "127.0.0.2"}
 					}
 					if restart {
-						c = NewAlertRuleConfigCache(zap.NewNop(), c.scrapePoolDAO, source, db, NewBatchConfigManager(db, zap.NewNop()), store).(*alertRuleConfigCache)
+						c = NewAlertRuleConfigCache(zap.NewNop(), c.scrapePoolDAO, source, db, NewBatchConfigManager(db, zap.NewNop()), store, db.projection.journal, db.projection.history, nil).(*alertRuleConfigCache)
+						db.projection.attach(c)
 					}
 					if err := c.GenerateMainConfig(ctx); err != nil {
 						t.Fatal(err)

@@ -115,6 +115,7 @@ func (s *supportRedis) Del(_ context.Context, keys ...string) *redis.IntCmd {
 }
 
 type supportFixture struct {
+	ruleProjection   *alertRuleProjectionFixture
 	recordProjection *recordProjectionFixture
 	pool             *model.MonitorScrapePool
 	inventory        *supportInventory
@@ -143,18 +144,25 @@ func newSupportFixture(t *testing.T) *supportFixture {
 			}
 		}
 	}, func() string { return f.db.failure }, func() { f.db.writes++ })
+	f.ruleProjection = newAlertRuleProjectionFixture(t, f.db, f.recordProjection)
 	f.rebuild()
 	return f
 }
 func (f *supportFixture) rebuild() {
 	logger := zap.NewNop()
-	f.rule = NewAlertRuleConfigCache(logger, f.inventory, f.ruleSource, f.db, NewBatchConfigManager(f.db, logger), f.store).(*alertRuleConfigCache)
+	f.rule = NewAlertRuleConfigCache(logger, f.inventory, f.ruleSource, f.db, NewBatchConfigManager(f.db, logger), f.store, f.ruleProjection.journal, f.ruleProjection.history, nil).(*alertRuleConfigCache)
+	f.ruleProjection.attach(f.rule)
 	f.record = NewRecordRuleConfigCache(logger, f.inventory, f.recordSource, f.db, NewBatchConfigManager(f.db, logger), f.store, f.recordProjection.journal, f.recordProjection.history, nil).(*recordRuleConfigCache)
 	f.recordProjection.attach(f.record)
 }
 func (f *supportFixture) publish(kind string) error {
 	if kind == "rule" {
-		return f.rule.GenerateMainConfig(context.Background())
+		before := f.recordProjection.commits.Load()
+		err := f.rule.GenerateMainConfig(context.Background())
+		if f.recordProjection.commits.Load() != before {
+			err = errors.Join(err, f.ruleProjection.refresh())
+		}
+		return err
 	}
 	return f.record.GenerateMainConfig(context.Background())
 }
@@ -421,8 +429,8 @@ func TestSupportLifecyclePendingFailureAndOwnershipConflictDoNotWrite(t *testing
 					if mode == "pending" {
 						extra = 1
 					}
-					if kind == "record" && mode == "pending" {
-						if f.store.writes != writes || !recordFixturePending(f.record) || !reflect.DeepEqual(before, f.store.values) || !reflect.DeepEqual(sets, f.store.sets) {
+					if (kind == "record" || kind == "rule") && mode == "pending" {
+						if f.store.writes != writes || !(kind == "record" && recordFixturePending(f.record) || kind == "rule" && alertFixturePending(f.rule)) || !reflect.DeepEqual(before, f.store.values) || !reflect.DeepEqual(sets, f.store.sets) {
 							t.Fatal("failed projection prepare changed raw/ACK or lost durable pending state")
 						}
 						return

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	cachepkg "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	configdao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
 	"go.uber.org/zap"
 	"gorm.io/driver/sqlite"
@@ -17,6 +16,12 @@ import (
 // Schedule a real ordinary DAO insert after metadata preflight but before the
 // generator's create. A successful publication must not claim that occupied key.
 func TestGeneratedCreationRejectsOwnerArrivingAfterPreflight(t *testing.T) {
+	runGeneratedCreationConflict(t, model.ConfigTypeRecordRule)
+}
+func TestAlertRuleCreationRejectsOwnerArrivingAfterPreflight(t *testing.T) {
+	runGeneratedCreationConflict(t, model.ConfigTypeAlertRule)
+}
+func runGeneratedCreationConflict(t *testing.T, family int8) {
 	for _, status := range []int8{model.ConfigStatusActive, model.ConfigStatusInactive} {
 		t.Run(map[int8]string{model.ConfigStatusActive: "active", model.ConfigStatusInactive: "inactive"}[status], func(t *testing.T) {
 			db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -35,18 +40,9 @@ func TestGeneratedCreationRejectsOwnerArrivingAfterPreflight(t *testing.T) {
 			dao := configdao.NewMonitorConfigDAO(zap.NewNop(), db)
 			ctx := context.Background()
 			pool := &model.MonitorScrapePool{Model: model.Model{ID: 7}, Name: "creation-race", SupportRecord: 1, PrometheusInstances: model.StringList{"127.0.0.1"}}
-			rule := &model.MonitorRecordRule{Model: model.Model{ID: 31}, PoolID: 7, Name: "fixture:up", Expr: "up", Enable: 1}
 			store := &ownerHTTPRedis{values: map[string]string{}, sets: map[string]map[string]bool{}}
-			journal, history, projection := cachepkg.RecordProjectionDependenciesForTest(db, store)
-			journal = &ownerHTTPJournal{RecordProjectionJournalDAO: journal, before: func() {
-				if store.pendingHook != nil {
-					hook := store.pendingHook
-					store.pendingHook = nil
-					hook()
-				}
-			}}
-			publisher := cachepkg.NewRecordRuleConfigCache(zap.NewNop(), ownerHTTPPools{pool: pool}, ownerHTTPRecordSource{rule: rule}, dao, cachepkg.NewBatchConfigManager(dao, zap.NewNop()), store, journal, history, projection)
-			foreign := &model.MonitorConfig{PoolID: 99, InstanceIP: "127.0.0.1", ConfigType: model.ConfigTypeRecordRule, Name: "operator-owned", ConfigContent: "preserve operator bytes", Status: status}
+			publisher, _ := ownerHTTPPublisherForFamily(t, family, db, dao, pool, store)
+			foreign := &model.MonitorConfig{PoolID: 99, InstanceIP: "127.0.0.1", ConfigType: family, Name: "operator-owned", ConfigContent: "preserve operator bytes", Status: status}
 			injected := false
 			store.pendingHook = func() {
 				if injected {
@@ -64,7 +60,7 @@ func TestGeneratedCreationRejectsOwnerArrivingAfterPreflight(t *testing.T) {
 			if err == nil {
 				t.Fatal("generator acknowledged a namespace occupied after preflight")
 			}
-			rows, err := dao.GetMonitorConfigsByInstances(ctx, []string{"127.0.0.1"}, model.ConfigTypeRecordRule)
+			rows, err := dao.GetMonitorConfigsByInstances(ctx, []string{"127.0.0.1"}, family)
 			if err != nil || len(rows) != 1 || rows[0].ID != foreign.ID || rows[0].ConfigContent != foreign.ConfigContent || rows[0].Status != status {
 				t.Fatal("generated create changed or duplicated the new owner")
 			}

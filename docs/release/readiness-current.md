@@ -1,5 +1,13 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-05：AlertRule 接入与 family3/4 共享闭环
+
+AlertRule已删除旧unsafe写链，共用真实source版本CAS、完整元数据计划、历史ABA与disposition、原SQL租约和typed Store；Record保持固定family4外层与已发数据格式。shared scope仅3/4，Alert专属rule_superseded拒混用，renderer与分片合同未变。见[共享边界与验收](scrape-rule-projection.md)。
+
+- Root owned原生27叶、完整Go/vet/全部标签编译、173工具/actionlint通过；完整cache/service race通过，Record旧回归/Alert renderer保持，clean db65五个兼容金样与当前一致。临时实例清理0，未使用演示服务。
+- Web955cbf7已独立Verify/gitleaks成功，AIba187，新后端组合另验。Recorddb65上一三CI53steps/实际3pins/5browserzero已成功，不拿它替代本提交远端验收。
+- Prometheus主配置/AM发布器、恢复worker、规模性能及剩余ESLint仍待继续；本地preview仍clean5feb/schema4，无真实外部执行，未上线，不宣称整个1.0完成。
+
 ## 2026-11-04：Record 真正发布链与恢复闭环
 
 正常生成、off/empty/deleted清退已接持久journal、原SQL租约和typed Store。源读取前的SQL版本与预留CAS拒绝迟到旧快照；事务历史guard防ABA，当前live owner的退役权限与已删除foreign观察分离，原permit只覆盖完整fresh目标时重放。见[Record合同与验收](record-projection.md)。

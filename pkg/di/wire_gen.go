@@ -165,14 +165,16 @@ func ProvideApp(cfg *config.Config) (*app.App, func(), error) {
 		return nil, nil, err
 	}
 	alertManagerRuleDAO := alert.NewAlertManagerRuleDAO(db, logger, userDAO)
-	alertRuleConfigCache := cache.NewAlertRuleConfigCache(logger, scrapePoolDAO, alertManagerRuleDAO, monitorConfigDAO, batchConfigManager, cmdable)
-	alertManagerRecordDAO := alert.NewAlertManagerRecordDAO(db, logger, userDAO)
 	projectionPlanJournalDAO := config2.NewProjectionPlanJournalDAO(logger, db)
-	generatedConfigHistoryReader := config2.NewGeneratedConfigHistoryReader(logger, db)
+	alertRuleHistoryReader := config2.NewAlertRuleHistoryReader(logger, db)
 	projectionStore, cleanup, err := ProvideProjectionStore(redisClient)
 	if err != nil {
 		return nil, nil, err
 	}
+	alertRuleProjectionRunner := cache.NewAlertRuleProjectionRunner(projectionStore)
+	alertRuleConfigCache := cache.NewAlertRuleConfigCache(logger, scrapePoolDAO, alertManagerRuleDAO, monitorConfigDAO, batchConfigManager, cmdable, projectionPlanJournalDAO, alertRuleHistoryReader, alertRuleProjectionRunner)
+	alertManagerRecordDAO := alert.NewAlertManagerRecordDAO(db, logger, userDAO)
+	generatedConfigHistoryReader := config2.NewGeneratedConfigHistoryReader(logger, db)
 	recordProjectionRunner := cache.NewRecordProjectionRunner(projectionStore)
 	recordRuleConfigCache := cache.NewRecordRuleConfigCache(logger, scrapePoolDAO, alertManagerRecordDAO, monitorConfigDAO, batchConfigManager, cmdable, projectionPlanJournalDAO, generatedConfigHistoryReader, recordProjectionRunner)
 	monitorCache, err := cache.NewMonitorCache(cfg, prometheusConfigCache, alertManagerConfigCache, alertRuleConfigCache, recordRuleConfigCache, logger)
@@ -353,7 +355,7 @@ var Injector = wire.NewSet(
 )
 
 var CacheSet = wire.NewSet(
-	ProvideProjectionStore, config2.NewProjectionPlanJournalDAO, config2.NewGeneratedConfigHistoryReader, cache.NewRecordProjectionRunner, cache.NewMonitorCache, cache.NewAlertManagerConfigCache, cache.NewAlertRuleConfigCache, cache.NewRecordRuleConfigCache, cache.NewPrometheusConfigCache, cache.NewBatchConfigManager,
+	ProvideProjectionStore, config2.NewProjectionPlanJournalDAO, config2.NewGeneratedConfigHistoryReader, cache.NewRecordProjectionRunner, config2.NewAlertRuleHistoryReader, cache.NewAlertRuleProjectionRunner, cache.NewMonitorCache, cache.NewAlertManagerConfigCache, cache.NewAlertRuleConfigCache, cache.NewRecordRuleConfigCache, cache.NewPrometheusConfigCache, cache.NewBatchConfigManager,
 )
 
 var ClientSet = wire.NewSet(client.NewK8sClient)

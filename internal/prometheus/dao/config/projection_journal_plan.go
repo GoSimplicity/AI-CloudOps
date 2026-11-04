@@ -211,7 +211,7 @@ func (d *monitorConfigDAO) commitGeneratedPlan(ctx context.Context, req Generate
 			}
 		}
 		if projection != nil {
-			if err := validateRecordHistoryTx(tx, projection.history); err != nil {
+			if err := validateScrapeRuleHistoryTx(tx, req.Reservation.Family, projection.history); err != nil {
 				return err
 			}
 			for _, proof := range projection.superseded {
@@ -219,7 +219,7 @@ func (d *monitorConfigDAO) commitGeneratedPlan(ctx context.Context, req Generate
 					return ErrJournalConflict
 				}
 			}
-			if err := d.validateRecordReplacementsTx(tx, projection.superseded); err != nil {
+			if err := d.validateScrapeRuleReplacementsTx(tx, projection.superseded); err != nil {
 				return err
 			}
 
@@ -246,8 +246,16 @@ func (d *monitorConfigDAO) commitGeneratedPlan(ctx context.Context, req Generate
 			if err != nil {
 				return err
 			}
-			payload = projectionManifestEnvelope{Version: 2, Artifacts: manifest, Controls: controls, PlanDigest: fingerprint, RecordSuperseded: projection.superseded}
-			if err := markRecordReplacementsTx(tx, projection.superseded); err != nil {
+			envelope := projectionManifestEnvelope{Version: 2, Artifacts: manifest, Controls: controls, PlanDigest: fingerprint}
+			if req.Reservation.Family == 4 {
+				envelope.RecordSuperseded = projection.superseded
+			} else if req.Reservation.Family == 3 {
+				envelope.RuleSuperseded = projection.superseded
+			} else if len(projection.superseded) > 0 {
+				return ErrJournalInvalid
+			}
+			payload = envelope
+			if err := markScrapeRuleReplacementsTx(tx, projection.superseded); err != nil {
 				return err
 			}
 		}
