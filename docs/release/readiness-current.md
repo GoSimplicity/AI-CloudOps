@@ -1,5 +1,13 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-04：typed Redis 投影与 fencing
+
+新Store从真实SQL lease派生opaque操作，Lua对完整behavior frame做同版硬CAS，Prepare只新fence，低版迟到命令零写；完整ACK核对artifact、members和AM intent。专用no-retry连接池隔离不确定传输结果。见[协议与实际验收](config-projection-store.md)。
+
+- 专属Redis7.4.11原生9子+独立3项通过，包含两类真实SQL大于2^53版本、同池四模式迟到全DUMP零写、TYPE、AM/subset/ordinary权限、真实写成功丢回复及重建恢复。同版legacy SHA篡改原红已修，不能夸成公开API越权。
+- Web锁为独立Verify41818358451成功e124f08，AIba187；上一628d三CI全success，实际3pins与5browser零skip/fail/retry已核。新组合另验。
+- 发布器、恢复worker与新原生CI实例供给仍待接线，两个实际publisher窗口未据此声称关闭，整体1.0尚未完成。预览固定clean5feb/schema4、数据保留且无外部执行，未上线。
+
 ## 2026-11-04：完整投影计划与有界 SQL 租约
 
 v2 manifest 将完整成员、退役 intent 与 ACK 向量同业务配置持久化；旧 v1 保留历史可读，不能冒充完整控制计划。pool/ordinary 租约分别遵循 control → namespace 与 namespace-only，callback 使用同一 SQL 连接重建材料，检测失败、取消或退出后失效。见[投影计划合同](config-projection-journal.md)。

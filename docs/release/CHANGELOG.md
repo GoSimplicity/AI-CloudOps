@@ -660,3 +660,11 @@
 - 第二事务按control→有序namespace取得sealed callback租约，普通事件仅可invalidate/retire；同连接重验与深拷贝，退出/取消/已知错误封闭，禁止丢连接后另借连接续租。
 - MySQL8.4.11/RR五子实际通过：互斥普通writer及新reserve、空发布与重复ACK保原时间、ordinary最小权限、取消、真实KILL自有会话后fail-closed。业务commit丢ACK按nonce恢复完整控制计划。临时资源已清。
 - 来源锁更新到独立远端验证通过的Web7e3daa5/AIba187；本机预览无损升级clean5feb/schema4，业务数据保留且Cron/外部执行关闭。新组合CI另验，Redis store/发布器/worker仍未接线，未上线。
+
+
+## 2026-11-04：typed Redis 投影存储与 fencing
+
+- 私有handle从真实SQL lease取得typed artifacts/controls，所有key按逻辑角色导出；Prepare只新fence，所有参数/TYPE/fence先验后写，uint64以20位字符串精确比较。
+- 同版完整behavior frame固定SHA、key/role/绑定、artifact/control/ACK，修复原生同版改legacy SHA可写入的反例；专用无重试client保留真实传输不确定状态，SQL重建可恢复。
+- 真实Redis9子和独立3项通过：迟到render/retire与四种同池命令、大于2^53事件/池版本、空发布、TYPE、完整AM/subset/ordinary、真实已执行丢回复恢复；不冒称跨存储原子或任意failover安全。
+- 来源锁更新已远端Verify通过Webe124f08/AIba187；发布器/worker与opt-in native CI供给另阶段，演示继续clean5feb/schema4、无外部执行，未上线。
