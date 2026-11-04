@@ -7,3 +7,5 @@
 现在push与手动运行按run_id分组，每个阶段独立完成；PR同ref仍替换过时head。按[GitHub并发说明](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)，仅关闭cancel-in-progress仍会替换同组旧pending，因此同时区分运行组。没有修改测试、触发条件、权限、依赖、隔离资源或发布任务，也没有触发Release、tag或上线。
 
 两个工作流通过actionlint；解析前后YAML并移除concurrency后，所有剩余内容一致。修复后的远端运行结果需在本提交触发后独立核对，不能拿上述旧成功作为新配置验收。
+
+首次修复运行的[Simple CI 41765525322](https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41765525322)复现真实失败：来源锁测试仍断言旧的分支级group字面值。已同步该契约为每push独立、PR条件取消，保留锁文件验证与Web/AIOps完整SHA checkout断言；没有删除失败测试。完整171项release tooling测试及actionlint通过，随后新运行继续核对。
