@@ -699,3 +699,8 @@
 - 原pc.Load、认证/TLS/SD/静态端口/IPv6、排序分片、秘密字段真实bytes marshal与targetHash不改；空目标仍校验任务，真实deleted清退不读坏job。
 - Root实际owned35叶0skip/fail与全Go/vet/tag/cache-service-DAO-DI race、173工具/actionlint通过，credential-only轮换/旧源/迟到包/三family隔离均覆盖，资源清理0；Record五发布金样保持。
 - Web锁b3ec3e6已独立Verify成功/AIba187，新CI另验；AM/worker/性能/剩余lint后续，未上线或连接生产。
+
+## 2026-11-05：前端第90阶段来源锁
+
+- Web来源锁更新至fd42255：整理本地同步门面的分组顺序，目标净减101条；3692项测试、类型检查与SFC编译对照通过，独立Verify41884434768/gitleaks41884434856成功。历史证明工具遍历缺口已完整复核，无未解释语义差异。
+- 最新全仓实扫1130文件仍有7509 errors和5 warnings；新组合另跑三仓CI。当前本机预览clean7adec/schema4，模拟数据与外部执行关闭保持；AM发布、worker与性能继续后续阶段，未上线。

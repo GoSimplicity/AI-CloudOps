@@ -1,5 +1,13 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-05：前端第90阶段来源锁与本机预览
+
+来源锁更新到Web `fd4225550a9504fba8ac3dfb7a78077a4b447b68`，AI保持 `ba1876a8f20c3f68f30b4f9a26748d9dded03d05`。Web独立Verify 41884434768和gitleaks 41884434856均已成功；目标16文件净减101条排序诊断，167文件3692项测试、类型检查及354个SFC的708组编译对照通过。完整实扫1130文件仍有7509 errors、5 warnings，未声称lint清零。历史AST证明工具的遍历缺口已修复，并按实际Git源重新验证，见Web的阶段90记录。
+
+- 后端已发布 `7adec89d017ea03284db8198c96b30d3c44edc90` 的Simple CI 41875239126、三仓集成41875239184和gitleaks 41875239307均成功；它们验证的是上一Web锁b3ec3，不作为本次新组合的验收。
+- 本次只更新已验证前端来源锁；新组合仍需本提交的三仓CI验证。AlertManager双控制发布、独立恢复worker、规模性能及剩余ESLint仍在开发，整个1.0尚未完成。
+- 本机预览已安全刷新到clean7adec，schema ledger为1/2/3/4，18080前端、8889后端、18089模拟API保持可用。最新本机检查MySQL/Redis healthy、health/ready true，cron关闭、数据库外部执行关闭；没有迁移、重置演示数据、真实通知或上线。下方较早阶段的preview版本仅表示当时快照。
+
 ## 2026-11-05：Prometheus 主配置接入
 
 PromMain固定family1入口已复用内部1/3/4发布核心，正常/empty/deleted走同SQL日志与原租约/Store；原auth/TLS/SD/目标顺序分片/真实秘密字节marshal/pc.Load和operational hash保持。见[Prom合同与验收](prom-main-projection.md)。
