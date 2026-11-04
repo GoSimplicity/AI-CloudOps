@@ -80,11 +80,18 @@ func TestMySQLCLIFreshBaselineAndLegacyRefusal(t *testing.T) {
 	db, dsn := cliMySQLFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
+
+	current, err := dbschema.CurrentManifest()
+	if err != nil {
+		t.Fatal("current fixture manifest unavailable")
+	}
+	// The reviewed role inventory contains the baseline, v2 guard and ledger.
+	expectedTables := append([]string{configNamespaceTable, schemaHistoryTable}, baselineBusinessTables[:]...)
 	invoke := func(want int, args ...string) string {
 		t.Helper()
 		var out, diagnostic bytes.Buffer
 		status := run(ctx, args, &out, &diagnostic, dependencies{
-			manifest: dbschema.Manifest,
+			manifest: dbschema.CurrentManifest,
 			getenv: func(key string) string {
 				if key != credentialEnvironment {
 					t.Fatal("unexpected credential source")
@@ -113,12 +120,12 @@ func TestMySQLCLIFreshBaselineAndLegacyRefusal(t *testing.T) {
 	invoke(2, "migrate")
 	countTables(0)
 	invoke(0, "migrate", "--confirm-new-database")
-	countTables(59) // 58 business tables plus the version ledger.
+	countTables(len(expectedTables))
 	invoke(0, "verify")
 	invoke(0, "migrate", "--confirm-new-database")
 	var versions int
-	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM cloudops_schema_history WHERE state='applied'").Scan(&versions); err != nil || versions != 1 {
-		t.Fatal("baseline must be applied exactly once")
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM cloudops_schema_history WHERE state='applied'").Scan(&versions); err != nil || versions != len(current) {
+		t.Fatal("every current manifest version must be applied exactly once")
 	}
 
 	invoke(1, "verify-clock", "--notification-timezone", "UTC")

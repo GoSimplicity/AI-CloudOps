@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,12 +21,16 @@ func TestMySQLCLILegacyInspectionAndAuditedAdoption(t *testing.T) {
 	db, dsn := cliMySQLFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	manifest, err := dbschema.Manifest()
-	if err != nil {
-		t.Fatal(err)
+	baseline, err := dbschema.Manifest()
+	if err != nil || len(baseline) != 1 || baseline[0].Version != 1 {
+		t.Fatal("frozen sole-v1 fixture manifest unavailable")
 	}
-	if err := schema.WithMigrationLock(ctx, db, func(conn *sql.Conn) error { return manifest[0].Apply(ctx, conn) }); err != nil {
+	if err := schema.WithMigrationLock(ctx, db, func(conn *sql.Conn) error { return baseline[0].Apply(ctx, conn) }); err != nil {
 		t.Fatal("owned legacy structure setup failed")
+	}
+	current, err := dbschema.CurrentManifest()
+	if err != nil {
+		t.Fatal("current fixture manifest unavailable")
 	}
 	if _, err := db.ExecContext(ctx, "INSERT INTO cl_system_departments (id,name,parent_id) VALUES (901,'preserved legacy fixture',0)"); err != nil {
 		t.Fatal("legacy row fixture failed")
@@ -38,7 +43,7 @@ func TestMySQLCLILegacyInspectionAndAuditedAdoption(t *testing.T) {
 	invoke := func(want int, args ...string) {
 		t.Helper()
 		var out, diagnostic bytes.Buffer
-		code := run(ctx, args, &out, &diagnostic, dependencies{manifest: dbschema.Manifest, getenv: func(string) string { return dsn }, open: openDatabase})
+		code := run(ctx, args, &out, &diagnostic, dependencies{manifest: dbschema.CurrentManifest, getenv: func(string) string { return dsn }, open: openDatabase})
 		if code != want {
 			t.Fatalf("unexpected CLI status %d expected %d; safe diagnostic: %s", code, want, diagnostic.String())
 		}
@@ -66,7 +71,10 @@ func TestMySQLCLILegacyInspectionAndAuditedAdoption(t *testing.T) {
 		t.Fatal("drift fixture restoration failed")
 	}
 	invoke(0, adoptArgs...)
-	invoke(0, "verify")
+	if err := schema.Verify(ctx, db, current); !errors.Is(err, schema.ErrPending) {
+		t.Fatal("sole-v1 adoption must leave later versions pending")
+	}
+	invoke(1, "verify")
 	invoke(0, adoptArgs...)
 	var origin, storedNote, actor string
 	if err := db.QueryRowContext(ctx, "SELECT origin,adoption_note,adopted_by FROM cloudops_schema_history WHERE version=1").Scan(&origin, &storedNote, &actor); err != nil || origin != "adopted" || storedNote != auditNote || actor == "" {
@@ -75,6 +83,25 @@ func TestMySQLCLILegacyInspectionAndAuditedAdoption(t *testing.T) {
 	var name string
 	if err := db.QueryRowContext(ctx, "SELECT name FROM cl_system_departments WHERE id=901").Scan(&name); err != nil || name != "preserved legacy fixture" {
 		t.Fatal("adoption changed legacy business row")
+	}
+	invoke(1, "verify-clock", "--notification-timezone", "UTC")
+	invoke(1, "init-clock", "--confirm-no-writers", "--notification-timezone", "UTC")
+	var markerCount int
+	if db.QueryRowContext(ctx, "SELECT COUNT(*) FROM cl_workorder_notification_clock").Scan(&markerCount) != nil || markerCount != 0 {
+		t.Fatal("pending manifest clock probe wrote a marker")
+	}
+	invoke(0, "migrate", "--confirm-pending-migrations", "--confirm-no-writers")
+	invoke(0, "verify")
+	var afterOrigin, afterNote, afterActor string
+	if err := db.QueryRowContext(ctx, "SELECT origin,adoption_note,adopted_by FROM cloudops_schema_history WHERE version=1").Scan(&afterOrigin, &afterNote, &afterActor); err != nil || afterOrigin != origin || afterNote != storedNote || afterActor != actor {
+		t.Fatal("pending migration changed baseline adoption provenance")
+	}
+	if err := db.QueryRowContext(ctx, "SELECT name FROM cl_system_departments WHERE id=901").Scan(&name); err != nil || name != "preserved legacy fixture" {
+		t.Fatal("pending migration changed legacy business row")
+	}
+	var versions int
+	if db.QueryRowContext(ctx, "SELECT COUNT(*) FROM cloudops_schema_history WHERE state='applied'").Scan(&versions) != nil || versions != len(current) {
+		t.Fatal("explicit pending migration did not apply the complete manifest")
 	}
 	invoke(1, "verify-clock", "--notification-timezone", "UTC")
 	invoke(0, "init-clock", "--confirm-no-writers", "--notification-timezone", "UTC")

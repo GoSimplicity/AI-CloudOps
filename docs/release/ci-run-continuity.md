@@ -21,3 +21,9 @@
 1145f07c的Simple CI/gitleaks成功，三仓集成[41773617342](https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41773617342)在`TestLegacyCurrentMySQL`失败：夹具仍使用现代InitTables（现在包含v2锁表），却要求sole-v1采用校验接受它。现代模型与当前迁移一致性检查本身已通过。
 
 修复仅让该旧库夹具从冻结v1 Apply创建无账本58表，并明确检查无v2锁表；原有只读数据指纹、时间戳、权限可见性、未知表/视图、结构与数据拒绝全部保留。没有放宽validator、修改v2 SQL或校验和。实际本机独立MySQL容器运行完整`TestLegacyCurrentMySQL`通过，资源由既有所有权清理完成；修复提交的远端集成仍需独立核对。
+
+## 现代CLI的原生fixture完整版本目标
+
+后续[34fb集成41776112209](https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41776112209)已通过上面的旧库结构校验，继续暴露两个CLI原生夹具的sole-v1假设：fresh与adopt夹具在只落v1后直接调用要求完整CurrentManifest的现代时区初始化。
+
+已让fresh调用完整当前目标、计数由版本和表清单推导；adopt仍从冻结v1源开始并保留原审计证明，先验证pending及clock拒绝无写，再显式pending迁移后验证时区。完整`go test -race -tags=integration ./cmd/schema -count=1 -timeout=180s`已在自有Docker MySQL上通过，原拒绝、dirty、无账本、只读账号和时区断言均保留。没有改生产校验、v1或v2输入。新提交远端结果继续独立跟踪。
