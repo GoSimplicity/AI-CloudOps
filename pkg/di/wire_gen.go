@@ -168,7 +168,9 @@ func ProvideApp(cfg *config.Config) (*app.App, func(), error) {
 	}
 	alertManagerPoolDAO := alert.NewAlertManagerPoolDAO(db, logger)
 	alertManagerSendDAO := alert.NewAlertManagerSendDAO(db, logger)
-	alertManagerConfigCache, err := cache.NewAlertManagerConfigCache(cfg, logger, alertManagerPoolDAO, alertManagerSendDAO, monitorConfigDAO, batchConfigManager, cmdable)
+	amProjectionHistoryReader := config2.NewAMProjectionHistoryReader(logger, db)
+	amProjectionRunner := cache.NewAMProjectionRunner(projectionStore)
+	alertManagerConfigCache, err := cache.NewAlertManagerConfigCache(cfg, logger, alertManagerPoolDAO, alertManagerSendDAO, monitorConfigDAO, batchConfigManager, cmdable, projectionPlanJournalDAO, amProjectionHistoryReader, amProjectionRunner)
 	if err != nil {
 		cleanup()
 		return nil, nil, err
@@ -359,7 +361,7 @@ var Injector = wire.NewSet(
 )
 
 var CacheSet = wire.NewSet(
-	ProvideProjectionStore, config2.NewProjectionPlanJournalDAO, config2.NewGeneratedConfigHistoryReader, cache.NewRecordProjectionRunner, config2.NewAlertRuleHistoryReader, cache.NewAlertRuleProjectionRunner, config2.NewPromMainHistoryReader, cache.NewPromMainProjectionRunner, cache.NewMonitorCache, cache.NewAlertManagerConfigCache, cache.NewAlertRuleConfigCache, cache.NewRecordRuleConfigCache, cache.NewPrometheusConfigCache, cache.NewBatchConfigManager,
+	ProvideProjectionStore, config2.NewProjectionPlanJournalDAO, config2.NewGeneratedConfigHistoryReader, cache.NewRecordProjectionRunner, config2.NewAlertRuleHistoryReader, cache.NewAlertRuleProjectionRunner, config2.NewPromMainHistoryReader, cache.NewPromMainProjectionRunner, config2.NewAMProjectionHistoryReader, cache.NewAMProjectionRunner, cache.NewMonitorCache, cache.NewAlertManagerConfigCache, cache.NewAlertRuleConfigCache, cache.NewRecordRuleConfigCache, cache.NewPrometheusConfigCache, cache.NewBatchConfigManager,
 )
 
 var ClientSet = wire.NewSet(client.NewK8sClient)

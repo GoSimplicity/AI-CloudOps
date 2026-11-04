@@ -78,6 +78,9 @@ func (s *alertContractRedis) Set(_ context.Context, key string, value any, _ tim
 	return redis.NewStatusResult("OK", nil)
 }
 func (s *alertContractRedis) SMembers(_ context.Context, key string) *redis.StringSliceCmd {
+	if strings.Contains(key, ":alertmanager:main:pool:") && s.onHashRead != nil {
+		s.onHashRead()
+	}
 	if s.failure == "members read" {
 		return redis.NewStringSliceResult(nil, errors.New("private-backend-error-canary"))
 	}
@@ -124,6 +127,7 @@ func (s *alertContractRedis) Del(_ context.Context, keys ...string) *redis.IntCm
 }
 
 type alertContractConfigs struct {
+	projection    *amProjectionFixture
 	retiredOwners map[int]configDAO.GeneratedConfigOwner
 	configDAO.MonitorConfigDAO
 	rows    map[int]*model.MonitorConfig
@@ -210,10 +214,13 @@ func alertContractCache(t *testing.T) (*alertManagerConfigCache, *alertContractG
 	db := &alertContractConfigs{rows: map[int]*model.MonitorConfig{}}
 	core, logs := observer.New(zap.DebugLevel)
 	logger := zap.New(core)
-	c, e := NewAlertManagerConfigCache(&config.Config{Server: config.ServerConfig{Port: "8891"}, Prometheus: config.PrometheusConfig{AlertWebhookAddr: "http://private-webhook-url-canary.invalid", AlertWebhookFileDir: "/typed/hooks"}}, logger, alertContractPools{pool: pool}, groups, db, NewBatchConfigManager(db, logger), storage)
+	f := newAMProjectionFixture(t, db)
+	c, e := NewAlertManagerConfigCache(&config.Config{Server: config.ServerConfig{Port: "8891"}, Prometheus: config.PrometheusConfig{AlertWebhookAddr: "http://private-webhook-url-canary.invalid", AlertWebhookFileDir: "/typed/hooks"}}, logger, alertContractPools{pool: pool}, groups, f, NewBatchConfigManager(f, logger), storage, f.journal, f.history, nil)
 	if e != nil {
 		t.Fatal(e)
 	}
+	f.attach(c.(*alertManagerConfigCache))
+	db.projection = f
 	return c.(*alertManagerConfigCache), groups, storage, db, pool, logs
 }
 func parseAlertContract(t *testing.T, raw string) *altconfig.Config {
@@ -381,4 +388,14 @@ func TestAlertEnabledGroupSnapshot(t *testing.T) {
 			t.Fatal("webhook HTTP/file/resolved contract changed")
 		}
 	})
+}
+
+func (s alertContractPools) GetAlertPoolByID(ctx context.Context, id int) (*model.MonitorAlertManagerPool, error) {
+	if s.pool == nil || s.pool.ID != id || s.pool.DeletedAt != 0 {
+		return nil, fmt.Errorf("fixture live AM pool missing")
+	}
+	copy := *s.pool
+	copy.AlertManagerInstances = append(model.StringList(nil), s.pool.AlertManagerInstances...)
+	copy.GroupBy = append(model.StringList(nil), s.pool.GroupBy...)
+	return &copy, nil
 }

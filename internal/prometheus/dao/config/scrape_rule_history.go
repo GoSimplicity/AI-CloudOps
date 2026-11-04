@@ -8,7 +8,7 @@ import (
 )
 
 func (d *monitorConfigDAO) getProjectedScrapeRuleRetirements(ctx context.Context, scope scrapePublicationScope, poolID int, owners []GeneratedConfigOwner) ([]GeneratedConfigOwner, error) {
-	if !validScrapePublicationScope(scope) {
+	if !validDispositionFamily(int8(scope)) {
 		return nil, ErrJournalInvalid
 	}
 	if err := ctx.Err(); err != nil {
@@ -58,7 +58,7 @@ func (d *monitorConfigDAO) getProjectedScrapeRuleRetirements(ctx context.Context
 		if err := d.db.WithContext(ctx).Where("operation_id = ?", *event.OperationID).First(&original).Error; err != nil {
 			return nil, generatedConfigReadError(ctx)
 		}
-		if original.Family != int8(scope) || original.PoolID != poolID {
+		if !familyAllowsKind(original.Family, int8(scope)) || original.PoolID != poolID {
 			continue
 		}
 		if event.Action == model.ConfigProjectionRender || original.Phase != model.ConfigPublicationProjected || event.DeliveryState != model.ConfigProjectionApplied {
@@ -77,7 +77,7 @@ func (d *monitorConfigDAO) getProjectedScrapeRuleRetirements(ctx context.Context
 			if err := d.db.WithContext(ctx).Where("operation_id = ?", *event.OperationID).First(&op).Error; err != nil {
 				return nil, generatedConfigReadError(ctx)
 			}
-			if op.Family != int8(scope) || op.PoolID != poolID || op.Phase != model.ConfigPublicationProjected || op.ProjectedAt == nil {
+			if !familyAllowsKind(op.Family, int8(scope)) || op.PoolID != poolID || op.Phase != model.ConfigPublicationProjected || op.ProjectedAt == nil {
 				operations[*event.OperationID] = nil
 				continue
 			}
@@ -159,7 +159,7 @@ func (d *monitorConfigDAO) scrapeRuleRetirementResolvedByRecovery(tx *gorm.DB, o
 // index. Their first typed control-only operation durably records the evidence.
 func (d *monitorConfigDAO) scrapeRuleLegacyOwnersResolvedByManifests(tx *gorm.DB, family int8, poolID int, owners map[int]GeneratedConfigOwner) (map[int]bool, error) {
 	var operations []model.MonitorConfigPoolOperation
-	if err := tx.Where("family = ? AND pool_id = ? AND phase IN ? AND manifest LIKE ?", family, poolID, []string{model.ConfigPublicationCommitted, model.ConfigPublicationProjected}, scrapeRuleSidePattern(family)).Order("operation_id ASC").Find(&operations).Error; err != nil {
+	if err := tx.Where("family IN ? AND pool_id = ? AND phase IN ? AND manifest LIKE ?", dispositionFamilies(family), poolID, []string{model.ConfigPublicationCommitted, model.ConfigPublicationProjected}, scrapeRuleSidePattern(family)).Order("operation_id ASC").Find(&operations).Error; err != nil {
 		return nil, err
 	}
 	result := map[int]bool{}
@@ -202,6 +202,9 @@ func (d *monitorConfigDAO) GetProjectedAlertRuleRetirements(ctx context.Context,
 }
 
 func scrapeRuleSidePattern(family int8) string {
+	if family == 2 || family == 5 {
+		return `%"am_superseded"%`
+	}
 	if family == 1 {
 		return `%"prom_superseded"%`
 	}

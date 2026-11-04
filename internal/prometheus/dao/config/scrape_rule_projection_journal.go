@@ -23,13 +23,19 @@ func scrapePublicationHistoryGuardOf(scope scrapePublicationScope, instanceKey s
 	if !validScrapePublicationScope(scope) {
 		return RecordHistoryGuard{}, ErrJournalInvalid
 	}
-	if !validConfigNamespace(configNamespaceKey{int8(scope), instanceKey}) {
+	return namespaceHistoryGuardOf(int8(scope), instanceKey, rows)
+}
+func namespaceHistoryGuardOf(kind int8, instanceKey string, rows []*model.MonitorConfig) (RecordHistoryGuard, error) {
+	if kind < 1 || kind > 5 {
+		return RecordHistoryGuard{}, ErrJournalInvalid
+	}
+	if !validConfigNamespace(configNamespaceKey{kind, instanceKey}) {
 		return RecordHistoryGuard{}, ErrJournalInvalid
 	}
 	result := RecordHistoryGuard{InstanceKey: instanceKey, Rows: make([]GeneratedConfigHistoryRow, 0, len(rows))}
 	seen := map[int]bool{}
 	for _, row := range rows {
-		if row == nil || row.ID <= 0 || row.ConfigType != int8(scope) || row.InstanceIP != instanceKey || seen[row.ID] {
+		if row == nil || row.ID <= 0 || row.ConfigType != kind || row.InstanceIP != instanceKey || seen[row.ID] {
 			return RecordHistoryGuard{}, ErrJournalInvalid
 		}
 		seen[row.ID] = true
@@ -120,7 +126,17 @@ func (d *monitorConfigDAO) commitScrapeRuleProjectionPlan(ctx context.Context, r
 // metadata/event/manifest write. FOR UPDATE is a current read under MySQL RR.
 func validateScrapeRuleHistoryTx(tx *gorm.DB, family int8, guards []RecordHistoryGuard) error {
 	for _, guard := range guards {
-		query := tx.Unscoped().Model(&model.MonitorConfig{}).Where("config_type = ?", family)
+		kind := family
+		if validAMFamily(family) {
+			if len(guard.Rows) == 0 {
+				return ErrJournalInvalid
+			}
+			kind = guard.Rows[0].Owner.ConfigType
+			if !familyAllowsKind(family, kind) {
+				return ErrJournalInvalid
+			}
+		}
+		query := tx.Unscoped().Model(&model.MonitorConfig{}).Where("config_type = ?", kind)
 		if tx.Dialector.Name() == "mysql" {
 			query = query.Where("instance_ip = ? AND BINARY instance_ip = BINARY ?", guard.InstanceKey, guard.InstanceKey)
 		} else {
@@ -130,7 +146,7 @@ func validateScrapeRuleHistoryTx(tx *gorm.DB, family int8, guards []RecordHistor
 		if err := query.Clauses(clause.Locking{Strength: "UPDATE"}).Order("id ASC").Find(&rows).Error; err != nil {
 			return err
 		}
-		actual, err := scrapePublicationHistoryGuardOf(scrapePublicationScope(family), guard.InstanceKey, rows)
+		actual, err := namespaceHistoryGuardOf(kind, guard.InstanceKey, rows)
 		if err != nil {
 			return err
 		}
@@ -154,7 +170,13 @@ func validateScrapePublicationRetirementHistory(scope scrapePublicationScope, ex
 	if !validScrapePublicationScope(scope) {
 		return ErrJournalInvalid
 	}
-	if !validGeneratedOwner(expected) || expected.ConfigType != int8(scope) || expected.InstanceIP != guard.InstanceKey || !generatedRowNameValid(scrapeRuleOwnerModel(expected)) {
+	return validateNamespaceRetirementHistory(int8(scope), expected, guard)
+}
+func validateNamespaceRetirementHistory(kind int8, expected GeneratedConfigOwner, guard RecordHistoryGuard) error {
+	if kind < 1 || kind > 5 {
+		return ErrJournalInvalid
+	}
+	if !validGeneratedOwner(expected) || expected.ConfigType != kind || expected.InstanceIP != guard.InstanceKey || !generatedRowNameValid(scrapeRuleOwnerModel(expected)) {
 		return ErrJournalConflict
 	}
 	var own *GeneratedConfigHistoryRow
@@ -163,7 +185,7 @@ func validateScrapePublicationRetirementHistory(scope scrapePublicationScope, ex
 	for i := range guard.Rows {
 		row := &guard.Rows[i]
 		owner := row.Owner
-		if owner.ID <= 0 || owner.ConfigType != int8(scope) || owner.InstanceIP != guard.InstanceKey || seen[owner.ID] {
+		if owner.ID <= 0 || owner.ConfigType != kind || owner.InstanceIP != guard.InstanceKey || seen[owner.ID] {
 			return ErrJournalConflict
 		}
 		seen[owner.ID] = true

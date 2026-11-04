@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	altconfig "github.com/prometheus/alertmanager/config"
+	"gorm.io/gorm"
 	"reflect"
 	"strings"
 	"sync"
@@ -225,9 +226,13 @@ func TestAlertCancellationDoesNotPublishOrAcknowledge(t *testing.T) {
 	before, hash, writes := r.values[key], r.values[hashKey], db.writes
 	ctx, cancel := context.WithCancel(context.Background())
 	pool.GroupWait = "45s"
-	r.onHashRead = cancel
+	called := false
+	r.onHashRead = func() { called = true; cancel() }
 	if err := c.GenerateMainConfig(ctx); !errors.Is(err, context.Canceled) {
 		t.Fatal("cancellation lost")
+	}
+	if !called {
+		t.Fatal("publication-read cancellation hook was not reached")
 	}
 	if r.values[key] != before || r.values[hashKey] != hash || db.writes != writes {
 		t.Fatal("canceled snapshot published or acknowledged")
@@ -449,10 +454,22 @@ func TestAlertCancellationDuringPersistenceRemainsDiscoverable(t *testing.T) {
 	before, hash := r.values[key], r.values[hashKey]
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c.configDAO = alertCanceledWrite{alertContractConfigs: db, cancel: cancel}
+	called := false
+	if err := db.projection.base.db.Callback().Update().After("gorm:update").Register("am_fixture:cancel_metadata", func(tx *gorm.DB) {
+		if !tx.Statement.SkipHooks && tx.Statement.Table == "cl_monitor_configs" && amFixtureWriteKind(tx) == model.ConfigTypeAlertManager {
+			called = true
+			cancel()
+			tx.AddError(context.Canceled)
+		}
+	}); err != nil {
+		t.Fatal("actual metadata cancellation callback unavailable")
+	}
 	pool.GroupWait = "45s"
 	if err := c.GenerateMainConfig(ctx); !errors.Is(err, context.Canceled) {
 		t.Fatal("persistence cancellation was hidden by a publication phase error")
+	}
+	if !called {
+		t.Fatal("actual AM metadata write cancellation was not reached")
 	}
 	if r.values[key] != before || (r.values[hashKey] != hash && !strings.HasPrefix(r.values[hashKey], "pending:")) {
 		t.Fatal("canceled persistence published or acknowledged configuration")
@@ -576,11 +593,12 @@ func TestAlertFailedSnapshotThenSourceRevertsRestoresAcknowledgedContents(t *tes
 						c.alertWebhookAddr = beforeAddress
 					}
 					if rebuild {
-						next, err := NewAlertManagerConfigCache(&config.Config{Server: config.ServerConfig{Port: c.serverPort}, Prometheus: config.PrometheusConfig{AlertWebhookAddr: c.alertWebhookAddr, AlertWebhookFileDir: c.webhookFileDir}}, c.logger, alertContractPools{pool: pool}, g, db, NewBatchConfigManager(db, c.logger), r)
+						next, err := NewAlertManagerConfigCache(&config.Config{Server: config.ServerConfig{Port: c.serverPort}, Prometheus: config.PrometheusConfig{AlertWebhookAddr: c.alertWebhookAddr, AlertWebhookFileDir: c.webhookFileDir}}, c.logger, alertContractPools{pool: pool}, g, db.projection, NewBatchConfigManager(db.projection, c.logger), r, db.projection.journal, db.projection.history, nil)
 						if err != nil {
 							t.Fatal(err)
 						}
 						c = next.(*alertManagerConfigCache)
+						db.projection.attach(c)
 					}
 					if err := c.GenerateMainConfig(ctx); err != nil {
 						t.Fatal(err)
@@ -632,8 +650,8 @@ func TestAlertPendingMarkerFailureAllowsNoArtifactWrite(t *testing.T) {
 	if c.GenerateMainConfig(ctx) == nil {
 		t.Fatal("failed pending marker reported success")
 	}
-	if db.writes != dbWrites || r.writes != redisWrites+1 || !reflect.DeepEqual(beforeRows, db.rows) || !reflect.DeepEqual(beforeRedis, r.values) {
-		t.Fatal("artifact writes preceded a reliable pending marker")
+	if db.writes <= dbWrites || reflect.DeepEqual(beforeRows, db.rows) || r.writes != redisWrites || !reflect.DeepEqual(beforeRedis, r.values) || !amFixturePending(c, 2, pool.ID) {
+		t.Fatal("failed prepare wrote Redis artifacts/ACK or lost the committed unprojected SQL plan")
 	}
 }
 func TestAlertPublicWrapperAndMainPublishSerialize(t *testing.T) {
@@ -726,11 +744,12 @@ func TestAlertRenamePendingStateSurvivesReversionAndRebuild(t *testing.T) {
 						pool.AlertManagerInstances = model.StringList{"127.0.0.1", "127.0.0.2"}
 					}
 					if rebuild {
-						next, err := NewAlertManagerConfigCache(&config.Config{Server: config.ServerConfig{Port: c.serverPort}, Prometheus: config.PrometheusConfig{AlertWebhookAddr: c.alertWebhookAddr, AlertWebhookFileDir: c.webhookFileDir}}, c.logger, alertContractPools{pool: pool}, g, db, NewBatchConfigManager(db, c.logger), r)
+						next, err := NewAlertManagerConfigCache(&config.Config{Server: config.ServerConfig{Port: c.serverPort}, Prometheus: config.PrometheusConfig{AlertWebhookAddr: c.alertWebhookAddr, AlertWebhookFileDir: c.webhookFileDir}}, c.logger, alertContractPools{pool: pool}, g, db.projection, NewBatchConfigManager(db.projection, c.logger), r, db.projection.journal, db.projection.history, nil)
 						if err != nil {
 							t.Fatal(err)
 						}
 						c = next.(*alertManagerConfigCache)
+						db.projection.attach(c)
 					}
 					if err := c.GenerateMainConfig(ctx); err != nil {
 						t.Fatal(err)

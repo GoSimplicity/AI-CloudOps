@@ -12,7 +12,7 @@ import (
 )
 
 func (d *monitorConfigDAO) getSupersededScrapeRuleArtifacts(ctx context.Context, scope scrapePublicationScope, previous ProjectionReceipt) ([]RecordSupersededArtifact, error) {
-	if !validScrapePublicationScope(scope) {
+	if !validDispositionFamily(int8(scope)) {
 		return nil, ErrJournalInvalid
 	}
 	result := []RecordSupersededArtifact{}
@@ -42,7 +42,7 @@ func (d *monitorConfigDAO) readAcceptedScrapeRuleReplacement(tx *gorm.DB, operat
 	if err := tx.Where("operation_id = ?", operationID).First(&oldOp).Error; err != nil {
 		return nil, err
 	}
-	if !validScrapePublicationScope(scrapePublicationScope(oldOp.Family)) || (oldOp.Phase != model.ConfigPublicationCommitted && oldOp.Phase != model.ConfigPublicationProjected) {
+	if !validDispositionFamily(oldOp.Family) || (oldOp.Phase != model.ConfigPublicationCommitted && oldOp.Phase != model.ConfigPublicationProjected) {
 		return nil, nil
 	}
 	old, err := d.loadProjectionReceipt(tx, oldOp)
@@ -58,7 +58,7 @@ func (d *monitorConfigDAO) readAcceptedScrapeRuleReplacement(tx *gorm.DB, operat
 			retirement = &old.Artifacts[i]
 		}
 	}
-	if retirement == nil || (retirement.Action != model.ConfigProjectionRetire && retirement.Action != model.ConfigProjectionRender) || retirement.ConfigRowID == nil || retirement.ConfigType != oldOp.Family {
+	if retirement == nil || (retirement.Action != model.ConfigProjectionRetire && retirement.Action != model.ConfigProjectionRender) || retirement.ConfigRowID == nil || !familyAllowsKind(oldOp.Family, retirement.ConfigType) {
 		return nil, nil
 	}
 	var oldRow model.MonitorConfig
@@ -106,7 +106,7 @@ func (d *monitorConfigDAO) readProjectedScrapeRuleReplacement(tx *gorm.DB, retir
 	if err := tx.Where("operation_id = ?", *latest.OperationID).First(&replacementOp).Error; err != nil {
 		return nil, err
 	}
-	if replacementOp.Family != retired.ConfigType || replacementOp.PoolID != row.PoolID || replacementOp.Phase != model.ConfigPublicationProjected || replacementOp.ProjectedAt == nil {
+	if !familyAllowsKind(replacementOp.Family, retired.ConfigType) || replacementOp.PoolID != row.PoolID || replacementOp.Phase != model.ConfigPublicationProjected || replacementOp.ProjectedAt == nil {
 		return nil, nil
 	}
 	replacement, err := d.loadProjectionReceipt(tx, replacementOp)
@@ -176,6 +176,9 @@ func markScrapeRuleReplacementsTx(tx *gorm.DB, proofs []RecordSupersededArtifact
 }
 
 func prepareScrapeRuleReplacements(req RecordProjectionPlanRequest) ([]RecordSupersededArtifact, error) {
+	return preparePublicationReplacements(req, false)
+}
+func preparePublicationReplacements(req RecordProjectionPlanRequest, am bool) ([]RecordSupersededArtifact, error) {
 	result := append([]RecordSupersededArtifact{}, req.Superseded...)
 	seen := map[string]bool{}
 	itemKeys := map[string]bool{}
@@ -188,7 +191,7 @@ func prepareScrapeRuleReplacements(req RecordProjectionPlanRequest) ([]RecordSup
 	}
 	for _, proof := range result {
 		a, b := proof.RetiredOwner, proof.ReplacementOwner
-		if proof.ReplacementOperationID == 0 || proof.ReplacementEventID == 0 || !validGeneratedOwner(a) || !validGeneratedOwner(b) || a.ConfigType != req.Reservation.Family || b.ConfigType != req.Reservation.Family || a.PoolID != req.Reservation.PoolID || b.PoolID == a.PoolID || a.InstanceIP != b.InstanceIP || seen[a.InstanceIP] || itemKeys[a.InstanceIP] {
+		if proof.ReplacementOperationID == 0 || proof.ReplacementEventID == 0 || !validGeneratedOwner(a) || !validGeneratedOwner(b) || (!am && a.ConfigType != req.Reservation.Family) || (am && !familyAllowsKind(req.Reservation.Family, a.ConfigType)) || b.ConfigType != a.ConfigType || a.PoolID != req.Reservation.PoolID || b.PoolID == a.PoolID || a.InstanceIP != b.InstanceIP || seen[a.InstanceIP] || itemKeys[a.InstanceIP] {
 			return nil, ErrJournalInvalid
 		}
 		for _, owner := range []GeneratedConfigOwner{a, b} {
@@ -226,7 +229,7 @@ func prepareScrapeRuleReplacements(req RecordProjectionPlanRequest) ([]RecordSup
 // the replacement that was checked under the business transaction's NS lock.
 func (d *monitorConfigDAO) validateScrapeRuleReplacementHistory(tx *gorm.DB, recovery model.MonitorConfigPoolOperation, proofs []RecordSupersededArtifact) error {
 	for _, proof := range proofs {
-		if !validScrapePublicationScope(scrapePublicationScope(recovery.Family)) || proof.RetiredOwner.ConfigType != recovery.Family || proof.RetiredOwner.PoolID != recovery.PoolID {
+		if !validDispositionFamily(recovery.Family) || !familyAllowsKind(recovery.Family, proof.RetiredOwner.ConfigType) || proof.RetiredOwner.PoolID != recovery.PoolID {
 			return ErrJournalConflict
 		}
 		if proof.Origin == RecordSupersededAcceptedArtifact {
@@ -237,7 +240,7 @@ func (d *monitorConfigDAO) validateScrapeRuleReplacementHistory(tx *gorm.DB, rec
 			if err != nil {
 				return err
 			}
-			if oldOp.Family != recovery.Family || oldOp.PoolID != recovery.PoolID || old.Action != proof.AcceptedAction || old.ConfigRowID == nil || *old.ConfigRowID != proof.RetiredOwner.ID || old.InstanceKey != proof.RetiredOwner.InstanceIP {
+			if (!validAMFamily(recovery.Family) && oldOp.Family != recovery.Family) || (validAMFamily(recovery.Family) && !validAMFamily(oldOp.Family)) || oldOp.PoolID != recovery.PoolID || old.Action != proof.AcceptedAction || old.ConfigRowID == nil || *old.ConfigRowID != proof.RetiredOwner.ID || old.InstanceKey != proof.RetiredOwner.InstanceIP {
 				return ErrJournalConflict
 			}
 			oldRow := scrapeRuleOwnerModel(proof.RetiredOwner)
@@ -262,10 +265,10 @@ func (d *monitorConfigDAO) validateScrapeRuleReplacementHistory(tx *gorm.DB, rec
 		if err != nil {
 			return err
 		}
-		if replacementOp.Family != recovery.Family || replacementOp.Phase != model.ConfigPublicationProjected || replacementOp.ProjectedAt == nil || replacementOp.PoolID != proof.ReplacementOwner.PoolID || replacementOp.PoolID == recovery.PoolID || replacement.Action != model.ConfigProjectionRender || replacement.ProjectionPolicy != model.ConfigProjectionGenerated || replacementEvent.DeliveryState != model.ConfigProjectionApplied {
+		if !familyAllowsKind(replacementOp.Family, proof.RetiredOwner.ConfigType) || replacementOp.Phase != model.ConfigPublicationProjected || replacementOp.ProjectedAt == nil || replacementOp.PoolID != proof.ReplacementOwner.PoolID || replacementOp.PoolID == recovery.PoolID || replacement.Action != model.ConfigProjectionRender || replacement.ProjectionPolicy != model.ConfigProjectionGenerated || replacementEvent.DeliveryState != model.ConfigProjectionApplied {
 			return ErrJournalConflict
 		}
-		if replacement.ConfigRowID == nil || *replacement.ConfigRowID != proof.ReplacementOwner.ID || replacement.InstanceKey != proof.RetiredOwner.InstanceIP || replacement.Binding == nil || replacement.Binding.ConfigType != recovery.Family || replacement.Binding.InstanceIP != proof.RetiredOwner.InstanceIP {
+		if replacement.ConfigRowID == nil || *replacement.ConfigRowID != proof.ReplacementOwner.ID || replacement.InstanceKey != proof.RetiredOwner.InstanceIP || replacement.Binding == nil || replacement.Binding.ConfigType != proof.RetiredOwner.ConfigType || replacement.Binding.InstanceIP != proof.RetiredOwner.InstanceIP {
 			return ErrJournalConflict
 		}
 		if !digestEqual(replacement.NewOwnerDigest, ownerDigest(scrapeRuleOwnerModel(proof.ReplacementOwner))) || !digestEqual(replacement.BodyDigest, proof.ReplacementBodyDigest[:]) || proof.ReplacementHash != hex.EncodeToString(proof.ReplacementBodyDigest[:]) {
@@ -283,7 +286,7 @@ func (d *monitorConfigDAO) loadScrapeRuleIssuedArtifact(tx *gorm.DB, opID, event
 	if err := tx.Where("operation_id = ?", opID).First(&op).Error; err != nil {
 		return op, ArtifactReceipt{}, event, err
 	}
-	if !validScrapePublicationScope(scrapePublicationScope(op.Family)) {
+	if !validDispositionFamily(op.Family) {
 		return op, ArtifactReceipt{}, event, ErrJournalConflict
 	}
 	base, err := d.loadReceipt(tx, op)
@@ -291,33 +294,36 @@ func (d *monitorConfigDAO) loadScrapeRuleIssuedArtifact(tx *gorm.DB, opID, event
 		return op, ArtifactReceipt{}, event, err
 	}
 	envelope, err := decodeProjectionManifest(op.Manifest)
-	if err != nil || envelope.Version != 2 || len(envelope.Controls) != 2 {
+	if err != nil || envelope.Version != 2 {
 		return op, ArtifactReceipt{}, event, ErrJournalConflict
 	}
-	members, ack := false, false
-	for _, control := range envelope.Controls {
-		if control.Kind == ProjectionMembersFull && control.Members != nil {
-			members = true
-		} else if control.Kind == ProjectionACKFull && control.Ack != nil && control.Ack.LegacySHA != nil && sameHash(*control.Ack.LegacySHA, op.SourceHash) {
-			ack = true
-		} else {
-			return op, ArtifactReceipt{}, event, ErrJournalConflict
-		}
+	expected := 2
+	if op.Family == 2 {
+		expected = 3
 	}
-	if !members || !ack {
+	if op.Family == 5 {
+		expected = 1
+	}
+	if len(envelope.Controls) != expected {
 		return op, ArtifactReceipt{}, event, ErrJournalConflict
 	}
+	members, ack, intents := false, false, false
 	desired := map[string]bool{}
 	for _, artifact := range base.Artifacts {
-		if artifact.Action == model.ConfigProjectionRender {
-			if artifact.Binding == nil || artifact.Binding.ConfigType != op.Family {
+		if artifact.Action == model.ConfigProjectionRender && artifact.ConfigType == op.Family {
+			if artifact.Binding == nil {
 				return op, ArtifactReceipt{}, event, ErrJournalConflict
 			}
 			desired[artifact.Binding.InstanceIP] = true
 		}
 	}
 	for _, control := range envelope.Controls {
-		if control.Members != nil {
+		switch control.Kind {
+		case ProjectionMembersFull:
+			if op.Family == 5 || control.Members == nil {
+				return op, ArtifactReceipt{}, event, ErrJournalConflict
+			}
+			members = true
 			seen := map[string]bool{}
 			for _, ip := range control.Members.DesiredIPs {
 				if !desired[ip] || seen[ip] {
@@ -328,9 +334,28 @@ func (d *monitorConfigDAO) loadScrapeRuleIssuedArtifact(tx *gorm.DB, opID, event
 			if len(seen) != len(desired) {
 				return op, ArtifactReceipt{}, event, ErrJournalConflict
 			}
+		case ProjectionWebhookIntents:
+			if op.Family != 2 || control.Intents == nil || !control.Intents.RequireEmpty {
+				return op, ArtifactReceipt{}, event, ErrJournalConflict
+			}
+			intents = true
+		case ProjectionACKFull:
+			if op.Family == 5 || control.Ack == nil || control.Ack.LegacySHA == nil || !sameHash(*control.Ack.LegacySHA, op.SourceHash) {
+				return op, ArtifactReceipt{}, event, ErrJournalConflict
+			}
+			ack = true
+		case ProjectionACKWebhookSubset:
+			if op.Family != 5 || control.Ack == nil || control.Ack.LegacySHA != nil {
+				return op, ArtifactReceipt{}, event, ErrJournalConflict
+			}
+			ack = true
+		default:
+			return op, ArtifactReceipt{}, event, ErrJournalConflict
 		}
 	}
-
+	if !ack || (op.Family != 5 && !members) || (op.Family == 2 && !intents) {
+		return op, ArtifactReceipt{}, event, ErrJournalConflict
+	}
 	for _, artifact := range base.Artifacts {
 		if artifact.EventID == eventID {
 			if err := tx.Where("event_id = ?", eventID).First(&event).Error; err != nil {
@@ -354,7 +379,7 @@ func (d *monitorConfigDAO) readLegacyScrapeRuleReplacement(tx *gorm.DB, owner Ge
 	if err := tx.Unscoped().First(&row, owner.ID).Error; err != nil {
 		return nil, err
 	}
-	if row.DeletedAt == 0 || GeneratedConfigOwnerOf(&row) != owner || !validScrapePublicationScope(scrapePublicationScope(owner.ConfigType)) || !generatedRowNameValid(&row) {
+	if row.DeletedAt == 0 || GeneratedConfigOwnerOf(&row) != owner || !validDispositionFamily(owner.ConfigType) || !generatedRowNameValid(&row) {
 		return nil, nil
 	}
 	proof, err := d.readProjectedScrapeRuleReplacement(tx, owner)
@@ -366,7 +391,7 @@ func (d *monitorConfigDAO) readLegacyScrapeRuleReplacement(tx *gorm.DB, owner Ge
 	return proof, nil
 }
 func (d *monitorConfigDAO) getLegacySupersededScrapeRuleArtifacts(ctx context.Context, scope scrapePublicationScope, poolID int, owners []GeneratedConfigOwner) ([]RecordSupersededArtifact, error) {
-	if !validScrapePublicationScope(scope) {
+	if !validDispositionFamily(int8(scope)) {
 		return nil, ErrJournalInvalid
 	}
 	if err := ctx.Err(); err != nil {

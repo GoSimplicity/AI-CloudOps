@@ -53,7 +53,8 @@ func TestAMMainUnindexedRetirementRemovesHTTPArtifacts(t *testing.T) {
 	log := zap.NewNop()
 	dao := configdao.NewMonitorConfigDAO(log, db)
 	r := &retirementHTTPRedis{values: map[string]string{}, members: map[string]map[string]bool{}}
-	c, err := cache.NewAlertManagerConfigCache(&config.Config{Server: config.ServerConfig{Port: "8891"}, Prometheus: config.PrometheusConfig{AlertWebhookAddr: "http://127.0.0.1:8891", AlertWebhookFileDir: "/tmp/fixture"}}, log, amMainHTTPPools{pool: pool}, amMainHTTPGroups{}, dao, nil, r)
+	journal, history, projection := cache.AMProjectionDependenciesForTest(db, r)
+	c, err := cache.NewAlertManagerConfigCache(&config.Config{Server: config.ServerConfig{Port: "8891"}, Prometheus: config.PrometheusConfig{AlertWebhookAddr: "http://127.0.0.1:8891", AlertWebhookFileDir: "/tmp/fixture"}}, log, amMainHTTPPools{pool: pool}, amMainHTTPGroups{}, dao, nil, r, journal, history, projection)
 	if err != nil {
 		t.Fatal(err)
 	}

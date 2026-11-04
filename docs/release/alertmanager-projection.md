@@ -1,0 +1,38 @@
+# AlertManager 主配置与 webhook 持久发布
+
+AM完整发布使用family2，公开路由构建器的webhook子集发布使用family5。二者复用现有namespace规划、历史归属、SQL journal、原事务租约和typed Store，不再经过旧BatchSQL及裸Redis写链。渲染器、URL文件内容、发送组排序、matcher、静默区间与原生配置校验保持。
+
+## 完整发布与子集边界
+
+- full2的计划包含main2及webhook5所有所需artifact，完整成员集、清退索引和full ACK；只有所有artifact、成员及清退索引全部完成后才确认成功。
+- subset5只upsert本次需要的webhook5并写自己的ACK，不清退旧webhook，不修改main、完整成员集、full SHA、full ACK或清退索引。清退由后续完整发布负责。
+- 子集入口先读取双source版本，再从SQL读取真实池；外部传入池仅用于定位及核对Name/instances，输出来自fresh保存值和fresh发送组。非零输出不能凭未保存的池快照写入。既有zero-instances且nil DB/Redis的纯路由构建合同保留，不产生operation或ACK。
+- 普通入口先完成池库存分页检查与detached快照再开始逐池发布；计数、重复ID、nil行和提前结束均拒绝。live空目标仍执行输入校验并清退旧输出；真实deleted池凭SQL墓碑清退，不读取失效的发送组。
+
+SQL元数据、artifact事件、manifest和lastCommitted在同一事务提交。SQL失败会整体回滚，不能沿用旧测试中“Redis清退索引先写、SQL删除随后失败”的时序。Redis未知结果按已提交SQL事实恢复，不能作为成功或透明重复执行外部操作的依据。
+
+## 双source与原SQL租约
+
+在任何池或发送组源读取前捕获family2/5各自counter与lastCommitted引用；预留时CAS整个pair，仅增加本family counter，不比较两个family的generation大小。锁顺序为full2 control、subset5 control、排序namespace，再到业务行。
+
+AM manifest保存双lastCommitted向量，租约在原SQL连接内重验它及namespace证明。另一方的新提交会使旧发布租约失效；单纯失败的reserved尝试不会使最近成功版本永久不可重放。当前已经投影的完整/子集回执可在只读coverage事务中组成覆盖集合，避免相同输出交替调用时不断生成新operation。coverage不赋予Redis写权限，并逐字检查实际ACK是否为签发值。
+
+旧v1/v2历史仍可读；新AM发布必须具有双control证明，不以缺少依赖为由回退。可选am_controls、am_superseded及Remove alias字段缺省时不进入旧JSON，Record既有manifest、receipt及fingerprint金样保持。
+
+## 清退索引、改名与恢复
+
+旧索引成员必须逐字等于GeneratedConfigOwner的五字段canonical JSON，未知字段、额外空白、非JSON及无权归属均拒绝。整个索引及其SQL归属在coverage、旧回执重放及新预留之前先做只读校验，畸形索引不能先触发幂等Redis写再返回错误。
+
+索引只是重试定位符。当前行、原始历史及已签发事件才提供权限；自定义或外池替代行不能被旧索引授权删除。同ID改名只允许Remove alias，必须保持pool/kind/key及canonical身份，由当前归属和新事件同事务证明；Add不能借用alias。删除后恢复为新ID时，只能沿用实际旧事件的精确owner证明取消旧索引，不能从digest反推名字或猜测ID。
+
+多次改名、两次ABA、删除或SREM未知结果均须可重建恢复；过时TCP请求由原Store的完整fence检查拒绝。没有改变Store/Lua/schema，也不声称SQL与多个Redis键具有分布式原子可见性。
+
+## 本阶段已执行验证
+
+Root owned Redis最终53叶全部通过，0fail/skip。原35保持，新AM18项覆盖完整/子集隔离与稳定no-op、空发送组清退、未保存子集拒绝、四个实际源读取barrier、失败预留、双向迟到artifact、同hash数据库旧输出、未签发ACK字节、同ID连续改名与不同ID恢复的两次真实SREM延迟，以及畸形索引在任何实际Redis写命令前拒绝。代理、Redis与SQLite均为隔离本机实例，不使用演示依赖或外部目标。
+
+旧11文件58个主测试、310叶全部保留并通过。完整cache race为227主测试1137叶，service为129叶，DAO为166叶，DI为40叶，均通过；旧Record五个发布payload金样保持。全Go、vet、integration/e2e/smoke标签编译、173发布工具回归通过。完整actionlint发现既有gitleaks范围参数未加引号，已修复并通过实际工作区range回归；没有放宽扫描范围或检测规则。
+
+本次源锁仍为独立验证成功的Web fd42255和AI ba187。上一文档/锁提交134db5ae的三仓CI 41886300757已53步骤成功，三个实际SHA与五个浏览器业务检查吻合；这不是本次AM实现的远端验收，新提交仍需独立CI。
+
+独立恢复worker、规模性能与剩余ESLint仍待后续阶段，整个1.0尚未完成。本机预览仍为clean7adec/schema4，保留既有模拟数据和外部执行关闭；本阶段未刷新后端、上线或连接生产。

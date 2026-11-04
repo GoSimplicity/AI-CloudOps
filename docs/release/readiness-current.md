@@ -1,5 +1,14 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-05：AlertManager 双控制发布与恢复
+
+AM full2和webhook subset5已接入同事务journal、双control原SQL租约及typed Store。完整发布负责main/webhook/成员/清退索引/full ACK，子集只upsert所需webhook及自己的ACK；相同输出可组成只读coverage避免交替增代。详见[AM合同与验收](alertmanager-projection.md)。
+
+- Root最终owned53叶0fail/skip：原35保持，AM新增18项覆盖双向真实迟到请求、实际旧源、改名/二次ABA、samehash旧输出、失败预留及畸形索引前置零写。Store/Lua/schema不变，Record五个旧payload金样保持。
+- 原58main/310leaf保持全绿；完整cache1137leaf、service129leaf、DAO166leaf、DI40leaf race通过。全Go/vet/标签编译、173工具通过；修复gitleaks范围参数未引用的既有shellcheck问题后，完整actionlint和工作区range回归通过。
+- 来源锁仍为Webfd42255/AIba187。上一134db5ae三仓41886300757已53步骤全成功、实际三个SHA及browser5zero吻合；本次AM新提交的远端CI仍需另验。
+- 独立恢复worker、规模性能与剩余ESLint仍未完成。预览仍clean7adec/schema4及模拟数据、外部执行关闭，本阶段没有刷新后端、上线或生产连接。
+
 ## 2026-11-05：前端第90阶段来源锁与本机预览
 
 来源锁更新到Web `fd4225550a9504fba8ac3dfb7a78077a4b447b68`，AI保持 `ba1876a8f20c3f68f30b4f9a26748d9dded03d05`。Web独立Verify 41884434768和gitleaks 41884434856均已成功；目标16文件净减101条排序诊断，167文件3692项测试、类型检查及354个SFC的708组编译对照通过。完整实扫1130文件仍有7509 errors、5 warnings，未声称lint清零。历史AST证明工具的遍历缺口已修复，并按实际Git源重新验证，见Web的阶段90记录。

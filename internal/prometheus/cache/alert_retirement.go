@@ -76,7 +76,10 @@ func (a *alertManagerConfigCache) readAlertRetirementIntents(ctx context.Context
 			// desired/current canonical owner can authorize cancelling the old locator.
 			wanted, ok := desired[owner.InstanceIP]
 			current := configdao.GeneratedConfigOwnerOf(row)
-			wantedOwner := ok && row.PoolID == wanted.PoolID && row.ConfigType == wanted.ConfigType && row.InstanceIP == owner.InstanceIP && row.Name == wanted.Name
+			wantedRow := *row
+			wantedRow.Name = wanted.Name
+			_, wantedCanonical := ownedAlertWebhook(&wantedRow, poolID)
+			wantedOwner := ok && wantedCanonical && row.PoolID == wanted.PoolID && row.ConfigType == wanted.ConfigType && row.InstanceIP == owner.InstanceIP
 			retiredOwner := currentRetired[row.ID] == current && row.PoolID == owner.PoolID && row.ConfigType == owner.ConfigType && row.InstanceIP == owner.InstanceIP
 			currentJSON, _ := json.Marshal(current)
 			_, indexedCurrent := byEntry[string(currentJSON)]

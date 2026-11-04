@@ -64,6 +64,9 @@ func (r *scrapeProjection) publish(ctx context.Context, pool *model.MonitorScrap
 	// were lost. Completed retirements no longer claim a subsequently reused IP.
 	if previous != nil {
 		for _, artifact := range previous.Artifacts {
+			if artifact.ConfigType != int8(r.scope) {
+				continue
+			}
 			if !supersededKeys[artifact.InstanceKey] && (artifact.Action == model.ConfigProjectionRender || previous.Phase != model.ConfigPublicationProjected) {
 				oldIPs = append(oldIPs, artifact.InstanceKey)
 			}
@@ -202,12 +205,17 @@ func scrapeGeneratedPlan(ref configdao.PoolReservation, hash [32]byte, generated
 }
 
 func (r *scrapeProjection) resolveRetirements(ctx context.Context, poolID int, plan *scrapePublicationPlan, previous *configdao.ProjectionReceipt) error {
-	known := map[string]int{}
+	var issued []configdao.ArtifactReceipt
 	if previous != nil {
-		for _, artifact := range previous.Artifacts {
-			if artifact.ConfigRowID != nil {
-				known[artifact.InstanceKey] = *artifact.ConfigRowID
-			}
+		issued = previous.Artifacts
+	}
+	return r.resolveIssuedRetirements(ctx, poolID, plan, issued)
+}
+func (r *scrapeProjection) resolveIssuedRetirements(ctx context.Context, poolID int, plan *scrapePublicationPlan, issued []configdao.ArtifactReceipt) error {
+	known := map[string]int{}
+	for _, artifact := range issued {
+		if artifact.ConfigType == int8(r.scope) && artifact.ConfigRowID != nil {
+			known[artifact.InstanceKey] = *artifact.ConfigRowID
 		}
 	}
 	missing := []string{}
@@ -218,7 +226,7 @@ func (r *scrapeProjection) resolveRetirements(ctx context.Context, poolID int, p
 		}
 		if id, ok := known[ip]; ok {
 			row, err := r.configDAO.GetGeneratedMonitorConfigByID(ctx, id)
-			if err != nil || !ownedScrapeArtifact(row, r.scope, poolID) || row.InstanceIP != ip {
+			if err != nil || !ownedNamespaceArtifact(row, int8(r.scope), poolID) || row.InstanceIP != ip {
 				return errors.New("历史发布归属已变化")
 			}
 			knownRows[ip] = row
@@ -256,7 +264,7 @@ func (r *scrapeProjection) resolveRetirements(ctx context.Context, poolID int, p
 		for _, ip := range batch {
 			matches := byKey[ip]
 			for _, row := range matches {
-				if !ownedScrapeArtifact(row, r.scope, poolID) {
+				if !ownedNamespaceArtifact(row, int8(r.scope), poolID) {
 					return errors.New("历史命名空间含其他归属，保留原始缓存")
 				}
 			}
@@ -363,7 +371,7 @@ func (r *scrapeProjection) historicalLocators(ctx context.Context, poolID int, d
 		if row.PoolID != poolID || row.ConfigType != int8(r.scope) {
 			return nil, nil, nil, errors.New("历史候选超出查询范围")
 		}
-		if row.DeletedAt > 0 && ownedScrapeArtifact(row, r.scope, poolID) {
+		if row.DeletedAt > 0 && ownedNamespaceArtifact(row, int8(r.scope), poolID) {
 			candidates = append(candidates, configdao.GeneratedConfigOwnerOf(row))
 		}
 	}
@@ -442,7 +450,7 @@ func (r *scrapeProjection) historicalLocators(ctx context.Context, poolID int, d
 		if row.PoolID != poolID || row.ConfigType != int8(r.scope) {
 			return nil, nil, nil, errors.New("历史候选超出查询范围")
 		}
-		if row.DeletedAt == 0 || !ownedScrapeArtifact(row, r.scope, poolID) || resolvedKey[row.InstanceIP] {
+		if row.DeletedAt == 0 || !ownedNamespaceArtifact(row, int8(r.scope), poolID) || resolvedKey[row.InstanceIP] {
 			continue
 		}
 		if _, wanted := desired[row.InstanceIP]; wanted {

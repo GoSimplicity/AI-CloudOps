@@ -141,7 +141,7 @@ func TestAMArtifactRepairPendingFailuresRecoverAcrossSourceAndRename(t *testing.
 					if ack != oldACK {
 						t.Fatal("failed pending write replaced old ACK")
 					}
-				} else if !strings.HasPrefix(ack, "pending:") {
+				} else if !amFixturePending(c, 2, pool.ID) {
 					t.Fatal("partial required writes retained acknowledged publication")
 				}
 				r.failure = ""
@@ -272,8 +272,8 @@ func TestAMArtifactSameSourceRepairFailureRetainsRetryAcrossRebuild(t *testing.T
 				if marker != ack {
 					t.Fatal("failed pending replaced old ACK")
 				}
-			} else if !strings.HasPrefix(marker, "pending:") {
-				t.Fatal("partial same-source repair was acknowledged")
+			} else if marker != ack {
+				t.Fatal("same-source failed replay changed its original ACK")
 			}
 			r.failure = ""
 			c = rebuildAlertRetirementABA(c)

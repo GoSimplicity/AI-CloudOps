@@ -62,8 +62,8 @@ func TestAMMainUnindexedRetirementSurvivesWriteFailuresAndRebuild(t *testing.T) 
 			if err := c.GenerateMainConfig(ctx); err == nil {
 				t.Fatal("injected failure reported completion")
 			}
-			if stage == "members write" && db.writes != beforeSQL {
-				t.Fatal("failed retirement anchor allowed SQL writes")
+			if stage == "members write" && (db.writes <= beforeSQL || !amFixturePending(c, 2, pool.ID)) {
+				t.Fatal("failed external membership write lost committed SQL retirement authority")
 			}
 			r.failure = ""
 			c = rebuildAlertRetirementABA(c)
@@ -221,4 +221,11 @@ func TestAMMainInventoryClonesRowsBeforePageReuse(t *testing.T) {
 	if err != nil || len(ips) != 1 || owners["127.0.0.9"].Name != fmt.Sprintf(ConfigNameAlertManager, pool.ID, "127.0.0.9") {
 		t.Fatal("later page reuse mutated the captured owner")
 	}
+}
+
+func (s amMainInventoryPages) GetGeneratedConfigPoolCandidates(ctx context.Context, req configdao.GeneratedConfigPoolQuery) ([]*model.MonitorConfig, int64, error) {
+	if req.ConfigType == model.ConfigTypeAlertManager {
+		return s.page(req.Page)
+	}
+	return s.MonitorConfigDAO.GetGeneratedConfigPoolCandidates(ctx, req)
 }

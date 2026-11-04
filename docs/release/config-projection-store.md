@@ -2,6 +2,8 @@
 
 `ProjectionStore` 接受真实 SQL 租约并从其深拷贝快照生成私有 handle；调用者只能按已签发 EventID/ControlID执行，不能提供任意物理 key 或正文。构造器接收当前实际的 standalone `*redis.Client`，复制 options 创建专用连接池并关闭命令重试；Close 不影响原应用池。本阶段不宣称支持 Redis Cluster/Sentinel/failover。
 
+当前PromMain1、AlertRule3、Record4及AM full2/subset5都已接入同一个由Wire统一清理的Store；AM双control与清退恢复详见[AM合同](alertmanager-projection.md)。本阶段不改Store/Lua/schema，独立恢复worker及规模性能仍待后续验收。
+
 ## 写入顺序与版本合同
 
 Prepare只更新新投影控制 fence，不改旧正文、成员集合、intent 或历史 publication SHA。每次准备、正文/清退、成员、intent 与 ACK 操作前均在原 sealed SQL lease 上重验，连接失效不能另借SQL连接续租。

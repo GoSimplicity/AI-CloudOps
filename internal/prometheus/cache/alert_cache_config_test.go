@@ -30,7 +30,7 @@ func TestAlertCacheUsesInjectedConfiguration(t *testing.T) {
 			viper.Set("prometheus.alert_webhook_file_dir", "/global-wrong")
 			viper.Set("server.port", "2")
 			cfg := &config.Config{Server: config.ServerConfig{Port: test.port}, Prometheus: config.PrometheusConfig{AlertWebhookAddr: test.address, AlertWebhookFileDir: "/typed/hooks"}}
-			cache, err := NewAlertManagerConfigCache(cfg, zap.NewNop(), nil, configSendGroups{}, nil, nil, nil)
+			cache, err := NewAlertManagerConfigCache(cfg, zap.NewNop(), nil, configSendGroups{}, nil, nil, nil, nil, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -69,7 +69,7 @@ func TestAlertCacheRejectsMissingConfiguration(t *testing.T) {
 		valid bool
 	}{{"missing", nil, false}, {"provided", &config.Config{}, true}} {
 		t.Run(test.name, func(t *testing.T) {
-			cache, err := NewAlertManagerConfigCache(test.cfg, zap.NewNop(), nil, nil, nil, nil, nil)
+			cache, err := NewAlertManagerConfigCache(test.cfg, zap.NewNop(), nil, nil, nil, nil, nil, nil, nil, nil)
 			if (err == nil) != test.valid {
 				t.Fatalf("unexpected constructor error %v", err)
 			}

@@ -704,3 +704,10 @@
 
 - Web来源锁更新至fd42255：整理本地同步门面的分组顺序，目标净减101条；3692项测试、类型检查与SFC编译对照通过，独立Verify41884434768/gitleaks41884434856成功。历史证明工具遍历缺口已完整复核，无未解释语义差异。
 - 最新全仓实扫1130文件仍有7509 errors和5 warnings；新组合另跑三仓CI。当前本机预览clean7adec/schema4，模拟数据与外部执行关闭保持；AM发布、worker与性能继续后续阶段，未上线。
+
+## 2026-11-05：AlertManager 完整与子集持久发布
+
+- AM full2/subset5接入双source CAS、同事务完整计划、原SQL租约与typed Store；子集只写所需webhook及自己的ACK，完整发布负责成员/清退/full ACK。删除旧无调用writer，保留原renderer和zero-output纯路由合同。
+- 修复连续改名取消旧索引、不同row恢复后二次ABA，以及同hash重放遇到畸形索引时先写后拒的问题；只允许已签归属证明取消旧locator，custom/foreign继续拒绝。schema/Store/Lua未变。
+- 最终owned53叶、旧AM58main310leaf、全cache/service/DAO/DI race、全Go/vet/tags及173工具通过，Record五发布金样保持；修复既有gitleaks shell参数引用并通过actionlint和实际range回归。
+- Webfd42255/AIba187来源锁保持；上个134db5ae三仓CI成功不替代新AM提交验收。独立worker/性能/剩余ESLint继续，本机预览未从WIP重建，未上线。

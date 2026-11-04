@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -182,4 +183,30 @@ func decodeLegacyPoolManifest(raw *string) ([]poolManifestEntry, error) {
 func decodePoolManifest(raw *string) ([]poolManifestEntry, error) {
 	value, err := decodeProjectionManifest(raw)
 	return value.Artifacts, err
+}
+
+// ProjectionBindingForNamespace derives typed logical components only. It
+// cannot accept a physical key, and group IDs remain strictly positive.
+func ProjectionBindingForNamespace(kind int8, key string) (ProjectionBinding, error) {
+	binding := ProjectionBinding{Version: 1, Role: "artifact", ConfigType: kind, InstanceIP: key}
+	if kind == 5 {
+		split := strings.LastIndex(key, "_")
+		if split <= 0 {
+			return ProjectionBinding{}, ErrJournalInvalid
+		}
+		group, err := strconv.Atoi(key[split+1:])
+		if err != nil || group <= 0 || strconv.Itoa(group) != key[split+1:] {
+			return ProjectionBinding{}, ErrJournalInvalid
+		}
+		binding.InstanceIP = key[:split]
+		binding.GroupID = &group
+	}
+	actual, err := bindingNamespace(binding)
+	if err != nil || actual.raw != key {
+		return ProjectionBinding{}, ErrJournalInvalid
+	}
+	return binding, nil
+}
+func GeneratedProjectionOwnerValid(owner GeneratedConfigOwner) bool {
+	return validGeneratedOwner(owner) && generatedRowNameValid(scrapeRuleOwnerModel(owner))
 }

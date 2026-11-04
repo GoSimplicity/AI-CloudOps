@@ -9,7 +9,7 @@ import (
 )
 
 func rebuildAlertRetirementABA(c *alertManagerConfigCache) *alertManagerConfigCache {
-	return &alertManagerConfigCache{redis: c.redis, logger: c.logger, alertWebhookAddr: c.alertWebhookAddr, webhookFileDir: c.webhookFileDir, serverPort: c.serverPort, alertPoolDAO: c.alertPoolDAO, alertSendDAO: c.alertSendDAO, configDAO: c.configDAO, batchManager: c.batchManager}
+	return &alertManagerConfigCache{redis: c.redis, logger: c.logger, alertWebhookAddr: c.alertWebhookAddr, webhookFileDir: c.webhookFileDir, serverPort: c.serverPort, alertPoolDAO: c.alertPoolDAO, alertSendDAO: c.alertSendDAO, configDAO: c.configDAO, batchManager: c.batchManager, journal: c.journal, history: c.history, projection: c.projection}
 }
 func TestAlertRetirementSecondABAWithOldIntent(t *testing.T) {
 	for _, firstFailure := range []string{"webhook delete", "intent remove"} {
@@ -102,9 +102,9 @@ func sameAlertRetirementState(a, b map[string]string, c, d map[int]*model.Monito
 	return reflect.DeepEqual(a, b) && reflect.DeepEqual(c, d)
 }
 
-// This also covers a rename on the same live metadata ID: if cancellation and
-// subsequent Redis deletion both fail, an exact-owner successor intent must keep
-// the older name's locator recoverable without trusting it as SQL authority.
+// A failed SQL retirement must preserve the original live row and last-good
+// projection. A later rename can succeed without inventing a retirement intent;
+// a subsequent committed retirement still needs durable retry after Redis fails.
 func TestAlertRetirementRenamedIntentTombstoneRetry(t *testing.T) {
 	c, g, r, db, pool, _ := alertContractCache(t)
 	ctx := context.Background()
@@ -113,20 +113,26 @@ func TestAlertRetirementRenamedIntentTombstoneRetry(t *testing.T) {
 	}
 	wrapped := &alertRetirementRedis{alertContractRedis: r}
 	c.redis = wrapped
+	beforeRows, beforeRedis := copyAlertRows(db.rows), copyAlertRedis(r.values)
+	beforeWrites := r.writes
 	pool.AlertManagerInstances = model.StringList{"127.0.0.1"}
 	db.failure = "webhook DB delete"
 	if c.GenerateMainConfig(ctx) == nil {
 		t.Fatal("initial DB fault not exercised")
 	}
+	if r.writes != beforeWrites || !sameAlertRetirementState(beforeRedis, r.values, beforeRows, db.rows) {
+		t.Fatal("failed SQL retirement changed last-good metadata or Redis")
+	}
 	db.failure = ""
-	wrapped.failIntentRemove = true
 	pool.Name = "renamed"
 	pool.AlertManagerInstances = model.StringList{"127.0.0.1", "127.0.0.2"}
 	c = rebuildAlertRetirementABA(c)
-	if c.GenerateMainConfig(ctx) == nil {
-		t.Fatal("rename cancellation fault not exercised")
+	if err := c.GenerateMainConfig(ctx); err != nil {
+		t.Fatal("restore and rename after rolled-back retirement failed", err)
 	}
-	wrapped.failIntentRemove = false
+	if r.values[buildRedisKeyWebhookFile("127.0.0.2", 3)] == "" || len(r.members[alertRetirementIntentKey(pool.ID)]) != 0 {
+		t.Fatal("restore lost its webhook or invented a retirement intent")
+	}
 	g.rows[0].Enable = 2
 	r.failure = "webhook delete"
 	c = rebuildAlertRetirementABA(c)

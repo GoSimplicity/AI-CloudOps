@@ -149,7 +149,15 @@ func (d *monitorConfigDAO) commitGeneratedPlan(ctx context.Context, req Generate
 	var receipt PoolReceipt
 	created := map[uint64]*model.MonitorConfig{}
 	err = d.journalTransaction(ctx, func(tx *gorm.DB) error {
-		control, err := lockExistingPoolControl(tx, req.Reservation.Family, req.Reservation.PoolID)
+		var control *model.MonitorConfigPoolControl
+		var err error
+		var amPair amLockedControls
+		if projection != nil && projection.amSource != nil {
+			amPair, err = lockAMControls(tx, req.Reservation.PoolID, false)
+			control = amPair.own(req.Reservation.Family)
+		} else {
+			control, err = lockExistingPoolControl(tx, req.Reservation.Family, req.Reservation.PoolID)
+		}
 		if err != nil {
 			return err
 		}
@@ -202,6 +210,9 @@ func (d *monitorConfigDAO) commitGeneratedPlan(ctx context.Context, req Generate
 			}
 			return nil
 		}
+		if projection != nil && projection.amSource != nil && !amPair.matchesSource(*projection.amSource, req.Reservation.Family, req.Reservation.Generation) {
+			return ErrJournalConflict
+		}
 		if op.Phase != model.ConfigPublicationReserved || op.CommittedAt != nil || control.CurrentAttemptOperationID == nil || *control.CurrentAttemptOperationID != op.OperationID {
 			return ErrJournalConflict
 		}
@@ -253,8 +264,14 @@ func (d *monitorConfigDAO) commitGeneratedPlan(ctx context.Context, req Generate
 				envelope.RuleSuperseded = projection.superseded
 			} else if req.Reservation.Family == 1 {
 				envelope.PromSuperseded = projection.superseded
+			} else if validAMFamily(req.Reservation.Family) {
+				envelope.AMSuperseded = projection.superseded
 			} else if len(projection.superseded) > 0 {
 				return ErrJournalInvalid
+			}
+			if projection.amControls != nil {
+				vector := *projection.amControls
+				envelope.AMControls = &vector
 			}
 			payload = envelope
 			if err := markScrapeRuleReplacementsTx(tx, projection.superseded); err != nil {

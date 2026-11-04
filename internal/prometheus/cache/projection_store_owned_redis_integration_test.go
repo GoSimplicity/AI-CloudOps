@@ -201,6 +201,17 @@ func TestProjectionStoreOwnedRedisProtocol(t *testing.T) {
 		{"prom_source_snapshot", TestPromMainProjectionNativeOlderSourceCannotReplaceNewer},
 		{"prom_credential_rotation", TestPromMainProjectionNativeCredentialRotationUsesOperationalBytes},
 		{"prom_deleted_pool", TestPromMainProjectionNativeDeletedPoolRetiresWithoutJobRead},
+		{"am_subset_isolation", TestAMProjectionNativeSubsetIsolationAndStableNoop},
+		{"am_empty_groups", TestAMProjectionNativeEmptyGroupsRetireOnlyWebhook},
+		{"am_unsaved_subset", TestAMProjectionNativeRejectsUnsavedSubsetPool},
+		{"am_source_snapshot", TestAMProjectionNativeOlderSourceCannotReplacePeerPublication},
+		{"am_failed_reservation", TestAMProjectionNativeFailedReservationDoesNotInvalidateLastGood},
+		{"am_delayed_subset", TestAMProjectionNativeDelayedSubsetCannotRevertFullPublication},
+		{"am_same_hash_metadata", TestAMProjectionNativeSameHashFindsDatabaseOnlyRetirement},
+		{"am_unissued_ack", TestAMProjectionNativeCoverageRejectsUnissuedACKBytes},
+		{"am_delayed_full", TestAMProjectionNativeDelayedFullCannotRevertSubset},
+		{"am_rename_aba", TestAMProjectionNativeRepeatedRenameAndSecondABARecover},
+		{"am_malformed_before_writes", TestAMProjectionNativeMalformedIntentFailsBeforeReplayWrites},
 	}
 	for _, group := range groups {
 		skipped := false

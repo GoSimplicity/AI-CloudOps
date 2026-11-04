@@ -87,7 +87,20 @@ func (l *sqlProjectionLease) recheck(ctx context.Context) error {
 	var artifacts []ArtifactReceipt
 	if l.pool != nil {
 		ref := l.pool.Reservation
-		control, err := lockExistingPoolControl(tx, ref.Family, ref.PoolID)
+		var control *model.MonitorConfigPoolControl
+		var err error
+		if l.pool.AMControls != nil {
+			pair, pairErr := lockAMControls(tx, ref.PoolID, false)
+			if pairErr != nil {
+				return pairErr
+			}
+			if !pair.matchesCommitted(*l.pool.AMControls) {
+				return ErrJournalConflict
+			}
+			control = pair.own(ref.Family)
+		} else {
+			control, err = lockExistingPoolControl(tx, ref.Family, ref.PoolID)
+		}
 		if err != nil {
 			return err
 		}
@@ -128,14 +141,14 @@ func (l *sqlProjectionLease) recheck(ctx context.Context) error {
 				if change.ProofSourceID != 0 {
 					proof = ProjectionProofRef{SourceID: change.ProofSourceID}
 				}
-				request.Add = append(request.Add, IntentOwnerChange{Owner: change.Owner, Proof: proof})
+				request.Add = append(request.Add, IntentOwnerChange{Owner: change.Owner, Proof: proof, AliasCurrentOwner: change.AliasCurrentOwner})
 			}
 			for _, change := range control.Intents.Remove {
 				proof := ProjectionProofRef{EventID: change.ProofEventID}
 				if change.ProofSourceID != 0 {
 					proof = ProjectionProofRef{SourceID: change.ProofSourceID}
 				}
-				request.Remove = append(request.Remove, IntentOwnerChange{Owner: change.Owner, Proof: proof})
+				request.Remove = append(request.Remove, IntentOwnerChange{Owner: change.Owner, Proof: proof, AliasCurrentOwner: change.AliasCurrentOwner})
 			}
 			proofPlan := &preparedProjectionPlan{
 				request:  GeneratedProjectionPlanRequest{GeneratedPlanRequest: GeneratedPlanRequest{Reservation: ref}},
@@ -253,7 +266,11 @@ func (d *monitorConfigDAO) WithPoolProjectionLease(ctx context.Context, receipt 
 		return err
 	}
 	err = d.journalTransaction(ctx, func(tx *gorm.DB) error {
-		if _, err := lockExistingPoolControl(tx, receipt.Reservation.Family, receipt.Reservation.PoolID); err != nil {
+		if receipt.AMControls != nil {
+			if _, err := lockAMControls(tx, receipt.Reservation.PoolID, false); err != nil {
+				return err
+			}
+		} else if _, err := lockExistingPoolControl(tx, receipt.Reservation.Family, receipt.Reservation.PoolID); err != nil {
 			return err
 		}
 		if err := lockConfigNamespacesTx(tx, keys); err != nil {

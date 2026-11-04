@@ -27,14 +27,16 @@ package cache
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -74,6 +76,9 @@ type alertManagerConfigCache struct {
 	alertSendDAO     alertPoolDao.AlertManagerSendDAO
 	configDAO        configDao.MonitorConfigDAO
 	batchManager     *BatchConfigManager
+	journal          configDao.ProjectionPlanJournalDAO
+	history          configDao.AMProjectionHistoryReader
+	projection       AMProjectionRunner
 }
 
 func NewAlertManagerConfigCache(
@@ -84,6 +89,9 @@ func NewAlertManagerConfigCache(
 	configDAO configDao.MonitorConfigDAO,
 	batchManager *BatchConfigManager,
 	redisClient redis.Cmdable,
+	journal configDao.ProjectionPlanJournalDAO,
+	history configDao.AMProjectionHistoryReader,
+	projection AMProjectionRunner,
 ) (AlertManagerConfigCache, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("配置不能为空")
@@ -100,6 +108,7 @@ func NewAlertManagerConfigCache(
 		alertSendDAO:     alertSendDAO,
 		configDAO:        configDAO,
 		batchManager:     batchManager,
+		journal:          journal, history: history, projection: projection,
 	}, nil
 }
 
@@ -127,57 +136,24 @@ func (a *alertManagerConfigCache) GenerateMainConfig(ctx context.Context) error 
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if err := ctx.Err(); err != nil {
+	versions, err := a.amSourceVersions(ctx)
+	if err != nil {
 		return err
 	}
-	startTime := time.Now()
-	a.logger.Info(LogModuleMonitor + "开始生成AlertManager主配置")
-
-	page := 1
-	size := 100
-	var allPools []*model.MonitorAlertManagerPool
-	var failures []error
-
-	for {
+	pools, err := readAlertPoolSnapshot(ctx, a.alertPoolDAO, false)
+	if err != nil {
+		return err
+	}
+	failures := []error{}
+	for _, pool := range pools {
 		if err := ctx.Err(); err != nil {
 			return errors.Join(append(failures, err)...)
 		}
-		pools, total, err := a.alertPoolDAO.GetMonitorAlertManagerPoolList(ctx, &model.GetMonitorAlertManagerPoolListReq{
-			ListReq: model.ListReq{
-				Page: page,
-				Size: size,
-			},
-		})
-		if err != nil {
-			return errors.Join(append(failures, a.alertPublicationError(0, "读取实例池"), ctx.Err())...)
-		}
-
-		if len(pools) == 0 {
-			break
-		}
-
-		if err := a.processPoolBatch(ctx, pools); err != nil {
+		if err := a.publishAlertPool(ctx, pool, amSourceVersionFor(versions, pool.ID)); err != nil {
 			failures = append(failures, err)
 		}
-
-		allPools = append(allPools, pools...)
-
-		if len(allPools) >= int(total) {
-			break
-		}
-		page++
 	}
-
-	if len(allPools) == 0 {
-		a.logger.Info(LogModuleMonitor + "没有找到任何AlertManager采集池")
-	}
-
-	if err := ctx.Err(); err != nil {
-		failures = append(failures, err)
-	}
-	result := errors.Join(failures...)
-	logCacheOperation(a.logger, "生成AlertManager主配置", "所有池", startTime, result)
-	return result
+	return errors.Join(append(failures, ctx.Err())...)
 }
 
 // Publication identity is the database ID, never a mutable pool name. Keep this
@@ -190,30 +166,6 @@ func alertPublicationStateKey(poolID int) string {
 func (a *alertManagerConfigCache) alertPublicationError(poolID int, stage string) error {
 	a.logger.Error(LogModuleMonitor+"AlertManager配置发布未完成", zap.Int("pool_id", poolID), zap.String("stage", stage))
 	return fmt.Errorf("AlertManager配置发布未完成，池%d，阶段%s", poolID, stage)
-}
-
-func (a *alertManagerConfigCache) processPoolBatch(ctx context.Context, pools []*model.MonitorAlertManagerPool) error {
-	var failures []error
-	for _, source := range pools {
-		if err := ctx.Err(); err != nil {
-			return errors.Join(append(failures, err)...)
-		}
-		if source == nil || source.ID <= 0 {
-			failures = append(failures, a.alertPublicationError(0, "实例池标识"))
-			continue
-		}
-		pool := *source
-		pool.AlertManagerInstances = append(model.StringList(nil), source.AlertManagerInstances...)
-		pool.GroupBy = append(model.StringList(nil), source.GroupBy...)
-		// A newly configured pool without instances is not yet a publication target.
-		if len(pool.AlertManagerInstances) == 0 {
-			continue
-		}
-		if err := a.publishAlertPool(ctx, &pool); err != nil {
-			failures = append(failures, err)
-		}
-	}
-	return errors.Join(failures...)
 }
 
 func (a *alertManagerConfigCache) readEnabledAlertGroups(ctx context.Context, poolID int) ([]*model.MonitorSendGroup, error) {
@@ -271,128 +223,6 @@ func (a *alertManagerConfigCache) alertWebhookConfigs(pool *model.MonitorAlertMa
 	return rows
 }
 
-// Save only this generator's artifacts; a content hash alone cannot detect a
-// changed file name after a pool rename. Custom and foreign rows are never adopted.
-func (a *alertManagerConfigCache) planAlertConfigs(ctx context.Context, desired map[string]ConfigData) (alertArtifactWrites, error) {
-	if len(desired) == 0 {
-		return alertArtifactWrites{}, nil
-	}
-	dao := a.alertConfigDAO()
-	if dao == nil {
-		return alertArtifactWrites{}, errors.New("配置存储不可用")
-	}
-	keys := make([]string, 0, len(desired))
-	var kind int8
-	for key, row := range desired {
-		if kind == 0 {
-			kind = row.ConfigType
-		}
-		if row.ConfigType != kind || (kind != model.ConfigTypeAlertManager && kind != model.ConfigTypeWebhookFile) {
-			return alertArtifactWrites{}, errors.New("AlertManager配置类型无效")
-		}
-		if err := validateYAMLConfig(row.Content); err != nil {
-			return alertArtifactWrites{}, errors.New("AlertManager配置内容无效")
-		}
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	saved, err := dao.GetMonitorConfigsByInstances(ctx, keys, kind)
-	if err != nil {
-		return alertArtifactWrites{}, errors.New("配置读取失败")
-	}
-	owned := map[string]*model.MonitorConfig{}
-	conflicts := map[string]bool{}
-	for _, row := range saved {
-		if row == nil {
-			return alertArtifactWrites{}, errors.New("配置快照无效")
-		}
-		target, wanted := desired[row.InstanceIP]
-		if !wanted {
-			continue
-		}
-		belongs := row.PoolID == target.PoolID && row.ConfigType == kind
-		if belongs && kind == model.ConfigTypeWebhookFile {
-			_, belongs = ownedAlertWebhook(row, target.PoolID)
-		}
-		if belongs && kind == model.ConfigTypeAlertManager {
-			belongs = row.Name == fmt.Sprintf(ConfigNameAlertManager, target.PoolID, row.InstanceIP)
-		}
-		if !belongs {
-			conflicts[row.InstanceIP] = true
-			continue
-		}
-		if owned[row.InstanceIP] != nil {
-			return alertArtifactWrites{}, errors.New("生成配置归属不唯一")
-		}
-		owned[row.InstanceIP] = row
-	}
-	var create []*model.MonitorConfig
-	var update []configDao.GeneratedConfigUpdate
-	for _, key := range keys {
-		row := desired[key]
-		hash := calculateConfigHash(row.Content)
-		if conflicts[key] {
-			return alertArtifactWrites{}, errors.New("配置键归属冲突")
-		}
-		previous := owned[key]
-		if previous == nil {
-			create = append(create, &model.MonitorConfig{Name: row.Name, PoolID: row.PoolID, InstanceIP: key, ConfigType: kind, ConfigContent: row.Content, ConfigHash: hash, Status: model.ConfigStatusActive, LastGeneratedTime: time.Now().Unix()})
-			continue
-		}
-		if previous.Name == row.Name && previous.PoolID == row.PoolID && previous.ConfigType == kind && previous.ConfigHash == hash && previous.ConfigContent == row.Content && previous.Status == model.ConfigStatusActive {
-			continue
-		}
-		copy := *previous
-		copy.Name = row.Name
-		copy.PoolID = row.PoolID
-		copy.ConfigType = kind
-		copy.ConfigContent = row.Content
-		copy.ConfigHash = hash
-		copy.Status = model.ConfigStatusActive
-		copy.LastGeneratedTime = time.Now().Unix()
-		update = append(update, configDao.GeneratedConfigUpdate{Expected: configDao.GeneratedConfigOwnerOf(previous), Desired: copy})
-	}
-	if err := ctx.Err(); err != nil {
-		return alertArtifactWrites{}, err
-	}
-	return alertArtifactWrites{create: create, update: update}, nil
-}
-
-type alertArtifactWrites struct {
-	create []*model.MonitorConfig
-	update []configDao.GeneratedConfigUpdate
-}
-
-func (a *alertManagerConfigCache) applyAlertWrites(ctx context.Context, writes alertArtifactWrites) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	dao := a.alertConfigDAO()
-	if dao == nil {
-		return errors.New("配置存储不可用")
-	}
-	if len(writes.create) > 0 {
-		if err := dao.BatchCreateMonitorConfigs(ctx, writes.create); err != nil {
-			return errors.New("配置创建失败")
-		}
-	}
-	if len(writes.update) > 0 {
-		if err := dao.UpdateGeneratedMonitorConfigs(ctx, writes.update); err != nil {
-			return errors.New("配置更新失败")
-		}
-	}
-	return nil
-}
-func (a *alertManagerConfigCache) saveAlertConfigs(ctx context.Context, desired map[string]ConfigData) error {
-	if len(desired) == 0 {
-		return nil
-	}
-	writes, err := a.planAlertConfigs(ctx, desired)
-	if err != nil {
-		return err
-	}
-	return a.applyAlertWrites(ctx, writes)
-}
 func (a *alertManagerConfigCache) alertConfigDAO() configDao.MonitorConfigDAO {
 	if a.configDAO != nil {
 		return a.configDAO
@@ -427,34 +257,6 @@ func ownedAlertWebhook(row *model.MonitorConfig, poolID int) (retiredAlertWebhoo
 		return retiredAlertWebhook{}, false
 	}
 	return retiredAlertWebhook{row: row, ip: ip, groupID: id}, true
-}
-func (a *alertManagerConfigCache) retiredAlertWebhooks(ctx context.Context, poolID int, desired map[string]ConfigData) ([]retiredAlertWebhook, error) {
-	dao := a.alertConfigDAO()
-	if dao == nil {
-		return nil, errors.New("配置存储不可用")
-	}
-	kind := model.ConfigTypeWebhookFile
-	var retired []retiredAlertWebhook
-	rowsByKey := map[string][]*model.MonitorConfig{}
-	rows, err := a.readAlertConfigSnapshot(ctx, kind)
-	if err != nil {
-		return nil, err
-	}
-	for _, row := range rows {
-		rowsByKey[row.InstanceIP] = append(rowsByKey[row.InstanceIP], row)
-		if item, ok := ownedAlertWebhook(row, poolID); ok {
-			if _, wanted := desired[row.InstanceIP]; !wanted {
-				retired = append(retired, item)
-			}
-		}
-	}
-	for _, item := range retired {
-		if len(rowsByKey[item.row.InstanceIP]) != 1 {
-			return nil, errors.New("旧webhook配置归属冲突")
-		}
-	}
-	sort.Slice(retired, func(i, j int) bool { return retired[i].row.ID < retired[j].row.ID })
-	return retired, nil
 }
 
 // Discover canonical DB-only artifacts as well as indexed targets. Complete
@@ -522,7 +324,7 @@ func (a *alertManagerConfigCache) checkRetiredAlertMainOwnership(ctx context.Con
 	return owners, ips, nil
 }
 
-func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *model.MonitorAlertManagerPool) error {
+func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *model.MonitorAlertManagerPool, version configDao.AMSourceVersion) error {
 	fail := func(stage string) error { return a.alertPublicationError(pool.ID, stage) }
 	var groups []*model.MonitorSendGroup
 	var content []byte
@@ -530,8 +332,10 @@ func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *mo
 	var err error
 	webhooks := map[string]ConfigData{}
 	if pool.DeletedAt == 0 {
-		if err := validateInstanceIPs(pool.AlertManagerInstances); err != nil {
-			return fail("实例列表无效")
+		if len(pool.AlertManagerInstances) > 0 {
+			if err := validateInstanceIPs(pool.AlertManagerInstances); err != nil {
+				return fail("实例列表无效")
+			}
 		}
 		if strings.TrimSpace(pool.Name) == "" {
 			return fail("实例池名称无效")
@@ -582,168 +386,18 @@ func (a *alertManagerConfigCache) publishAlertPool(ctx context.Context, pool *mo
 	if pool.DeletedAt > 0 {
 		hash = calculateConfigHash(fmt.Sprintf("deleted:alertmanager:%d:%d", pool.ID, pool.DeletedAt))
 	}
-	hashKey := alertPublicationStateKey(pool.ID)
-	oldHash, err := a.redis.Get(ctx, hashKey).Result()
-	if err != nil && !errors.Is(err, redis.Nil) {
-		return fail("读取缓存版本")
+	decoded, err := hex.DecodeString(hash)
+	if err != nil || len(decoded) != 32 {
+		return fail("版本指纹无效")
 	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	setKey := buildRedisSetKeyAlertManagerMainPoolIPs(pool.ID)
-	oldIPs, err := a.redis.SMembers(ctx, setKey).Result()
-	if err != nil {
-		return fail("读取实例成员")
-	}
-	retired, err := a.retiredAlertWebhooks(ctx, pool.ID, webhooks)
-	if err != nil {
-		return fail("读取旧webhook配置")
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
+	var sourceHash [32]byte
+	copy(sourceHash[:], decoded)
 	mains := map[string]ConfigData{}
-	desired := map[string]bool{}
 	for _, ip := range instances {
-		desired[ip] = true
-		mains[ip] = ConfigData{Name: fmt.Sprintf(ConfigNameAlertManager, pool.ID, ip), PoolID: pool.ID, ConfigType: model.ConfigTypeAlertManager, Content: string(content)}
+		mains[ip] = ConfigData{Name: fmt.Sprintf(ConfigNameAlertManager, pool.ID, ip), PoolID: pool.ID, ConfigType: 2, Content: string(content)}
 	}
-	webhookWrites, err := a.planAlertConfigs(ctx, webhooks)
-	if err != nil {
-		return fail("检查webhook配置归属")
-	}
-	mainWrites, err := a.planAlertConfigs(ctx, mains)
-	if err != nil {
-		return fail("检查主配置归属")
-	}
-	retiredMains, staleMainIPs, err := a.checkRetiredAlertMainOwnership(ctx, pool.ID, oldIPs, desired)
-	if err != nil {
-		return fail("检查旧实例配置归属")
-	}
-	intents, err := a.readAlertRetirementIntents(ctx, pool.ID, webhooks, retired)
-	if err != nil {
-		return fail("检查退役配置归属")
-	}
-	sameMembers := len(oldIPs) == len(desired)
-	for _, ip := range oldIPs {
-		if !desired[ip] {
-			sameMembers = false
-		}
-	}
-	// An ACK and metadata describe intent, not the bytes currently served by
-	// Redis. Compare only this publication's desired keys; never log their bodies.
-	sameArtifacts := true
-	for _, ip := range instances {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		body, err := a.redis.Get(ctx, buildRedisKeyAlertManagerMain(ip)).Result()
-		if err != nil && !errors.Is(err, redis.Nil) {
-			return errors.Join(fail("读取当前主配置缓存"), ctx.Err())
-		}
-		if err != nil || body != string(content) {
-			sameArtifacts = false
-		}
-	}
-	for _, group := range groups {
-		for _, ip := range instances {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			body, err := a.redis.Get(ctx, buildRedisKeyWebhookFile(ip, group.ID)).Result()
-			if err != nil && !errors.Is(err, redis.Nil) {
-				return errors.Join(fail("读取当前webhook缓存"), ctx.Err())
-			}
-			if err != nil || body != webhooks[fmt.Sprintf("%s_%d", ip, group.ID)].Content {
-				sameArtifacts = false
-			}
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if oldHash == hash && len(webhookWrites.create) == 0 && len(webhookWrites.update) == 0 && len(mainWrites.create) == 0 && len(mainWrites.update) == 0 && len(intents) == 0 && len(staleMainIPs) == 0 && sameMembers && sameArtifacts {
-		return nil
-	}
-	// An old ACK must stop being usable before the first artifact can change.
-	// Otherwise partial B followed by source A could reuse the old A ACK while
-	// serving B. A failed invalidation forbids all following artifact writes.
-	if err := a.redis.Set(ctx, hashKey, "pending:"+hash, 0).Err(); err != nil {
-		return fail("标记待发布版本")
-	}
-	// Retiring a DB-only row must not erase the sole locator before Redis
-	// deletion succeeds. Pending is durable before this member/artifact write.
-	for _, ip := range staleMainIPs {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := a.redis.SAdd(ctx, setKey, ip).Err(); err != nil {
-			return fail("登记待清退主配置实例")
-		}
-	}
-	for _, intent := range intents {
-		if err := a.redis.SAdd(ctx, alertRetirementIntentKey(pool.ID), intent.encoded).Err(); err != nil {
-			return fail("登记退役配置")
-		}
-	}
-	if err := a.applyAlertWrites(ctx, webhookWrites); err != nil {
-		return fail("持久化webhook配置")
-	}
-	if err := a.applyAlertWrites(ctx, mainWrites); err != nil {
-		return fail("持久化主配置")
-	}
-	for _, group := range groups {
-		for _, ip := range instances {
-			if err := a.redis.Set(ctx, buildRedisKeyWebhookFile(ip, group.ID), webhooks[fmt.Sprintf("%s_%d", ip, group.ID)].Content, 0).Err(); err != nil {
-				return fail("写入webhook缓存")
-			}
-		}
-	}
-	for _, ip := range instances {
-		if err := a.redis.Set(ctx, buildRedisKeyAlertManagerMain(ip), string(content), 0).Err(); err != nil {
-			return fail("写入主配置缓存")
-		}
-		if err := a.redis.SAdd(ctx, setKey, ip).Err(); err != nil {
-			return fail("写入实例成员")
-		}
-	}
-	// Desired active IPs are never retired, even when one of their SETs fails.
-	for _, ip := range staleMainIPs {
-		if !desired[ip] {
-			if owner, exists := retiredMains[ip]; exists {
-				if err := a.alertConfigDAO().DeleteGeneratedMonitorConfig(ctx, owner); err != nil {
-					return fail("退役旧主配置")
-				}
-			}
-			if err := a.redis.Del(ctx, buildRedisKeyAlertManagerMain(ip)).Err(); err != nil {
-				return fail("清理旧实例缓存")
-			}
-			if err := a.redis.SRem(ctx, setKey, ip).Err(); err != nil {
-				return fail("清理旧实例成员")
-			}
-		}
-	}
-	for _, intent := range intents {
-		// ABA: a wanted key has already been restored by the normal owned write path.
-		// Its obsolete tombstone must never authorize deleting the restored key.
-		if _, wanted := webhooks[intent.owner.InstanceIP]; !wanted {
-			if err := a.alertConfigDAO().DeleteGeneratedMonitorConfig(ctx, intent.retireOwner); err != nil {
-				return fail("退役旧webhook配置")
-			}
-			if err := a.redis.Del(ctx, buildRedisKeyWebhookFile(intent.ip, intent.groupID)).Err(); err != nil {
-				return fail("清理旧webhook缓存")
-			}
-		}
-		if err := a.redis.SRem(ctx, alertRetirementIntentKey(pool.ID), intent.encoded).Err(); err != nil {
-			return fail("清理退役配置索引")
-		}
-	}
-
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if err := a.redis.Set(ctx, hashKey, hash, 0).Err(); err != nil {
-		return fail("确认缓存版本")
+	if err := a.amProject(ctx, 2, pool.ID, map[int8]map[string]ConfigData{2: mains, 5: webhooks}, sourceHash, version); err != nil {
+		return errors.Join(fail("持久化投影"), ctx.Err())
 	}
 	return nil
 }
@@ -832,46 +486,51 @@ func (a *alertManagerConfigCache) GenerateRouteConfigForPool(ctx context.Context
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if ctx.Err() != nil {
+	snapshot := cloneAlertPoolLifecycle(pool)
+	// The released zero-output route builder has no persistence side effect.
+	// It does not mint an operation or ACK and is never a publishing fallback.
+	if len(snapshot.AlertManagerInstances) == 0 && a.configDAO == nil && a.redis == nil {
+		groups, err := a.readEnabledAlertGroups(ctx, snapshot.ID)
+		if err != nil {
+			return nil, nil
+		}
+		routes, receivers, err := a.renderAlertRoutes(snapshot, groups)
+		if err != nil {
+			return nil, nil
+		}
+		return routes, receivers
+	}
+	versions, err := a.amSourceVersions(ctx)
+	if err != nil || a.alertPoolDAO == nil {
 		return nil, nil
 	}
-	snapshot := *pool
-	snapshot.AlertManagerInstances = append(model.StringList(nil), pool.AlertManagerInstances...)
-	snapshot.GroupBy = append(model.StringList(nil), pool.GroupBy...)
-	pool = &snapshot
-	groups, err := a.readEnabledAlertGroups(ctx, pool.ID)
+	current, err := a.alertPoolDAO.GetAlertPoolByID(ctx, snapshot.ID)
+	if err != nil || current == nil || current.DeletedAt != 0 || current.ID != snapshot.ID || current.Name != snapshot.Name || !reflect.DeepEqual(current.AlertManagerInstances, snapshot.AlertManagerInstances) {
+		return nil, nil
+	}
+	snapshot = cloneAlertPoolLifecycle(current)
+	groups, err := a.readEnabledAlertGroups(ctx, snapshot.ID)
 	if err != nil {
-		a.alertPublicationError(pool.ID, "读取发送组")
 		return nil, nil
 	}
-	routes, receivers, err := a.renderAlertRoutes(pool, groups)
+	routes, receivers, err := a.renderAlertRoutes(snapshot, groups)
 	if err != nil {
-		a.alertPublicationError(pool.ID, "生成路由")
 		return nil, nil
 	}
-	if err := a.generateWebhookFilesForSendGroups(ctx, pool, groups); err != nil {
-		a.alertPublicationError(pool.ID, "发布webhook配置")
+	if err := a.generateWebhookFilesForSendGroups(ctx, snapshot, groups, amSourceVersionFor(versions, snapshot.ID)); err != nil {
+		a.alertPublicationError(snapshot.ID, "发布webhook配置")
 		return nil, nil
 	}
 	return routes, receivers
 }
-
-func (a *alertManagerConfigCache) generateWebhookFilesForSendGroups(ctx context.Context, pool *model.MonitorAlertManagerPool, groups []*model.MonitorSendGroup) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
+func (a *alertManagerConfigCache) generateWebhookFilesForSendGroups(ctx context.Context, pool *model.MonitorAlertManagerPool, groups []*model.MonitorSendGroup, version configDao.AMSourceVersion) error {
 	rows := a.alertWebhookConfigs(pool, groups)
-	if err := a.saveAlertConfigs(ctx, rows); err != nil {
-		return errors.New("webhook持久化失败")
+	encoded, err := json.Marshal(rows)
+	if err != nil {
+		return errors.New("webhook版本生成失败")
 	}
-	for _, group := range groups {
-		for _, ip := range pool.AlertManagerInstances {
-			if err := a.redis.Set(ctx, buildRedisKeyWebhookFile(ip, group.ID), rows[fmt.Sprintf("%s_%d", ip, group.ID)].Content, 0).Err(); err != nil {
-				return errors.New("webhook缓存写入失败")
-			}
-		}
-	}
-	return nil
+	hash := sha256.Sum256(encoded)
+	return a.amProject(ctx, 5, pool.ID, map[int8]map[string]ConfigData{5: rows}, hash, version)
 }
 
 func stringSliceToString(slice model.StringList) string {

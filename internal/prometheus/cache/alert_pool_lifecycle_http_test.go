@@ -74,7 +74,8 @@ func TestDeletedAMPoolRealHTTPAndDatabaseRecovery(t *testing.T) {
 			configs := configdao.NewMonitorConfigDAO(log, db)
 			store := &retirementHTTPRedis{values: map[string]string{"aiops:monitor:config:alertmanager:main:127.0.0.1": "old", "monitor:webhook_file:127.0.0.1:3": "old", "unindexed-legacy-unknown": "keep"}, members: map[string]map[string]bool{}}
 			makeManager := func() cache.MonitorCache {
-				am, err := cache.NewAlertManagerConfigCache(&config.Config{}, log, pools, groups, configs, nil, store)
+				journal, history, projection := cache.AMProjectionDependenciesForTest(db, store)
+				am, err := cache.NewAlertManagerConfigCache(&config.Config{}, log, pools, groups, configs, nil, store, journal, history, projection)
 				if err != nil {
 					t.Fatal(err)
 				}

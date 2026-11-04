@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func (r *alertRetirementRedis) SRem(ctx context.Context, k string, v ...any) *re
 	return r.alertContractRedis.SRem(ctx, k, v...)
 }
 func TestAlertRetirementRetryAnchors(t *testing.T) {
-	for _, mode := range []string{"rebuild", "ABA", "rename ABA", "rename ABA index remove retry", "active rename ABA index remove retry", "index remove retry", "index add failure", "main DB retired", "foreign replacement", "changed tombstone"} {
+	for _, mode := range []string{"rebuild", "ABA", "rename ABA", "rename ABA index remove retry", "active rename ABA SQL rollback", "index remove retry", "index add failure", "main DB retired", "foreign replacement", "changed tombstone"} {
 		t.Run(mode, func(t *testing.T) {
 			c, g, r, db, pool, _ := alertContractCache(t)
 			ctx := context.Background()
@@ -55,6 +56,8 @@ func TestAlertRetirementRetryAnchors(t *testing.T) {
 					oldOwner = configdao.GeneratedConfigOwnerOf(row)
 				}
 			}
+			baselineRows, baselineRedis := copyAlertRows(db.rows), copyAlertRedis(r.values)
+			baselineWrites := r.writes
 			wrapped := &alertRetirementRedis{alertContractRedis: r}
 			c.redis = wrapped
 			pool.AlertManagerInstances = model.StringList{"127.0.0.1"}
@@ -72,12 +75,19 @@ func TestAlertRetirementRetryAnchors(t *testing.T) {
 			if err := c.GenerateMainConfig(ctx); err == nil {
 				t.Fatal("retirement failure accepted")
 			}
-			if !strings.HasPrefix(r.values[alertPublicationStateKey(pool.ID)], "pending:") {
+			if strings.HasPrefix(mode, "active ") {
+				// SQL now commits before Redis projection: a failed delete rolls
+				// back the whole business transaction and creates no new intent.
+				if r.writes != baselineWrites || !sameAlertRetirementState(baselineRedis, r.values, baselineRows, db.rows) {
+					t.Fatal("failed SQL retirement changed last-good metadata or Redis")
+				}
+			}
+			if !amFixturePending(c, 2, pool.ID) {
 				t.Fatal("failed retirement ACKed")
 			}
 			if mode == "index add failure" {
-				if db.rows[oldOwner.ID] == nil {
-					t.Fatal("DB changed before durable intent")
+				if !amFixturePending(c, 2, pool.ID) {
+					t.Fatal("failed external intent add lost the SQL retirement plan")
 				}
 				wrapped.failIntentAdd = false
 			} else if mode != "main DB retired" && !strings.HasPrefix(mode, "active ") {
@@ -110,7 +120,7 @@ func TestAlertRetirementRetryAnchors(t *testing.T) {
 				}
 			}
 			// Reconstruct the cache object: no process-local retirement ledger is required.
-			rebuilt := alertManagerConfigCache{redis: c.redis, logger: c.logger, alertWebhookAddr: c.alertWebhookAddr, webhookFileDir: c.webhookFileDir, serverPort: c.serverPort, alertPoolDAO: c.alertPoolDAO, alertSendDAO: c.alertSendDAO, configDAO: c.configDAO, batchManager: c.batchManager}
+			rebuilt := alertManagerConfigCache{redis: c.redis, logger: c.logger, alertWebhookAddr: c.alertWebhookAddr, webhookFileDir: c.webhookFileDir, serverPort: c.serverPort, alertPoolDAO: c.alertPoolDAO, alertSendDAO: c.alertSendDAO, configDAO: c.configDAO, batchManager: c.batchManager, journal: c.journal, history: c.history, projection: c.projection}
 			if strings.Contains(mode, "index remove retry") {
 				wrapped.failIntentRemove = true
 			}
@@ -153,7 +163,15 @@ func TestAlertRetirementRetryAnchors(t *testing.T) {
 			} else if r.values[hookKey] != "" {
 				t.Fatal("retired webhook not cleaned")
 			}
-			_ = g
+			if strings.HasPrefix(mode, "active ") {
+				g.rows[0].Enable = 2
+				if err := rebuilt.GenerateMainConfig(ctx); err != nil {
+					t.Fatal(err)
+				}
+				if r.values[hookKey] != "" || len(r.members[alertRetirementIntentKey(pool.ID)]) != 0 {
+					t.Fatal("restored SQL-rollback owner did not retire after disable")
+				}
+			}
 		})
 	}
 }
@@ -178,28 +196,53 @@ func TestAlertRetirementOwnerChangeAfterPreflight(t *testing.T) {
 				}
 			}
 			before := r.values[key]
-			wrapped := &alertRetirementRedis{alertContractRedis: r, onPending: func() { target.Name = "operator-custom" }}
+			called := false
+			wrapped := &alertRetirementRedis{alertContractRedis: r, onPending: func() {
+				called = true
+				row, err := db.projection.MonitorConfigDAO.GetMonitorConfigByID(ctx, target.ID)
+				if err != nil {
+					t.Fatal("actual owner fixture missing", err)
+				}
+				row.Name = "operator-custom"
+				if err := db.projection.MonitorConfigDAO.UpdateMonitorConfig(ctx, row); err != nil {
+					t.Fatal("actual ordinary owner change failed", err)
+				}
+			}}
 			c.redis = wrapped
 			pool.AlertManagerInstances = model.StringList{"127.0.0.1"}
 			if err := c.GenerateMainConfig(ctx); err == nil {
 				t.Fatal("changed owner accepted")
 			}
-			if r.values[key] != before || db.rows[target.ID] != target {
-				t.Fatal("CAS rejection followed destructive cleanup")
+			if !called {
+				t.Fatal("actual typed AM commit interleaving was not reached")
+			}
+			actual, err := db.projection.MonitorConfigDAO.GetMonitorConfigByID(ctx, target.ID)
+			if err != nil || actual.ID != target.ID || actual.Name != "operator-custom" || actual.ConfigType != kind || r.values[key] != before {
+				t.Fatal("CAS rejection followed destructive cleanup or lost the actual changed owner")
 			}
 		})
 	}
 }
 func TestAlertRetirementMalformedIntentZeroWrites(t *testing.T) {
 	for _, raw := range []string{"not-json", `{"ID":1}`, `{"ID":1,"PoolID":99,"ConfigType":5,"InstanceIP":"127.0.0.2_3","Name":"webhook_x_3_127.0.0.2"}`} {
-		c, _, r, _, pool, _ := alertContractCache(t)
+		c, _, r, db, pool, _ := alertContractCache(t)
 		if err := c.GenerateMainConfig(context.Background()); err != nil {
 			t.Fatal(err)
 		}
 		r.members[alertRetirementIntentKey(pool.ID)] = map[string]bool{raw: true}
 		before := r.writes
-		if err := c.GenerateMainConfig(context.Background()); err == nil || r.writes != before {
-			t.Fatal("invalid intent mutated publication")
+		rows, values := copyAlertRows(db.rows), copyAlertRedis(r.values)
+		versions, err := db.projection.journal.ReadAMSourceVersions(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = c.GenerateMainConfig(context.Background())
+		if err == nil || r.writes != before {
+			t.Fatalf("invalid intent rejected=%v publication write delta=%d", err != nil, r.writes-before)
+		}
+		afterVersions, err := db.projection.journal.ReadAMSourceVersions(context.Background())
+		if err != nil || !reflect.DeepEqual(versions, afterVersions) || !sameAlertRetirementState(values, r.values, rows, db.rows) {
+			t.Fatal("invalid intent changed a source reservation or last-good business state")
 		}
 	}
 }

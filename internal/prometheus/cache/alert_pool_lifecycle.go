@@ -15,6 +15,9 @@ func cloneAlertPoolLifecycle(source *model.MonitorAlertManagerPool) *model.Monit
 	return &copy
 }
 func readAlertPoolLifecycleSnapshot(ctx context.Context, dao alertdao.AlertManagerPoolDAO) ([]*model.MonitorAlertManagerPool, error) {
+	return readAlertPoolSnapshot(ctx, dao, true)
+}
+func readAlertPoolSnapshot(ctx context.Context, dao alertdao.AlertManagerPoolDAO, lifecycle bool) ([]*model.MonitorAlertManagerPool, error) {
 	if dao == nil {
 		return nil, errors.New("AM生命周期存储不可用")
 	}
@@ -25,7 +28,15 @@ func readAlertPoolLifecycleSnapshot(ctx context.Context, dao alertdao.AlertManag
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		rows, total, err := dao.GetMonitorAlertManagerPoolLifecycleList(ctx, &model.GetMonitorAlertManagerPoolListReq{ListReq: model.ListReq{Page: page, Size: 100}})
+		var rows []*model.MonitorAlertManagerPool
+		var total int64
+		var err error
+		request := &model.GetMonitorAlertManagerPoolListReq{ListReq: model.ListReq{Page: page, Size: 100}}
+		if lifecycle {
+			rows, total, err = dao.GetMonitorAlertManagerPoolLifecycleList(ctx, request)
+		} else {
+			rows, total, err = dao.GetMonitorAlertManagerPoolList(ctx, request)
+		}
 		if err != nil || total < 0 || expected >= 0 && total != expected {
 			return nil, errors.Join(errors.New("AM生命周期分页读取失败"), ctx.Err())
 		}
@@ -65,6 +76,10 @@ func (a *alertManagerConfigCache) RetireDeletedAlertManagerPool(ctx context.Cont
 	if a.alertPoolDAO == nil || poolID <= 0 {
 		return errors.New("缺少AM删除授权")
 	}
+	versions, err := a.amSourceVersions(ctx)
+	if err != nil {
+		return err
+	}
 	pool, err := a.alertPoolDAO.GetMonitorAlertManagerPoolTombstone(ctx, poolID)
 	if err != nil {
 		return errors.Join(errors.New("无法确认AM删除记录"), ctx.Err())
@@ -72,11 +87,15 @@ func (a *alertManagerConfigCache) RetireDeletedAlertManagerPool(ctx context.Cont
 	if pool == nil || pool.ID != poolID || pool.DeletedAt == 0 {
 		return errors.New("缺少真实AM删除授权")
 	}
-	return a.publishAlertPool(ctx, cloneAlertPoolLifecycle(pool))
+	return a.publishAlertPool(ctx, cloneAlertPoolLifecycle(pool), amSourceVersionFor(versions, pool.ID))
 }
 func (a *alertManagerConfigCache) ReconcileDeletedAlertManagerPools(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	versions, err := a.amSourceVersions(ctx)
+	if err != nil {
+		return err
+	}
 	pools, err := readAlertPoolLifecycleSnapshot(ctx, a.alertPoolDAO)
 	if err != nil {
 		return err
@@ -89,7 +108,7 @@ func (a *alertManagerConfigCache) ReconcileDeletedAlertManagerPools(ctx context.
 		if pool.DeletedAt == 0 {
 			continue
 		}
-		if err := a.publishAlertPool(ctx, pool); err != nil {
+		if err := a.publishAlertPool(ctx, pool, amSourceVersionFor(versions, pool.ID)); err != nil {
 			failures = append(failures, err)
 		}
 	}

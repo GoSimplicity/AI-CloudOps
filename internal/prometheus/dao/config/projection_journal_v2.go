@@ -25,6 +25,8 @@ type projectionManifestEnvelope struct {
 	RecordSuperseded []RecordSupersededArtifact `json:"record_superseded,omitempty"`
 	RuleSuperseded   []RecordSupersededArtifact `json:"rule_superseded,omitempty"`
 	PromSuperseded   []RecordSupersededArtifact `json:"prom_superseded,omitempty"`
+	AMControls       *AMCommittedVector         `json:"am_controls,omitempty"`
+	AMSuperseded     []RecordSupersededArtifact `json:"am_superseded,omitempty"`
 }
 type preparedProjectionPlan struct {
 	request    GeneratedProjectionPlanRequest
@@ -33,6 +35,8 @@ type preparedProjectionPlan struct {
 	digest     [32]byte
 	history    []RecordHistoryGuard
 	superseded []RecordSupersededArtifact
+	amSource   *AMSourceVersion
+	amControls *AMCommittedVector
 }
 
 func prepareProjectionPlan(req GeneratedProjectionPlanRequest) (*preparedProjectionPlan, error) {
@@ -115,10 +119,13 @@ func prepareProjectionPlan(req GeneratedProjectionPlanRequest) (*preparedProject
 			if control.Intents.Remove == nil {
 				control.Intents.Remove = []IntentOwnerChange{}
 			}
-			for _, entries := range [][]IntentOwnerChange{control.Intents.Add, control.Intents.Remove} {
+			for which, entries := range [][]IntentOwnerChange{control.Intents.Add, control.Intents.Remove} {
 				seenOwners := map[GeneratedConfigOwner]bool{}
 				for _, entry := range entries {
 					owner := entry.Owner
+					if entry.AliasCurrentOwner != nil && (which == 0 || !validIntentAlias(owner, *entry.AliasCurrentOwner)) {
+						return nil, ErrJournalInvalid
+					}
 					if !validGeneratedOwner(owner) || owner.ConfigType != 5 || owner.PoolID != req.Reservation.PoolID ||
 						!validConfigNamespace(configNamespaceKey{5, owner.InstanceIP}) || !utf8.ValidString(owner.Name) ||
 						utf8.RuneCountInString(owner.Name) > model.MonitorConfigNameMaxRunes || seenOwners[owner] {
@@ -227,6 +234,13 @@ func (d *monitorConfigDAO) resolveProjectionControls(tx *gorm.DB, prepared *prep
 			result := &IssuedWebhookIntentsControl{Add: []IssuedIntentOwnerChange{}, Remove: []IssuedIntentOwnerChange{}, RequireEmpty: true}
 			for which, changes := range [][]IntentOwnerChange{control.Intents.Add, control.Intents.Remove} {
 				for _, change := range changes {
+					locatorOwner := change.Owner
+					if change.AliasCurrentOwner != nil {
+						if which == 0 || !validIntentAlias(locatorOwner, *change.AliasCurrentOwner) {
+							return nil, ErrJournalInvalid
+						}
+						change.Owner = *change.AliasCurrentOwner
+					}
 					event := model.MonitorConfigArtifactEvent{}
 					if change.Proof.SourceID != 0 {
 						var ok bool
@@ -365,7 +379,11 @@ func (d *monitorConfigDAO) resolveProjectionControls(tx *gorm.DB, prepared *prep
 							return nil, ErrJournalConflict
 						}
 					}
-					value := IssuedIntentOwnerChange{Owner: change.Owner, ProofEventID: event.EventID, ProofSourceID: change.Proof.SourceID}
+					value := IssuedIntentOwnerChange{Owner: locatorOwner, ProofEventID: event.EventID, ProofSourceID: change.Proof.SourceID}
+					if change.AliasCurrentOwner != nil {
+						owner := *change.AliasCurrentOwner
+						value.AliasCurrentOwner = &owner
+					}
 					if which == 0 {
 						result.Add = append(result.Add, value)
 					} else {
@@ -427,7 +445,7 @@ func decodeProjectionManifest(raw *string) (projectionManifestEnvelope, error) {
 			return envelope, ErrJournalConflict
 		}
 	}
-	if boolCount(envelope.RecordSuperseded != nil, envelope.RuleSuperseded != nil, envelope.PromSuperseded != nil) > 1 {
+	if boolCount(envelope.RecordSuperseded != nil, envelope.RuleSuperseded != nil, envelope.PromSuperseded != nil, envelope.AMSuperseded != nil) > 1 {
 		return envelope, ErrJournalConflict
 	}
 	if err := validateIssuedControlShape(envelope.Controls, envelope.Artifacts); err != nil {
@@ -470,13 +488,16 @@ func validateIssuedControlShape(controls []IssuedProjectionControl, artifacts []
 			if control.Intents == nil || !control.Intents.RequireEmpty {
 				return ErrJournalConflict
 			}
-			for _, changes := range [][]IssuedIntentOwnerChange{control.Intents.Add, control.Intents.Remove} {
-				owners := map[int]bool{}
+			for which, changes := range [][]IssuedIntentOwnerChange{control.Intents.Add, control.Intents.Remove} {
+				owners := map[GeneratedConfigOwner]bool{}
 				for _, change := range changes {
-					if !validGeneratedOwner(change.Owner) || change.Owner.ConfigType != 5 || change.ProofEventID == 0 || owners[change.Owner.ID] {
+					if change.AliasCurrentOwner != nil && (which == 0 || !validIntentAlias(change.Owner, *change.AliasCurrentOwner)) {
 						return ErrJournalConflict
 					}
-					owners[change.Owner.ID] = true
+					if !validGeneratedOwner(change.Owner) || change.Owner.ConfigType != 5 || change.ProofEventID == 0 || owners[change.Owner] {
+						return ErrJournalConflict
+					}
+					owners[change.Owner] = true
 					if change.ProofSourceID != 0 {
 						found := false
 						for _, entry := range artifacts {
@@ -530,6 +551,15 @@ func (d *monitorConfigDAO) loadProjectionReceipt(tx *gorm.DB, op model.MonitorCo
 		return ProjectionReceipt{}, err
 	}
 	result := ProjectionReceipt{PoolReceipt: base, ManifestVersion: envelope.Version, CompleteControls: envelope.Version == 2}
+	if envelope.AMControls != nil {
+		if err := validateAMCommittedVector(tx, op, *envelope.AMControls); err != nil {
+			return ProjectionReceipt{}, err
+		}
+		copy := *envelope.AMControls
+		copy.FullOperationID = cloneUint64(copy.FullOperationID)
+		copy.SubsetOperationID = cloneUint64(copy.SubsetOperationID)
+		result.AMControls = &copy
+	}
 	if envelope.Version == 2 {
 		decoded, _ := hex.DecodeString(envelope.PlanDigest)
 		copy(result.PlanDigest[:], decoded)
@@ -610,8 +640,14 @@ func (d *monitorConfigDAO) loadProjectionReceipt(tx *gorm.DB, op model.MonitorCo
 		for _, artifact := range result.Artifacts {
 			check.Items = append(check.Items, GeneratedPlanItem{Desired: &model.MonitorConfig{InstanceIP: artifact.InstanceKey}})
 		}
-		if _, err := prepareScrapeRuleReplacements(check); err != nil {
-			return ProjectionReceipt{}, err
+		var proofErr error
+		if validAMFamily(op.Family) {
+			_, proofErr = prepareAMReplacements(AMProjectionPlanRequest{GeneratedProjectionPlanRequest: check.GeneratedProjectionPlanRequest, Superseded: check.Superseded})
+		} else {
+			_, proofErr = prepareScrapeRuleReplacements(check)
+		}
+		if proofErr != nil {
+			return ProjectionReceipt{}, proofErr
 		}
 		if err := d.validateScrapeRuleReplacementHistory(tx, op, proofs); err != nil {
 			return ProjectionReceipt{}, err
@@ -681,6 +717,12 @@ func scopedScrapeSuperseded(envelope projectionManifestEnvelope, family int8) ([
 	if envelope.PromSuperseded != nil && family != 1 {
 		return nil, ErrJournalConflict
 	}
+	if envelope.AMSuperseded != nil && !validAMFamily(family) {
+		return nil, ErrJournalConflict
+	}
+	if validAMFamily(family) {
+		return envelope.AMSuperseded, nil
+	}
 	if family == 1 {
 		return envelope.PromSuperseded, nil
 	}
@@ -698,4 +740,8 @@ func boolCount(values ...bool) int {
 		}
 	}
 	return count
+}
+
+func validIntentAlias(locator, current GeneratedConfigOwner) bool {
+	return validGeneratedOwner(locator) && validGeneratedOwner(current) && locator.ID == current.ID && locator.PoolID == current.PoolID && locator.ConfigType == 5 && current.ConfigType == 5 && locator.InstanceIP == current.InstanceIP && generatedRowNameValid(scrapeRuleOwnerModel(locator)) && generatedRowNameValid(scrapeRuleOwnerModel(current))
 }

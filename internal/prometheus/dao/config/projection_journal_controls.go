@@ -38,8 +38,9 @@ type ProjectionProofRef struct {
 	EventID  uint64 `json:"event_id,omitempty"`
 }
 type IntentOwnerChange struct {
-	Owner GeneratedConfigOwner `json:"owner"`
-	Proof ProjectionProofRef   `json:"proof"`
+	Owner             GeneratedConfigOwner  `json:"owner"`
+	Proof             ProjectionProofRef    `json:"proof"`
+	AliasCurrentOwner *GeneratedConfigOwner `json:"alias_current_owner,omitempty"`
 }
 type WebhookIntentsControl struct {
 	Add          []IntentOwnerChange `json:"add"`
@@ -60,9 +61,10 @@ type ProjectionControlDigest struct {
 	Digest    [32]byte `json:"digest"`
 }
 type IssuedIntentOwnerChange struct {
-	Owner         GeneratedConfigOwner `json:"owner"`
-	ProofEventID  uint64               `json:"proof_event_id"`
-	ProofSourceID uint64               `json:"proof_source_id,omitempty"`
+	Owner             GeneratedConfigOwner  `json:"owner"`
+	ProofEventID      uint64                `json:"proof_event_id"`
+	ProofSourceID     uint64                `json:"proof_source_id,omitempty"`
+	AliasCurrentOwner *GeneratedConfigOwner `json:"alias_current_owner,omitempty"`
 }
 type IssuedWebhookIntentsControl struct {
 	Add          []IssuedIntentOwnerChange `json:"add"`
@@ -92,6 +94,7 @@ type ProjectionReceipt struct {
 	CompleteControls bool
 	PlanDigest       [32]byte
 	Controls         []IssuedProjectionControl
+	AMControls       *AMCommittedVector `json:",omitempty"`
 }
 type ProjectionOperationSnapshot struct {
 	PoolOperationSnapshot
@@ -133,6 +136,19 @@ func cloneProjectionControls(input []ProjectionControl) []ProjectionControl {
 			copy := *value.Intents
 			copy.Add = append([]IntentOwnerChange(nil), value.Intents.Add...)
 			copy.Remove = append([]IntentOwnerChange(nil), value.Intents.Remove...)
+			for j := range copy.Add {
+				if copy.Add[j].AliasCurrentOwner != nil {
+					owner := *copy.Add[j].AliasCurrentOwner
+					copy.Add[j].AliasCurrentOwner = &owner
+				}
+			}
+			for j := range copy.Remove {
+				if copy.Remove[j].AliasCurrentOwner != nil {
+					owner := *copy.Remove[j].AliasCurrentOwner
+					copy.Remove[j].AliasCurrentOwner = &owner
+				}
+			}
+
 			out[i].Intents = &copy
 		}
 		if value.Ack != nil {
@@ -176,7 +192,7 @@ func equalProjectionPayload(a, b ProjectionReceipt) bool {
 	return a.Reservation == b.Reservation && a.SourceHash == b.SourceHash &&
 		a.ManifestVersion == b.ManifestVersion && a.CompleteControls == b.CompleteControls &&
 		a.PlanDigest == b.PlanDigest && reflect.DeepEqual(a.Artifacts, b.Artifacts) &&
-		reflect.DeepEqual(a.Controls, b.Controls)
+		reflect.DeepEqual(a.Controls, b.Controls) && reflect.DeepEqual(a.AMControls, b.AMControls)
 }
 func projectionAckProof(receipt ProjectionReceipt) (ProjectionAckProof, error) {
 	for _, control := range receipt.Controls {

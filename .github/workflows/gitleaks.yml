@@ -66,7 +66,7 @@ jobs:
           # 推送默认分支本身且无可用 before 时全量扫描；无法确定完整范围则失败（不再退化成只扫 HEAD）。
           range="$(bash .github/scripts/gitleaks-range.sh)"
           # gitleaks 8.30.1 在 git log 报错（如无效范围）时仍以 0 退出，这里先校验范围可解析。
-          git rev-list ${range} >/dev/null
+          git rev-list "${range}" >/dev/null
           echo "gitleaks scan range: ${range}"
           # --diff-merges=first-parent：merge 提交按相对第一父提交的差异输出，
           # 冲突解决 / evil merge 中引入的内容也会被扫描（默认 git log -p 不输出 merge 提交的差异）。

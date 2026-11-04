@@ -109,6 +109,10 @@ func rootReadRecordRESP(reader *bufio.Reader, depth int) (rootRecordRESP, error)
 	}
 }
 func rootIsRecordArtifactRequest(frame rootRecordRESP) bool {
+	return rootIsProjectionModeRequest(frame, "artifact")
+}
+
+func rootIsProjectionModeRequest(frame rootRecordRESP, mode string) bool {
 	if len(frame.args) < 5 || !bytes.EqualFold(frame.args[0], []byte("eval")) {
 		return false
 	}
@@ -119,7 +123,7 @@ func rootIsRecordArtifactRequest(frame rootRecordRESP) bool {
 	var wire struct {
 		Mode string `json:"mode"`
 	}
-	return json.Unmarshal(frame.args[keys+3], &wire) == nil && wire.Mode == "artifact"
+	return json.Unmarshal(frame.args[keys+3], &wire) == nil && wire.Mode == mode
 }
 
 type rootRecordQueueReply struct {
@@ -139,15 +143,22 @@ type rootRecordQueue struct {
 	mu          sync.Mutex
 	conns       map[net.Conn]bool
 	wg          sync.WaitGroup
+	match       func(rootRecordRESP) bool
 }
 
 func rootNewRecordQueue(t *testing.T, backend string) *rootRecordQueue {
+	t.Helper()
+	return rootNewRecordQueueMatching(t, backend, rootIsRecordArtifactRequest)
+}
+
+func rootNewRecordQueueMatching(t *testing.T, backend string, match func(rootRecordRESP) bool) *rootRecordQueue {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal("cannot start local delayed-packet fixture")
 	}
 	q := &rootRecordQueue{listener: listener, backend: backend, seen: make(chan struct{}), release: make(chan struct{}), result: make(chan rootRecordQueueReply, 1), stop: make(chan struct{}), conns: map[net.Conn]bool{}}
+	q.match = match
 	q.wg.Add(1)
 	go q.accept()
 	t.Cleanup(q.close)
@@ -218,7 +229,7 @@ func (q *rootRecordQueue) relay(client net.Conn) {
 		if err != nil {
 			return
 		}
-		if rootIsRecordArtifactRequest(request) && q.held.CompareAndSwap(false, true) {
+		if q.match(request) && q.held.CompareAndSwap(false, true) {
 			// The caller sees an unknown result and releases its SQL lease. The
 			// original Redis request remains in this real TCP intermediary's queue.
 			client.Close()

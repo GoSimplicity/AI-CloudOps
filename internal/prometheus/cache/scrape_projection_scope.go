@@ -3,7 +3,6 @@ package cache
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	configdao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
@@ -34,6 +33,14 @@ func (s scrapePublicationScope) pattern() string {
 	return ""
 }
 func (s scrapePublicationScope) rawKey(ip string) string {
+	if s == 2 || s == 5 {
+		binding, err := configdao.ProjectionBindingForNamespace(int8(s), ip)
+		if err != nil {
+			return ""
+		}
+		key, _ := projectionRawKey(binding)
+		return key
+	}
 	if s == scrapePromScope {
 		return buildRedisKeyPrometheusMain(ip)
 	}
@@ -70,7 +77,7 @@ func (s scrapePublicationScope) stateKey(pool int) string {
 	return ""
 }
 func ownedScrapeArtifact(row *model.MonitorConfig, scope scrapePublicationScope, poolID int) bool {
-	return scope.valid() && row != nil && row.ID > 0 && row.PoolID == poolID && row.ConfigType == int8(scope) && validateInstanceIPs([]string{row.InstanceIP}) == nil && row.Name == fmt.Sprintf(scope.pattern(), poolID, row.InstanceIP)
+	return ownedNamespaceArtifact(row, int8(scope), poolID)
 }
 
 type scrapePublicationJournal interface {
@@ -234,12 +241,18 @@ func (h promHistoryFacade) resolved(ctx context.Context, pool int, owners []conf
 	return h.GetProjectedPromMainRetirements(ctx, pool, owners)
 }
 func (s scrapePublicationScope) historyGuard(key string, rows []*model.MonitorConfig) (configdao.RecordHistoryGuard, error) {
+	if s == 2 || s == 5 {
+		return configdao.AMHistoryGuardOf(int8(s), key, rows)
+	}
 	if s == scrapePromScope {
 		return configdao.PromMainHistoryGuardOf(key, rows)
 	}
 	return configdao.ScrapeRuleHistoryGuardOf(configdao.ScrapeRuleScope(s), key, rows)
 }
 func (s scrapePublicationScope) validateHistory(owner configdao.GeneratedConfigOwner, guard configdao.RecordHistoryGuard) error {
+	if s == 2 || s == 5 {
+		return configdao.ValidateAMRetirementHistory(owner, guard)
+	}
 	if s == scrapePromScope {
 		return configdao.ValidatePromMainRetirementHistory(owner, guard)
 	}

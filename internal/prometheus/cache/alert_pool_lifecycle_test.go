@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	configdao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
 	"sync"
 	"testing"
 
@@ -135,8 +136,8 @@ func TestDeletedAMPoolFailuresRecoverFromTombstoneAfterRebuild(t *testing.T) {
 				t.Fatal("injected retirement failure returned complete")
 			}
 			if stage == "pending write" || stage == "members write" || stage == "intent add" {
-				if len(db.rows) != 4 {
-					t.Fatal("failed anchor changed SQL metadata")
+				if !amFixturePending(c, 2, pool.ID) {
+					t.Fatal("failed external anchor lost durable SQL retirement plan")
 				}
 				for _, ip := range []string{"127.0.0.1", "127.0.0.2"} {
 					if r.values[buildRedisKeyAlertManagerMain(ip)] == "" || r.values[buildRedisKeyWebhookFile(ip, 3)] == "" {
@@ -488,4 +489,11 @@ func TestDeletedAMPoolRecoveryPrecedesFailingNormalGeneration(t *testing.T) {
 		t.Fatal("normal generation failure contract changed")
 	}
 	assertDeletedAMRetired(t, r, db)
+}
+
+func (s deletedAMMetadataPages) GetGeneratedConfigPoolCandidates(ctx context.Context, req configdao.GeneratedConfigPoolQuery) ([]*model.MonitorConfig, int64, error) {
+	if req.ConfigType == s.kind {
+		return s.page(req.Page)
+	}
+	return s.alertContractConfigs.MonitorConfigDAO.GetGeneratedConfigPoolCandidates(ctx, req)
 }

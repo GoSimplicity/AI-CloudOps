@@ -111,13 +111,24 @@ func (d *monitorConfigDAO) ReservePoolOperation(ctx context.Context, req PoolOpe
 }
 
 func (d *monitorConfigDAO) reservePoolOperation(ctx context.Context, req PoolOperationRequest, expectedCounter *uint64) (PoolReservation, error) {
+	return d.reservePoolOperationWithAM(ctx, req, expectedCounter, nil)
+}
+func (d *monitorConfigDAO) reservePoolOperationWithAM(ctx context.Context, req PoolOperationRequest, expectedCounter *uint64, amSource *AMSourceVersion) (PoolReservation, error) {
 	if !validPublicationScope(req.Family, req.PoolID) || !nonzeroNonce(req.Nonce) || req.RecoveryOfOperationID != nil && *req.RecoveryOfOperationID == 0 {
 		return PoolReservation{}, ErrJournalInvalid
 	}
 	req.RecoveryOfOperationID = cloneUint64(req.RecoveryOfOperationID)
 	var result PoolReservation
 	err := d.journalTransaction(ctx, func(tx *gorm.DB) error {
-		control, err := lockPoolControl(tx, req.Family, req.PoolID)
+		var control *model.MonitorConfigPoolControl
+		var err error
+		var pair amLockedControls
+		if amSource != nil {
+			pair, err = lockAMControls(tx, req.PoolID, true)
+			control = pair.own(req.Family)
+		} else {
+			control, err = lockPoolControl(tx, req.Family, req.PoolID)
+		}
 		if err != nil {
 			return err
 		}
@@ -132,6 +143,9 @@ func (d *monitorConfigDAO) reservePoolOperation(ctx context.Context, req PoolOpe
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
+		}
+		if amSource != nil && !pair.matchesSource(*amSource, 0, 0) {
+			return ErrJournalConflict
 		}
 		if expectedCounter != nil && control.ReservedGeneration != *expectedCounter {
 			return ErrJournalConflict

@@ -1,5 +1,11 @@
 # 配置发布的持久日志与投影版本
 
+## 当前接线状态（2026-11-05）
+
+PromMain1、AlertRule3、Record4及AM full2/subset5均已接入持久计划、原SQL租约与typed Redis Store。AM使用双source控制与只读coverage，见[AM合同](alertmanager-projection.md)；其它发布器见[Prom合同](prom-main-projection.md)和[规则共享合同](scrape-rule-projection.md)。独立恢复worker与规模性能仍未完成，不以已接线声明整个1.0完成。当前schema ledger为1/2/3/4；下方保留各阶段当时的交付记录，最新验收见[当前完成度](readiness-current.md)。
+
+## 初始 v3 交付快照
+
 当前已交付 v3 存储结构及日志事务接口；普通配置写入会在同一 SQL 事务记录事件。新日志计划接口尚未接入发布器，Redis fencing 与恢复 worker 尚未交付。已有的两处 SQL 提交后 Redis 竞争仍属于后续验收，不能用建表成功声称发布窗口已经关闭。
 
 ## 三种记录的责任
