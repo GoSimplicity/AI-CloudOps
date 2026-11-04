@@ -1,5 +1,13 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-04：Record 真正发布链与恢复闭环
+
+正常生成、off/empty/deleted清退已接持久journal、原SQL租约和typed Store。源读取前的SQL版本与预留CAS拒绝迟到旧快照；事务历史guard防ABA，当前live owner的退役权限与已删除foreign观察分离，原permit只覆盖完整fresh目标时重放。见[Record合同与验收](record-projection.md)。
+
+- 20叶owned原生全部通过，0skip/fail，含真实TCP旧包在B完成后实际STALE、legacy/替代后空恢复/重建、B正常body更新及自己退役、真正source DAO快照竞争和同hash新增stale；临时实例清理0。
+- 全Go/vet/全部标签编译及完整cache/DAO/DI race、vet通过；实际Wire生成，专属Store pool构建失败及正常shutdown cleanup已接入。旧其它3pub测试分支保持。
+- 新source lock为独立Verify成功Webcd4f757/AIba187，新后端组合CI另验。AlertRule/Prometheus/AM发布器、独立恢复worker、规模性能和剩余ESLint仍待继续，不以单个Record阶段宣称1.0完成。本地preview继续clean5feb/schema4，未上线。
+
 ## 2026-11-04：Redis 原生协议接入自动隔离 CI
 
 新增显式owned实例入口，并接入三仓integration工作流。私有ACL/marker、动态loopback端口、只允许本机Unix Docker endpoint，创建与清理均核所有权；不复用本机业务服务。

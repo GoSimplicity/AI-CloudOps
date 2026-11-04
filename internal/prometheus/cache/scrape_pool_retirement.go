@@ -71,10 +71,22 @@ func (r *alertRuleConfigCache) ReconcileDeletedScrapePools(ctx context.Context) 
 func (r *recordRuleConfigCache) RetireDeletedScrapePool(ctx context.Context, poolID int) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return retireDeletedScrapePool(ctx, r.scrapePoolDAO, poolID, r.publishRecordPool)
+	versions, err := r.recordSourceVersions(ctx)
+	if err != nil {
+		return err
+	}
+	return retireDeletedScrapePool(ctx, r.scrapePoolDAO, poolID, func(ctx context.Context, pool *model.MonitorScrapePool) error {
+		return r.publishRecordPool(ctx, pool, versions[pool.ID])
+	})
 }
 func (r *recordRuleConfigCache) ReconcileDeletedScrapePools(ctx context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return reconcileDeletedScrapePools(ctx, r.scrapePoolDAO, r.publishRecordPool)
+	versions, err := r.recordSourceVersions(ctx)
+	if err != nil {
+		return err
+	}
+	return reconcileDeletedScrapePools(ctx, r.scrapePoolDAO, func(ctx context.Context, pool *model.MonitorScrapePool) error {
+		return r.publishRecordPool(ctx, pool, versions[pool.ID])
+	})
 }

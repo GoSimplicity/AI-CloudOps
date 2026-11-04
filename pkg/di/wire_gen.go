@@ -54,24 +54,24 @@ import (
 
 // Injectors from wire.go:
 
-func ProvideApp(cfg *config.Config) (*app.App, error) {
+func ProvideApp(cfg *config.Config) (*app.App, func(), error) {
 	logger, err := InitLogger(cfg)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	db, err := InitDB(cfg, logger)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	redisClient, err := InitRedis(cfg, logger)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	cmdable := ProvideRedisCmdable(redisClient)
 	jwtConfig := InitJWTConfig(cfg)
 	jwtHandler, err := jwt.NewJWTHandler(cmdable, jwtConfig)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	roleDAO := dao.NewRoleDAO(db)
 	roleService := service.NewRoleService(roleDAO, logger)
@@ -156,21 +156,29 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	batchConfigManager := cache.NewBatchConfigManager(monitorConfigDAO, logger)
 	prometheusConfigCache, err := cache.NewPrometheusConfigCache(cfg, logger, scrapePoolDAO, scrapeJobDAO, monitorConfigDAO, batchConfigManager, cmdable)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	alertManagerPoolDAO := alert.NewAlertManagerPoolDAO(db, logger)
 	alertManagerSendDAO := alert.NewAlertManagerSendDAO(db, logger)
 	alertManagerConfigCache, err := cache.NewAlertManagerConfigCache(cfg, logger, alertManagerPoolDAO, alertManagerSendDAO, monitorConfigDAO, batchConfigManager, cmdable)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	alertManagerRuleDAO := alert.NewAlertManagerRuleDAO(db, logger, userDAO)
 	alertRuleConfigCache := cache.NewAlertRuleConfigCache(logger, scrapePoolDAO, alertManagerRuleDAO, monitorConfigDAO, batchConfigManager, cmdable)
 	alertManagerRecordDAO := alert.NewAlertManagerRecordDAO(db, logger, userDAO)
-	recordRuleConfigCache := cache.NewRecordRuleConfigCache(logger, scrapePoolDAO, alertManagerRecordDAO, monitorConfigDAO, batchConfigManager, cmdable)
+	projectionPlanJournalDAO := config2.NewProjectionPlanJournalDAO(logger, db)
+	generatedConfigHistoryReader := config2.NewGeneratedConfigHistoryReader(logger, db)
+	projectionStore, cleanup, err := ProvideProjectionStore(redisClient)
+	if err != nil {
+		return nil, nil, err
+	}
+	recordProjectionRunner := cache.NewRecordProjectionRunner(projectionStore)
+	recordRuleConfigCache := cache.NewRecordRuleConfigCache(logger, scrapePoolDAO, alertManagerRecordDAO, monitorConfigDAO, batchConfigManager, cmdable, projectionPlanJournalDAO, generatedConfigHistoryReader, recordProjectionRunner)
 	monitorCache, err := cache.NewMonitorCache(cfg, prometheusConfigCache, alertManagerConfigCache, alertRuleConfigCache, recordRuleConfigCache, logger)
 	if err != nil {
-		return nil, err
+		cleanup()
+		return nil, nil, err
 	}
 	alertManagerEventService := alert2.NewAlertManagerEventService(alertManagerEventDAO, monitorCache, logger, userDAO, alertManagerSendDAO)
 	alertEventHandler := api4.NewAlertEventHandler(alertManagerEventService)
@@ -209,12 +217,14 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	workorderNotificationDAO := dao4.NewNotificationDAO(db, logger)
 	notificationConfig, err := InitNotificationConfig(cfg)
 	if err != nil {
-		return nil, err
+		cleanup()
+		return nil, nil, err
 	}
 	asynqClient := InitAsynqClient(cfg)
 	notificationManager, err := InitNotificationManager(notificationConfig, asynqClient, logger)
 	if err != nil {
-		return nil, err
+		cleanup()
+		return nil, nil, err
 	}
 	workorderNotificationService := service4.NewWorkorderNotificationService(workorderNotificationDAO, notificationManager, logger, workorderInstanceDAO, userDAO)
 	instanceService := service4.NewInstanceService(workorderInstanceDAO, workorderInstanceFlowDAO, workorderInstanceTimelineDAO, workorderInstanceCommentDAO, workorderProcessDAO, workorderFormDesignDAO, workorderTemplateDAO, workorderNotificationService, logger)
@@ -232,7 +242,8 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	treeLocalDAO := dao2.NewTreeLocalDAO(db, logger)
 	treeLocalService, err := service5.NewTreeLocalService(cfg, logger, treeLocalDAO)
 	if err != nil {
-		return nil, err
+		cleanup()
+		return nil, nil, err
 	}
 	terminalClientFactory := InitTerminalClientFactory(logger)
 	upgrader := InitWebSocketUpgrader(cfg)
@@ -241,18 +252,21 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	cloudAccountDAO := dao2.NewCloudAccountDAO(db, logger)
 	treeCloudService, err := service5.NewTreeCloudService(cfg, logger, treeCloudDAO, cloudAccountDAO)
 	if err != nil {
-		return nil, err
+		cleanup()
+		return nil, nil, err
 	}
 	treeCloudHandler := api6.NewTreeCloudHandler(treeCloudService, terminalClientFactory, upgrader, logger)
 	managedCloudDAO := dao2.NewManagedCloudDAO(db)
 	managedCloudService, err := service5.NewManagedCloudService(cfg, logger, cloudAccountDAO, treeCloudDAO, managedCloudDAO)
 	if err != nil {
-		return nil, err
+		cleanup()
+		return nil, nil, err
 	}
 	managedCloudHandler := api6.NewManagedCloudHandler(managedCloudService)
 	cloudAccountService, err := service5.NewCloudAccountService(cfg, logger, cloudAccountDAO)
 	if err != nil {
-		return nil, err
+		cleanup()
+		return nil, nil, err
 	}
 	cloudAccountHandler := api6.NewCloudAccountHandler(cloudAccountService)
 	cloudAccountRegionDAO := dao2.NewCloudAccountRegionDAO(db, logger)
@@ -283,7 +297,8 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	builtinTaskManager := cron.NewBuiltinTaskManager(logger, cronJobDAO)
 	sshExecutor, err := executor.NewSSHExecutor(cfg, logger, treeLocalDAO)
 	if err != nil {
-		return nil, err
+		cleanup()
+		return nil, nil, err
 	}
 	cronHandlers := handler.NewCronHandlers(logger, cronJobDAO, sshExecutor, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache, cronLocalExecPolicy)
 	cronManager := cron.NewUnifiedCronManager(logger, alertManagerOnDutyDAO, clusterDAO, k8sClient, clusterManager, monitorCache, cronScheduler, builtinTaskManager, cronHandlers)
@@ -291,13 +306,17 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 	processor := notification.NewProcessor(notificationManager, logger)
 	notificationEventWorker, err := service4.NewNotificationEventWorker(db, workorderNotificationService, logger)
 	if err != nil {
-		return nil, err
+		cleanup()
+		return nil, nil, err
 	}
 	appApp, err := app.NewApp(cfg, logger, db, redisClient, engine, applicationBootstrap, cronManager, server, asynqScheduler, cronHandlers, processor, notificationEventWorker)
 	if err != nil {
-		return nil, err
+		cleanup()
+		return nil, nil, err
 	}
-	return appApp, nil
+	return appApp, func() {
+		cleanup()
+	}, nil
 }
 
 // wire.go:
@@ -333,7 +352,9 @@ var Injector = wire.NewSet(
 	CronSet,
 )
 
-var CacheSet = wire.NewSet(cache.NewMonitorCache, cache.NewAlertManagerConfigCache, cache.NewAlertRuleConfigCache, cache.NewRecordRuleConfigCache, cache.NewPrometheusConfigCache, cache.NewBatchConfigManager)
+var CacheSet = wire.NewSet(
+	ProvideProjectionStore, config2.NewProjectionPlanJournalDAO, config2.NewGeneratedConfigHistoryReader, cache.NewRecordProjectionRunner, cache.NewMonitorCache, cache.NewAlertManagerConfigCache, cache.NewAlertRuleConfigCache, cache.NewRecordRuleConfigCache, cache.NewPrometheusConfigCache, cache.NewBatchConfigManager,
+)
 
 var ClientSet = wire.NewSet(client.NewK8sClient)
 

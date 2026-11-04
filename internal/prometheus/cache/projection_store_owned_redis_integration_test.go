@@ -186,6 +186,10 @@ func TestProjectionStoreOwnedRedisProtocol(t *testing.T) {
 		{"queued_full_plan", TestProjectionStoreReviewQueuedFullPlanCannotRevertHigherPrepare},
 		{"same_plan_sha", TestIndependentProjectionStoreLegacySHAIsEqualPayload},
 		{"same_plan_binding", TestIndependentProjectionStoreEqualPlanCannotRedirectArtifactBinding},
+		{"record_publishers", TestRecordProjectionNativeLatePacketsCannotDamageNewOwner},
+		{"record_legacy_owner", TestRecordProjectionNativeLegacyOwnerCanFinishAfterReplacement},
+		{"record_source_snapshot", TestRecordProjectionNativeOlderSourceCannotReserveAfterNewerPublication},
+		{"record_same_hash_metadata", TestRecordProjectionNativeSameHashFindsNewDatabaseOnlyRetirement},
 	}
 	for _, group := range groups {
 		skipped := false

@@ -18,16 +18,19 @@ import (
 )
 
 type projectionManifestEnvelope struct {
-	Version    uint8                     `json:"version"`
-	Artifacts  []poolManifestEntry       `json:"artifacts"`
-	Controls   []IssuedProjectionControl `json:"controls"`
-	PlanDigest string                    `json:"plan_digest"`
+	Version          uint8                      `json:"version"`
+	Artifacts        []poolManifestEntry        `json:"artifacts"`
+	Controls         []IssuedProjectionControl  `json:"controls"`
+	PlanDigest       string                     `json:"plan_digest"`
+	RecordSuperseded []RecordSupersededArtifact `json:"record_superseded,omitempty"`
 }
 type preparedProjectionPlan struct {
-	request  GeneratedProjectionPlanRequest
-	controls []ProjectionControl
-	keys     []configNamespaceKey
-	digest   [32]byte
+	request    GeneratedProjectionPlanRequest
+	controls   []ProjectionControl
+	keys       []configNamespaceKey
+	digest     [32]byte
+	history    []RecordHistoryGuard
+	superseded []RecordSupersededArtifact
 }
 
 func prepareProjectionPlan(req GeneratedProjectionPlanRequest) (*preparedProjectionPlan, error) {
@@ -591,6 +594,18 @@ func (d *monitorConfigDAO) loadProjectionReceipt(tx *gorm.DB, op model.MonitorCo
 			if members != 1 || intents != expectedIntents || ack != 1 || len(result.Controls) != 2+expectedIntents {
 				return ProjectionReceipt{}, ErrJournalConflict
 			}
+		}
+	}
+	if len(envelope.RecordSuperseded) > 0 {
+		check := RecordProjectionPlanRequest{GeneratedProjectionPlanRequest: GeneratedProjectionPlanRequest{GeneratedPlanRequest: GeneratedPlanRequest{Reservation: result.Reservation}}, Superseded: envelope.RecordSuperseded}
+		for _, artifact := range result.Artifacts {
+			check.Items = append(check.Items, GeneratedPlanItem{Desired: &model.MonitorConfig{InstanceIP: artifact.InstanceKey}})
+		}
+		if _, err := prepareRecordReplacements(check); err != nil {
+			return ProjectionReceipt{}, err
+		}
+		if err := d.validateRecordReplacementHistory(tx, op, envelope.RecordSuperseded); err != nil {
+			return ProjectionReceipt{}, err
 		}
 	}
 	return result, nil

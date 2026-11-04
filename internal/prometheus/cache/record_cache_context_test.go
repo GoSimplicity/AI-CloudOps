@@ -9,7 +9,7 @@ import (
 )
 
 func TestRecordingCanceledRefreshDoesNotReadOrPublish(t *testing.T) {
-	cache, source, storage, _ := newRecordingContractCache([]*model.MonitorRecordRule{{Name: "valid:up", Expr: "up", Enable: 1}})
+	cache, source, storage, _ := newRecordingContractCache(t, []*model.MonitorRecordRule{{Name: "valid:up", Expr: "up", Enable: 1}})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if err := cache.GenerateMainConfig(ctx); !errors.Is(err, context.Canceled) {

@@ -14,6 +14,7 @@ import (
 // process-local publication flag is copied into the replacement instance.
 type publicationAckHarness struct {
 	poolID         int
+	pending        func() bool
 	valueA, valueB string
 	publish        func() error
 	setValue       func(string)
@@ -28,13 +29,14 @@ type publicationAckHarness struct {
 
 func recordPublicationAckHarness(t *testing.T) publicationAckHarness {
 	t.Helper()
-	cache, source, storage, pool := newRecordingContractCache([]*model.MonitorRecordRule{{Name: "fixture:up", Expr: "up", Enable: 1}})
+	cache, source, storage, pool := newRecordingContractCache(t, []*model.MonitorRecordRule{{Name: "fixture:up", Expr: "up", Enable: 1}})
 	client := &recordingPublicationRedis{refreshRedis: storage, members: map[string]bool{}}
 	database := &recordingPublicationConfigs{rows: map[string]*model.MonitorConfig{}}
 	cache.redis = client
 	cache.batchManager = NewBatchConfigManager(database, cache.logger)
+	attachRecordingProjection(t, cache, database)
 	return publicationAckHarness{
-		poolID: pool.ID,
+		poolID: pool.ID, pending: func() bool { return recordFixturePending(cache) },
 		valueA: "up", valueB: "sum(up)",
 		publish:  func() error { return cache.GenerateMainConfig(context.Background()) },
 		setValue: func(value string) { source.rows[0].Expr = value },
@@ -53,7 +55,7 @@ func recordPublicationAckHarness(t *testing.T) publicationAckHarness {
 		restart: func() {
 			cache = &recordRuleConfigCache{logger: cache.logger, redis: client,
 				scrapePoolDAO: cache.scrapePoolDAO, alertRecordDAO: source,
-				batchManager: NewBatchConfigManager(database, cache.logger)}
+				batchManager: NewBatchConfigManager(database, cache.logger), configDAO: cache.configDAO, journal: cache.journal, history: cache.history, projection: cache.projection}
 		},
 		state: func() (string, string, string) {
 			redisRows := parseRecordingContract(t, storage.values[buildRedisKeyRecordRule("127.0.0.1")])
@@ -123,7 +125,7 @@ func TestPublicationAckRebuildRepairsCurrentSource(t *testing.T) {
 						t.Fatal("incomplete B publication reported success")
 					}
 					_, _, pending := fixture.state()
-					if !strings.HasPrefix(pending, "pending:") {
+					if fixture.pending != nil && !fixture.pending() || fixture.pending == nil && !strings.HasPrefix(pending, "pending:") {
 						t.Fatal("a partially written generation retained a trusted ACK")
 					}
 					wanted := fixture.valueB
@@ -173,7 +175,7 @@ func TestPublicationAckStablePoolIdentityAcrossRename(t *testing.T) {
 						t.Fatal("renamed B publication did not fail")
 					}
 					_, _, marker := fixture.state()
-					if !strings.HasPrefix(marker, "pending:") {
+					if fixture.pending != nil && !fixture.pending() || fixture.pending == nil && !strings.HasPrefix(marker, "pending:") {
 						t.Fatal("renaming changed the publication identity")
 					}
 					fixture.setName("name-a")
@@ -249,11 +251,20 @@ func TestPublicationPendingFailureMakesNoArtifactWrites(t *testing.T) {
 				t.Error("pending write failure reported success")
 			}
 			redisValue, databaseValue, marker := fixture.state()
-			if redisValue != fixture.valueA || databaseValue != fixture.valueA || marker != previousAck {
-				t.Error("failed pending write changed an acknowledged generation")
-			}
-			if nextArtifacts, nextSaves := fixture.writeCounts(); nextArtifacts != artifacts || nextSaves != saves {
-				t.Error("artifacts were touched before a durable pending marker")
+			if fixture.pending != nil {
+				if redisValue != fixture.valueA || databaseValue != fixture.valueB || marker != previousAck || !fixture.pending() {
+					t.Error("failed projection prepare lost committed SQL/pending state or advanced raw/ACK")
+				}
+				if nextArtifacts, _ := fixture.writeCounts(); nextArtifacts != artifacts {
+					t.Error("failed prepare changed Redis artifacts")
+				}
+			} else {
+				if redisValue != fixture.valueA || databaseValue != fixture.valueA || marker != previousAck {
+					t.Error("failed pending write changed an acknowledged generation")
+				}
+				if nextArtifacts, nextSaves := fixture.writeCounts(); nextArtifacts != artifacts || nextSaves != saves {
+					t.Error("artifacts were touched before a durable pending marker")
+				}
 			}
 			fixture.setFailure("")
 			fixture.restart()

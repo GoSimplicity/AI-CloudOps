@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gorm.io/gorm"
 	"reflect"
 	"sort"
 	"strings"
@@ -93,6 +94,9 @@ func (s *recordReconcileRedis) Set(_ context.Context, key string, value interfac
 	return redis.NewStatusResult("OK", nil)
 }
 func (s *recordReconcileRedis) SMembers(context.Context, string) *redis.StringSliceCmd {
+	if s.onRead != nil {
+		s.onRead()
+	}
 	if s.failure == "members read" {
 		return redis.NewStringSliceResult(nil, errors.New("fixture membership read failure"))
 	}
@@ -135,6 +139,7 @@ func (s *recordReconcileRedis) Del(_ context.Context, keys ...string) *redis.Int
 }
 
 type recordReconcileDB struct {
+	projection *recordProjectionFixture
 	configdao.MonitorConfigDAO
 	rows         map[int]*model.MonitorConfig
 	next, writes int
@@ -227,6 +232,7 @@ func newRecordReconcile(t *testing.T) (*recordRuleConfigCache, *recordReconcileS
 	db := &recordReconcileDB{rows: map[int]*model.MonitorConfig{}}
 	logger := zap.NewNop()
 	cache := &recordRuleConfigCache{logger: logger, redis: store, alertRecordDAO: source, scrapePoolDAO: &recordReconcilePools{pool: pool}, configDAO: db, batchManager: NewBatchConfigManager(db, logger)}
+	attachRecordReconcileProjection(t, cache, db)
 	return cache, source, store, db, pool
 }
 func recordReconcileACK(poolID int) string {
@@ -339,7 +345,8 @@ func TestRecordReconcileFailureThenReturnToEitherSnapshot(t *testing.T) {
 						pool.PrometheusInstances = model.StringList{"127.0.0.1", "127.0.0.2"}
 					}
 					if restart {
-						c = NewRecordRuleConfigCache(zap.NewNop(), c.scrapePoolDAO, source, db, NewBatchConfigManager(db, zap.NewNop()), store).(*recordRuleConfigCache)
+						c = NewRecordRuleConfigCache(zap.NewNop(), c.scrapePoolDAO, source, db, NewBatchConfigManager(db, zap.NewNop()), store, db.projection.journal, db.projection.history, nil).(*recordRuleConfigCache)
+						db.projection.attach(c)
 					}
 					if err := c.GenerateMainConfig(ctx); err != nil {
 						t.Fatal(err)
@@ -386,8 +393,8 @@ func TestRecordReconcilePendingFailureIsZeroArtifact(t *testing.T) {
 	if c.GenerateMainConfig(context.Background()) == nil {
 		t.Fatal("pending failure acknowledged")
 	}
-	if len(store.values) != 0 || len(store.members) != 0 || len(db.rows) != 0 || db.writes != 0 {
-		t.Fatal("artifact appeared before reliable pending marker")
+	if len(store.values) != 0 || len(store.members) != 0 || !recordFixturePending(c) || len(db.rows) != 2 {
+		t.Fatal("failed prepare published raw/ACK or lost its committed, unprojected SQL plan")
 	}
 }
 func TestRecordReconcileIgnoresLegacyNameKeys(t *testing.T) {
@@ -544,7 +551,8 @@ func TestRecordReconcileEmptyTargetFailureRecovery(t *testing.T) {
 						pool.PrometheusInstances = model.StringList{"127.0.0.1", "127.0.0.2"}
 					}
 					if restart {
-						c = NewRecordRuleConfigCache(zap.NewNop(), c.scrapePoolDAO, source, db, NewBatchConfigManager(db, zap.NewNop()), store).(*recordRuleConfigCache)
+						c = NewRecordRuleConfigCache(zap.NewNop(), c.scrapePoolDAO, source, db, NewBatchConfigManager(db, zap.NewNop()), store, db.projection.journal, db.projection.history, nil).(*recordRuleConfigCache)
+						db.projection.attach(c)
 					}
 					if err := c.GenerateMainConfig(ctx); err != nil {
 						t.Fatal(err)
@@ -741,4 +749,229 @@ func copyRecordReconcileRows(source map[int]*model.MonitorConfig) map[int]*model
 		copy[id] = &value
 	}
 	return copy
+}
+
+func TestRecordProjectionMemberOnlyLocatorCannotAuthorizeDeletion(t *testing.T) {
+	for _, mode := range []string{"empty targets", "feature off"} {
+		t.Run(mode, func(t *testing.T) {
+			c, _, store, db, pool := newRecordReconcile(t)
+			const ip = "127.0.0.9"
+			store.members[ip] = true
+			store.values[buildRedisKeyRecordRule(ip)] = "preserve unproved legacy bytes"
+			pool.PrometheusInstances = nil
+			if mode == "feature off" {
+				pool.SupportRecord = 2
+			}
+			before := copyRecordReconcileRedis(store.values)
+			if err := c.GenerateMainConfig(context.Background()); err == nil {
+				t.Fatal("member without SQL owner/history was treated as delete authority")
+			}
+			if !reflect.DeepEqual(before, store.values) || !store.members[ip] || len(db.rows) != 0 {
+				t.Fatal("unproved member cleanup changed raw data or metadata")
+			}
+			var operations int64
+			if db.projection.db.Model(&model.MonitorConfigPoolOperation{}).Count(&operations).Error != nil || operations != 0 {
+				t.Fatal("unproved member acquired a committed publication authority")
+			}
+		})
+	}
+}
+
+func TestRecordProjectionHistoricalTombstoneRequiresUnambiguousOwner(t *testing.T) {
+	for _, foreign := range []bool{false, true} {
+		t.Run(fmt.Sprintf("foreign-history-%v", foreign), func(t *testing.T) {
+			c, _, store, db, pool := newRecordReconcile(t)
+			const ip = "127.0.0.9"
+			pool.SupportRecord = 2
+			pool.PrometheusInstances = nil
+			owned := &model.MonitorConfig{Model: model.Model{ID: 91, DeletedAt: 19}, PoolID: pool.ID, ConfigType: 4, InstanceIP: ip, Name: fmt.Sprintf(ConfigNameRecordRule, pool.ID, ip), ConfigContent: "historical synthetic", Status: 2}
+			if db.projection.db.Session(&gorm.Session{SkipHooks: true}).Unscoped().Create(owned).Error != nil {
+				t.Fatal("real historical tombstone fixture failed")
+			}
+			if foreign {
+				row := *owned
+				row.ID = 92
+				row.PoolID = 99
+				row.Name = fmt.Sprintf(ConfigNameRecordRule, 99, ip)
+				if db.projection.db.Session(&gorm.Session{SkipHooks: true}).Unscoped().Create(&row).Error != nil {
+					t.Fatal("foreign historical tombstone fixture failed")
+				}
+			}
+			store.members[ip] = true
+			store.values[buildRedisKeyRecordRule(ip)] = "historical synthetic"
+			before := copyRecordReconcileRedis(store.values)
+			err := c.GenerateMainConfig(context.Background())
+			if foreign {
+				if err == nil || !reflect.DeepEqual(before, store.values) || !store.members[ip] {
+					t.Fatal("ambiguous cross-pool history was guessed into cleanup authority")
+				}
+				var operations int64
+				if db.projection.db.Model(&model.MonitorConfigPoolOperation{}).Count(&operations).Error != nil || operations != 0 {
+					t.Fatal("ambiguous history committed a cleanup plan")
+				}
+			} else {
+				if err != nil || store.members[ip] || store.values[buildRedisKeyRecordRule(ip)] != "" {
+					t.Fatal("proven historical owner did not complete retirement", err)
+				}
+				receipt, err := c.journal.LoadLastProjectedProjection(context.Background(), 4, pool.ID)
+				if err != nil || receipt == nil || receipt.Phase != model.ConfigPublicationProjected {
+					t.Fatal("historical retirement lacks its actual projected SQL receipt")
+				}
+			}
+			var saved model.MonitorConfig
+			if db.projection.db.Unscoped().First(&saved, owned.ID).Error != nil || saved.DeletedAt != owned.DeletedAt || saved.Name != owned.Name {
+				t.Fatal("historical owner audit row was changed or removed")
+			}
+		})
+	}
+}
+
+func TestRecordProjectionDiscoversUnindexedHistoricalArtifacts(t *testing.T) {
+	for _, foreign := range []bool{false, true} {
+		t.Run(fmt.Sprintf("foreign-history-%v", foreign), func(t *testing.T) {
+			c, source, store, db, pool := newRecordReconcile(t)
+			const ip = "127.0.0.19"
+			pool.SupportRecord = 2
+			pool.PrometheusInstances = nil
+			source.failure = true
+			owned := &model.MonitorConfig{Model: model.Model{ID: 191, DeletedAt: 29}, PoolID: pool.ID, ConfigType: 4, InstanceIP: ip, Name: fmt.Sprintf(ConfigNameRecordRule, pool.ID, ip), ConfigContent: "unindexed historical synthetic", Status: 2}
+			if db.projection.db.Session(&gorm.Session{SkipHooks: true}).Unscoped().Create(owned).Error != nil {
+				t.Fatal("unindexed tombstone fixture failed")
+			}
+			if foreign {
+				row := *owned
+				row.ID = 192
+				row.PoolID = 99
+				row.Name = "custom historical owner"
+				if db.projection.db.Session(&gorm.Session{SkipHooks: true}).Unscoped().Create(&row).Error != nil {
+					t.Fatal("foreign unindexed history fixture failed")
+				}
+			}
+			store.values[buildRedisKeyRecordRule(ip)] = "unindexed historical synthetic"
+			if len(store.members) != 0 {
+				t.Fatal("fixture unexpectedly has a member locator")
+			}
+			prior, err := c.journal.LoadLastCommittedProjection(context.Background(), 4, pool.ID)
+			if err != nil || prior != nil {
+				t.Fatal("fixture unexpectedly has a durable prior manifest")
+			}
+			before := copyRecordReconcileRedis(store.values)
+			err = c.GenerateMainConfig(context.Background())
+			if foreign {
+				if err == nil || !reflect.DeepEqual(before, store.values) {
+					t.Fatal("unindexed foreign history was acknowledged or modified")
+				}
+				var operations int64
+				if db.projection.db.Model(&model.MonitorConfigPoolOperation{}).Count(&operations).Error != nil || operations != 0 {
+					t.Fatal("ambiguous unindexed history acquired publication authority")
+				}
+			} else {
+				if err != nil || store.values[buildRedisKeyRecordRule(ip)] != "" || len(store.members) != 0 {
+					t.Fatal("unindexed canonical tombstone was not discovered and retired", err)
+				}
+				receipt, err := c.journal.LoadLastProjectedProjection(context.Background(), 4, pool.ID)
+				if err != nil || receipt == nil || len(receipt.Artifacts) != 1 || receipt.Artifacts[0].InstanceKey != ip || receipt.Artifacts[0].Action != model.ConfigProjectionRetire {
+					t.Fatal("unindexed retirement lacks its exact projected SQL artifact receipt")
+				}
+			}
+			var audit model.MonitorConfig
+			if db.projection.db.Unscoped().First(&audit, owned.ID).Error != nil || audit.DeletedAt != owned.DeletedAt || audit.Name != owned.Name {
+				t.Fatal("unindexed historical audit row changed")
+			}
+			if source.calls != 0 {
+				t.Fatal("explicit off consulted broken record definitions")
+			}
+		})
+	}
+}
+
+func TestRecordProjectionCommitRechecksHistoryAfterForeignABA(t *testing.T) {
+	for _, state := range []string{"historical tombstone", "active owner deleted after preflight"} {
+		t.Run(state, func(t *testing.T) {
+			c, _, store, db, pool := newRecordReconcile(t)
+			ctx := context.Background()
+			const ip = "127.0.0.1"
+			var owned model.MonitorConfig
+			if state == "historical tombstone" {
+				owned = model.MonitorConfig{Model: model.Model{ID: 91, DeletedAt: 19}, PoolID: pool.ID, ConfigType: 4, InstanceIP: ip, Name: fmt.Sprintf(ConfigNameRecordRule, pool.ID, ip), ConfigContent: "original synthetic", Status: 2}
+				if db.projection.db.Session(&gorm.Session{SkipHooks: true}).Unscoped().Create(&owned).Error != nil {
+					t.Fatal("real tombstone fixture failed")
+				}
+				store.members[ip] = true
+				store.values[buildRedisKeyRecordRule(ip)] = "original synthetic"
+			} else {
+				if err := c.GenerateMainConfig(ctx); err != nil {
+					t.Fatal(err)
+				}
+				for _, row := range db.rows {
+					if row.InstanceIP == ip {
+						owned = *row
+					}
+				}
+				if owned.ID <= 0 {
+					t.Fatal("active SQL owner missing")
+				}
+			}
+			oldSHA := store.values[recordPublicationKey(pool.ID)]
+			oldReceipt := store.values[projectionPoolKey(4, pool.ID, "ack")]
+			prior, err := c.journal.LoadLastCommittedProjection(ctx, 4, pool.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pool.SupportRecord = 2
+			pool.PrometheusInstances = nil
+			called := false
+			hook := &recordFixtureCommitHook{RecordProjectionJournalDAO: db.projection.journal}
+			hook.before = func() {
+				if called {
+					t.Fatal("typed commit interleaving repeated")
+				}
+				called = true
+				if state == "active owner deleted after preflight" {
+					if err := db.projection.MonitorConfigDAO.DeleteMonitorConfig(ctx, owned.ID); err != nil {
+						t.Fatal("ordinary owner deletion failed", err)
+					}
+				}
+				foreign := &model.MonitorConfig{PoolID: 99, ConfigType: 4, InstanceIP: ip, Name: "foreign transient owner", ConfigContent: "foreign transient synthetic", Status: 2}
+				if err := db.projection.MonitorConfigDAO.CreateMonitorConfig(ctx, foreign); err != nil {
+					t.Fatal("ordinary foreign create failed", err)
+				}
+				if err := db.projection.MonitorConfigDAO.DeleteMonitorConfig(ctx, foreign.ID); err != nil {
+					t.Fatal("ordinary foreign delete failed", err)
+				}
+				store.values[buildRedisKeyRecordRule(ip)] = "foreign transient synthetic"
+			}
+			c.journal = hook
+			publishErr := c.GenerateMainConfig(ctx)
+			if !called {
+				t.Fatal("interleaving did not reach actual typed commit boundary")
+			}
+			if publishErr == nil {
+				t.Fatal("preflight proof survived foreign create-delete ABA")
+			}
+			if store.values[buildRedisKeyRecordRule(ip)] != "foreign transient synthetic" || store.values[recordPublicationKey(pool.ID)] != oldSHA || store.values[projectionPoolKey(4, pool.ID, "ack")] != oldReceipt {
+				t.Fatal("rejected history proof changed raw data or acknowledged a new projection")
+			}
+			current, err := c.journal.LoadLastCommittedProjection(ctx, 4, pool.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if prior == nil {
+				if current != nil {
+					t.Fatal("failed history guard committed a new manifest")
+				}
+			} else if current == nil || current.Reservation.OperationID != prior.Reservation.OperationID {
+				t.Fatal("failed history guard replaced the last-good committed operation")
+			}
+			var history []*model.MonitorConfig
+			if db.projection.db.Unscoped().Where("config_type=4 AND instance_ip=?", ip).Find(&history).Error != nil || len(history) != 2 {
+				t.Fatal("ABA audit history was removed")
+			}
+			for _, row := range history {
+				if row.DeletedAt == 0 {
+					t.Fatal("foreign ABA did not leave a vacant namespace fixture")
+				}
+			}
+		})
+	}
 }

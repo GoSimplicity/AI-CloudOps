@@ -140,7 +140,7 @@ func newRetirementFixture(t *testing.T, kind string) *retirementFixture {
 		h.writes = func() int { return store.writes + db.writes }
 		h.onRead = func(fn func()) { store.onRead = fn }
 		h.rebuild = func() {
-			c = &recordRuleConfigCache{logger: c.logger, redis: store, scrapePoolDAO: h.inventory, alertRecordDAO: source, configDAO: db, batchManager: c.batchManager}
+			c = &recordRuleConfigCache{logger: c.logger, redis: store, scrapePoolDAO: h.inventory, alertRecordDAO: source, configDAO: c.configDAO, batchManager: c.batchManager, journal: c.journal, history: c.history, projection: c.projection}
 			h.publisher = c
 		}
 	default:
@@ -239,7 +239,11 @@ func TestDeletedScrapePoolPartialFailuresRecoverAfterRebuild(t *testing.T) {
 							t.Fatal("failed pending write changed visible artifact")
 						}
 					}
-					if len(h.rows) != 2 || len(h.members) != 2 {
+					if kind == "record" {
+						if !recordFixturePending(h.publisher.(*recordRuleConfigCache)) || len(h.members) != 2 {
+							t.Fatal("failed prepare lost durable retirement or changed members")
+						}
+					} else if len(h.rows) != 2 || len(h.members) != 2 {
 						t.Fatal("failed pending write changed metadata/members")
 					}
 				}
@@ -413,7 +417,11 @@ func TestLiveScrapePoolRetirementAnchorsDBOnlyArtifactsBeforeSQLDelete(t *testin
 						t.Fatal("injected retirement failure reported complete")
 					}
 					if stage == "sadd" {
-						if len(h.rows) != 2 {
+						if kind == "record" {
+							if !recordFixturePending(h.publisher.(*recordRuleConfigCache)) {
+								t.Fatal("failed projection control lost durable retirement")
+							}
+						} else if len(h.rows) != 2 {
 							t.Fatal("failed retirement anchor allowed SQL deletion")
 						}
 						for _, ip := range []string{"127.0.0.1", "127.0.0.2"} {

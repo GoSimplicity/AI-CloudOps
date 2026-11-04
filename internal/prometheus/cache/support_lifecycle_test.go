@@ -115,26 +115,42 @@ func (s *supportRedis) Del(_ context.Context, keys ...string) *redis.IntCmd {
 }
 
 type supportFixture struct {
-	pool         *model.MonitorScrapePool
-	inventory    *supportInventory
-	store        *supportRedis
-	db           *alertRulePubDB
-	ruleSource   *alertRulePubSource
-	recordSource *recordReconcileSource
-	rule         *alertRuleConfigCache
-	record       *recordRuleConfigCache
+	recordProjection *recordProjectionFixture
+	pool             *model.MonitorScrapePool
+	inventory        *supportInventory
+	store            *supportRedis
+	db               *alertRulePubDB
+	ruleSource       *alertRulePubSource
+	recordSource     *recordReconcileSource
+	rule             *alertRuleConfigCache
+	record           *recordRuleConfigCache
 }
 
-func newSupportFixture() *supportFixture {
+func newSupportFixture(t *testing.T) *supportFixture {
 	f := &supportFixture{pool: &model.MonitorScrapePool{Model: model.Model{ID: 7}, Name: "support-A", SupportAlert: 1, SupportRecord: 1, PrometheusInstances: model.StringList{"127.0.0.1", "127.0.0.2"}}, store: &supportRedis{values: map[string]string{}, sets: map[string]map[string]bool{}}, db: &alertRulePubDB{rows: map[int]*model.MonitorConfig{}}, ruleSource: &alertRulePubSource{rows: []*model.MonitorAlertRule{alertingContractRow(31)}}, recordSource: &recordReconcileSource{rows: []*model.MonitorRecordRule{recordReconcileRow()}}}
 	f.inventory = &supportInventory{pool: f.pool}
+	f.recordProjection = newRecordProjectionFixture(t, func() []*model.MonitorConfig { return targetedFakeMapRows(f.db.rows) }, func(rows []*model.MonitorConfig) {
+		for id, row := range f.db.rows {
+			if row.ConfigType == 4 {
+				delete(f.db.rows, id)
+			}
+		}
+		for _, row := range rows {
+			copy := *row
+			f.db.rows[row.ID] = &copy
+			if row.ID > f.db.next {
+				f.db.next = row.ID
+			}
+		}
+	}, func() string { return f.db.failure }, func() { f.db.writes++ })
 	f.rebuild()
 	return f
 }
 func (f *supportFixture) rebuild() {
 	logger := zap.NewNop()
 	f.rule = NewAlertRuleConfigCache(logger, f.inventory, f.ruleSource, f.db, NewBatchConfigManager(f.db, logger), f.store).(*alertRuleConfigCache)
-	f.record = NewRecordRuleConfigCache(logger, f.inventory, f.recordSource, f.db, NewBatchConfigManager(f.db, logger), f.store).(*recordRuleConfigCache)
+	f.record = NewRecordRuleConfigCache(logger, f.inventory, f.recordSource, f.db, NewBatchConfigManager(f.db, logger), f.store, f.recordProjection.journal, f.recordProjection.history, nil).(*recordRuleConfigCache)
+	f.recordProjection.attach(f.record)
 }
 func (f *supportFixture) publish(kind string) error {
 	if kind == "rule" {
@@ -208,7 +224,7 @@ func copySupportSets(source map[string]map[string]bool) map[string]map[string]bo
 func TestSupportLifecycleOnOffOnIsFeatureScoped(t *testing.T) {
 	for _, kind := range []string{"rule", "record"} {
 		t.Run(kind, func(t *testing.T) {
-			f := newSupportFixture()
+			f := newSupportFixture(t)
 			if err := f.publish("rule"); err != nil {
 				t.Fatal(err)
 			}
@@ -267,7 +283,7 @@ func TestSupportLifecycleOffBypassesBadRulesAndUntrustedCurrentTargets(t *testin
 	for _, kind := range []string{"rule", "record"} {
 		for _, mode := range []string{"DAO failure", "bad rows"} {
 			t.Run(kind+"/"+mode, func(t *testing.T) {
-				f := newSupportFixture()
+				f := newSupportFixture(t)
 				if err := f.publish(kind); err != nil {
 					t.Fatal(err)
 				}
@@ -301,7 +317,7 @@ func TestSupportLifecycleUnknownFlagsAreReadOnly(t *testing.T) {
 	for _, kind := range []string{"rule", "record"} {
 		for _, flag := range []int8{0, -1, 3, 127} {
 			t.Run(fmt.Sprintf("%s/%d", kind, flag), func(t *testing.T) {
-				f := newSupportFixture()
+				f := newSupportFixture(t)
 				if err := f.publish(kind); err != nil {
 					t.Fatal(err)
 				}
@@ -324,7 +340,7 @@ func TestSupportLifecycleOffFailureReturnsToOnOrCompletesOff(t *testing.T) {
 			for _, target := range []string{"on", "off"} {
 				for _, restart := range []bool{false, true} {
 					t.Run(fmt.Sprintf("%s/%s/%s/restart%v", kind, stage, target, restart), func(t *testing.T) {
-						f := newSupportFixture()
+						f := newSupportFixture(t)
 						if err := f.publish(kind); err != nil {
 							t.Fatal(err)
 						}
@@ -373,7 +389,7 @@ func TestSupportLifecyclePendingFailureAndOwnershipConflictDoNotWrite(t *testing
 		for _, state := range []int8{1, 2} {
 			for _, mode := range []string{"pending", "custom rename", "foreign mixed"} {
 				t.Run(fmt.Sprintf("%s/state%d/%s", kind, state, mode), func(t *testing.T) {
-					f := newSupportFixture()
+					f := newSupportFixture(t)
 					if err := f.publish(kind); err != nil {
 						t.Fatal(err)
 					}
@@ -405,6 +421,12 @@ func TestSupportLifecyclePendingFailureAndOwnershipConflictDoNotWrite(t *testing
 					if mode == "pending" {
 						extra = 1
 					}
+					if kind == "record" && mode == "pending" {
+						if f.store.writes != writes || !recordFixturePending(f.record) || !reflect.DeepEqual(before, f.store.values) || !reflect.DeepEqual(sets, f.store.sets) {
+							t.Fatal("failed projection prepare changed raw/ACK or lost durable pending state")
+						}
+						return
+					}
 					if f.store.writes != writes+extra || f.db.writes != dbWrites || !reflect.DeepEqual(before, f.store.values) || !reflect.DeepEqual(rows, f.db.rows) || !reflect.DeepEqual(sets, f.store.sets) {
 						t.Fatal("precondition failure changed an artifact or acknowledged state")
 					}
@@ -417,7 +439,7 @@ func TestSupportLifecycleReadFailureAndMissingPoolAreNotOff(t *testing.T) {
 	for _, kind := range []string{"rule", "record"} {
 		for _, mode := range []string{"read failure", "missing pool"} {
 			t.Run(kind+"/"+mode, func(t *testing.T) {
-				f := newSupportFixture()
+				f := newSupportFixture(t)
 				if err := f.publish(kind); err != nil {
 					t.Fatal(err)
 				}
@@ -438,7 +460,7 @@ func TestSupportLifecycleReadFailureAndMissingPoolAreNotOff(t *testing.T) {
 func TestSupportLifecycleEmptyOnAndOffHaveDistinctVersions(t *testing.T) {
 	for _, kind := range []string{"rule", "record"} {
 		t.Run(kind, func(t *testing.T) {
-			f := newSupportFixture()
+			f := newSupportFixture(t)
 			f.pool.PrometheusInstances = nil
 			f.ruleSource.rows = nil
 			f.recordSource.rows = nil
@@ -492,7 +514,7 @@ func TestSupportLifecycleWholeInventoryPrecedesAnyOffWrite(t *testing.T) {
 	for _, kind := range []string{"rule", "record"} {
 		for _, mode := range []string{"read error", "early empty", "duplicate ID", "total drift"} {
 			t.Run(kind+"/"+mode, func(t *testing.T) {
-				f := newSupportFixture()
+				f := newSupportFixture(t)
 				if err := f.publish(kind); err != nil {
 					t.Fatal(err)
 				}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gorm.io/gorm"
 	"reflect"
 	"testing"
 
@@ -273,6 +274,21 @@ func TestTargetedPublisherRejectsLocatorOwnerDriftButUsesFreshOwnedContent(t *te
 						case "status":
 							target.Status = 2
 						}
+						if domain == "record" {
+							fixture := base.(*recordProjectionFixture)
+							seed := fixture.db.Session(&gorm.Session{SkipHooks: true}).Unscoped()
+							if change == "missing" {
+								if seed.Delete(&model.MonitorConfig{}, target.ID).Error != nil {
+									t.Fatal("fixture drift delete failed")
+								}
+							} else {
+								copy := *target
+								if seed.Save(&copy).Error != nil {
+									t.Fatal("fixture drift write failed")
+								}
+							}
+						}
+
 					}
 					return rows, total, err
 				}, namespace: base.GetGeneratedConfigNamespacePage}

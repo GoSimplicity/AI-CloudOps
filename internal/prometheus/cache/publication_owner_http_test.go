@@ -119,7 +119,15 @@ func TestGeneratedPublicationOwnerGuardThroughRealConfigCRUD(t *testing.T) {
 			pool := &model.MonitorScrapePool{Model: model.Model{ID: 7}, Name: "ownerHTTP-fixture", SupportAlert: 2, SupportRecord: 1, PrometheusInstances: model.StringList{"127.0.0.1", "127.0.0.2"}}
 			rule := &model.MonitorRecordRule{Model: model.Model{ID: 31}, PoolID: 7, Name: "fixture:up", Expr: "up", Enable: 1}
 			storage := &ownerHTTPRedis{values: map[string]string{}, sets: map[string]map[string]bool{}}
-			cache := cachepkg.NewRecordRuleConfigCache(zap.NewNop(), ownerHTTPPools{pool: pool}, ownerHTTPRecordSource{rule: rule}, dao, cachepkg.NewBatchConfigManager(dao, zap.NewNop()), storage)
+			journal, history, projection := cachepkg.RecordProjectionDependenciesForTest(db, storage)
+			journal = &ownerHTTPJournal{RecordProjectionJournalDAO: journal, before: func() {
+				if storage.pendingHook != nil {
+					hook := storage.pendingHook
+					storage.pendingHook = nil
+					hook()
+				}
+			}}
+			cache := cachepkg.NewRecordRuleConfigCache(zap.NewNop(), ownerHTTPPools{pool: pool}, ownerHTTPRecordSource{rule: rule}, dao, cachepkg.NewBatchConfigManager(dao, zap.NewNop()), storage, journal, history, projection)
 			if err := cache.GenerateMainConfig(context.Background()); err != nil {
 				t.Fatal(err)
 			}
@@ -164,4 +172,18 @@ func TestGeneratedPublicationOwnerGuardThroughRealConfigCRUD(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Interleave the real registered CRUD request after publisher metadata preflight
+// and before the actual journal's atomic commit; no receipt/lease is mocked.
+type ownerHTTPJournal struct {
+	configdao.RecordProjectionJournalDAO
+	before func()
+}
+
+func (j *ownerHTTPJournal) CommitRecordProjectionPlan(ctx context.Context, req configdao.RecordProjectionPlanRequest) (configdao.ProjectionReceipt, error) {
+	if j.before != nil {
+		j.before()
+	}
+	return j.RecordProjectionJournalDAO.CommitRecordProjectionPlan(ctx, req)
 }

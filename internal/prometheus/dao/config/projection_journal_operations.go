@@ -107,6 +107,10 @@ func operationMatches(op model.MonitorConfigPoolOperation, ref PoolReservation) 
 	return err == nil && actual == ref
 }
 func (d *monitorConfigDAO) ReservePoolOperation(ctx context.Context, req PoolOperationRequest) (PoolReservation, error) {
+	return d.reservePoolOperation(ctx, req, nil)
+}
+
+func (d *monitorConfigDAO) reservePoolOperation(ctx context.Context, req PoolOperationRequest, expectedCounter *uint64) (PoolReservation, error) {
 	if !validPublicationScope(req.Family, req.PoolID) || !nonzeroNonce(req.Nonce) || req.RecoveryOfOperationID != nil && *req.RecoveryOfOperationID == 0 {
 		return PoolReservation{}, ErrJournalInvalid
 	}
@@ -128,6 +132,9 @@ func (d *monitorConfigDAO) ReservePoolOperation(ctx context.Context, req PoolOpe
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
+		}
+		if expectedCounter != nil && control.ReservedGeneration != *expectedCounter {
+			return ErrJournalConflict
 		}
 		if control.ReservedGeneration == math.MaxUint64 {
 			return ErrJournalCounterExhausted

@@ -59,10 +59,12 @@ func run() error {
 		}
 	}
 
-	application, err := di.ProvideApp(cfg)
+	application, cleanup, err := di.ProvideApp(cfg)
 	if err != nil {
 		return err
 	}
+
+	defer cleanup()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()

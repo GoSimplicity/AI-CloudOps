@@ -37,7 +37,15 @@ func TestGeneratedCreationRejectsOwnerArrivingAfterPreflight(t *testing.T) {
 			pool := &model.MonitorScrapePool{Model: model.Model{ID: 7}, Name: "creation-race", SupportRecord: 1, PrometheusInstances: model.StringList{"127.0.0.1"}}
 			rule := &model.MonitorRecordRule{Model: model.Model{ID: 31}, PoolID: 7, Name: "fixture:up", Expr: "up", Enable: 1}
 			store := &ownerHTTPRedis{values: map[string]string{}, sets: map[string]map[string]bool{}}
-			publisher := cachepkg.NewRecordRuleConfigCache(zap.NewNop(), ownerHTTPPools{pool: pool}, ownerHTTPRecordSource{rule: rule}, dao, cachepkg.NewBatchConfigManager(dao, zap.NewNop()), store)
+			journal, history, projection := cachepkg.RecordProjectionDependenciesForTest(db, store)
+			journal = &ownerHTTPJournal{RecordProjectionJournalDAO: journal, before: func() {
+				if store.pendingHook != nil {
+					hook := store.pendingHook
+					store.pendingHook = nil
+					hook()
+				}
+			}}
+			publisher := cachepkg.NewRecordRuleConfigCache(zap.NewNop(), ownerHTTPPools{pool: pool}, ownerHTTPRecordSource{rule: rule}, dao, cachepkg.NewBatchConfigManager(dao, zap.NewNop()), store, journal, history, projection)
 			foreign := &model.MonitorConfig{PoolID: 99, InstanceIP: "127.0.0.1", ConfigType: model.ConfigTypeRecordRule, Name: "operator-owned", ConfigContent: "preserve operator bytes", Status: status}
 			injected := false
 			store.pendingHook = func() {

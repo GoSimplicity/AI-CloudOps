@@ -43,7 +43,7 @@ func (s recordingContractPools) GetMonitorScrapePoolList(_ context.Context, req 
 	return []*model.MonitorScrapePool{s.pool}, 1, nil
 }
 
-func newRecordingContractCache(rows []*model.MonitorRecordRule) (*recordRuleConfigCache, *recordingContractRules, *refreshRedis, *model.MonitorScrapePool) {
+func newRecordingContractCache(t *testing.T, rows []*model.MonitorRecordRule) (*recordRuleConfigCache, *recordingContractRules, *refreshRedis, *model.MonitorScrapePool) {
 	pool := &model.MonitorScrapePool{Model: model.Model{ID: 7}, Name: "recording-fixture", SupportRecord: 1, PrometheusInstances: model.StringList{"127.0.0.1"}}
 	rules := &recordingContractRules{rows: rows}
 	storage := &refreshRedis{values: map[string]string{}}
@@ -53,6 +53,7 @@ func newRecordingContractCache(rows []*model.MonitorRecordRule) (*recordRuleConf
 		scrapePoolDAO: recordingContractPools{pool: pool},
 		batchManager:  NewBatchConfigManager(&recordingPublicationConfigs{rows: map[string]*model.MonitorConfig{}}, logger),
 	}
+	attachRecordingProjection(t, cache, &recordingPublicationConfigs{rows: map[string]*model.MonitorConfig{}})
 	return cache, rules, storage, pool
 }
 
@@ -79,7 +80,7 @@ func TestRecordingContractValidNamesExpressionsAndLabels(t *testing.T) {
 		{"record:scalar", "1 + 2"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			cache, _, _, pool := newRecordingContractCache([]*model.MonitorRecordRule{{
+			cache, _, _, pool := newRecordingContractCache(t, []*model.MonitorRecordRule{{
 				Name: test.name, Expr: test.expression, Enable: 1,
 				Labels: model.StringList{"team=ops", "url=a=b", "empty="},
 			}})
@@ -109,7 +110,7 @@ func TestRecordingContractBadRowDoesNotPoisonPool(t *testing.T) {
 		{"empty label name", &model.MonitorRecordRule{Name: "bad:label", Expr: "up", Enable: 1, Labels: model.StringList{"=ops"}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			cache, _, _, pool := newRecordingContractCache([]*model.MonitorRecordRule{
+			cache, _, _, pool := newRecordingContractCache(t, []*model.MonitorRecordRule{
 				{Name: "good:up", Expr: "up", Enable: 1, Labels: model.StringList{"team=ops"}}, test.bad,
 			})
 			rules := parseRecordingContract(t, cache.GenerateConfigForPool(context.Background(), pool)["127.0.0.1"])
@@ -135,7 +136,7 @@ func TestRecordingContractInvalidSnapshotPreservesLastGood(t *testing.T) {
 		{"DAO error", nil, errors.New("fixture read failure")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			cache, source, storage, pool := newRecordingContractCache([]*model.MonitorRecordRule{{Name: "good:up", Expr: "up", Enable: 1}})
+			cache, source, storage, pool := newRecordingContractCache(t, []*model.MonitorRecordRule{{Name: "good:up", Expr: "up", Enable: 1}})
 			if err := cache.GenerateMainConfig(context.Background()); err != nil {
 				t.Fatal(err)
 			}
@@ -157,7 +158,7 @@ func TestRecordingContractInvalidSnapshotPreservesLastGood(t *testing.T) {
 }
 
 func TestRecordingContractEmptyActiveListClearsRules(t *testing.T) {
-	cache, source, storage, pool := newRecordingContractCache([]*model.MonitorRecordRule{{Name: "good:up", Expr: "up", Enable: 1}})
+	cache, source, storage, pool := newRecordingContractCache(t, []*model.MonitorRecordRule{{Name: "good:up", Expr: "up", Enable: 1}})
 	if err := cache.GenerateMainConfig(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +180,7 @@ func TestRecordingContractEmptyActiveListClearsRules(t *testing.T) {
 }
 
 func TestRecordingContractLabelsOnlyRefreshAndUnchangedNoWrite(t *testing.T) {
-	cache, source, storage, pool := newRecordingContractCache([]*model.MonitorRecordRule{{Name: "good:up", Expr: "up", Enable: 1, Labels: model.StringList{"team=before"}}})
+	cache, source, storage, pool := newRecordingContractCache(t, []*model.MonitorRecordRule{{Name: "good:up", Expr: "up", Enable: 1, Labels: model.StringList{"team=before"}}})
 	if err := cache.GenerateMainConfig(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +203,7 @@ func TestRecordingContractLabelsOnlyRefreshAndUnchangedNoWrite(t *testing.T) {
 }
 
 func TestRecordingContractHashSeparatorsDoNotCollide(t *testing.T) {
-	cache, source, storage, pool := newRecordingContractCache([]*model.MonitorRecordRule{{Name: "a", Expr: "up", Enable: 1}, {Name: "b", Expr: "up", Enable: 1}})
+	cache, source, storage, pool := newRecordingContractCache(t, []*model.MonitorRecordRule{{Name: "a", Expr: "up", Enable: 1}, {Name: "b", Expr: "up", Enable: 1}})
 	if err := cache.GenerateMainConfig(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +219,7 @@ func TestRecordingContractHashSeparatorsDoNotCollide(t *testing.T) {
 }
 
 func TestRecordingContractMainUsesOneDAOSnapshot(t *testing.T) {
-	cache, source, _, _ := newRecordingContractCache([]*model.MonitorRecordRule{{Name: "good:up", Expr: "up", Enable: 1}})
+	cache, source, _, _ := newRecordingContractCache(t, []*model.MonitorRecordRule{{Name: "good:up", Expr: "up", Enable: 1}})
 	for iteration := 1; iteration <= 2; iteration++ {
 		before := source.calls
 		if err := cache.GenerateMainConfig(context.Background()); err != nil {

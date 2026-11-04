@@ -210,6 +210,20 @@ func (d *monitorConfigDAO) commitGeneratedPlan(ctx context.Context, req Generate
 				return ErrJournalInvalid
 			}
 		}
+		if projection != nil {
+			if err := validateRecordHistoryTx(tx, projection.history); err != nil {
+				return err
+			}
+			for _, proof := range projection.superseded {
+				if proof.Origin == RecordSupersededAcceptedArtifact && (op.RecoveryOfOperationID == nil || *op.RecoveryOfOperationID != proof.AcceptedOperationID) {
+					return ErrJournalConflict
+				}
+			}
+			if err := d.validateRecordReplacementsTx(tx, projection.superseded); err != nil {
+				return err
+			}
+
+		}
 		manifest := make([]poolManifestEntry, 0, len(prepared))
 		events := map[uint64]model.MonitorConfigArtifactEvent{}
 		for _, entry := range prepared {
@@ -232,7 +246,10 @@ func (d *monitorConfigDAO) commitGeneratedPlan(ctx context.Context, req Generate
 			if err != nil {
 				return err
 			}
-			payload = projectionManifestEnvelope{Version: 2, Artifacts: manifest, Controls: controls, PlanDigest: fingerprint}
+			payload = projectionManifestEnvelope{Version: 2, Artifacts: manifest, Controls: controls, PlanDigest: fingerprint, RecordSuperseded: projection.superseded}
+			if err := markRecordReplacementsTx(tx, projection.superseded); err != nil {
+				return err
+			}
 		}
 		encoded, err := json.Marshal(payload)
 		if err != nil {

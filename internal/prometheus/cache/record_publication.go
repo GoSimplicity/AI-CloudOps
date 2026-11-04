@@ -9,7 +9,6 @@ import (
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	configDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
-	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
@@ -53,12 +52,13 @@ type recordPublicationPlan struct {
 	update  []configDao.GeneratedConfigUpdate
 	stale   []string
 	retired map[string]configDao.GeneratedConfigOwner
+	owners  map[string]*model.MonitorConfig
 }
 
 // Inspect every metadata page before any write. This also discovers canonical
 // rows left without membership by an older failed publication.
 func (r *recordRuleConfigCache) planRecordPublication(ctx context.Context, poolID int, desired map[string]string, oldIPs []string) (recordPublicationPlan, error) {
-	plan := recordPublicationPlan{retired: map[string]configDao.GeneratedConfigOwner{}}
+	plan := recordPublicationPlan{retired: map[string]configDao.GeneratedConfigOwner{}, owners: map[string]*model.MonitorConfig{}}
 	dao := r.recordConfigDAO()
 	if dao == nil {
 		return plan, errors.New("配置存储不可用")
@@ -120,6 +120,8 @@ func (r *recordRuleConfigCache) planRecordPublication(ctx context.Context, poolI
 			plan.create = append(plan.create, &model.MonitorConfig{Name: name, PoolID: poolID, InstanceIP: ip, ConfigType: kind, ConfigContent: content, ConfigHash: hash, Status: model.ConfigStatusActive, LastGeneratedTime: time.Now().Unix()})
 		} else {
 			row := rows[0]
+			copyOfRow := *row
+			plan.owners[ip] = &copyOfRow
 			if row.ConfigContent == content && row.ConfigHash == hash && row.Status == model.ConfigStatusActive {
 				continue
 			}
@@ -144,6 +146,9 @@ func (r *recordRuleConfigCache) planRecordPublication(ctx context.Context, poolI
 }
 
 func (r *recordRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
+	if err := r.recordPublicationReady(); err != nil {
+		return err
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -151,6 +156,10 @@ func (r *recordRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+	sourceVersions, err := r.recordSourceVersions(ctx)
+	if err != nil {
 		return err
 	}
 	pools, err := readScrapePoolSnapshot(ctx, r.scrapePoolDAO)
@@ -166,14 +175,17 @@ func (r *recordRuleConfigCache) GenerateMainConfig(ctx context.Context) error {
 			failures = append(failures, r.recordPublicationError(0, "采集池标识"))
 			continue
 		}
-		if err := r.publishRecordPool(ctx, pool); err != nil {
+		if err := r.publishRecordPool(ctx, pool, sourceVersions[pool.ID]); err != nil {
 			failures = append(failures, err)
 		}
 	}
 	return errors.Join(append(failures, ctx.Err())...)
 }
 
-func (r *recordRuleConfigCache) publishRecordPool(ctx context.Context, sourcePool *model.MonitorScrapePool) error {
+func (r *recordRuleConfigCache) publishRecordPool(ctx context.Context, sourcePool *model.MonitorScrapePool, sourceVersion uint64) error {
+	if err := r.recordPublicationReady(); err != nil {
+		return err
+	}
 	pool, _ := detachedRecordRules(sourcePool, nil)
 	fail := func(stage string) error { return r.recordPublicationError(pool.ID, stage) }
 	if pool.DeletedAt > 0 {
@@ -203,6 +215,9 @@ func (r *recordRuleConfigCache) publishRecordPool(ctx context.Context, sourcePoo
 	var err error
 	generated := map[string]string{}
 	if pool.SupportRecord == 1 {
+		if r.alertRecordDAO == nil {
+			return fail("规则存储不可用")
+		}
 		rows, _, err = r.alertRecordDAO.GetMonitorRecordRuleByPoolId(ctx, pool.ID)
 		if err != nil {
 			return fail("读取规则")
@@ -222,109 +237,5 @@ func (r *recordRuleConfigCache) publishRecordPool(ctx context.Context, sourcePoo
 	if pool.DeletedAt > 0 {
 		targetHash = calculateConfigHash(fmt.Sprintf("deleted:%d:%d", pool.ID, pool.DeletedAt))
 	}
-	key := recordPublicationKey(pool.ID)
-	previous, err := r.redis.Get(ctx, key).Result()
-	if err != nil && !errors.Is(err, redis.Nil) {
-		return fail("读取发布版本")
-	}
-	membersKey := buildRedisSetKeyRecordRulePoolIPs(pool.ID)
-	oldIPs, err := r.redis.SMembers(ctx, membersKey).Result()
-	if err != nil {
-		return fail("读取实例成员")
-	}
-	plan, err := r.planRecordPublication(ctx, pool.ID, generated, oldIPs)
-	if err != nil {
-		return fail("检查配置归属")
-	}
-	sameMembers := len(oldIPs) == len(desiredIPs)
-	for _, ip := range oldIPs {
-		if !desiredIPs[ip] {
-			sameMembers = false
-		}
-	}
-	sameArtifacts := true
-	for _, ip := range pool.PrometheusInstances {
-		body, err := r.redis.Get(ctx, buildRedisKeyRecordRule(ip)).Result()
-		if err != nil && !errors.Is(err, redis.Nil) {
-			return fail("读取规则缓存")
-		}
-		if body != generated[ip] {
-			sameArtifacts = false
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if previous == targetHash && sameMembers && sameArtifacts && len(plan.create) == 0 && len(plan.update) == 0 && len(plan.stale) == 0 {
-		return nil
-	}
-	if err := r.redis.Set(ctx, key, "pending:"+targetHash, 0).Err(); err != nil {
-		return fail("标记待发布")
-	}
-	// A historical owned DB row may have no member index. Every retirement,
-	// including live target removal or feature-off, must remain discoverable after
-	// SQL soft-delete succeeds but Redis deletion fails.
-	for _, ip := range plan.stale {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := r.redis.SAdd(ctx, membersKey, ip).Err(); err != nil {
-			return fail("登记待清退实例成员")
-		}
-	}
-	// Register all intended targets before DB or configuration writes. Failed
-	// attempts remain discoverable even when no configuration row was created.
-	for _, ip := range pool.PrometheusInstances {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := r.redis.SAdd(ctx, membersKey, ip).Err(); err != nil {
-			return fail("登记实例成员")
-		}
-	}
-	dao := r.recordConfigDAO()
-	if len(plan.create) > 0 {
-		if err := dao.BatchCreateMonitorConfigs(ctx, plan.create); err != nil {
-			return fail("创建规则配置")
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if len(plan.update) > 0 {
-		if err := dao.UpdateGeneratedMonitorConfigs(ctx, plan.update); err != nil {
-			return fail("更新规则配置")
-		}
-	}
-	for _, ip := range pool.PrometheusInstances {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := r.redis.Set(ctx, buildRedisKeyRecordRule(ip), generated[ip], 0).Err(); err != nil {
-			return fail("写入规则缓存")
-		}
-	}
-	for _, ip := range plan.stale {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if expected, ok := plan.retired[ip]; ok {
-			if err := dao.DeleteGeneratedMonitorConfig(ctx, expected); err != nil {
-				return fail("清理旧规则配置归属")
-			}
-		}
-		if err := r.redis.Del(ctx, buildRedisKeyRecordRule(ip)).Err(); err != nil {
-			return fail("清理旧规则缓存")
-		}
-		if err := r.redis.SRem(ctx, membersKey, ip).Err(); err != nil {
-			return fail("清理旧实例成员")
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if err := r.redis.Set(ctx, key, targetHash, 0).Err(); err != nil {
-		return fail("确认发布版本")
-	}
-	return nil
+	return r.publishRecordProjection(ctx, pool, generated, targetHash, sourceVersion, fail)
 }

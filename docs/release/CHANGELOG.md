@@ -675,3 +675,11 @@
 - 三仓integration新增owned原生入口：全新Redis/private ACL/owner marker/动态loopback，自供给12项真实协议测试并精确清理，不依赖本机连接文件或业务Redis。
 - daemon操作前拒DOCKER_HOST/DOCKER_CONTEXT并验证本机Unix socket，所有命令显式固定endpoint；新增2项调用CLI前拒绝回归。
 - 干净62e4c107隔离候选本机14叶race零skip/fail、tagged vet/actionlint/来源锁通过，实例清理验证为零；Linux新CI另验。Record并行WIP不在此提交，未上线。
+
+
+## 2026-11-04：Record 持久发布与故障恢复
+
+- Record正常生成、off/empty/deleted共用journal→sealed lease→Store，移除旧unsafe写序列和隐式fallback；源读前版本/原control CAS拒迟到旧快照，源Hash与DB metadata同时参与完整计划判断。
+- 新narrow历史定位覆盖无member/manifest墓碑；同tx全历史guard防create/delete ABA，live owner可观察已deleted foreign/custom而退自己，未授权旧墓碑仍严格消歧。
+- accepted render/retire与显式legacy provenance持久记录替代完成事实，A只回收自身empty bookkeeping不碰B；B后更新/退役及多次重建不忘解决结果。已有permit可在原sealed lease恢复，但新增stale必须新guarded plan。
+- 全Go/vet/tag与cache/DAO/DI race通过；owned原生20叶0skip/fail含真实TCP/SQL/Redis，实例清理0。Wire实际生成并接pool cleanup。Web锁cd4f757已独立Verify成功，AIba187；新CI另验，未上线。

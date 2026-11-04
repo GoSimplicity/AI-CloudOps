@@ -283,6 +283,10 @@ var Injector = wire.NewSet(
 )
 
 var CacheSet = wire.NewSet(
+	ProvideProjectionStore,
+	configDao.NewProjectionPlanJournalDAO,
+	configDao.NewGeneratedConfigHistoryReader,
+	cache.NewRecordProjectionRunner,
 	cache.NewMonitorCache,
 	cache.NewAlertManagerConfigCache,
 	cache.NewAlertRuleConfigCache,
@@ -307,7 +311,7 @@ var NotificationSet = wire.NewSet(
 	InitNotificationManager,
 )
 
-func ProvideApp(cfg *config.Config) (*app.App, error) {
+func ProvideApp(cfg *config.Config) (*app.App, func(), error) {
 	wire.Build(
 		Injector,
 		HandlerSet,
@@ -323,5 +327,5 @@ func ProvideApp(cfg *config.Config) (*app.App, error) {
 		NotificationSet,
 		app.NewApp,
 	)
-	return &app.App{}, nil
+	return &app.App{}, nil, nil
 }

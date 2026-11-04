@@ -61,6 +61,9 @@ type recordRuleConfigCache struct {
 	alertRecordDAO alertRecordDao.AlertManagerRecordDAO
 	configDAO      configDao.MonitorConfigDAO
 	batchManager   *BatchConfigManager
+	journal        configDao.ProjectionPlanJournalDAO
+	history        configDao.GeneratedConfigHistoryReader
+	projection     RecordProjectionRunner
 }
 
 type RecordGroup struct {
@@ -79,6 +82,9 @@ func NewRecordRuleConfigCache(
 	configDAO configDao.MonitorConfigDAO,
 	batchManager *BatchConfigManager,
 	redisClient redis.Cmdable,
+	journal configDao.ProjectionPlanJournalDAO,
+	history configDao.GeneratedConfigHistoryReader,
+	projection RecordProjectionRunner,
 ) RecordRuleConfigCache {
 	return &recordRuleConfigCache{
 		logger:         logger,
@@ -88,6 +94,7 @@ func NewRecordRuleConfigCache(
 		alertRecordDAO: alertRecordDAO,
 		configDAO:      configDAO,
 		batchManager:   batchManager,
+		journal:        journal, history: history, projection: projection,
 	}
 }
 
@@ -114,7 +121,7 @@ func recordPublicationKey(poolID int) string {
 
 // GenerateConfigForPool 根据单个采集池生成Prometheus的预聚合规则配置YAML
 func (r *recordRuleConfigCache) GenerateConfigForPool(ctx context.Context, pool *model.MonitorScrapePool) map[string]string {
-	if pool == nil || ctx.Err() != nil {
+	if pool == nil || ctx.Err() != nil || r.alertRecordDAO == nil {
 		return nil
 	}
 	poolStartTime := time.Now()

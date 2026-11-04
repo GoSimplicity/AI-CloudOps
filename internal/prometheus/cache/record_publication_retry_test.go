@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"testing"
@@ -169,11 +170,12 @@ func TestRecordingPublicationRetriesFailedSnapshot(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			cache, source, storage, pool := newRecordingContractCache([]*model.MonitorRecordRule{{Name: "before:up", Expr: "up", Enable: 1}})
+			cache, source, storage, pool := newRecordingContractCache(t, []*model.MonitorRecordRule{{Name: "before:up", Expr: "up", Enable: 1}})
 			client := &recordingPublicationRedis{refreshRedis: storage, members: map[string]bool{}}
 			configs := &recordingPublicationConfigs{rows: map[string]*model.MonitorConfig{}}
 			cache.redis = client
 			cache.batchManager = NewBatchConfigManager(configs, cache.logger)
+			attachRecordingProjection(t, cache, configs)
 			if err := cache.GenerateMainConfig(ctx); err != nil {
 				t.Fatal(err)
 			}
@@ -189,13 +191,18 @@ func TestRecordingPublicationRetriesFailedSnapshot(t *testing.T) {
 			if test.stale {
 				client.members["127.0.0.2"] = true
 				storage.values[buildRedisKeyRecordRule("127.0.0.2")] = previousConfig
+				// A stale member is a locator only. Seed its actual canonical SQL owner
+				// so this case tests authorized retirement rather than guessed deletion.
+				configs.next++
+				configs.rows["127.0.0.2"] = &model.MonitorConfig{Model: model.Model{ID: configs.next}, PoolID: pool.ID, ConfigType: model.ConfigTypeRecordRule, InstanceIP: "127.0.0.2", Name: fmt.Sprintf(ConfigNameRecordRule, pool.ID, "127.0.0.2"), ConfigContent: previousConfig, Status: 1}
+
 			}
 			source.rows = []*model.MonitorRecordRule{{Name: "after:up", Expr: "sum(up)", Enable: 1, Labels: model.StringList{"team=after"}}}
 			client.failure = test.failure
 			configs.failure = test.failure == "database"
 			// A failed publication may be logged or returned, but cannot be acknowledged.
 			_ = cache.GenerateMainConfig(ctx)
-			if !strings.HasPrefix(storage.values[hashKey], "pending:") {
+			if !recordFixturePending(cache) {
 				t.Fatal("failed publication retained a trusted completion marker")
 			}
 			if test.failure == "set" && storage.values[configKey] != previousConfig {

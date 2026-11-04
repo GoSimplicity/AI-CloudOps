@@ -46,15 +46,21 @@ func targetedFakeMapRows(rows map[int]*model.MonitorConfig) []*model.MonitorConf
 	}
 	return out
 }
-func (s *recordReconcileDB) GetGeneratedConfigPoolCandidates(_ context.Context, req configdao.GeneratedConfigPoolQuery) ([]*model.MonitorConfig, int64, error) {
+func (s *recordReconcileDB) GetGeneratedConfigPoolCandidates(ctx context.Context, req configdao.GeneratedConfigPoolQuery) ([]*model.MonitorConfig, int64, error) {
 	if s.failure == "db read" {
 		return nil, 0, errors.New("fixture metadata failure")
 	}
+	if s.projection != nil {
+		return s.projection.GetGeneratedConfigPoolCandidates(ctx, req)
+	}
 	return targetedFakePage(targetedFakeMapRows(s.rows), &req.PoolID, req.ConfigType, nil, false, req.Page, req.Size)
 }
-func (s *recordReconcileDB) GetGeneratedConfigNamespacePage(_ context.Context, req configdao.GeneratedConfigKeysQuery) ([]*model.MonitorConfig, int64, error) {
+func (s *recordReconcileDB) GetGeneratedConfigNamespacePage(ctx context.Context, req configdao.GeneratedConfigKeysQuery) ([]*model.MonitorConfig, int64, error) {
 	if s.failure == "db read" {
 		return nil, 0, errors.New("fixture metadata failure")
+	}
+	if s.projection != nil {
+		return s.projection.GetGeneratedConfigNamespacePage(ctx, req)
 	}
 	return targetedFakePage(targetedFakeMapRows(s.rows), nil, req.ConfigType, req.InstanceKeys, true, req.Page, req.Size)
 }
