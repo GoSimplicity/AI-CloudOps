@@ -718,3 +718,8 @@
 - 复用实际publisher与SQL租约，重签绑定锁内ExpectedLastCommitted；AM stale peer按fresh源恢复且不拼旧main/新subset。恢复锁等待可取消，App等待worker结束后清理SQL/Store；日志只含locator及分类。
 - Root59原生全绿、worker16leaf race及全Go/vet/tags通过；此前完整cache/service与DAO/DI/App race、Record五金样、173工具保持，忙锁6项负控由红转绿。schema/Store/Lua不改，MySQL并发与规模验证继续后续。
 - 锁Weba7fd8ff/AI75d4a87独立CI成功版本，新组合另验。预览安全刷新clean304f3386/schema4且业务数据哈希保持，worker未进入预览，无上线或生产连接。
+
+## 2026-11-05：投影规模基线
+
+- 新增真实SQLite/lease的15项可复现benchmark，分离entry、Recheck和命令检查/JSON帧成本，不执行Redis或伪造ACK。N128实际84,876 timed SELECT、约9.65s、累计4.87GB分配，明确仍有规模优化工作。
+- 测试fixture参数兼容testing.TB；生产/Store/Lua/schema不改。Web锁提升到独立CI成功的5f5bc8f，AI75d4a87保持，新组合另验。

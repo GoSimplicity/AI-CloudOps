@@ -16,7 +16,7 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-func projectionStoreSQL(t *testing.T) (configdao.ProjectionPlanJournalDAO, configdao.MonitorConfigDAO, *gorm.DB) {
+func projectionStoreSQL(t testing.TB) (configdao.ProjectionPlanJournalDAO, configdao.MonitorConfigDAO, *gorm.DB) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "store.sqlite")), &gorm.Config{Logger: logger.Discard})
 	if err != nil {

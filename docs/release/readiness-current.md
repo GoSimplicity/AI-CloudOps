@@ -1,5 +1,13 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-05：可复现规模基线与新来源锁
+
+新增[投影规模基线](projection-scale.md)：15项实际测试全通过，微小正文N128仅SQL检查/帧序列化段就有84,876 SELECT、约9.65s及累计4.87GB分配，未含Redis/Lua，也不是峰值内存。已确认重复校验成本，尚未实施优化，下一步先补MySQL原连接断开及AM双control验证。
+
+- worker c1fa5ff8的三仓41900107061、Simple41900107052、gitleaks41900107210已全部success；三仓53步骤全成功。实际checkout与浏览器业务日志仍需按新候选保存核验，不能仅靠watch冒称所有外部验收。
+- 来源锁前端升级到独立Verify41898933827/gitleaks41898933872成功的5f5bc8f，AI保持75d4a87。新基线/锁提交组合另跑CI。
+- 原报告F01–F14、D01–D05已有实现与专项回归，本轮独立复查未发现应因旧报告重新打开的已证实P1缺失。仍需MySQL并发、规模性能、最新隔离整站/容量验收及剩余ESLint；不宣称整体1.0完成。
+
 ## 2026-11-05：独立投影恢复与可取消生命周期
 
 独立worker已接入App：立即扫描当前committed未projected，固定高水位/keyset/cursor、逐项错误隔离及数量/时间限制；不依赖Cron或normal生成开关。仍有效计划原样重放，AM stale peer按fresh单池真实源重签，Reserve/Commit锁内LC guard防旧恢复覆盖新正常发布。见[恢复合同、配置与验收](projection-recovery.md)。
