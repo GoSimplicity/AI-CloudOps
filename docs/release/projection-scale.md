@@ -104,3 +104,30 @@ CLOUDOPS_TEST_PROJECTION_STORE=true CLOUDOPS_TEST_PROJECTION_CAPACITY=true \
 | 2 / 1MiB+1B | 825,263,542 | 26 | 5 | 2,196,692 |
 
 全部场景验证raw逐字、完整成员、实际EVAL统计及SQL projected。大单体按发送前预算选择既有single路径；这证明没有因batch预算把既有合法协议输入永久拒收，不代表该单体具有1MiB命令上限。1024微小正文的单次结果也不是恢复item_timeout的容量保证，源读取/生成/提交、MySQL网络、真实YAML和并发仍需独立验收。frame自身超预算时仍会退回逐项，因此更大计划可能存在成本拐点，不能由此表推断无限容量或整体线性。
+
+
+## 大计划的完整请求布局
+
+`BenchmarkProjectionCapacityLayout`使用真实SQL journal/lease与当前Store规划器，仅计算未发送请求的布局，不创建Redis客户端、不写ACK或标记projected。每例最终核对仍为committed且无last projected。
+
+```sh
+go test ./internal/prometheus/cache -run '^$' \
+  -bench '^BenchmarkProjectionCapacityLayout$' -benchtime=1x -count=1 -benchmem -timeout=15m
+```
+
+八项均实际通过。正文固定11B；长地址为45字节原始IPv4-mapped IPv6，不做归一化。下表仅计artifact命令，不含Prepare/完成控制命令。
+
+| N | 地址 | batch帧字节 | 批次 / 单项 | 计划artifact RESP字节 |
+| ---: | --- | ---: | ---: | ---: |
+| 1024 | 短IPv4 | 718141 | 64 / 0 | 55988271 |
+| 1024 | 长IPv6 | 929824 | 0 / 1024 | 1221622701 |
+| 1280 | 短IPv4 | 898451 | 0 / 1280 | 1394863533 |
+| 1280 | 长IPv6 | 1163045 | 0 / 1280 | 1904523693 |
+| 1536 | 短IPv4 | 1078751 | 0 / 1536 | 2004517293 |
+| 1536 | 长IPv6 | 1396263 | 0 / 1536 | 2738416557 |
+| 2048 | 短IPv4 | 1439362 | 0 / 2048 | 3554524077 |
+| 2048 | 长IPv6 | 1862695 | 0 / 2048 | 4859181997 |
+
+1024长地址的JSON帧虽低于1MiB，完整请求仍含全部KEYS、Lua源码及RESP封装；首16项候选1193343B，单项最大1192992B，全部退回single。1280短地址同样在JSON未超预算时已退回single。这说明只有JSON长度不足以判断是否可批量，合法输入未被拒收，但传输成本明显上升。
+
+这些GB数值是未发送的长度计算，没有向Redis发送GB数据。单项JSON按目标ID十进制位宽复用实际序列化长度，避免为了统计分配GB内存；因此基准ns/op不代表逐条序列化或真实发布耗时。SQL准备/lease进入退出另列，不能把布局资格当作成功发布。下一阶段需在保留完整fencing的前提下减少重复传输；本阶段不提高预算、不限制既有合法实例数，也不声称容量问题已经解决。
