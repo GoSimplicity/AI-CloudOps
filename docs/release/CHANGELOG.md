@@ -668,3 +668,10 @@
 - 同版完整behavior frame固定SHA、key/role/绑定、artifact/control/ACK，修复原生同版改legacy SHA可写入的反例；专用无重试client保留真实传输不确定状态，SQL重建可恢复。
 - 真实Redis9子和独立3项通过：迟到render/retire与四种同池命令、大于2^53事件/池版本、空发布、TYPE、完整AM/subset/ordinary、真实已执行丢回复恢复；不冒称跨存储原子或任意failover安全。
 - 来源锁更新已远端Verify通过Webe124f08/AIba187；发布器/worker与opt-in native CI供给另阶段，演示继续clean5feb/schema4、无外部执行，未上线。
+
+
+## 2026-11-04：Redis fencing 自动隔离 CI
+
+- 三仓integration新增owned原生入口：全新Redis/private ACL/owner marker/动态loopback，自供给12项真实协议测试并精确清理，不依赖本机连接文件或业务Redis。
+- daemon操作前拒DOCKER_HOST/DOCKER_CONTEXT并验证本机Unix socket，所有命令显式固定endpoint；新增2项调用CLI前拒绝回归。
+- 干净62e4c107隔离候选本机14叶race零skip/fail、tagged vet/actionlint/来源锁通过，实例清理验证为零；Linux新CI另验。Record并行WIP不在此提交，未上线。

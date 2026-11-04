@@ -1,5 +1,12 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-04：Redis 原生协议接入自动隔离 CI
+
+新增显式owned实例入口，并接入三仓integration工作流。私有ACL/marker、动态loopback端口、只允许本机Unix Docker endpoint，创建与清理均核所有权；不复用本机业务服务。
+
+- 干净62e4c107加两个CI文件的本机隔离验证中，12项真实Redis协议与2项远程Docker覆盖拒绝回归通过，零skip/fail，tagged vet/actionlint/来源锁测试通过，容器清理为零；远端新工作流另验。
+- Record生产接线与既有测试迁移独立进行中，不夹进本次原子提交，也不拿中间不可编译的WIP当本阶段验收。其它3类发布器、恢复worker、性能与剩余ESLint仍待继续完成，未上线。
+
 ## 2026-11-04：typed Redis 投影与 fencing
 
 新Store从真实SQL lease派生opaque操作，Lua对完整behavior frame做同版硬CAS，Prepare只新fence，低版迟到命令零写；完整ACK核对artifact、members和AM intent。专用no-retry连接池隔离不确定传输结果。见[协议与实际验收](config-projection-store.md)。

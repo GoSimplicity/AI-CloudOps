@@ -27,3 +27,12 @@ Prepare只更新新投影控制 fence，不改旧正文、成员集合、intent 
 本机预览继续clean5feb4cc/schema4、18080/8889/18089，演示数据保留，Cron及外部执行关闭；本次Store源码未刷新入预览，没有上线或连接生产。
 
 最终整合检查：全Go测试、vet及integration/e2e/smoke标签编译通过；完整cache/DAO race与vet通过。独立原生overlay文件已逐字节移为永久回归。专属Redis实例以所有权label精确删除，连接文件及ACL清理，未使用演示Redis16379。
+
+
+## 自动供给 CI 原生实例
+
+`CLOUDOPS_TEST_PROJECTION_STORE=true go test -race -tags=integration ./internal/prometheus/cache -run '^TestProjection(StoreOwnedRedisProtocol|OwnedDockerRejectsRemoteOverrides)$' -count=1 -timeout=120s` 会生成新的专属Redis实例与私有ACL，动态绑定loopback端口，写入owner marker后运行12个真实协议叶测试。它不发现或复用开发机Redis，也不会读取调用者提供的连接文件。关闭实例前核验所有权label和完整container ID，按ID删除后再次确认无遗留；创建结果不确定时也先核身份再清理。
+
+入口在任何daemon操作前拒绝DOCKER_HOST/DOCKER_CONTEXT覆盖，只读取本机Docker context元数据，验证unix绝对地址及实际Unix socket，再对所有daemon命令显式传--host。两项无Docker CLI路径的回归证明远程环境覆盖在调用CLI前被拒绝。工作流在自有fresh stack已经缓存相同7.4.11镜像后执行，使用--pull=never，不拉取新镜像或使用演示16379。
+
+本机实际结果为12项真实协议+2项入口门禁通过、零跳过/失败，tagged vet、actionlint与来源锁测试通过，实例清理为零。验证使用干净62e4c107源码加这两个CI文件的隔离本机checkout，未把并行中的Record接线WIP算入证据；文件SHA与提交候选一致。Linux GitHub运行结果另行跟踪，源码接线不等于已取得远端绿灯。

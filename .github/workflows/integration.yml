@@ -65,6 +65,8 @@ jobs:
         run: python -m unittest scripts.tests.test_release_fresh scripts.tests.test_release_env scripts.tests.test_locked_sources -v
       - name: Explicitly migrate a new owned stack and start with runtime roles
         run: python scripts/release-fresh.py --execute-new-stack --project "$COMPOSE_PROJECT_NAME" --docker-socket /var/run/docker.sock
+      - name: Typed projection fencing with an owned Redis and private ACL
+        run: CLOUDOPS_TEST_PROJECTION_STORE=true go test -race -tags=integration ./internal/prometheus/cache -run '^TestProjection(StoreOwnedRedisProtocol|OwnedDockerRejectsRemoteOverrides)$' -count=1 -timeout=120s
       - name: Versioned migration engine with owned MySQL fixtures
         run: go test -race -tags=integration ./pkg/schema -count=1 -timeout=180s
       - name: Immutable baseline matches all registered models
