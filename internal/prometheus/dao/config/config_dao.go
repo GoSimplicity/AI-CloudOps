@@ -29,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
@@ -50,7 +51,6 @@ type MonitorConfigDAO interface {
 	// 批量操作方法
 	BatchCreateMonitorConfigs(ctx context.Context, configs []*model.MonitorConfig) error
 	BatchUpdateMonitorConfigs(ctx context.Context, configs []*model.MonitorConfig) error
-	BatchUpsertMonitorConfigs(ctx context.Context, configs []*model.MonitorConfig) error
 	GetMonitorConfigsByInstances(ctx context.Context, instanceIPs []string, configType int8) ([]*model.MonitorConfig, error)
 }
 
@@ -133,39 +133,54 @@ func (d *monitorConfigDAO) GetMonitorConfigByID(ctx context.Context, id int) (*m
 	return &config, nil
 }
 
-func (d *monitorConfigDAO) CreateMonitorConfig(ctx context.Context, config *model.MonitorConfig) error {
-	if err := d.db.WithContext(ctx).Create(config).Error; err != nil {
-		d.l.Error("创建监控配置失败", zap.String("name", config.Name), zap.Error(err))
-		return err
-	}
-
-	return nil
+func (d *monitorConfigDAO) CreateMonitorConfig(ctx context.Context, row *model.MonitorConfig) error {
+	return d.BatchCreateMonitorConfigs(ctx, []*model.MonitorConfig{row})
 }
 
-func (d *monitorConfigDAO) UpdateMonitorConfig(ctx context.Context, config *model.MonitorConfig) error {
-	if config.ID == 0 {
-		return errors.New("无效的监控配置ID")
-	}
-
-	if err := d.db.WithContext(ctx).Model(&model.MonitorConfig{}).Where("id = ?", config.ID).Updates(config).Error; err != nil {
-		d.l.Error("更新监控配置失败", zap.Int("id", config.ID), zap.Error(err))
-		return err
-	}
-
-	return nil
+func (d *monitorConfigDAO) UpdateMonitorConfig(ctx context.Context, row *model.MonitorConfig) error {
+	return d.BatchUpdateMonitorConfigs(ctx, []*model.MonitorConfig{row})
 }
 
 func (d *monitorConfigDAO) DeleteMonitorConfig(ctx context.Context, id int) error {
 	if id <= 0 {
-		return fmt.Errorf("无效的ID: %d", id)
+		return ErrInvalidConfigWrite
 	}
-
-	if err := d.db.WithContext(ctx).Delete(&model.MonitorConfig{}, id).Error; err != nil {
-		d.l.Error("删除监控配置失败", zap.Int("id", id), zap.Error(err))
-		return err
+	var observed model.MonitorConfig
+	if err := d.db.WithContext(ctx).First(&observed, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return configWriteError(ctx, err)
 	}
-
-	return nil
+	err := d.withConfigNamespaces(ctx, []configNamespaceKey{configKey(&observed)}, func(tx *gorm.DB) error {
+		current, err := currentConfigByID(tx, id)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if GeneratedConfigOwnerOf(current) != GeneratedConfigOwnerOf(&observed) {
+			return ErrConfigNamespaceConflict
+		}
+		rows, err := currentConfigNamespace(tx, configKey(current))
+		if err != nil {
+			return err
+		}
+		if !namespaceContains(rows, id) {
+			return ErrConfigNamespaceConflict
+		}
+		// Explicit ID deletion may repair a historical duplicate; never delete peers.
+		result := tx.Where("id = ?", id).Delete(&model.MonitorConfig{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrConfigNamespaceConflict
+		}
+		return nil
+	})
+	return configWriteError(ctx, err)
 }
 
 // GetMonitorConfigByInstance 通过实例IP和配置类型获取监控配置
@@ -190,112 +205,132 @@ func (d *monitorConfigDAO) GetMonitorConfigByInstance(ctx context.Context, insta
 	return &config, nil
 }
 
-func (d *monitorConfigDAO) BatchCreateMonitorConfigs(ctx context.Context, configs []*model.MonitorConfig) error {
-	if len(configs) == 0 {
+func (d *monitorConfigDAO) BatchCreateMonitorConfigs(ctx context.Context, input []*model.MonitorConfig) error {
+	if len(input) == 0 {
 		return nil
 	}
-
-	const batchSize = 100
-	for i := 0; i < len(configs); i += batchSize {
-		end := i + batchSize
-		if end > len(configs) {
-			end = len(configs)
+	copies := make([]*model.MonitorConfig, len(input))
+	keys := make([]configNamespaceKey, 0, len(input))
+	seen := map[configNamespaceKey]bool{}
+	for i, row := range input {
+		if row == nil || !validConfigNamespace(configKey(row)) {
+			return ErrInvalidConfigWrite
 		}
-
-		batch := configs[i:end]
-		if err := d.db.WithContext(ctx).CreateInBatches(batch, batchSize).Error; err != nil {
-			d.l.Error("批量创建监控配置失败",
-				zap.Int("batch_start", i),
-				zap.Int("batch_size", len(batch)),
-				zap.Error(err))
-			return err
+		key := configKey(row)
+		if seen[key] {
+			return ErrConfigNamespaceConflict
 		}
-
-		d.l.Debug("批量创建监控配置成功",
-			zap.Int("batch_start", i),
-			zap.Int("batch_size", len(batch)))
+		seen[key] = true
+		keys = append(keys, key)
+		copy := *row
+		copies[i] = &copy
 	}
-
+	err := d.withConfigNamespaces(ctx, keys, func(tx *gorm.DB) error {
+		for _, key := range keys {
+			rows, err := currentConfigNamespace(tx, key)
+			if err != nil {
+				return err
+			}
+			if len(rows) != 0 {
+				return ErrConfigNamespaceConflict
+			}
+		}
+		return tx.CreateInBatches(copies, 100).Error
+	})
+	if err != nil {
+		return configWriteError(ctx, err)
+	}
+	for i := range input {
+		*input[i] = *copies[i]
+	}
 	return nil
 }
 
-func (d *monitorConfigDAO) BatchUpdateMonitorConfigs(ctx context.Context, configs []*model.MonitorConfig) error {
-	if len(configs) == 0 {
+func (d *monitorConfigDAO) BatchUpdateMonitorConfigs(ctx context.Context, input []*model.MonitorConfig) error {
+	if len(input) == 0 {
 		return nil
 	}
-
-	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for _, config := range configs {
-			if config.ID == 0 {
-				d.l.Warn("跳过无效的监控配置ID", zap.String("name", config.Name))
-				continue
+	copies := make([]*model.MonitorConfig, len(input))
+	observed := make([]model.MonitorConfig, len(input))
+	keys := make([]configNamespaceKey, 0, 2*len(input))
+	seenIDs := map[int]bool{}
+	for i, row := range input {
+		if !validConfigPatch(row) {
+			return ErrInvalidConfigWrite
+		}
+		if seenIDs[row.ID] {
+			return ErrInvalidConfigWrite
+		}
+		seenIDs[row.ID] = true
+		copy := *row
+		copies[i] = &copy
+	}
+	for i, row := range copies {
+		if err := d.db.WithContext(ctx).First(&observed[i], row.ID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrConfigNamespaceConflict
 			}
-
-			if err := tx.Model(&model.MonitorConfig{}).Where("id = ?", config.ID).Updates(config).Error; err != nil {
-				d.l.Error("批量更新监控配置失败", zap.Int("id", config.ID), zap.Error(err))
+			return configWriteError(ctx, err)
+		}
+		source, target := configKey(&observed[i]), configPatchKey(&observed[i], row)
+		if !validConfigNamespace(source) || !validConfigNamespace(target) {
+			return ErrInvalidConfigWrite
+		}
+		keys = append(keys, source, target)
+	}
+	err := d.withConfigNamespaces(ctx, keys, func(tx *gorm.DB) error {
+		// Data rows are locked by ID after all namespace guards, never vice versa.
+		indices := make([]int, len(copies))
+		for i := range indices {
+			indices[i] = i
+		}
+		sort.Slice(indices, func(i, j int) bool { return copies[indices[i]].ID < copies[indices[j]].ID })
+		current := make([]*model.MonitorConfig, len(copies))
+		for _, i := range indices {
+			row, err := currentConfigByID(tx, copies[i].ID)
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrConfigNamespaceConflict
+			}
+			if err != nil {
+				return err
+			}
+			if GeneratedConfigOwnerOf(row) != GeneratedConfigOwnerOf(&observed[i]) {
+				return ErrConfigNamespaceConflict
+			}
+			current[i] = row
+		}
+		targets := map[configNamespaceKey]bool{}
+		for i, patch := range copies {
+			source, target := configKey(current[i]), configPatchKey(current[i], patch)
+			rows, err := currentConfigNamespace(tx, target)
+			if err != nil {
+				return err
+			}
+			if source == target {
+				if !namespaceContains(rows, patch.ID) {
+					return ErrConfigNamespaceConflict
+				}
+			} else {
+				if len(rows) != 0 || targets[target] {
+					return ErrConfigNamespaceConflict
+				}
+			}
+			targets[target] = true
+		}
+		for _, patch := range copies {
+			if err := tx.Model(&model.MonitorConfig{}).Where("id = ?", patch.ID).Updates(patch).Error; err != nil {
 				return err
 			}
 		}
 		return nil
 	})
-}
-
-func (d *monitorConfigDAO) BatchUpsertMonitorConfigs(ctx context.Context, configs []*model.MonitorConfig) error {
-	if len(configs) == 0 {
-		return nil
+	if err != nil {
+		return configWriteError(ctx, err)
 	}
-
-	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		const batchSize = 100
-		for i := 0; i < len(configs); i += batchSize {
-			end := i + batchSize
-			if end > len(configs) {
-				end = len(configs)
-			}
-
-			batch := configs[i:end]
-
-			// 使用ON DUPLICATE KEY UPDATE语法进行批量upsert
-			if err := tx.Clauses(
-			// 这里假设unique key是 instance_ip + config_type
-			).CreateInBatches(batch, batchSize).Error; err != nil {
-				// 如果批量upsert失败，回退到逐个处理
-				for _, config := range batch {
-					var existing model.MonitorConfig
-					err := tx.Where("instance_ip = ? AND config_type = ?", config.InstanceIP, config.ConfigType).First(&existing).Error
-
-					if errors.Is(err, gorm.ErrRecordNotFound) {
-						if err := tx.Create(config).Error; err != nil {
-							d.l.Error("创建监控配置失败",
-								zap.String("instance_ip", config.InstanceIP),
-								zap.Int8("config_type", config.ConfigType),
-								zap.Error(err))
-							return err
-						}
-					} else if err != nil {
-						d.l.Error("查询监控配置失败",
-							zap.String("instance_ip", config.InstanceIP),
-							zap.Int8("config_type", config.ConfigType),
-							zap.Error(err))
-						return err
-					} else {
-						config.ID = existing.ID
-						if err := tx.Model(&existing).Updates(config).Error; err != nil {
-							d.l.Error("更新监控配置失败",
-								zap.Int("id", existing.ID),
-								zap.Error(err))
-							return err
-						}
-					}
-				}
-			}
-
-			d.l.Debug("批量upsert监控配置成功",
-				zap.Int("batch_start", i),
-				zap.Int("batch_size", len(batch)))
-		}
-		return nil
-	})
+	for i := range input {
+		*input[i] = *copies[i]
+	}
+	return nil
 }
 
 func (d *monitorConfigDAO) GetMonitorConfigsByInstances(ctx context.Context, instanceIPs []string, configType int8) ([]*model.MonitorConfig, error) {

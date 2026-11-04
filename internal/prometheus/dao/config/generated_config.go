@@ -58,8 +58,17 @@ func generatedWriteError(ctx context.Context, err error) error {
 	if err == nil {
 		return nil
 	}
+	if errors.Is(err, ErrConfigNamespaceConflict) || errors.Is(err, ErrInvalidConfigWrite) {
+		return errors.Join(ErrGeneratedConfigConflict, ctx.Err())
+	}
+	if errors.Is(err, ErrConfigWriteUncertain) {
+		return errors.Join(ErrGeneratedConfigWrite, ErrConfigWriteUncertain, ctx.Err())
+	}
 	if errors.Is(err, ErrGeneratedConfigConflict) {
 		return errors.Join(ErrGeneratedConfigConflict, ctx.Err())
+	}
+	if configWriteLockRetry(err) {
+		return errors.Join(ErrGeneratedConfigWrite, ErrConfigWriteRetry, ctx.Err())
 	}
 	if errors.Is(err, context.Canceled) {
 		return errors.Join(ErrGeneratedConfigWrite, context.Canceled)
@@ -76,9 +85,25 @@ func (d *monitorConfigDAO) UpdateGeneratedMonitorConfigs(ctx context.Context, ch
 	if len(changes) == 0 {
 		return nil
 	}
-	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	keys := make([]configNamespaceKey, 0, len(changes))
+	seen := map[int]bool{}
+	for _, change := range changes {
+		if !validGeneratedUpdate(change) || seen[change.Expected.ID] {
+			return ErrGeneratedConfigConflict
+		}
+		seen[change.Expected.ID] = true
+		keys = append(keys, configNamespaceKey{change.Expected.ConfigType, change.Expected.InstanceIP})
+	}
+	err := d.withConfigNamespaces(ctx, keys, func(tx *gorm.DB) error {
 		for _, change := range changes {
 			if !validGeneratedUpdate(change) {
+				return ErrGeneratedConfigConflict
+			}
+			namespace, err := currentConfigNamespace(tx, configNamespaceKey{change.Expected.ConfigType, change.Expected.InstanceIP})
+			if err != nil {
+				return err
+			}
+			if len(namespace) != 1 || (GeneratedConfigOwnerOf(namespace[0]) != change.Expected && !generatedDesiredMatches(*namespace[0], change.Desired)) {
 				return ErrGeneratedConfigConflict
 			}
 			next := change.Desired
@@ -127,16 +152,24 @@ func (d *monitorConfigDAO) DeleteGeneratedMonitorConfig(ctx context.Context, exp
 	if !validGeneratedOwner(expected) {
 		return ErrGeneratedConfigConflict
 	}
-	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		result := generatedOwnerQuery(tx, expected).Delete(&model.MonitorConfig{})
-		if result.Error != nil {
-			return result.Error
+	key := configNamespaceKey{expected.ConfigType, expected.InstanceIP}
+	err := d.withConfigNamespaces(ctx, []configNamespaceKey{key}, func(tx *gorm.DB) error {
+		rows, err := currentConfigNamespace(tx, key)
+		if err != nil {
+			return err
 		}
-		if result.RowsAffected == 1 {
+		if len(rows) != 0 {
+			if len(rows) != 1 || GeneratedConfigOwnerOf(rows[0]) != expected {
+				return ErrGeneratedConfigConflict
+			}
+			result := generatedOwnerQuery(tx, expected).Delete(&model.MonitorConfig{})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return ErrGeneratedConfigConflict
+			}
 			return nil
-		}
-		if result.RowsAffected != 0 {
-			return ErrGeneratedConfigConflict
 		}
 		var retired model.MonitorConfig
 		if err := tx.Unscoped().Clauses(clause.Locking{Strength: "UPDATE"}).First(&retired, expected.ID).Error; err != nil {
@@ -148,20 +181,7 @@ func (d *monitorConfigDAO) DeleteGeneratedMonitorConfig(ctx context.Context, exp
 		if retired.DeletedAt == 0 || GeneratedConfigOwnerOf(&retired) != expected {
 			return ErrGeneratedConfigConflict
 		}
-		// Use strict IP comparison even on a case-insensitive MySQL column.
-		replacement := tx.Model(&model.MonitorConfig{}).Where("config_type = ?", expected.ConfigType)
-		if tx.Dialector.Name() == "mysql" {
-			replacement = replacement.Where("BINARY instance_ip = BINARY ?", expected.InstanceIP)
-		} else {
-			replacement = replacement.Where("instance_ip COLLATE BINARY = ?", expected.InstanceIP)
-		}
-		var rows []model.MonitorConfig
-		if err := replacement.Clauses(clause.Locking{Strength: "UPDATE"}).Limit(1).Find(&rows).Error; err != nil {
-			return err
-		}
-		if len(rows) != 0 {
-			return ErrGeneratedConfigConflict
-		}
+		// The full namespace is still locked and empty, including inactive rows.
 		return nil
 	})
 	return generatedWriteError(ctx, err)

@@ -27,14 +27,17 @@ func generatedFixture(t *testing.T) (*monitorConfigDAO, *gorm.DB) {
 	}
 	pool.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = pool.Close() })
-	if err := db.AutoMigrate(&model.MonitorConfig{}); err != nil {
+	if err := db.AutoMigrate(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}); err != nil {
 		t.Fatal(err)
 	}
 	return NewMonitorConfigDAO(zap.NewNop(), db).(*monitorConfigDAO), db
 }
-func generatedRow(t *testing.T, dao *monitorConfigDAO, name string) *model.MonitorConfig {
+func generatedRow(t *testing.T, dao *monitorConfigDAO, name string, ips ...string) *model.MonitorConfig {
 	t.Helper()
 	row := &model.MonitorConfig{Name: name, PoolID: 7, InstanceIP: "127.0.0.1", ConfigType: model.ConfigTypeWebhookFile, ConfigContent: "before", ConfigHash: "before-hash", Status: 1, LastGeneratedTime: 1}
+	if len(ips) > 0 {
+		row.InstanceIP = ips[0]
+	}
 	if err := dao.CreateMonitorConfig(context.Background(), row); err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +107,7 @@ func TestGeneratedConfigConditionalUpdateContract(t *testing.T) {
 func TestGeneratedConfigBatchConflictRollsBackPriorUpdate(t *testing.T) {
 	dao, _ := generatedFixture(t)
 	a := generatedRow(t, dao, "before-a")
-	b := generatedRow(t, dao, "before-b")
+	b := generatedRow(t, dao, "before-b", "127.0.0.2")
 	x := GeneratedConfigUpdate{Expected: GeneratedConfigOwnerOf(a), Desired: *a}
 	x.Desired.ConfigContent = "after-a"
 	y := GeneratedConfigUpdate{Expected: GeneratedConfigOwnerOf(b), Desired: *b}

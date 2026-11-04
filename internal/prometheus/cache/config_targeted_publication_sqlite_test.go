@@ -30,7 +30,7 @@ func TestGeneratedPublicationNamespaceConflictsWithRealSQLite(t *testing.T) {
 					}
 					sqlDB.SetMaxOpenConns(1)
 					t.Cleanup(func() { _ = sqlDB.Close() })
-					if err := db.AutoMigrate(&model.MonitorConfig{}); err != nil {
+					if err := db.AutoMigrate(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}); err != nil {
 						t.Fatal(err)
 					}
 					dao := configdao.NewMonitorConfigDAO(zap.NewNop(), db)
@@ -106,7 +106,7 @@ func TestGeneratedPublicationUnindexedOrphanNamespaceWithRealSQLite(t *testing.T
 				}
 				sqlDB.SetMaxOpenConns(1)
 				t.Cleanup(func() { _ = sqlDB.Close() })
-				if err := db.AutoMigrate(&model.MonitorConfig{}); err != nil {
+				if err := db.AutoMigrate(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}); err != nil {
 					t.Fatal(err)
 				}
 				dao := configdao.NewMonitorConfigDAO(zap.NewNop(), db)
@@ -200,7 +200,7 @@ func TestGeneratedPublicationReturnedRowsScaleWithRealSQLite(t *testing.T) {
 				}
 				sqlDB.SetMaxOpenConns(1)
 				t.Cleanup(func() { _ = sqlDB.Close() })
-				if err := db.AutoMigrate(&model.MonitorConfig{}); err != nil {
+				if err := db.AutoMigrate(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}); err != nil {
 					t.Fatal(err)
 				}
 				dao := &countedPublicationQueryDAO{MonitorConfigDAO: configdao.NewMonitorConfigDAO(zap.NewNop(), db)}

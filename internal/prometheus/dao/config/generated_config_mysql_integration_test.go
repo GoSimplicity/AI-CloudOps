@@ -21,7 +21,7 @@ import (
 
 // Opt-in only: the caller must provision a NEW EMPTY loopback schema and confirm
 // its exact name separately. Never use the application's demo or runtime DSN.
-// This fixture creates/drops only its own cl_monitor_configs table.
+// This fixture creates/drops only its own metadata and namespace-guard tables.
 func TestGeneratedOwnerGuardNativeMySQL(t *testing.T) {
 	path := os.Getenv("CLOUDOPS_OWNER_GUARD_MYSQL_DSN_FILE")
 	if path == "" {
@@ -64,11 +64,11 @@ func TestGeneratedOwnerGuardNativeMySQL(t *testing.T) {
 			if err := db.Raw("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = ?", cfg.DBName, "cl_monitor_configs").Scan(&tables).Error; err != nil || tables != 0 {
 				t.Fatal("fixture table must not already exist")
 			}
-			if err := db.AutoMigrate(&model.MonitorConfig{}); err != nil {
+			if err := db.AutoMigrate(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}); err != nil {
 				t.Fatal("fixture migration failed")
 			}
 			defer func() {
-				if err := db.Migrator().DropTable(&model.MonitorConfig{}); err != nil {
+				if err := db.Migrator().DropTable(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}); err != nil {
 					t.Error("fixture table cleanup failed")
 				}
 			}()

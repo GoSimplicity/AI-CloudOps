@@ -51,7 +51,7 @@ func TestDeletedAMPoolRealHTTPAndDatabaseRecovery(t *testing.T) {
 			}
 			conn.SetMaxOpenConns(1)
 			defer conn.Close()
-			if err := db.AutoMigrate(&model.MonitorAlertManagerPool{}, &model.MonitorSendGroup{}, &model.MonitorConfig{}, &model.MonitorScrapePool{}); err != nil {
+			if err := db.AutoMigrate(&model.MonitorAlertManagerPool{}, &model.MonitorSendGroup{}, &model.MonitorConfig{}, &model.MonitorScrapePool{}, &model.MonitorConfigNamespaceGuard{}); err != nil {
 				t.Fatal(err)
 			}
 			pool := &model.MonitorAlertManagerPool{Model: model.Model{ID: 7}, Name: "old-am", AlertManagerInstances: model.StringList{"invalid old target"}, ResolveTimeout: "invalid"}

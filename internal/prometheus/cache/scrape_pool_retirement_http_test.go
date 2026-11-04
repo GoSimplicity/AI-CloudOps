@@ -111,7 +111,7 @@ func TestDeletedPoolHTTPAndDatabaseRetirementRecoverFromPersistentTombstone(t *t
 			}
 			conn.SetMaxOpenConns(1)
 			defer conn.Close()
-			if err := db.AutoMigrate(&model.MonitorScrapePool{}, &model.MonitorScrapeJob{}, &model.MonitorAlertRule{}, &model.MonitorRecordRule{}, &model.MonitorConfig{}); err != nil {
+			if err := db.AutoMigrate(&model.MonitorScrapePool{}, &model.MonitorScrapeJob{}, &model.MonitorAlertRule{}, &model.MonitorRecordRule{}, &model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}); err != nil {
 				t.Fatal(err)
 			}
 			pool := &model.MonitorScrapePool{Model: model.Model{ID: 7}, Name: "deleted-pool", SupportAlert: 1, SupportRecord: 1, PrometheusInstances: model.StringList{"invalid old target"}}

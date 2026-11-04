@@ -1,5 +1,14 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-04：配置 SQL 命名空间原子写保护
+
+普通单项/批量写与生成器更新/清退全部参与永久guard的固定顺序事务锁，锁内完整namespace当前读保护foreign/custom/非激活冲突；普通迁入和新建拒绝占用，历史重复可明确按ID删除/迁出修复。见[完整SQL合同](config-namespace-guards.md)。
+
+- 独立9主40叶SQLite contract race通过，对旧实现同测30叶实红；原实际publisher预检后新owner的2红例转绿。完整Go/vet/全标签编译及cache/DAO race通过。
+- MySQL8.4.11/RR两个真实连接7场景零skip通过；原changed/found rows两模式CAS再次通过。真实101后段SQL失败证明整批回滚且不泄ID/时间，未知提交确认单列uncertain，不谎称rollback。
+- 原1213独立键互锁以真实屏障复现，增加可索引的普通IP预过滤并保字节精确比较后原用例转绿，EXPLAIN为IP ref/估计1行；没有schema/index改动，不承诺所有deadlock消失或线上耗时改善。专属测试库/用户/DSN已清。
+- Web锁更新已远端Verify成功的9bd9b7c166f9bf1016261bc14a69acf4f17a6daa，AI保持ba1876a；新后端组合仍需远端验收。SQL提交后的Redis发布窗口尚待闭环，未上线。
+
 ## 2026-11-04：配置命名空间锁迁移基础与确认模式
 
 独立v2只添加永久字节锁地址，不改历史配置或v1证明；现代runtime、CLI和时区初始化验证完整CurrentManifest，冻结旧库工具继续sole-v1。见[阶段合同与原生验收](config-namespace-guards.md)。

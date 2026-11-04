@@ -626,3 +626,10 @@
 - fresh/pending显式确认分流，同持锁连接在任何DDL/ledger写前重新判定；3个真实双连接预检竞态拒绝，无新v2/账本写。修复现代clock遗漏版本与旧回滚演练误用modern verify。
 - 全Go test/vet/标签编译、相关race、173发布工具测试、8个MySQL子场景、原生角色权限及完整旧49表→58表→物理恢复49表12行演练通过，资源清理。数据复制2.948秒不代表整站RTO。
 - Web锁更新已远端验证68bee75/AIba187；新组合CI另验。业务DAO接线与跨SQL/Redis窗口尚未交付，未上线。
+
+## 2026-11-04：普通与生成配置的 SQL 命名空间保护
+
+- 全部DAO写入口先固定序guard再当前读全namespace，新增/迁入占用含Status2拒绝；历史duplicate保留，按ID删除/迁出可修复。Generated保Expected CAS、更名完全Desired重试及tombstone保护，移除无caller假BatchUpsert。
+- 批次一个事务，复制输入、commit成功后回填；101后段真实SQL失败零前段提交/零ID时间泄漏，1205/1213安全重试类别与commit不确定类别分开。
+- 独立40叶/旧实现30实红、原publisher2红转绿、完整Go/vet/tag/cache-DAO race、MySQL双连接7场景及原CAS两row-count模式通过；原生无关键1213复现并以IP索引预过滤修复，字节精确检查保留，测试资源清理。
+- Web锁更新已验证9bd9b7c，AIba187不变；SQL→Redis窗口另阶段，不宣称跨存储原子或上线。
