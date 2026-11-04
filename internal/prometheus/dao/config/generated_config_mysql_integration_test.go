@@ -64,11 +64,11 @@ func TestGeneratedOwnerGuardNativeMySQL(t *testing.T) {
 			if err := db.Raw("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = ?", cfg.DBName, "cl_monitor_configs").Scan(&tables).Error; err != nil || tables != 0 {
 				t.Fatal("fixture table must not already exist")
 			}
-			if err := db.AutoMigrate(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}); err != nil {
+			if err := db.AutoMigrate(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}, &model.MonitorConfigPoolControl{}, &model.MonitorConfigPoolOperation{}, &model.MonitorConfigArtifactEvent{}); err != nil {
 				t.Fatal("fixture migration failed")
 			}
 			defer func() {
-				if err := db.Migrator().DropTable(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}); err != nil {
+				if err := db.Migrator().DropTable(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}, &model.MonitorConfigPoolControl{}, &model.MonitorConfigPoolOperation{}, &model.MonitorConfigArtifactEvent{}); err != nil {
 					t.Error("fixture table cleanup failed")
 				}
 			}()

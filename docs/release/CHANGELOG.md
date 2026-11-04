@@ -640,3 +640,9 @@
 - CurrentManifest追加独立自绑定v3，v1/v2字节不变，统一当前额外表目录与最小S/I/U权限，legacy58不改。
 - 357叶race、全Go/vet/tagcompile、MySQL4子例及完整dbschema/CLI Docker原生测试通过，资源清理；Web锁已验证19ac271，AIba187。
 - 当前仅存储基础，不假称DAO journal/Redis fencing或两个窗口闭环；preview仍0618/schema2，未上线。
+
+## 2026-11-04：发布日志SQL业务接口
+
+- 独立ProjectionJournalDAO reserve/typed business plan/nonce恢复/last-good/条件mark，metadata+events+manifest+lastCommitted单事务；ordinary写同tx记录lineage/N/A，不依赖Redis。保批次rollback/input回填与owner CAS，禁止自由Redis key投影权。
+- 独立12叶及SourceID/状态红转绿、真实commit丢ACK、MySQL双session6子、旧CAS两模式/namespace7子与全Go/vet/tag/cache-DAO race通过，资源清理。
+- Web锁已验证dd558ce/AIba187，新CI另验；发布器/Lua/recovery worker及两窗口闭环仍待接线，未上线。

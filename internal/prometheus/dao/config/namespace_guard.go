@@ -80,40 +80,13 @@ func (d *monitorConfigDAO) withConfigNamespaces(ctx context.Context, keys []conf
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	unique := map[configNamespaceKey]bool{}
-	ordered := make([]configNamespaceKey, 0, len(keys))
-	for _, key := range keys {
-		if !validConfigNamespace(key) {
-			return ErrInvalidConfigWrite
-		}
-		if !unique[key] {
-			unique[key] = true
-			ordered = append(ordered, key)
-		}
+	if _, err := orderedConfigNamespaces(keys); err != nil {
+		return err
 	}
-	sort.Slice(ordered, func(i, j int) bool {
-		if ordered[i].kind != ordered[j].kind {
-			return ordered[i].kind < ordered[j].kind
-		}
-		return ordered[i].raw < ordered[j].raw
-	})
 	readyToCommit := false
 	err := d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for _, key := range ordered {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			guard := model.MonitorConfigNamespaceGuard{ConfigType: key.kind, InstanceKey: []byte(key.raw)}
-			if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "config_type"}, {Name: "instance_key"}}, DoUpdates: clause.Assignments(map[string]interface{}{"instance_key": gorm.Expr("instance_key")})}).Create(&guard).Error; err != nil {
-				return err
-			}
-			var locked model.MonitorConfigNamespaceGuard
-			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("config_type = ? AND instance_key = ?", key.kind, []byte(key.raw)).First(&locked).Error; err != nil {
-				return err
-			}
-			if locked.ConfigType != key.kind || string(locked.InstanceKey) != key.raw {
-				return ErrConfigNamespaceConflict
-			}
+		if err := lockConfigNamespacesTx(tx, keys); err != nil {
+			return err
 		}
 		if err := write(tx); err != nil {
 			return err
@@ -156,4 +129,49 @@ func namespaceContains(rows []*model.MonitorConfig, id int) bool {
 		}
 	}
 	return false
+}
+
+func orderedConfigNamespaces(keys []configNamespaceKey) ([]configNamespaceKey, error) {
+	unique := map[configNamespaceKey]bool{}
+	ordered := make([]configNamespaceKey, 0, len(keys))
+	for _, key := range keys {
+		if !validConfigNamespace(key) {
+			return nil, ErrInvalidConfigWrite
+		}
+		if !unique[key] {
+			unique[key] = true
+			ordered = append(ordered, key)
+		}
+	}
+	sort.Slice(ordered, func(i, j int) bool {
+		if ordered[i].kind != ordered[j].kind {
+			return ordered[i].kind < ordered[j].kind
+		}
+		return ordered[i].raw < ordered[j].raw
+	})
+	return ordered, nil
+}
+func lockConfigNamespacesTx(tx *gorm.DB, keys []configNamespaceKey) error {
+	ordered, err := orderedConfigNamespaces(keys)
+	if err != nil {
+		return err
+	}
+	ctx := tx.Statement.Context
+	for _, key := range ordered {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		guard := model.MonitorConfigNamespaceGuard{ConfigType: key.kind, InstanceKey: []byte(key.raw)}
+		if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "config_type"}, {Name: "instance_key"}}, DoUpdates: clause.Assignments(map[string]interface{}{"instance_key": gorm.Expr("instance_key")})}).Create(&guard).Error; err != nil {
+			return err
+		}
+		var locked model.MonitorConfigNamespaceGuard
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("config_type = ? AND instance_key = ?", key.kind, []byte(key.raw)).First(&locked).Error; err != nil {
+			return err
+		}
+		if locked.ConfigType != key.kind || string(locked.InstanceKey) != key.raw {
+			return ErrConfigNamespaceConflict
+		}
+	}
+	return nil
 }

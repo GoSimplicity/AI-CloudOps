@@ -1,6 +1,6 @@
 # 配置发布的持久日志与投影版本
 
-当前阶段只交付 v3 存储结构、模型和权限；事务日志业务接口、Redis fencing、发布器及恢复 worker 尚未接入。已有的两处 SQL 提交后 Redis 竞争仍属于后续验收，不能用建表成功声称发布窗口已经关闭。
+当前已交付 v3 存储结构及日志事务接口；普通配置写入会在同一 SQL 事务记录事件。新日志计划接口尚未接入发布器，Redis fencing 与恢复 worker 尚未交付。已有的两处 SQL 提交后 Redis 竞争仍属于后续验收，不能用建表成功声称发布窗口已经关闭。
 
 ## 三种记录的责任
 
@@ -41,3 +41,17 @@ v3 只创建上述三表，已发布 v1/v2 的 SQL、执行包装及校验和保
 完整`go test -race -tags=integration ./internal/dbschema`与`./cmd/schema`两组自有Docker原生测试通过，包含冻结旧库、当前模型结构、现代CLI、角色正反权限与时区流程；没有仅跑新例而漏掉旧fixture版本目标。
 
 Web来源锁19ac2716481c44d145193fe24a6e97095e49b97f自身远端Verify/gitleaks成功，AI维持ba1876a；后端本提交的新组合CI另验。本地预览仍运行已验收0618及schema v2，本次开发未对演示库应用v3。
+
+## 日志事务接口验收
+
+`ProjectionJournalDAO` 独立于旧元数据接口：reserve 以永久 control 行锁分配 generation 和追加操作；commit 在 control → namespace → 数据行的顺序下，将业务配置、事件、manifest 和 lastCommitted 同事务提交。业务 SQL 使用私有事务原语，不嵌套调用自行提交的旧 public DAO。创建只在已知 commit 成功后回填输入 ID/时间；未知结果返回固定不确定错误，通过 nonce 重新加载 SQL 事实。
+
+普通单项、批量、迁入/迁出及旧 generated 写口同事务追加 lineage_only 或 not_applicable 事件，不调用 Redis。只有验证过的 generated binding 或同字节 namespace 的可信谱系可授权投影；不穿过最新 N/A 或断链去找更旧权限。`pool:7:ips`、45字符自定义键和 type5 intent 保存成功不等于有 Redis artifact 权限。
+
+已提交 manifest 及事件 payload 不允许被重试改写；MySQL JSON 的字段排序/空格按严格字段语义解码。交付标记从已签发 manifest 核对完整回执与 SourceID、latest revision 和 lastCommitted，不用调用方字段重新“签发”回执。空操作有独立 [] manifest，失败后继 attempt 不覆盖 last-good；必要时新 generation 恢复旧已提交事实。
+
+新增独立 12 叶合同 race 通过。审查中实际复现并修复错误 SourceID 可标 applied，以及 create -1/3 状态可获得 generated receipt 两个缺口，原红例均转绿。另有非空 lineage/条件标记/返回值深拷贝、真实 SQLite commit 成功后故意丢 ACK 的 reserve/business 两分支及 nonce 重载测试通过。
+
+MySQL8.4.11/RR 两独立 session 实际运行6子例、零skip：并发 generation/nonce、非空 JSON receipt/ordinary lineage、empty last-good/new recovery、后段 SQL CHECK 错误整批回滚、commit ACK 丢失独立 session 重载、unsigned counter 耗尽。旧 owner CAS 的 changed/found rows 两模式和7个 namespace 原生回归再次通过。完整 config DAO/cache race、vet、全 Go 与全部标签编译通过；所有专属 schema/user/DSN 已清理。
+
+此提交没有连接发布器、Lua 或 worker。SQL mark API 由内部调用者确认外部投影后使用，测试中调用它不证明 Redis 已写；已复现的旧 A 删除/覆盖新 B 两个窗口仍待后续 fencing 业务闭环。普通 SQL 成功只表示保存与持久 pending，不等于分发成功。Web锁为独立 Verify 已通过的 dd558ce，AIba187；新后端组合CI另验。本地预览仍固定0618/schema2，没有把本次WIP直接应用演示库。

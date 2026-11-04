@@ -86,11 +86,11 @@ func TestNamespaceWritesNativeMySQL(t *testing.T) {
 	if a.WithContext(ctx).Raw("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()").Scan(&objects).Error != nil || objects != 0 {
 		t.Fatal("private schema must initially be empty")
 	}
-	if err := a.AutoMigrate(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}); err != nil {
+	if err := a.AutoMigrate(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}, &model.MonitorConfigPoolControl{}, &model.MonitorConfigPoolOperation{}, &model.MonitorConfigArtifactEvent{}); err != nil {
 		t.Fatal("private schema migration failed")
 	}
 	defer func() {
-		if err := a.Migrator().DropTable(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}); err != nil {
+		if err := a.Migrator().DropTable(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}, &model.MonitorConfigPoolControl{}, &model.MonitorConfigPoolOperation{}, &model.MonitorConfigArtifactEvent{}); err != nil {
 			t.Error("private fixture cleanup failed")
 		}
 	}()

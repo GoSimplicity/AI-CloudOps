@@ -29,7 +29,7 @@ func newNamespaceWriteContractDB(t *testing.T) (MonitorConfigDAO, *gorm.DB) {
 	}
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = conn.Close() })
-	if db.AutoMigrate(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}) != nil {
+	if db.AutoMigrate(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}, &model.MonitorConfigPoolControl{}, &model.MonitorConfigPoolOperation{}, &model.MonitorConfigArtifactEvent{}) != nil {
 		t.Fatal("namespace fixture migration failed")
 	}
 	return NewMonitorConfigDAO(zap.NewNop(), db), db

@@ -178,7 +178,7 @@ func (d *monitorConfigDAO) DeleteMonitorConfig(ctx context.Context, id int) erro
 		if result.RowsAffected != 1 {
 			return ErrConfigNamespaceConflict
 		}
-		return nil
+		return appendConfigTransition(tx, current, nil)
 	})
 	return configWriteError(ctx, err)
 }
@@ -235,7 +235,15 @@ func (d *monitorConfigDAO) BatchCreateMonitorConfigs(ctx context.Context, input 
 				return ErrConfigNamespaceConflict
 			}
 		}
-		return tx.CreateInBatches(copies, 100).Error
+		if err := tx.CreateInBatches(copies, 100).Error; err != nil {
+			return err
+		}
+		for _, row := range copies {
+			if err := appendConfigTransition(tx, nil, row); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return configWriteError(ctx, err)
@@ -319,6 +327,15 @@ func (d *monitorConfigDAO) BatchUpdateMonitorConfigs(ctx context.Context, input 
 		}
 		for _, patch := range copies {
 			if err := tx.Model(&model.MonitorConfig{}).Where("id = ?", patch.ID).Updates(patch).Error; err != nil {
+				return err
+			}
+		}
+		for i, patch := range copies {
+			after, err := currentConfigByID(tx, patch.ID)
+			if err != nil {
+				return err
+			}
+			if err := appendConfigTransition(tx, current[i], after); err != nil {
 				return err
 			}
 		}

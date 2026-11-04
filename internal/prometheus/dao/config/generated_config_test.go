@@ -27,7 +27,7 @@ func generatedFixture(t *testing.T) (*monitorConfigDAO, *gorm.DB) {
 	}
 	pool.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = pool.Close() })
-	if err := db.AutoMigrate(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}); err != nil {
+	if err := db.AutoMigrate(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}, &model.MonitorConfigPoolControl{}, &model.MonitorConfigPoolOperation{}, &model.MonitorConfigArtifactEvent{}); err != nil {
 		t.Fatal(err)
 	}
 	return NewMonitorConfigDAO(zap.NewNop(), db).(*monitorConfigDAO), db

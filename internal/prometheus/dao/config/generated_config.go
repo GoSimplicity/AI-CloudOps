@@ -106,12 +106,20 @@ func (d *monitorConfigDAO) UpdateGeneratedMonitorConfigs(ctx context.Context, ch
 			if len(namespace) != 1 || (GeneratedConfigOwnerOf(namespace[0]) != change.Expected && !generatedDesiredMatches(*namespace[0], change.Desired)) {
 				return ErrGeneratedConfigConflict
 			}
+			before := *namespace[0]
 			next := change.Desired
 			result := generatedOwnerQuery(tx.Model(&model.MonitorConfig{}), change.Expected).Updates(map[string]any{"name": next.Name, "pool_id": next.PoolID, "config_type": next.ConfigType, "instance_ip": next.InstanceIP, "config_content": next.ConfigContent, "config_hash": next.ConfigHash, "status": next.Status, "last_generated_time": next.LastGeneratedTime})
 			if result.Error != nil {
 				return result.Error
 			}
 			if result.RowsAffected == 1 {
+				after, err := currentConfigByID(tx, change.Expected.ID)
+				if err != nil {
+					return err
+				}
+				if err := appendConfigTransition(tx, &before, after); err != nil {
+					return err
+				}
 				continue
 			}
 			if result.RowsAffected != 0 {
@@ -128,6 +136,9 @@ func (d *monitorConfigDAO) UpdateGeneratedMonitorConfigs(ctx context.Context, ch
 			}
 			if !generatedDesiredMatches(current, next) {
 				return ErrGeneratedConfigConflict
+			}
+			if err := appendConfigTransition(tx, &before, &current); err != nil {
+				return err
 			}
 		}
 		return nil
@@ -169,7 +180,7 @@ func (d *monitorConfigDAO) DeleteGeneratedMonitorConfig(ctx context.Context, exp
 			if result.RowsAffected != 1 {
 				return ErrGeneratedConfigConflict
 			}
-			return nil
+			return appendConfigTransition(tx, rows[0], nil)
 		}
 		var retired model.MonitorConfig
 		if err := tx.Unscoped().Clauses(clause.Locking{Strength: "UPDATE"}).First(&retired, expected.ID).Error; err != nil {

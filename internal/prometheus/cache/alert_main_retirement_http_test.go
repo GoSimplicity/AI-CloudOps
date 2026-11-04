@@ -46,7 +46,7 @@ func TestAMMainUnindexedRetirementRemovesHTTPArtifacts(t *testing.T) {
 	}
 	conn.SetMaxOpenConns(1)
 	defer conn.Close()
-	if err := db.AutoMigrate(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}); err != nil {
+	if err := db.AutoMigrate(&model.MonitorConfig{}, &model.MonitorConfigNamespaceGuard{}, &model.MonitorConfigPoolControl{}, &model.MonitorConfigPoolOperation{}, &model.MonitorConfigArtifactEvent{}); err != nil {
 		t.Fatal(err)
 	}
 	pool := &model.MonitorAlertManagerPool{Model: model.Model{ID: 7}, Name: "before", AlertManagerInstances: model.StringList{"127.0.0.1"}, ResolveTimeout: "5m", GroupWait: "30s", GroupInterval: "5m", RepeatInterval: "1h", GroupBy: model.StringList{"alertname"}}

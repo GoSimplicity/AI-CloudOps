@@ -1,5 +1,13 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-04：发布日志事务接口
+
+Reserve/Commit/Load/条件Mark已实现，业务配置、事件、manifest和lastCommitted同SQL事务；普通写口追加谱系或N/A事件，不等待Redis。见[日志事务合同](config-projection-journal.md)。
+
+- 独立12叶race及真实失去commit ACK的重载、非空lineage/条件mark通过；MySQL双session6子、旧CAS两模式及namespace7子实跑通过，完整Go/vet/tag与DAO/cache race通过，私有资源清理。
+- 审查实际SourceID映射及非法create状态红例已修，标记必须匹配已签发manifest；空manifest[]与reserved NULL、failed latest/lastGood/recovery保留。
+- Web锁更新已远端验证dd558ce，AIba187；新Go组合CI另验。发布器/Lua/worker尚未接线，两个SQL→Redis窗口未据此称消除。本地预览仍0618/schema2，未上线。
+
 ## 2026-11-04：发布日志 v3 存储基础
 
 新增永久池control、逐代operation与artifact事件三表；保留空操作与失败后last-good证明，不复制YAML正文。v3仅追加建表，已发布v1/v2输入不变。见[日志合同与当前边界](config-projection-journal.md)。
