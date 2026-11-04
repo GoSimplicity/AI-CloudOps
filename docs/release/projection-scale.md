@@ -83,3 +83,24 @@ Store/Lua/schema未改，整帧字节完全不降，wire与Lua全量检查仍有
 ## 第三阶段：有界 artifact batch
 
 在保全原行为帧、全部namespace fencing与控制顺序的前提下，[有界批量](artifact-batch.md)减少artifact RPC。原15项StoreCommandFrames继续测原单项接口，不改变基准口径；当前runner由真实Redis规模场景观测。N128 EVAL131→11、RESP参数16,093,977→1,369,684字节；race单次完整投影约1.464s→0.457s，不能当生产SLA或宣称全帧算法已线性。
+
+## 扩展容量观测
+
+显式设置CLOUDOPS_TEST_PROJECTION_CAPACITY=true，可在原owned scale入口增加较大场景；默认CI正确性gate不增加这些慢项。五项扩展均实际通过，0fail/skip，使用相同专属Redis/SQLite与race检查。配置保存、journal提交及夹具准备在完整投影计时之前，因此这里不代表HTTP保存请求总延迟。
+
+```sh
+CLOUDOPS_TEST_PROJECTION_STORE=true CLOUDOPS_TEST_PROJECTION_CAPACITY=true \
+  go test -race -json -tags=integration ./internal/prometheus/cache \
+  -run '^TestProjectionStoreOwnedRedisProtocol$/^scale_cost$/(N256|N512|N1024|N16_body64KiB|N2_bodyOver1MiB)$' \
+  -count=1 -timeout=600s
+```
+
+| 产物 / 单体正文 | 完整投影ns | SELECT | EVAL | EVAL RESP字节 |
+| --- | ---: | ---: | ---: | ---: |
+| 256 / 11B | 1,045,495,458 | 1564 | 19 | 4,405,076 |
+| 512 / 11B | 2,864,983,875 | 3116 | 35 | 15,597,930 |
+| 1024 / 11B | 9,100,364,167 | 6220 | 67 | 58,611,476 |
+| 16 / 64KiB | 467,648,458 | 110 | 5 | 1,205,535 |
+| 2 / 1MiB+1B | 825,263,542 | 26 | 5 | 2,196,692 |
+
+全部场景验证raw逐字、完整成员、实际EVAL统计及SQL projected。大单体按发送前预算选择既有single路径；这证明没有因batch预算把既有合法协议输入永久拒收，不代表该单体具有1MiB命令上限。1024微小正文的单次结果也不是恢复item_timeout的容量保证，源读取/生成/提交、MySQL网络、真实YAML和并发仍需独立验收。frame自身超预算时仍会退回逐项，因此更大计划可能存在成本拐点，不能由此表推断无限容量或整体线性。

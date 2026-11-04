@@ -746,3 +746,8 @@
 - typed runner合并artifact为最多16项、完整RESP至多1MiB批次，正文独立raw参数；首发前整选择验证，Lua所有批内数据与原完整frame/全NS fencing检查先于首写。控制顺序与原single保留。
 - 超预算发前选择原fenced单项；EVAL错误不fallback/retry，执行后丢回复由持久状态恢复。Root Redis86/MySQL12及全Go/vet/tags通过。
 - 固定微小正文N128实测EVAL131→11、RESP16.09→1.37MB，不宣称生产SLA/整体线性。预览安全更新67df/schema4且数据保持，新批量代码未上线。
+
+## 2026-11-05：扩展投影容量观测
+
+- 新显式测试flag覆盖256/512/1024产物及64KiB、超过1MiB单体，五项真实SQL/Redis/ACK完成验证通过；默认正确性gate规模不变。
+- 记录全部原始数量/耗时与预算fallback边界，不推断生产SLA或新增合法输入限制，生产/schema/Store协议不改。

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -154,9 +155,30 @@ func rootProjectionEvalStats(t *testing.T, ctx context.Context, client *redis.Cl
 // Timings are observations, never host-dependent pass/fail thresholds.
 func TestProjectionStoreNativeScaleCost(t *testing.T) {
 	client := projectionRedisNative(t)
+	type scaleCase struct {
+		name      string
+		size      int
+		bodyBytes int
+		timeout   time.Duration
+	}
+	cases := []scaleCase{}
 	for _, size := range []int{1, 4, 16, 64, 128} {
-		t.Run(fmt.Sprintf("N%d", size), func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		cases = append(cases, scaleCase{fmt.Sprintf("N%d", size), size, 11, 30 * time.Second})
+	}
+	if os.Getenv("CLOUDOPS_TEST_PROJECTION_CAPACITY") == "true" {
+		for _, size := range []int{256, 512, 1024} {
+			cases = append(cases, scaleCase{fmt.Sprintf("N%d", size), size, 11, 2 * time.Minute})
+		}
+		cases = append(cases, scaleCase{"N16_body64KiB", 16, 64 << 10, 2 * time.Minute}, scaleCase{"N2_bodyOver1MiB", 2, (1 << 20) + 1, 2 * time.Minute})
+	}
+	for _, scenario := range cases {
+		t.Run(scenario.name, func(t *testing.T) {
+			size := scenario.size
+			body := "groups: []\n"
+			if scenario.bodyBytes > len(body) {
+				body += "#" + strings.Repeat("x", scenario.bodyBytes-len(body)-1)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), scenario.timeout)
 			defer cancel()
 			journal, _, db := projectionStoreSQL(t)
 			ref, err := journal.ReservePoolOperation(ctx, configdao.PoolOperationRequest{Family: 4, PoolID: 22000 + size, Nonce: [16]byte{1}})
@@ -165,7 +187,7 @@ func TestProjectionStoreNativeScaleCost(t *testing.T) {
 			}
 			items := make([]configdao.GeneratedPlanItem, 0, size)
 			for i := 0; i < size; i++ {
-				items = append(items, projectionRecordItem(ref.PoolID, uint64(i+1), fmt.Sprintf("10.21.%d.%d", i/250, i%250+1), "groups: []\n"))
+				items = append(items, projectionRecordItem(ref.PoolID, uint64(i+1), fmt.Sprintf("10.21.%d.%d", i/250, i%250+1), body))
 			}
 			receipt, err := journal.CommitGeneratedProjectionPlan(ctx, projectionFullRequest(ref, items...))
 			if err != nil {
