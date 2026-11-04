@@ -65,6 +65,69 @@ func TestProjectionStoreOwnedRedisProtocol(t *testing.T) {
 	if os.Getenv("CLOUDOPS_TEST_PROJECTION_STORE") != "true" {
 		t.Skip("requires explicit owned projection Redis acceptance flag")
 	}
+	projectionOwnedRedis(t)
+	groups := []struct {
+		name string
+		run  func(*testing.T)
+	}{
+		{"protocol", TestProjectionStoreNativeRedis},
+		{"queued_full_plan", TestProjectionStoreReviewQueuedFullPlanCannotRevertHigherPrepare},
+		{"same_plan_sha", TestIndependentProjectionStoreLegacySHAIsEqualPayload},
+		{"same_plan_binding", TestIndependentProjectionStoreEqualPlanCannotRedirectArtifactBinding},
+		{"record_publishers", TestRecordProjectionNativeLatePacketsCannotDamageNewOwner},
+		{"record_legacy_owner", TestRecordProjectionNativeLegacyOwnerCanFinishAfterReplacement},
+		{"record_source_snapshot", TestRecordProjectionNativeOlderSourceCannotReserveAfterNewerPublication},
+		{"record_same_hash_metadata", TestRecordProjectionNativeSameHashFindsNewDatabaseOnlyRetirement},
+		{"alert_publishers", TestAlertRuleProjectionNativeLatePacketsCannotDamageNewOwner},
+		{"alert_legacy_owner", TestAlertRuleProjectionNativeLegacyOwnerCanFinishAfterReplacement},
+		{"alert_same_hash_metadata", TestAlertRuleProjectionNativeSameHashFindsNewDatabaseOnlyRetirement},
+		{"alert_source_snapshot", TestAlertRuleProjectionNativeOlderSourceCannotReserveAfterNewerPublication},
+		{"scrape_rule_family_isolation", TestScrapeRuleProjectionNativeFamiliesShareDatabaseWithoutCrossWrites},
+		{"prom_publishers", TestPromMainProjectionNativeLatePacketsCannotDamageNewOwner},
+		{"prom_legacy_owner", TestPromMainProjectionNativeLegacyOwnerCanFinishAfterReplacement},
+		{"prom_same_hash_metadata", TestPromMainProjectionNativeSameHashFindsNewDatabaseOnlyRetirement},
+		{"prom_source_snapshot", TestPromMainProjectionNativeOlderSourceCannotReplaceNewer},
+		{"prom_credential_rotation", TestPromMainProjectionNativeCredentialRotationUsesOperationalBytes},
+		{"prom_deleted_pool", TestPromMainProjectionNativeDeletedPoolRetiresWithoutJobRead},
+		{"am_subset_isolation", TestAMProjectionNativeSubsetIsolationAndStableNoop},
+		{"am_empty_groups", TestAMProjectionNativeEmptyGroupsRetireOnlyWebhook},
+		{"am_unsaved_subset", TestAMProjectionNativeRejectsUnsavedSubsetPool},
+		{"am_source_snapshot", TestAMProjectionNativeOlderSourceCannotReplacePeerPublication},
+		{"am_failed_reservation", TestAMProjectionNativeFailedReservationDoesNotInvalidateLastGood},
+		{"am_delayed_subset", TestAMProjectionNativeDelayedSubsetCannotRevertFullPublication},
+		{"am_same_hash_metadata", TestAMProjectionNativeSameHashFindsDatabaseOnlyRetirement},
+		{"am_unissued_ack", TestAMProjectionNativeCoverageRejectsUnissuedACKBytes},
+		{"am_delayed_full", TestAMProjectionNativeDelayedFullCannotRevertSubset},
+		{"am_rename_aba", TestAMProjectionNativeRepeatedRenameAndSecondABARecover},
+		{"am_malformed_before_writes", TestAMProjectionNativeMalformedIntentFailsBeforeReplayWrites},
+		{"recovery_scrape_restart", TestProjectionRecoveryNativeScrapeFamiliesRestart},
+		{"recovery_am_peer", TestProjectionRecoveryNativeAMPeerConverges},
+		{"recovery_poison_page", TestProjectionRecoveryNativePoisonDoesNotBlockLaterPool},
+		{"scale_cost", TestProjectionStoreNativeScaleCost},
+		{"batch_preflight", TestProjectionBatchNativeRejectsBeforeAnyArtifactWrite},
+		{"batch_lost_reply", TestProjectionBatchNativeLostReplyRecoversWithoutRetry},
+		{"batch_expired_lease", TestProjectionBatchNativeExpiredLeaseSendsNoEval},
+		{"batch_independent_review", TestProjectionBatchIndependentNative},
+		{"batch_raw_bytes", TestProjectionBatchNativeRawBodyBytesRemainExact},
+	}
+	for _, group := range groups {
+		skipped := false
+		passed := t.Run(group.name, func(child *testing.T) {
+			defer func() { skipped = child.Skipped() }()
+			group.run(child)
+		})
+		if skipped {
+			t.Errorf("owned protocol group %s skipped despite prepared fixture", group.name)
+		}
+		if !passed {
+			t.Errorf("owned protocol group %s failed", group.name)
+		}
+	}
+}
+
+// projectionOwnedRedis creates a fresh fixture; callers must explicitly opt in.
+func projectionOwnedRedis(t *testing.T) *redis.Client {
+	t.Helper()
 	endpointContext, endpointCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	endpoint, endpointErr := projectionLocalDockerEndpoint(endpointContext)
 	endpointCancel()
@@ -178,61 +241,5 @@ func TestProjectionStoreOwnedRedisProtocol(t *testing.T) {
 	}
 	path := writePrivate("connection.json", encoded)
 	t.Setenv("CLOUDOPS_PROJECTION_STORE_REDIS_CONNECTION_FILE", path)
-	groups := []struct {
-		name string
-		run  func(*testing.T)
-	}{
-		{"protocol", TestProjectionStoreNativeRedis},
-		{"queued_full_plan", TestProjectionStoreReviewQueuedFullPlanCannotRevertHigherPrepare},
-		{"same_plan_sha", TestIndependentProjectionStoreLegacySHAIsEqualPayload},
-		{"same_plan_binding", TestIndependentProjectionStoreEqualPlanCannotRedirectArtifactBinding},
-		{"record_publishers", TestRecordProjectionNativeLatePacketsCannotDamageNewOwner},
-		{"record_legacy_owner", TestRecordProjectionNativeLegacyOwnerCanFinishAfterReplacement},
-		{"record_source_snapshot", TestRecordProjectionNativeOlderSourceCannotReserveAfterNewerPublication},
-		{"record_same_hash_metadata", TestRecordProjectionNativeSameHashFindsNewDatabaseOnlyRetirement},
-		{"alert_publishers", TestAlertRuleProjectionNativeLatePacketsCannotDamageNewOwner},
-		{"alert_legacy_owner", TestAlertRuleProjectionNativeLegacyOwnerCanFinishAfterReplacement},
-		{"alert_same_hash_metadata", TestAlertRuleProjectionNativeSameHashFindsNewDatabaseOnlyRetirement},
-		{"alert_source_snapshot", TestAlertRuleProjectionNativeOlderSourceCannotReserveAfterNewerPublication},
-		{"scrape_rule_family_isolation", TestScrapeRuleProjectionNativeFamiliesShareDatabaseWithoutCrossWrites},
-		{"prom_publishers", TestPromMainProjectionNativeLatePacketsCannotDamageNewOwner},
-		{"prom_legacy_owner", TestPromMainProjectionNativeLegacyOwnerCanFinishAfterReplacement},
-		{"prom_same_hash_metadata", TestPromMainProjectionNativeSameHashFindsNewDatabaseOnlyRetirement},
-		{"prom_source_snapshot", TestPromMainProjectionNativeOlderSourceCannotReplaceNewer},
-		{"prom_credential_rotation", TestPromMainProjectionNativeCredentialRotationUsesOperationalBytes},
-		{"prom_deleted_pool", TestPromMainProjectionNativeDeletedPoolRetiresWithoutJobRead},
-		{"am_subset_isolation", TestAMProjectionNativeSubsetIsolationAndStableNoop},
-		{"am_empty_groups", TestAMProjectionNativeEmptyGroupsRetireOnlyWebhook},
-		{"am_unsaved_subset", TestAMProjectionNativeRejectsUnsavedSubsetPool},
-		{"am_source_snapshot", TestAMProjectionNativeOlderSourceCannotReplacePeerPublication},
-		{"am_failed_reservation", TestAMProjectionNativeFailedReservationDoesNotInvalidateLastGood},
-		{"am_delayed_subset", TestAMProjectionNativeDelayedSubsetCannotRevertFullPublication},
-		{"am_same_hash_metadata", TestAMProjectionNativeSameHashFindsDatabaseOnlyRetirement},
-		{"am_unissued_ack", TestAMProjectionNativeCoverageRejectsUnissuedACKBytes},
-		{"am_delayed_full", TestAMProjectionNativeDelayedFullCannotRevertSubset},
-		{"am_rename_aba", TestAMProjectionNativeRepeatedRenameAndSecondABARecover},
-		{"am_malformed_before_writes", TestAMProjectionNativeMalformedIntentFailsBeforeReplayWrites},
-		{"recovery_scrape_restart", TestProjectionRecoveryNativeScrapeFamiliesRestart},
-		{"recovery_am_peer", TestProjectionRecoveryNativeAMPeerConverges},
-		{"recovery_poison_page", TestProjectionRecoveryNativePoisonDoesNotBlockLaterPool},
-		{"scale_cost", TestProjectionStoreNativeScaleCost},
-		{"batch_preflight", TestProjectionBatchNativeRejectsBeforeAnyArtifactWrite},
-		{"batch_lost_reply", TestProjectionBatchNativeLostReplyRecoversWithoutRetry},
-		{"batch_expired_lease", TestProjectionBatchNativeExpiredLeaseSendsNoEval},
-		{"batch_independent_review", TestProjectionBatchIndependentNative},
-		{"batch_raw_bytes", TestProjectionBatchNativeRawBodyBytesRemainExact},
-	}
-	for _, group := range groups {
-		skipped := false
-		passed := t.Run(group.name, func(child *testing.T) {
-			defer func() { skipped = child.Skipped() }()
-			group.run(child)
-		})
-		if skipped {
-			t.Errorf("owned protocol group %s skipped despite prepared fixture", group.name)
-		}
-		if !passed {
-			t.Errorf("owned protocol group %s failed", group.name)
-		}
-	}
+	return client
 }

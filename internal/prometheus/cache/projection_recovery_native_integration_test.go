@@ -99,82 +99,87 @@ func TestProjectionRecoveryNativeAMPeerConverges(t *testing.T) {
 	for index, oldSubset := range []bool{false, true} {
 		t.Run(map[bool]string{false: "full pending then subset", true: "subset pending then full"}[oldSubset], func(t *testing.T) {
 			f := rootAMNative(t, 10001+index)
-			const currentURL = "http://native-recovery-current.invalid"
-			pub := f.publisher(currentURL)
-			renameSource := func() {
-				if err := f.db.WithContext(f.ctx).Model(&model.MonitorAlertManagerPool{}).Where("id = ?", f.pool.ID).Update("name", "native-recovery-renamed").Error; err != nil {
-					t.Fatal(err)
-				}
-				current, err := f.pools.GetAlertPoolByID(f.ctx, f.pool.ID)
-				if err != nil {
-					t.Fatal(err)
-				}
-				f.pool = current
-			}
-			var queue *rootRecordQueue
-			var family int8 = 2
-			if oldSubset {
-				if err := pub.GenerateMainConfig(f.ctx); err != nil {
-					t.Fatal(err)
-				}
-				queue = rootRecoveryAMInterrupted(t, f, true, "http://native-recovery-obsolete.invalid")
-				family = 5
-				renameSource()
-				if err := pub.GenerateMainConfig(f.ctx); err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				queue = rootRecoveryAMInterrupted(t, f, false, currentURL)
-				renameSource()
-				if r, s := pub.GenerateRouteConfigForPool(f.ctx, f.pool); len(r) == 0 || len(s) == 0 {
-					t.Fatal("newer subset did not complete")
-				}
-			}
-			pending, err := f.journal.LoadLastCommittedProjection(f.ctx, family, f.pool.ID)
-			if err != nil || pending == nil || pending.Phase != model.ConfigPublicationCommitted {
-				t.Fatal("pending peer operation missing", err)
-			}
-			ip := f.pool.AlertManagerInstances[0]
-			fullKeys := []string{buildRedisKeyAlertManagerMain(ip), buildRedisSetKeyAlertManagerMainPoolIPs(f.pool.ID), alertRetirementIntentKey(f.pool.ID), alertPublicationStateKey(f.pool.ID), projectionPoolKey(2, f.pool.ID, "ack"), projectionPoolKey(2, f.pool.ID, "fence")}
-			fullBefore := rootProjectionValues(t, f.client, fullKeys)
-			recoverer := pub.(PoolProjectionRecoverer)
-			worker := rootRecoveryWorker(t, configdao.NewProjectionRecoveryJournalDAO(zap.NewNop(), f.db), map[int8]PoolProjectionRecoverer{2: recoverer, 5: recoverer})
-			if err := worker.RunOnce(f.ctx); err != nil {
-				t.Fatal("independent worker did not recover AM stale peer", err)
-			}
-			full, subset := f.projected(2), f.projected(5)
-			if !strings.Contains(pub.GetConfigByIP(ip), "webhook_native-recovery-renamed_") {
-				t.Fatal("worker combined an old main filename with a newly renamed subset")
-			}
-			if f.projected(family).Reservation.Generation <= pending.Reservation.Generation {
-				t.Fatal("stale peer vector was not replaced by fresh guarded recovery")
-			}
-			if oldSubset && !reflect.DeepEqual(fullBefore, rootProjectionValues(t, f.client, fullKeys)) {
-				t.Fatal("subset recovery changed full state")
-			}
-			for i := 0; i < 3; i++ {
-				if err := worker.RunOnce(f.ctx); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if f.projected(2).Reservation != full.Reservation || f.projected(5).Reservation != subset.Reservation {
-				t.Fatal("recovery generated AM peer ping-pong")
-			}
-			keys := append(append([]string(nil), fullKeys...), buildRedisKeyWebhookFile(ip, f.group.ID), projectionPoolKey(5, f.pool.ID, "ack"), projectionPoolKey(5, f.pool.ID, "fence"))
-			before := rootProjectionValues(t, f.client, keys)
-			queue.unblock()
-			select {
-			case result := <-queue.result:
-				if result.err != nil || result.response != "STALE" {
-					t.Fatal("old AM artifact was not fenced after recovery", result.err)
-				}
-			case <-f.ctx.Done():
-				t.Fatal("old artifact was not evaluated")
-			}
-			if !reflect.DeepEqual(before, rootProjectionValues(t, f.client, keys)) {
-				t.Fatal("old AM packet changed recovered state")
-			}
+			rootRecoveryAMPeerCase(t, f, oldSubset)
 		})
+	}
+}
+
+func rootRecoveryAMPeerCase(t *testing.T, f *rootAMNativeFixture, oldSubset bool) {
+	t.Helper()
+	const currentURL = "http://native-recovery-current.invalid"
+	pub := f.publisher(currentURL)
+	renameSource := func() {
+		if err := f.db.WithContext(f.ctx).Model(&model.MonitorAlertManagerPool{}).Where("id = ?", f.pool.ID).Update("name", "native-recovery-renamed").Error; err != nil {
+			t.Fatal(err)
+		}
+		current, err := f.pools.GetAlertPoolByID(f.ctx, f.pool.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.pool = current
+	}
+	var queue *rootRecordQueue
+	var family int8 = 2
+	if oldSubset {
+		if err := pub.GenerateMainConfig(f.ctx); err != nil {
+			t.Fatal(err)
+		}
+		queue = rootRecoveryAMInterrupted(t, f, true, "http://native-recovery-obsolete.invalid")
+		family = 5
+		renameSource()
+		if err := pub.GenerateMainConfig(f.ctx); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		queue = rootRecoveryAMInterrupted(t, f, false, currentURL)
+		renameSource()
+		if r, s := pub.GenerateRouteConfigForPool(f.ctx, f.pool); len(r) == 0 || len(s) == 0 {
+			t.Fatal("newer subset did not complete")
+		}
+	}
+	pending, err := f.journal.LoadLastCommittedProjection(f.ctx, family, f.pool.ID)
+	if err != nil || pending == nil || pending.Phase != model.ConfigPublicationCommitted {
+		t.Fatal("pending peer operation missing", err)
+	}
+	ip := f.pool.AlertManagerInstances[0]
+	fullKeys := []string{buildRedisKeyAlertManagerMain(ip), buildRedisSetKeyAlertManagerMainPoolIPs(f.pool.ID), alertRetirementIntentKey(f.pool.ID), alertPublicationStateKey(f.pool.ID), projectionPoolKey(2, f.pool.ID, "ack"), projectionPoolKey(2, f.pool.ID, "fence")}
+	fullBefore := rootProjectionValues(t, f.client, fullKeys)
+	recoverer := pub.(PoolProjectionRecoverer)
+	worker := rootRecoveryWorker(t, configdao.NewProjectionRecoveryJournalDAO(zap.NewNop(), f.db), map[int8]PoolProjectionRecoverer{2: recoverer, 5: recoverer})
+	if err := worker.RunOnce(f.ctx); err != nil {
+		t.Fatal("independent worker did not recover AM stale peer", err)
+	}
+	full, subset := f.projected(2), f.projected(5)
+	if !strings.Contains(pub.GetConfigByIP(ip), "webhook_native-recovery-renamed_") {
+		t.Fatal("worker combined an old main filename with a newly renamed subset")
+	}
+	if f.projected(family).Reservation.Generation <= pending.Reservation.Generation {
+		t.Fatal("stale peer vector was not replaced by fresh guarded recovery")
+	}
+	if oldSubset && !reflect.DeepEqual(fullBefore, rootProjectionValues(t, f.client, fullKeys)) {
+		t.Fatal("subset recovery changed full state")
+	}
+	for i := 0; i < 3; i++ {
+		if err := worker.RunOnce(f.ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if f.projected(2).Reservation != full.Reservation || f.projected(5).Reservation != subset.Reservation {
+		t.Fatal("recovery generated AM peer ping-pong")
+	}
+	keys := append(append([]string(nil), fullKeys...), buildRedisKeyWebhookFile(ip, f.group.ID), projectionPoolKey(5, f.pool.ID, "ack"), projectionPoolKey(5, f.pool.ID, "fence"))
+	before := rootProjectionValues(t, f.client, keys)
+	queue.unblock()
+	select {
+	case result := <-queue.result:
+		if result.err != nil || result.response != "STALE" {
+			t.Fatal("old AM artifact was not fenced after recovery", result.err)
+		}
+	case <-f.ctx.Done():
+		t.Fatal("old artifact was not evaluated")
+	}
+	if !reflect.DeepEqual(before, rootProjectionValues(t, f.client, keys)) {
+		t.Fatal("old AM packet changed recovered state")
 	}
 }
 

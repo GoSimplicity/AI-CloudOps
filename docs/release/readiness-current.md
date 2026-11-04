@@ -1,5 +1,13 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-05：MySQL/Redis 组合与真实进程恢复
+
+[组合验收](combined-recovery.md)实际四场景通过：发布子进程在已提交且第一artifact发送前硬退出，另一OS进程worker恢复同一原始回执并直接验raw/ACK/SHA/members/MySQL状态；另真KILL原MySQL连接后新batch零EVAL/DUMP不变，以及AM两向peer真实MySQL/Redis改名恢复。
+
+供给提取为integration-only testinfra，原MySQL12/Redis86、全Go/vet/标签编译/actionlint均通过。父持资源，child只读私有runtime DSN并核容器归属，无admin凭据、无演示库接入；新组合CI另验。尚不等同完整App所有行为的进程崩溃/主从切换演练，整体1.0未完成。
+
+来源锁Web更新为独立Verify41922266200/gitleaks41922266368成功的892816e，AI75d4a87保持；最新前端实扫7183errors/5warnings，仍有剩余技术债。
+
 ## 2026-11-05：较大计划与单体容量观测
 
 增加显式opt-in的5项容量场景，256/512/1024微小产物与64KiB、超过1MiB单体全部实际投影成功，见[边界与复现命令](projection-scale.md)。1024项在本机race下投影约9.10s，不含保存/生成/提交阶段；没有据此设新拒收上限或声明生产SLA。默认CI仍执行原86正确性场景。

@@ -751,3 +751,9 @@
 
 - 新显式测试flag覆盖256/512/1024产物及64KiB、超过1MiB单体，五项真实SQL/Redis/ACK完成验证通过；默认正确性gate规模不变。
 - 记录全部原始数量/耗时与预算fallback边界，不推断生产SLA或新增合法输入限制，生产/schema/Store协议不改。
+
+## 2026-11-05：MySQL 与 Redis 跨进程组合恢复
+
+- integration-only MySQL资源供给提取复用，保原12SQL断言；Redis同包setup复用，旧86协议断言保持，无生产依赖新增。
+- 发布进程真实exit86、另一OS进程worker从原持久回执恢复，实核MySQL+Redis正文/ACK/SHA/成员/完成；另AM两向peer及真KILL租约后0新EVAL，组合4场景及原12/86、全Go/vet/tags通过，接入三仓CI。
+- 子进程仅获私有runtime凭据并验证owned资源身份，不连接演示或生产；不冒称完整App/云通知故障切换，未上线。
