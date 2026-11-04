@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -359,6 +360,128 @@ class FreshReleaseTests(unittest.TestCase):
         with patch.object(runner, "command", return_value=json.dumps(wrong).encode()):
             with self.assertRaises(tool.FreshError):
                 runner.image_id("unique-reference", {"ai.cloudops.fresh.build": runner.build_token})
+
+
+class FreshCommandDiagnosticTests(unittest.TestCase):
+    def test_failed_child_exposes_only_fixed_hint_and_snapshot_metadata(self):
+        samples = (
+            ("toomanyrequests: private-registry", "build-registry-rate-limit"),
+            ("401 Unauthorized private-auth", "build-registry-auth"),
+            ("no matching manifest for private-platform", "build-platform"),
+            ("ERR_PNPM_OUTDATED_LOCKFILE private-file", "build-lockfile"),
+            ("failed to fetch oauth token: i/o timeout private-url", "build-network"),
+            ("failed to resolve source metadata for private-image", "build-base-image-resolution"),
+            ("failed to read dockerfile: private-path", "build-context"),
+            ("unrecognized private-message", "build-unknown"),
+        )
+        for diagnostic, category in samples:
+            with self.subTest(category=category), tempfile.TemporaryDirectory() as directory:
+                runner = tool.FreshRunner(Path(directory), PROJECT, Path("/fixture.sock"), settings())
+                runner.snapshot = Path(directory)
+                runner.phase = "build"
+                sentinel = "fixture-sensitive-output-not-for-logs"
+                program = "import sys; print(sys.argv[1]); print(sys.argv[2], file=sys.stderr); sys.exit(7)"
+                public = io.StringIO()
+                with redirect_stdout(public), redirect_stderr(public):
+                    with self.assertRaises(tool.FreshError):
+                        runner.command([sys.executable, "-c", program, sentinel, diagnostic], payload=b"private-stdin")
+                    print(runner.failure_hint())
+                self.assertEqual(public.getvalue(), f"; diagnostic={category}; command_exit=7\n")
+                path = Path(directory) / "command-failure.json"
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                record = json.loads(path.read_text())
+                self.assertEqual(record, {"phase": "build", "category": category, "returncode": 7})
+                self.assertEqual(set(Path(directory).iterdir()), {path})
+                for value in (sentinel, diagnostic, "private-stdin", "private-stdout"):
+                    self.assertNotIn(value, path.read_text())
+
+    def test_nonbuild_output_does_not_get_build_classification(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runner = tool.FreshRunner(Path(directory), PROJECT, Path("/fixture.sock"), settings())
+            runner.phase = "migrate"
+            with self.assertRaises(tool.FreshError):
+                runner.command([sys.executable, "-c", "import sys; sys.stderr.write('toomanyrequests private'); sys.exit(1)"])
+            self.assertEqual(runner.failure_hint(), "; diagnostic=command-exit; command_exit=1")
+
+    def test_cli_reports_fixed_build_hint_without_command_or_child_output(self):
+        def fail(runner):
+            runner.phase = "build"
+            runner.command([sys.executable, "-c", "import sys; sys.stderr.write('failed to resolve source metadata private-diagnostic'); sys.exit(9)"])
+        with tempfile.TemporaryDirectory() as directory, socket.socket(socket.AF_UNIX) as local:
+            endpoint = Path(directory) / "fixture.sock"
+            local.bind(str(endpoint))
+            public = io.StringIO()
+            with patch.dict(os.environ, {"DOCKER_HOST": "", "DOCKER_CONTEXT": ""}), patch.object(tool, "ROOT", Path(directory)), patch.object(tool, "private_settings", return_value=settings()), patch.object(tool.FreshRunner, "execute", autospec=True, side_effect=fail), redirect_stderr(public):
+                code = tool.main(["--execute-new-stack", "--project", PROJECT, "--docker-socket", str(endpoint)])
+            self.assertEqual(code, 1)
+            self.assertEqual(public.getvalue(), "FAIL fresh stack at build; diagnostic=build-base-image-resolution; command_exit=9; private diagnostics omitted; resources preserved; automatic retry forbidden\n")
+            self.assertNotIn("private-diagnostic", public.getvalue())
+            self.assertNotIn(sys.executable, public.getvalue())
+
+    def test_successful_command_does_not_record_stderr_or_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runner = tool.FreshRunner(Path(directory), PROJECT, Path("/fixture.sock"), settings())
+            runner.snapshot = Path(directory)
+            result = runner.command([sys.executable, "-c", "import sys; print('result', end=''); sys.stderr.write('private')"])
+            self.assertEqual(result, b"result")
+            self.assertIsNone(runner.failure)
+            self.assertEqual(runner.failure_hint(), "")
+            self.assertEqual(list(Path(directory).iterdir()), [])
+
+    def test_timeout_kills_original_process_without_retry_or_output(self):
+        from unittest.mock import Mock
+        runner = tool.FreshRunner(Path("/fixture"), PROJECT, Path("/fixture.sock"), settings())
+        child = Mock(pid=123456)
+        child.communicate.side_effect = [subprocess.TimeoutExpired("private-command", 1), (b"private-output", b"private-error")]
+        with patch.object(tool.subprocess, "Popen", return_value=child) as start, patch.object(tool.os, "killpg") as kill:
+            with self.assertRaises(tool.FreshError):
+                runner.command(["private-command"], timeout=1)
+        self.assertEqual(start.call_count, 1)
+        kill.assert_called_once_with(child.pid, tool.signal.SIGKILL)
+        self.assertEqual(runner.failure_hint(), "; diagnostic=command-timeout")
+
+    def test_unknown_category_and_invalid_exit_cannot_echo_values(self):
+        runner = tool.FreshRunner(Path("/fixture"), PROJECT, Path("/fixture.sock"), settings())
+        runner.record_command_failure("private-driver-error", "private-code")
+        self.assertEqual(runner.failure_hint(), "; diagnostic=command-exit")
+
+    def test_classification_is_bounded_and_conservative_for_binary_or_conflicting_output(self):
+        self.assertEqual(tool.build_failure_category(b"\xff\x00private", b"\xfeprivate"), "build-unknown")
+        self.assertEqual(tool.build_failure_category(b"toomanyrequests", b"401 Unauthorized: failed to resolve source metadata"), "build-registry-rate-limit")
+        self.assertEqual(tool.build_failure_category(b"toomanyrequests" + b"x" * 65536, b"private"), "build-unknown")
+
+    def test_successful_json_larger_than_diagnostic_tail_remains_complete(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runner = tool.FreshRunner(Path(directory), PROJECT, Path("/fixture.sock"), settings())
+            result = runner.command([sys.executable, "-c", "import json; print(json.dumps({'value':'x'*70000}))"])
+            self.assertEqual(json.loads(result), {"value": "x" * 70000})
+            self.assertIsNone(runner.failure)
+
+    def test_existing_diagnostic_files_links_or_fifo_never_mask_command_failure(self):
+        for kind in ("file", "symlink", "fifo"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                runner = tool.FreshRunner(root, PROJECT, Path("/fixture.sock"), settings())
+                runner.snapshot = root
+                target = root / "preserved"
+                target.write_text("preserved")
+                diagnostic = root / "command-failure.json"
+                if kind == "file":
+                    diagnostic.write_text("preserved diagnostic")
+                elif kind == "symlink":
+                    diagnostic.symlink_to(target)
+                else:
+                    os.mkfifo(diagnostic)
+                with self.assertRaisesRegex(tool.FreshError, "^command-failed-private-output-omitted$"):
+                    runner.command([sys.executable, "-c", "import sys; sys.exit(3)"])
+                self.assertEqual(runner.failure_hint(), "; diagnostic=command-exit; command_exit=3")
+                self.assertEqual(target.read_text(), "preserved")
+                if kind == "file":
+                    self.assertEqual(diagnostic.read_text(), "preserved diagnostic")
+                elif kind == "symlink":
+                    self.assertTrue(diagnostic.is_symlink())
+                else:
+                    self.assertTrue(tool.stat.S_ISFIFO(diagnostic.stat().st_mode))
 
 
 if __name__ == "__main__":

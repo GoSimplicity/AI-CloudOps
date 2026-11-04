@@ -64,6 +64,14 @@ MySQL 官方镜像的 `MYSQL_USER` 初始化会授予数据库级 `ALL`，因此
 
 GitHub 集成 job 使用托管临时 runner 和本 job 唯一项目；其外层 `if: always()` 清理仍会回收该 job 的专用 fixture。这是测试生命周期清理，区别于本地 fresh 入口的失败保留，不代表 CI 会持久保存数据库卷。流水线在清理前输出安全阶段/服务状态，不上传私有 `.env`、数据库卷或 Playwright 原始日志。
 
+## 安全失败诊断
+
+命令失败时，控制台仅输出固定phase、诊断类别和整数退出码；不回显异常原文、命令参数、stdin、stdout或stderr。build阶段从两流各最后64KiB在内存中匹配固定标记，区分registry限流/鉴权、平台、lockfile、网络、基础镜像解析和构建上下文；无法判断则为`build-unknown`。它们是排查提示，不是根因证明，不会据此重试、跳过检查或启动服务。
+
+超时、命令无法启动和成功退出但stdout超限分别记录，不受输出标记覆盖。成功stdout继续完整返回给原Compose/角色/镜像解析器，保留原8MiB上限；64KiB仅是诊断分析范围，不是子进程流的内存上限。
+
+私有快照中的`command-failure.json`只含phase白名单、固定category、整数或null returncode，权限0600、独占创建且不跟随链接。已有文件、symlink、FIFO或写入错误不能覆盖原始失败，不写原始输出，也不上传私有快照。没有创建新测试服务、接入现有部署或改变失败后禁止自动重试的合同。
+
 ## 验证与范围
 
 ```sh

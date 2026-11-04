@@ -32,6 +32,30 @@ PHASES = (
     "create-accounts", "migrator-grants", "migrate", "initialize-clock", "runtime-grants",
     "verify-runtime", "start-services",
 )
+FAILURE_CATEGORIES = frozenset({
+    "command-exit", "command-unavailable", "command-timeout", "command-output-limit",
+    "build-registry-rate-limit", "build-registry-auth", "build-platform",
+    "build-lockfile", "build-network", "build-base-image-resolution", "build-context", "build-unknown",
+})
+
+
+def build_failure_category(output: bytes, errors: bytes) -> str:
+    # Hints only: never emit a matching line, URL, argument or captured value.
+    # Bound inspection; raw output is neither logged nor written to snapshots.
+    text = (output[-65536:] + b"\n" + errors[-65536:]).lower()
+    signatures = (
+        ("build-registry-rate-limit", (b"toomanyrequests", b"too many requests", b"pull rate limit")),
+        ("build-registry-auth", (b"401 unauthorized", b"authorization failed", b"insufficient_scope", b"pull access denied")),
+        ("build-platform", (b"no matching manifest", b"no match for platform")),
+        ("build-lockfile", (b"err_pnpm_outdated_lockfile", b"err_pnpm_lockfile_config_mismatch")),
+        ("build-network", (b"network is unreachable", b"connection reset by peer", b"i/o timeout", b"tls handshake timeout", b"temporary failure in name resolution", b"certificate verify failed", b"x509: certificate signed by unknown authority")),
+        ("build-base-image-resolution", (b"failed to resolve source metadata", b"failed to fetch oauth token", b"failed to resolve reference", b"manifest unknown")),
+        ("build-context", (b"failed to read dockerfile", b"failed to compute cache key", b"failed to calculate checksum")),
+    )
+    for category, needles in signatures:
+        if any(needle in text for needle in needles):
+            return category
+    return "build-unknown"
 
 
 class FreshError(RuntimeError):
@@ -195,6 +219,30 @@ class FreshRunner:
         self.snapshot: Path | None = None
         self.build_token = secrets.token_hex(16)
         self.images: dict[str, str] = {}
+        self.failure: dict | None = None
+
+    def record_command_failure(self, category: str, returncode: int | None = None) -> None:
+        self.failure = {
+            "phase": self.phase if self.phase in PHASES else "unknown",
+            "category": category if category in FAILURE_CATEGORIES else "command-exit",
+            "returncode": returncode if type(returncode) is int and -255 <= returncode <= 255 else None,
+        }
+        if self.snapshot is not None:
+            try:
+                self.save_snapshot_json("command-failure.json", self.failure)
+            except (OSError, FreshError):
+                # Diagnostics are best effort; preserve the original failure.
+                # Exclusive creation also refuses existing files, links/FIFOs.
+                pass
+
+    def failure_hint(self) -> str:
+        if not self.failure or self.failure.get("category") not in FAILURE_CATEGORIES:
+            return ""
+        hint = "; diagnostic=" + self.failure["category"]
+        code = self.failure.get("returncode")
+        if type(code) is int and -255 <= code <= 255:
+            hint += "; command_exit=" + str(code)
+        return hint
 
     def save_snapshot_file(self, name: str, content: bytes) -> Path:
         if self.snapshot is None or not re.fullmatch(r"[a-z0-9.-]+", name):
@@ -317,16 +365,22 @@ class FreshRunner:
             process = subprocess.Popen(arguments, cwd=self.root, env=self.environment,
                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                        start_new_session=True)
-            output, _ = process.communicate(payload, timeout=timeout)
-        except (OSError, subprocess.TimeoutExpired):
+            output, errors = process.communicate(payload, timeout=timeout)
+        except (OSError, subprocess.TimeoutExpired) as error:
             if process is not None:
                 try:
                     os.killpg(process.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
                 process.communicate()
+            self.record_command_failure("command-timeout" if isinstance(error, subprocess.TimeoutExpired) else "command-unavailable")
             raise FreshError("command-failed-or-timed-out") from None
-        if process.returncode or len(output) > 8 * 1024 * 1024:
+        if process.returncode:
+            category = build_failure_category(output, errors) if self.phase == "build" else "command-exit"
+            self.record_command_failure(category, process.returncode)
+            raise FreshError("command-failed-private-output-omitted")
+        if len(output) > 8 * 1024 * 1024:
+            self.record_command_failure("command-output-limit", process.returncode)
             raise FreshError("command-failed-private-output-omitted")
         return output
 
@@ -477,7 +531,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     except (FreshError, OSError, ValueError, KeyError, TypeError, AttributeError):
         phase = runner.phase if runner is not None else "preflight"
-        print("FAIL fresh stack at " + phase + "; private diagnostics omitted; resources preserved; automatic retry forbidden", file=sys.stderr)
+        hint = runner.failure_hint() if runner is not None else ""
+        print("FAIL fresh stack at " + phase + hint + "; private diagnostics omitted; resources preserved; automatic retry forbidden", file=sys.stderr)
         return 1
 
 
