@@ -640,7 +640,7 @@ func TestRecordReconcileIncompleteMetadataCannotAcknowledgeOrDuplicate(t *testin
 			var first []*model.MonitorConfig
 			for i := 0; i < 100; i++ {
 				db.next++
-				row := &model.MonitorConfig{Model: model.Model{ID: db.next}, PoolID: 99, ConfigType: model.ConfigTypeRecordRule, InstanceIP: fmt.Sprintf("unrelated-%d", i), Name: "custom-preserved", ConfigContent: "keep"}
+				row := &model.MonitorConfig{Model: model.Model{ID: db.next}, PoolID: 7, ConfigType: model.ConfigTypeRecordRule, InstanceIP: fmt.Sprintf("unrelated-%d", i), Name: "custom-preserved", ConfigContent: "keep"}
 				db.rows[row.ID] = row
 				first = append(first, row)
 			}

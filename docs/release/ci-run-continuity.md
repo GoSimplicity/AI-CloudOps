@@ -9,3 +9,9 @@
 两个工作流通过actionlint；解析前后YAML并移除concurrency后，所有剩余内容一致。修复后的远端运行结果需在本提交触发后独立核对，不能拿上述旧成功作为新配置验收。
 
 首次修复运行的[Simple CI 41765525322](https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41765525322)复现真实失败：来源锁测试仍断言旧的分支级group字面值。已同步该契约为每push独立、PR条件取消，保留锁文件验证与Web/AIOps完整SHA checkout断言；没有删除失败测试。完整171项release tooling测试及actionlint通过，随后新运行继续核对。
+
+## 修复后的远端验收
+
+修复提交638c1bda的[三仓集成41765868496](https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41765868496)及Simple CI/gitleaks成功。后续d478ac7的[三仓集成41766503939](https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41766503939)、Simple CI及gitleaks也成功；两个同分支运行独立完成，后push没有取消前run。
+
+两次集成均核对实际checkout的Web813fb305、AIOpsba1876a，5项owned浏览器业务检查零跳过、失败或重试。Web93decdd自身Verify成功，166文件3619项单测及生产构建登录启动检查通过；这项Web独立结果不代表上述集成锁已覆盖93decdd。历史失败与取消记录保留。

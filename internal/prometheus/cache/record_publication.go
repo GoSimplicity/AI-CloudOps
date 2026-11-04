@@ -74,22 +74,34 @@ func (r *recordRuleConfigCache) planRecordPublication(ctx context.Context, poolI
 			stale[ip] = true
 		}
 	}
-	rows, err := readConfigMetadataSnapshot(ctx, dao, kind)
+	candidates, err := readPoolConfigCandidates(ctx, dao, poolID, kind)
 	if err != nil {
 		return plan, err
 	}
-	for _, row := range rows {
-		// Retain the existing publisher policy: unexpected kinds are ignored only
-		// after the complete inventory has passed identity/pagination validation.
-		if row.ConfigType != kind {
-			continue
-		}
-		byKey[row.InstanceIP] = append(byKey[row.InstanceIP], row)
+	queryKeys := make([]string, 0, len(desired)+len(oldIPs)+len(candidates))
+	for ip := range desired {
+		queryKeys = append(queryKeys, ip)
+	}
+	queryKeys = append(queryKeys, oldIPs...)
+	var locators []configDao.GeneratedConfigOwner
+	for _, row := range candidates {
 		if ownedRecordArtifact(row, poolID) {
+			queryKeys = append(queryKeys, row.InstanceIP)
+			locators = append(locators, configDao.GeneratedConfigOwnerOf(row))
 			if _, wanted := desired[row.InstanceIP]; !wanted {
 				stale[row.InstanceIP] = true
 			}
 		}
+	}
+	rows, err := readConfigKeyNamespace(ctx, dao, kind, queryKeys)
+	if err != nil {
+		return plan, err
+	}
+	if err := validateConfigLocatorOwners(locators, rows); err != nil {
+		return plan, err
+	}
+	for _, row := range rows {
+		byKey[row.InstanceIP] = append(byKey[row.InstanceIP], row)
 	}
 	keys := make([]string, 0, len(desired))
 	for ip := range desired {

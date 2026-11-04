@@ -613,3 +613,9 @@
 - 新private DAO分页提供pool/type全部候选及精确键全Pool命名空间，保foreign/custom/Status2/duplicates，空键零查询，100键/页界限与byte比较明确。
 - 新18叶、独立SQLite边界、隔离真实MySQL11 PASS节点零skip、全Go test/vet/DAO-cache race/标签只编译通过；测试资源清理。
 - publisher未接线、扫描量未改善、不添加atomic create/schema/index，未上线。见[查询合同](config-metadata-snapshot.md)。
+
+## 2026-11-04：Record/Prom发布元数据返回量减量
+
+- 每池候选仅定位canonical旧键，desired/成员/旧键完整分块读取全namespace；保foreign/custom/inactive/duplicate冲突与两阶段owner漂移拒绝。原写入顺序、CAS和恢复锚点保持，去掉无生产调用的旧wrapper。
+- 新38叶、原pager25叶和真实SQLite28叶通过；全Go test/vet、cache/DAO race及标签编译通过。5/10池样本返回量25/100降为10/20行，查询数增加为10/20次；不宣称真实SQL耗时下降。
+- Web锁更新已远端验证的814214b，来源锁5测试通过；补齐CI修复后638/d478最终成功收据。新组合另验，atomic create-if-none与Rule/AM减量尚未交付，未上线。

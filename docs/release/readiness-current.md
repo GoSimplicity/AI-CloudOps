@@ -1,12 +1,20 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-04：Record/Prometheus发布查询减量
+
+两发布器切换为每池候选定位及完整精确键命名空间读取，所有分块分页验完才允许写入；候选已观察到的canonical归属消失或变化时拒绝，写计划使用第二次最新数据。见[接线合同](config-metadata-snapshot.md)。
+
+- 新38叶专项、原pager25叶及独立实际SQLite28叶通过；全Go test/vet、cache与config DAO完整race、全标签只编译通过。未新增schema或改变pending/成员锚点/owner CAS/Redis/ACK顺序。
+- 每池1行样本中5池返回量25→10行、10池100→20行，查询次数分别5→10、10→20；不再调用全类型列表。不宣称物理扫描或真实延迟改善，Rule/AM未接线，atomic create-if-none竞争仍待处理。
+- 来源锁更新已通过远端Verify的Web814214b8951071b53f58b22f476af31b2b1f8982，AI维持ba1876a；5项来源锁测试通过。本阶段新组合CI另验，未上线。
+
 ## 2026-11-04：安全定向查询DAO能力
 
 新增按池/type候选与精确实例键全命名空间分页，保留foreign/custom/Status2，字节比较、空集合零查询和100键边界明确；普通CRUD、schema及旧IN查询不变。见[能力合同](config-metadata-snapshot.md)。
 
 - 新18叶、独立SQLite分页/别名/取消、隔离真实MySQL11个PASS节点零skip、全Go test/vet/DAO-cache race/标签只编译通过；临时资源已清理，没有演示数据修改。
 - publisher未接线，N²扫描未改善，atomic absent-owner创建也未添加。后续接线另测，不将DAO能力当作完整优化。
-- CI取消策略与来源锁旧断言已单独修复，当前修复运行的Simple CI成功，三仓集成仍跟踪中；未上线或连接生产。
+- CI取消策略与来源锁旧断言已单独修复；638c1bda及后续d478ac7的Simple CI、gitleaks、三仓集成均成功，两次集成各5浏览器检查零跳过/失败/重试。见[CI运行完整性](ci-run-continuity.md)；未上线或连接生产。
 
 ## 2026-11-04：Record/Prom完整元数据读取责任
 

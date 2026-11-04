@@ -5,19 +5,14 @@ import (
 	"errors"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
-	configdao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
 )
 
-// Read every page afresh for one caller. This function owns only pagination,
-// identity validation and detachment; each publisher keeps its type/ownership
-// policy and creation preflight. There is no cross-pool or cross-run cache.
-// COUNT/OFFSET checks detect observed drift, not SQL snapshot isolation.
-func readConfigMetadataSnapshot(ctx context.Context, dao configdao.MonitorConfigDAO, kind int8) ([]*model.MonitorConfig, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if dao == nil {
-		return nil, errors.New("配置元数据存储不可用")
+// Read every page afresh for one caller. The fetch closure supplies its query
+// scope; this pager owns only completeness, positive unique IDs and detachment.
+// COUNT/OFFSET detects observed drift, not SQL snapshot isolation.
+func readConfigMetadataPages(ctx context.Context, fetch func(page, size int) ([]*model.MonitorConfig, int64, error)) ([]*model.MonitorConfig, error) {
+	if fetch == nil {
+		return nil, errors.New("配置元数据读取器不可用")
 	}
 	var snapshot []*model.MonitorConfig
 	expected, scanned := int64(-1), int64(0)
@@ -26,7 +21,7 @@ func readConfigMetadataSnapshot(ctx context.Context, dao configdao.MonitorConfig
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		rows, total, err := dao.GetMonitorConfigList(ctx, &model.GetMonitorConfigListReq{ListReq: model.ListReq{Page: page, Size: 100}, ConfigType: &kind})
+		rows, total, err := fetch(page, 100)
 		if err != nil {
 			return nil, errors.Join(errors.New("配置元数据读取失败"), ctx.Err())
 		}

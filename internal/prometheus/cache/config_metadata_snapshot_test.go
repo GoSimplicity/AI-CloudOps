@@ -21,6 +21,14 @@ func (d *configSnapshotPages) GetMonitorConfigList(ctx context.Context, req *mod
 	d.calls++
 	return d.read(ctx, req)
 }
+
+// Reader fixtures provide their own scope; production retains only the pager.
+func (d *configSnapshotPages) readSnapshot(ctx context.Context, kind int8) ([]*model.MonitorConfig, error) {
+	return readConfigMetadataPages(ctx, func(page, size int) ([]*model.MonitorConfig, int64, error) {
+		return d.GetMonitorConfigList(ctx, &model.GetMonitorConfigListReq{ListReq: model.ListReq{Page: page, Size: size}, ConfigType: &kind})
+	})
+}
+
 func snapshotRows(count int) []*model.MonitorConfig {
 	rows := make([]*model.MonitorConfig, count)
 	for i := range rows {
@@ -68,7 +76,7 @@ func TestConfigMetadataSnapshotRejectsIncompleteOrAmbiguousInventory(t *testing.
 					return nil, 0, errors.New("PRIVATE_DB_ERROR")
 				}
 			}}
-			rows, err := readConfigMetadataSnapshot(context.Background(), dao, model.ConfigTypePrometheus)
+			rows, err := dao.readSnapshot(context.Background(), model.ConfigTypePrometheus)
 			if err == nil || rows != nil {
 				t.Fatal("invalid inventory returned a partial authoritative snapshot")
 			}
@@ -93,7 +101,7 @@ func TestConfigMetadataSnapshotAllowsEmptyAndExactPagination(t *testing.T) {
 				}
 				return source[start:end], int64(total), nil
 			}}
-			rows, err := readConfigMetadataSnapshot(context.Background(), dao, model.ConfigTypePrometheus)
+			rows, err := dao.readSnapshot(context.Background(), model.ConfigTypePrometheus)
 			if err != nil || len(rows) != total {
 				t.Fatal("valid complete inventory rejected")
 			}
@@ -123,7 +131,7 @@ func TestConfigMetadataSnapshotClonesEachPageBeforeBufferReuse(t *testing.T) {
 		first[0].ConfigContent = "mutated"
 		return []*model.MonitorConfig{{Model: model.Model{ID: 101}}}, 101, nil
 	}}
-	rows, err := readConfigMetadataSnapshot(context.Background(), dao, model.ConfigTypePrometheus)
+	rows, err := dao.readSnapshot(context.Background(), model.ConfigTypePrometheus)
 	if err != nil || rows[0].ID != 1 || rows[0].Name != "before" || rows[0].ConfigContent != "original bytes" {
 		t.Fatal("later read mutated an already captured page")
 	}
@@ -134,18 +142,18 @@ func TestConfigMetadataSnapshotNeverCachesAcrossCalls(t *testing.T) {
 	dao := &configSnapshotPages{read: func(context.Context, *model.GetMonitorConfigListReq) ([]*model.MonitorConfig, int64, error) {
 		return source, 1, nil
 	}}
-	first, err := readConfigMetadataSnapshot(context.Background(), dao, model.ConfigTypePrometheus)
+	first, err := dao.readSnapshot(context.Background(), model.ConfigTypePrometheus)
 	if err != nil {
 		t.Fatal(err)
 	}
 	source[0].Name = "second"
-	second, err := readConfigMetadataSnapshot(context.Background(), dao, model.ConfigTypePrometheus)
+	second, err := dao.readSnapshot(context.Background(), model.ConfigTypePrometheus)
 	if err != nil || dao.calls != 2 || first[0].Name != "first" || second[0].Name != "second" {
 		t.Fatal("snapshot was reused across independent calls")
 	}
 }
 func TestConfigMetadataSnapshotNilStorageAndCancellation(t *testing.T) {
-	if rows, err := readConfigMetadataSnapshot(context.Background(), nil, 1); err == nil || rows != nil {
+	if rows, err := readConfigMetadataPages(context.Background(), nil); err == nil || rows != nil {
 		t.Fatal("nil storage accepted")
 	}
 	for _, mode := range []string{"before read", "during successful read", "during failed read"} {
@@ -162,7 +170,7 @@ func TestConfigMetadataSnapshotNilStorageAndCancellation(t *testing.T) {
 			if mode == "before read" {
 				cancel()
 			}
-			rows, err := readConfigMetadataSnapshot(ctx, dao, model.ConfigTypePrometheus)
+			rows, err := dao.readSnapshot(ctx, model.ConfigTypePrometheus)
 			if !errors.Is(err, context.Canceled) || rows != nil {
 				t.Fatal("cancelled inventory became authoritative or lost error identity")
 			}
