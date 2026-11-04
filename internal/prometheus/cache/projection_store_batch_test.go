@@ -128,8 +128,12 @@ func TestProjectionBatchGoErrorNeverFallsBackAndBodiesStayRaw(t *testing.T) {
 		if !ok {
 			t.Fatal("missing EVAL key count")
 		}
-		var wire projectionWire
-		if err := json.Unmarshal([]byte(hook.args[keyCount+3].(string)), &wire); err != nil {
+		keys := make([]string, keyCount)
+		for i := range keys {
+			keys[i] = hook.args[i+3].(string)
+		}
+		wire, err := decodeProjectionTestWire(hook.args[keyCount+3].(string), keys)
+		if err != nil {
 			t.Fatal(err)
 		}
 		if wire.Mode != "artifact_batch" || wire.Target != "" {

@@ -64,13 +64,21 @@ func (combinedCrashHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 				return next(ctx, cmd)
 			}
 			keys, ok := args[2].(int)
-			if ok && len(args) > keys+3 {
+			if ok && keys >= 0 && len(args) > keys+3 {
 				frame, ok := args[keys+3].(string)
-				var w struct {
-					Mode string `json:"mode"`
+				wireKeys := make([]string, keys)
+				for i := range wireKeys {
+					value, valid := args[i+3].(string)
+					if !valid {
+						return next(ctx, cmd)
+					}
+					wireKeys[i] = value
 				}
-				if ok && json.Unmarshal([]byte(frame), &w) == nil && (w.Mode == "artifact" || w.Mode == "artifact_batch") {
-					os.Exit(86)
+				if ok {
+					w, err := decodeProjectionTestWire(frame, wireKeys)
+					if err == nil && (w.Mode == "artifact" || w.Mode == "artifact_batch") {
+						os.Exit(86)
+					}
 				}
 			}
 		}

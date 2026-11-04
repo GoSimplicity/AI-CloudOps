@@ -44,7 +44,7 @@ func (p *PreparedProjection) ApplyArtifacts(ctx context.Context, eventIDs []uint
 	wire := p.wire
 	wire.Mode = "artifact_batch"
 	wire.Target = ""
-	encoded, err := json.Marshal(wire)
+	encoded, err := marshalProjectionWire(wire, p.keys)
 	if err != nil {
 		return ErrProjectionStore
 	}

@@ -120,10 +120,12 @@ func rootIsProjectionModeRequest(frame rootRecordRESP, mode string) bool {
 	if err != nil || keys < 0 || keys+5 > len(frame.args) {
 		return false
 	}
-	var wire struct {
-		Mode string `json:"mode"`
+	wireKeys := make([]string, keys)
+	for i := range wireKeys {
+		wireKeys[i] = string(frame.args[i+3])
 	}
-	if json.Unmarshal(frame.args[keys+3], &wire) != nil || wire.Mode != mode {
+	wire, err := decodeProjectionTestWire(string(frame.args[keys+3]), wireKeys)
+	if err != nil || wire.Mode != mode {
 		return false
 	}
 	if mode != "artifact_batch" {

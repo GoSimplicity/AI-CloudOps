@@ -109,6 +109,9 @@ func TestProjectionStoreOwnedRedisProtocol(t *testing.T) {
 		{"batch_expired_lease", TestProjectionBatchNativeExpiredLeaseSendsNoEval},
 		{"batch_independent_review", TestProjectionBatchIndependentNative},
 		{"batch_raw_bytes", TestProjectionBatchNativeRawBodyBytesRemainExact},
+		{"compact_independent_review", func(t *testing.T) {
+			runProjectionWireIndependentNativeReview(t, projectionRedisNative(t))
+		}},
 	}
 	for _, group := range groups {
 		skipped := false

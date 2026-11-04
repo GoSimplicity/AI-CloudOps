@@ -1,7 +1,57 @@
 -- All schema, role, TYPE and fence checks finish before the first write.
 -- Versions stay fixed-width decimal strings: Lua doubles never order uint64 IDs.
+local function array(t)
+ if type(t)~='table' then return false end
+ local n=0;for k,_ in pairs(t) do if type(k)~='number' or k%1~=0 or k<1 or k>#t then return false end;n=n+1 end
+ return n==#t
+end
+
+local function tuple(t,n) return array(t) and #t==n end
+local function strings(t)
+ if not array(t) then return false end
+ for _,v in ipairs(t) do if type(v)~='string' then return false end end
+ return true
+end
+local function reference(v,zero)
+ return type(v)=='number' and v%1==0 and v>=(zero and 0 or 1) and v<=#KEYS
+end
+-- cjson represents both {} and [] as an empty Lua table. Empty collections
+-- deliberately retain that existing equivalence. Fixed nonempty tuple arities,
+-- null/missing/false, scalar types and extra fields are checked explicitly.
+local function compactwire(t)
+ if not tuple(t,15) or t[1]~='pw2' then return nil end
+ for _,i in ipairs({2,3,4,5,13,14,15}) do if type(t[i])~='string' then return nil end end
+ for _,i in ipairs({6,7,8,9}) do if not array(t[i]) then return nil end end
+ if #t[6]~=#KEYS or not reference(t[10],true) or not reference(t[11],true) or not reference(t[12],true) then return nil end
+ local w={mode=t[2],family=t[3],pool=t[4],target=t[5],roles={},fences={},artifacts={},controls={},pool_fence=t[10],ack=t[11],legacy=t[12],legacy_sha=t[13],ack_receipt=t[14],ack_signature=t[15]}
+ for i,r in ipairs(t[6]) do
+  if not tuple(r,5) then return nil end
+  for _,v in ipairs(r) do if type(v)~='string' then return nil end end
+  w.roles[i]={role=r[1],key=KEYS[i],type=r[2],kind=r[3],ip=r[4],group=r[5]}
+ end
+ for i,f in ipairs(t[7]) do
+  if not tuple(f,4) or not reference(f[1],false) or type(f[2])~='string' or type(f[3])~='string' or type(f[4])~='string' then return nil end
+  w.fences[i]={key=f[1],version=f[2],nonce=f[3],signature=f[4]}
+ end
+ for i,a in ipairs(t[8]) do
+  if not tuple(a,6) or type(a[1])~='string' or not reference(a[2],false) or not reference(a[3],false) or type(a[4])~='string' or type(a[5])~='string' or type(a[6])~='string' then return nil end
+  w.artifacts[i]={id=a[1],raw=a[2],fence=a[3],action=a[4],sha1=a[5],signature=a[6]}
+ end
+ for i,c in ipairs(t[9]) do
+  if not tuple(c,8) or type(c[1])~='string' or type(c[2])~='string' or not reference(c[3],true) or not strings(c[4]) or not strings(c[5]) or not strings(c[6]) or type(c[7])~='string' or type(c[8])~='boolean' then return nil end
+  w.controls[i]={id=c[1],kind=c[2],key=c[3],desired=c[4],add=c[5],remove=c[6],signature=c[7],require_empty=c[8]}
+ end
+ return w
+end
 local ok,w=pcall(cjson.decode,ARGV[1])
-if not ok or type(w)~='table' or type(w.roles)~='table' or #w.roles~=#KEYS then return 'INVALID' end
+if not ok or type(w)~='table' then return 'INVALID' end
+if w[1]~=nil then
+ w=compactwire(w)
+ if not w then return 'INVALID' end
+end
+-- Legacy objects keep their original validation path and behavior. Compact
+-- input reaches precisely the same canonical checks and fingerprints below.
+if type(w.roles)~='table' or #w.roles~=#KEYS then return 'INVALID' end
 local prefix='aiops:monitor:config'
 local paths={['1']='prometheus:main',['2']='alertmanager:main',['3']='prometheus:alert_rule',['4']='prometheus:record_rule'}
 local publications={['1']='prometheus',['2']='alertmanager',['3']='alert_rule',['4']='record_rule'}
@@ -13,11 +63,6 @@ local function index(n) return type(n)=='number' and n%1==0 and n>=1 and n<=#KEY
 local function poolkey(suffix) return prefix..':projection:v1:pool:'..w.family..':'..w.pool..':'..suffix end
 local pool=w.pool_fence~=0
 if pool and (not digits(w.pool) or not paths[w.family] and w.family~='5') then return 'INVALID' end
-local function array(t)
- if type(t)~='table' then return false end
- local n=0;for k,_ in pairs(t) do if type(k)~='number' or k%1~=0 or k<1 or k>#t then return false end;n=n+1 end
- return n==#t
-end
 if not array(w.roles) or not array(w.fences) or not array(w.artifacts) or not array(w.controls) then return 'INVALID' end
 local seen={}
 for i,r in ipairs(w.roles) do

@@ -58,7 +58,18 @@ func (h *batchReviewHook) ProcessHook(redis.ProcessHook) redis.ProcessHook {
 			return h.parseErr
 		}
 		entry := batchReviewCommand{}
-		if json.Unmarshal([]byte(raw), &entry.wire) != nil {
+		keys := make([]string, n)
+		for i := range keys {
+			value, ok := args[i+3].(string)
+			if !ok {
+				h.parseErr = errors.New("invalid EVAL key")
+				return h.parseErr
+			}
+			keys[i] = value
+		}
+		decoded, decodeErr := decodeProjectionTestWire(raw, keys)
+		entry.wire = decoded
+		if decodeErr != nil {
 			h.parseErr = errors.New("invalid frame")
 			return h.parseErr
 		}

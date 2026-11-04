@@ -20,10 +20,10 @@ import (
 )
 
 type rootProjectionWireTotals struct {
-	mu                                                sync.Mutex
-	calls, frameBytes, bodyBytes, respBytes, failures int64
-	elapsed                                           time.Duration
-	invalid                                           bool
+	mu                                                              sync.Mutex
+	calls, compactCalls, frameBytes, bodyBytes, respBytes, failures int64
+	elapsed                                                         time.Duration
+	invalid                                                         bool
 }
 
 func (h *rootProjectionWireTotals) DialHook(next redis.DialHook) redis.DialHook { return next }
@@ -76,12 +76,22 @@ func (h *rootProjectionWireTotals) observe(cmd redis.Cmder, elapsed time.Duratio
 		h.invalid = true
 		return
 	}
-	var envelope struct {
-		Mode string `json:"mode"`
+	wireKeys := make([]string, keys)
+	for i := range wireKeys {
+		value, ok := args[i+3].(string)
+		if !ok {
+			h.invalid = true
+			return
+		}
+		wireKeys[i] = value
 	}
-	if json.Unmarshal([]byte(frame), &envelope) != nil {
+	envelope, decodeErr := decodeProjectionTestWire(frame, wireKeys)
+	if decodeErr != nil {
 		h.invalid = true
 		return
+	}
+	if strings.HasPrefix(frame, `["pw2",`) {
+		h.compactCalls++
 	}
 	h.frameBytes += int64(len(frame))
 	if envelope.Mode == "artifact_batch" {
@@ -171,6 +181,9 @@ func TestProjectionStoreNativeScaleCost(t *testing.T) {
 		}
 		cases = append(cases, scaleCase{"N16_body64KiB", 16, 64 << 10, 2 * time.Minute}, scaleCase{"N2_bodyOver1MiB", 2, (1 << 20) + 1, 2 * time.Minute})
 	}
+	if os.Getenv("CLOUDOPS_TEST_PROJECTION_COMPACT_CAPACITY") == "true" {
+		cases = append(cases, scaleCase{"N1024_IPv6Raw45", 1024, 11, 2 * time.Minute})
+	}
 	for _, scenario := range cases {
 		t.Run(scenario.name, func(t *testing.T) {
 			size := scenario.size
@@ -187,7 +200,14 @@ func TestProjectionStoreNativeScaleCost(t *testing.T) {
 			}
 			items := make([]configdao.GeneratedPlanItem, 0, size)
 			for i := 0; i < size; i++ {
-				items = append(items, projectionRecordItem(ref.PoolID, uint64(i+1), fmt.Sprintf("10.21.%d.%d", i/250, i%250+1), body))
+				ip := fmt.Sprintf("10.21.%d.%d", i/250, i%250+1)
+				if scenario.name == "N1024_IPv6Raw45" {
+					ip = fmt.Sprintf("0000:0000:0000:0000:0000:ffff:192.168.%d.%d", 100+i/155, 100+i%155)
+					if len(ip) != 45 {
+						t.Fatal("compact capacity fixture lost its raw address width")
+					}
+				}
+				items = append(items, projectionRecordItem(ref.PoolID, uint64(i+1), ip, body))
 			}
 			receipt, err := journal.CommitGeneratedProjectionPlan(ctx, projectionFullRequest(ref, items...))
 			if err != nil {
@@ -210,6 +230,7 @@ func TestProjectionStoreNativeScaleCost(t *testing.T) {
 				t.Fatal("scale SQL observer unavailable")
 			}
 			beforeCalls, beforeUsec := rootProjectionEvalStats(t, ctx, client)
+			var ackKey, expectedACK, legacyKey, expectedLegacySHA string
 			started := time.Now()
 			err = journal.WithPoolProjectionLease(ctx, receipt, func(lease configdao.ProjectionLease) error {
 				snapshot, err := lease.Snapshot()
@@ -221,6 +242,8 @@ func TestProjectionStoreNativeScaleCost(t *testing.T) {
 					return err
 				}
 				projectionTrack(t, client, handle)
+				ackKey, expectedACK = handle.keys[handle.wire.Ack-1], handle.wire.AckReceipt
+				legacyKey, expectedLegacySHA = handle.keys[handle.wire.Legacy-1], handle.wire.LegacySHA
 				return NewRecordProjectionRunner(store).Project(ctx, lease)
 			})
 			elapsed := time.Since(started)
@@ -238,13 +261,32 @@ func TestProjectionStoreNativeScaleCost(t *testing.T) {
 					t.Fatal("scale raw artifact differs from accepted source")
 				}
 			}
-			if n, err := client.SCard(ctx, buildRedisSetKeyRecordRulePoolIPs(ref.PoolID)).Result(); err != nil || n != int64(size) {
+			members, err := client.SMembers(ctx, buildRedisSetKeyRecordRulePoolIPs(ref.PoolID)).Result()
+			if err != nil || len(members) != size {
 				t.Fatal("scale membership is incomplete")
+			}
+			expectedMembers := make(map[string]bool, len(items))
+			for _, item := range items {
+				expectedMembers[item.Desired.InstanceIP] = true
+			}
+			for _, member := range members {
+				if !expectedMembers[member] {
+					t.Fatal("scale membership differs from accepted source")
+				}
+			}
+			if ack, err := client.Get(ctx, ackKey).Result(); err != nil || ack != expectedACK {
+				t.Fatal("scale ACK differs from canonical accepted receipt")
+			}
+			if sha, err := client.Get(ctx, legacyKey).Result(); err != nil || sha != expectedLegacySHA {
+				t.Fatal("scale legacy SHA differs from accepted receipt")
 			}
 			wire.mu.Lock()
 			defer wire.mu.Unlock()
 			if wire.invalid || wire.failures != 0 || wire.calls < 1 || afterCalls-beforeCalls != wire.calls {
 				t.Fatal("actual EVAL accounting differs from owned Redis")
+			}
+			if scenario.name == "N1024_IPv6Raw45" && (wire.compactCalls != wire.calls || wire.calls != 67) {
+				t.Fatal("large raw-address plan did not use compact frames and 64 bounded artifact batches")
 			}
 			t.Logf("scale size=%d full_sql_redis_ns=%d sql_selects=%d eval_calls=%d eval_client_ns=%d eval_server_us=%d frame_bytes=%d body_bytes=%d eval_resp_bytes=%d", size, elapsed.Nanoseconds(), timedSelects, wire.calls, wire.elapsed.Nanoseconds(), afterUsec-beforeUsec, wire.frameBytes, wire.bodyBytes, wire.respBytes)
 		})

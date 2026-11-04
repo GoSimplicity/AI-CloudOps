@@ -100,7 +100,7 @@ func (p *PreparedProjection) execute(ctx context.Context, mode, target string, b
 	wire := p.wire
 	wire.Mode = mode
 	wire.Target = target
-	raw, err := json.Marshal(wire)
+	raw, err := marshalProjectionWire(wire, p.keys)
 	if err != nil {
 		return ErrProjectionStore
 	}

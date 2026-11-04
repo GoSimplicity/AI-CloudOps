@@ -1,12 +1,18 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-05：紧凑传输与全向量校验
+
+[pw2传输合同与实测](projection-wire.md)仅消除重复字段及role key传输，完整KEYS、所有namespace/TYPE/fingerprint与原控制顺序保持；旧对象继续支持。最终107个协议/环境叶场景、四个真实MySQL/Redis组合及1024原始长IPv6容量场景通过，全Go/vet/tags/cache race通过。
+
+1024长地址实际64个artifact批次+3控制命令，完整RESP52,976,776B，原文/精确成员/canonicalACK/legacySHA/SQL projected全部核对；单次race约22.79s且不含配置保存和生成，不作生产SLA或无限容量结论。新固定组合仍待CI，本地预览保持可用，未上线。
+
 ## 2026-11-05：MySQL/Redis 组合与真实进程恢复
 
 [组合验收](combined-recovery.md)实际四场景通过：发布子进程在已提交且第一artifact发送前硬退出，另一OS进程worker恢复同一原始回执并直接验raw/ACK/SHA/members/MySQL状态；另真KILL原MySQL连接后新batch零EVAL/DUMP不变，以及AM两向peer真实MySQL/Redis改名恢复。
 
 供给提取为integration-only testinfra，原MySQL12/Redis86、全Go/vet/标签编译/actionlint均通过。父持资源，child只读私有runtime DSN并核容器归属，无admin凭据、无演示库接入；新组合CI另验。尚不等同完整App所有行为的进程崩溃/主从切换演练，整体1.0未完成。
 
-来源锁Web更新为独立Verify41922266200/gitleaks41922266368成功的892816e，AI75d4a87保持；最新前端实扫7183errors/5warnings，仍有剩余技术债。
+来源锁Web更新为独立Verify41929732475/gitleaks41929730856成功的841a313，AI75d4a87保持；最新前端实扫7109errors/5warnings，仍有剩余技术债。
 
 ## 2026-11-05：较大计划与单体容量观测
 
