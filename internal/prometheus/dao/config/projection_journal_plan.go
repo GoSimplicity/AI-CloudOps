@@ -138,6 +138,7 @@ func (d *monitorConfigDAO) CommitGeneratedPlan(ctx context.Context, req Generate
 }
 
 func (d *monitorConfigDAO) commitGeneratedPlan(ctx context.Context, req GeneratedPlanRequest, projection *preparedProjectionPlan) (PoolReceipt, error) {
+	req.ExpectedLastCommittedOperationID = cloneUint64(req.ExpectedLastCommittedOperationID)
 	prepared, keys, fingerprint, err := prepareGeneratedPlan(req)
 	if err != nil {
 		return PoolReceipt{}, err
@@ -169,6 +170,9 @@ func (d *monitorConfigDAO) commitGeneratedPlan(ctx context.Context, req Generate
 			return err
 		}
 		if !operationMatches(op, req.Reservation) {
+			return ErrJournalConflict
+		}
+		if req.ExpectedLastCommittedOperationID != nil && (*req.ExpectedLastCommittedOperationID == 0 || !sameOptionalID(req.ExpectedLastCommittedOperationID, op.RecoveryOfOperationID)) {
 			return ErrJournalConflict
 		}
 		if op.Manifest != nil {
@@ -209,6 +213,9 @@ func (d *monitorConfigDAO) commitGeneratedPlan(ctx context.Context, req Generate
 				}
 			}
 			return nil
+		}
+		if req.ExpectedLastCommittedOperationID != nil && !sameOptionalID(control.LastCommittedOperationID, req.ExpectedLastCommittedOperationID) {
+			return ErrJournalConflict
 		}
 		if projection != nil && projection.amSource != nil && !amPair.matchesSource(*projection.amSource, req.Reservation.Family, req.Reservation.Generation) {
 			return ErrJournalConflict

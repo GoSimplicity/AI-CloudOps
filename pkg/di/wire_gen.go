@@ -317,7 +317,19 @@ func ProvideApp(cfg *config.Config) (*app.App, func(), error) {
 		cleanup()
 		return nil, nil, err
 	}
-	appApp, err := app.NewApp(cfg, logger, db, redisClient, engine, applicationBootstrap, cronManager, server, asynqScheduler, cronHandlers, processor, notificationEventWorker)
+	projectionRecoveryJournalDAO := config2.NewProjectionRecoveryJournalDAO(logger, db)
+	projectionRecoveryDispatcher, err := cache.NewProjectionRecoveryDispatcher(prometheusConfigCache, alertManagerConfigCache, alertRuleConfigCache, recordRuleConfigCache)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	projectionRecoveryOptions := ProvideProjectionRecoveryOptions(cfg)
+	projectionRecoveryWorker, err := cache.NewProjectionRecoveryWorker(projectionRecoveryJournalDAO, projectionRecoveryDispatcher, logger, projectionRecoveryOptions)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	appApp, err := app.NewApp(cfg, logger, db, redisClient, engine, applicationBootstrap, cronManager, server, asynqScheduler, cronHandlers, processor, notificationEventWorker, projectionRecoveryWorker)
 	if err != nil {
 		cleanup()
 		return nil, nil, err
@@ -360,9 +372,7 @@ var Injector = wire.NewSet(
 	CronSet,
 )
 
-var CacheSet = wire.NewSet(
-	ProvideProjectionStore, config2.NewProjectionPlanJournalDAO, config2.NewGeneratedConfigHistoryReader, cache.NewRecordProjectionRunner, config2.NewAlertRuleHistoryReader, cache.NewAlertRuleProjectionRunner, config2.NewPromMainHistoryReader, cache.NewPromMainProjectionRunner, config2.NewAMProjectionHistoryReader, cache.NewAMProjectionRunner, cache.NewMonitorCache, cache.NewAlertManagerConfigCache, cache.NewAlertRuleConfigCache, cache.NewRecordRuleConfigCache, cache.NewPrometheusConfigCache, cache.NewBatchConfigManager,
-)
+var CacheSet = wire.NewSet(config2.NewProjectionRecoveryJournalDAO, cache.NewProjectionRecoveryDispatcher, ProvideProjectionRecoveryOptions, cache.NewProjectionRecoveryWorker, ProvideProjectionStore, config2.NewProjectionPlanJournalDAO, config2.NewGeneratedConfigHistoryReader, cache.NewRecordProjectionRunner, config2.NewAlertRuleHistoryReader, cache.NewAlertRuleProjectionRunner, config2.NewPromMainHistoryReader, cache.NewPromMainProjectionRunner, config2.NewAMProjectionHistoryReader, cache.NewAMProjectionRunner, cache.NewMonitorCache, cache.NewAlertManagerConfigCache, cache.NewAlertRuleConfigCache, cache.NewRecordRuleConfigCache, cache.NewPrometheusConfigCache, cache.NewBatchConfigManager)
 
 var ClientSet = wire.NewSet(client.NewK8sClient)
 

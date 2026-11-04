@@ -283,6 +283,10 @@ var Injector = wire.NewSet(
 )
 
 var CacheSet = wire.NewSet(
+	configDao.NewProjectionRecoveryJournalDAO,
+	cache.NewProjectionRecoveryDispatcher,
+	ProvideProjectionRecoveryOptions,
+	cache.NewProjectionRecoveryWorker,
 	ProvideProjectionStore,
 	configDao.NewProjectionPlanJournalDAO,
 	configDao.NewGeneratedConfigHistoryReader,

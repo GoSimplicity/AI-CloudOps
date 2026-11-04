@@ -1,5 +1,14 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-05：独立投影恢复与可取消生命周期
+
+独立worker已接入App：立即扫描当前committed未projected，固定高水位/keyset/cursor、逐项错误隔离及数量/时间限制；不依赖Cron或normal生成开关。仍有效计划原样重放，AM stale peer按fresh单池真实源重签，Reserve/Commit锁内LC guard防旧恢复覆盖新正常发布。见[恢复合同、配置与验收](projection-recovery.md)。
+
+- Root最终59个原生场景全通过，原53保持；新增6项含三family重启、AM改名peer双向收敛、坏manifest后页公平与实际迟到包。发现的忙锁取消问题已由6项真实负控验证修复；修后worker16leaf race、全Go/vet/tags和59原生通过，DAO/DI/App完整race收据保持。
+- Web来源锁升级到独立Verify41893472829/gitleaks41893472886成功的a7fd8ff，AI升级到Verify41893469511/gitleaks41893469535成功的75d4a87。此前304f三仓41891975151已53步骤成功，新worker组合另验。
+- 本机预览已安全刷新到clean304f3386/schema4，后端PID56895，三端口健康，业务数据哈希保持，模拟API external_io=false。worker WIP未进入预览。
+- 规模验证成本、隔离MySQL并发验收和剩余ESLint仍待后续阶段，未上线或连接生产，整体1.0尚未完成。
+
 ## 2026-11-05：AlertManager 双控制发布与恢复
 
 AM full2和webhook subset5已接入同事务journal、双control原SQL租约及typed Store。完整发布负责main/webhook/成员/清退索引/full ACK，子集只upsert所需webhook及自己的ACK；相同输出可组成只读coverage避免交替增代。详见[AM合同与验收](alertmanager-projection.md)。

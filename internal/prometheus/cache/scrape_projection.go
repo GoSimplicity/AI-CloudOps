@@ -34,6 +34,10 @@ func (r *scrapeProjection) publish(ctx context.Context, pool *model.MonitorScrap
 	if previous != nil && (previous.Reservation.Family != int8(r.scope) || previous.Reservation.PoolID != pool.ID) {
 		return fail("持久计划归属不一致")
 	}
+	expectedOperation := recoveryExpectedOperation(ctx, int8(r.scope), pool.ID)
+	if expectedOperation != nil && (previous == nil || previous.Reservation.OperationID != *expectedOperation || previous.Phase != model.ConfigPublicationCommitted) {
+		return configdao.ErrJournalConflict
+	}
 	superseded := []configdao.ScrapeRuleSupersededArtifact{}
 	supersededKeys := map[string]bool{}
 	supersededOwners := map[int]configdao.GeneratedConfigOwner{}
@@ -129,11 +133,13 @@ func (r *scrapeProjection) publish(ctx context.Context, pool *model.MonitorScrap
 		operationID := previous.Reservation.OperationID
 		reservationRequest.RecoveryOfOperationID = &operationID
 	}
+	reservationRequest.ExpectedLastCommittedOperationID = expectedOperation
 	reservation, err := r.journal.reserve(ctx, reservationRequest, sourceVersion)
 	if err != nil {
 		return fail("预留持久发布版本")
 	}
 	request := scrapeGeneratedPlan(reservation, sourceHash, generated, plan)
+	request.ExpectedLastCommittedOperationID = expectedOperation
 	commitRequest := configdao.ScrapeRuleProjectionPlanRequest{
 		GeneratedProjectionPlanRequest: request,
 		History:                        historyGuards,

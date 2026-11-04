@@ -212,6 +212,9 @@ func TestProjectionStoreOwnedRedisProtocol(t *testing.T) {
 		{"am_delayed_full", TestAMProjectionNativeDelayedFullCannotRevertSubset},
 		{"am_rename_aba", TestAMProjectionNativeRepeatedRenameAndSecondABARecover},
 		{"am_malformed_before_writes", TestAMProjectionNativeMalformedIntentFailsBeforeReplayWrites},
+		{"recovery_scrape_restart", TestProjectionRecoveryNativeScrapeFamiliesRestart},
+		{"recovery_am_peer", TestProjectionRecoveryNativeAMPeerConverges},
+		{"recovery_poison_page", TestProjectionRecoveryNativePoisonDoesNotBlockLaterPool},
 	}
 	for _, group := range groups {
 		skipped := false

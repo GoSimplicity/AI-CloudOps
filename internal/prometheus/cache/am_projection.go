@@ -134,9 +134,6 @@ type amNamespacePlan struct {
 	namespace *scrapeProjection
 }
 
-func (a *alertManagerConfigCache) amLoadReceipts(ctx context.Context) (configdao.AMProjectionJournalDAO, error) {
-	return a.amJournal()
-}
 func (a *alertManagerConfigCache) amProject(ctx context.Context, family int8, poolID int, desired map[int8]map[string]ConfigData, hash [32]byte, version configdao.AMSourceVersion) error {
 	journal, err := a.amJournal()
 	if err != nil {
@@ -157,6 +154,10 @@ func (a *alertManagerConfigCache) amProject(ctx context.Context, family int8, po
 		if receipts[i].Reservation.Family == family {
 			own = &receipts[i]
 		}
+	}
+	expectedOperation := recoveryExpectedOperation(ctx, family, poolID)
+	if expectedOperation != nil && (own == nil || own.Reservation.OperationID != *expectedOperation || own.Phase != model.ConfigPublicationCommitted) {
+		return configdao.ErrJournalConflict
 	}
 	issued := []configdao.ArtifactReceipt{}
 	for _, receipt := range receipts {
@@ -263,7 +264,7 @@ func (a *alertManagerConfigCache) amProject(ctx context.Context, family int8, po
 	}
 	// A successful projected cohort can cover the same output across full/subset
 	// calls without manufacturing alternating generations or touching full state.
-	if a.amPlansUnchanged(namespaces) {
+	if expectedOperation == nil && a.amPlansUnchanged(namespaces) {
 		covered, err := a.amCovered(ctx, journal, family, poolID, hash, namespaces, receipts)
 		if err == nil && covered {
 			return nil
@@ -308,11 +309,13 @@ func (a *alertManagerConfigCache) amProject(ctx context.Context, family int8, po
 		id := own.Reservation.OperationID
 		reservationRequest.RecoveryOfOperationID = &id
 	}
+	reservationRequest.ExpectedLastCommittedOperationID = expectedOperation
 	ref, err := journal.ReserveAMPoolOperation(ctx, reservationRequest, version)
 	if err != nil {
 		return err
 	}
 	request.Reservation = ref
+	request.ExpectedLastCommittedOperationID = expectedOperation
 	receipt, err := journal.CommitAMProjectionPlan(ctx, request)
 	if err != nil {
 		if !errors.Is(err, configdao.ErrJournalUncertain) {
@@ -357,7 +360,6 @@ func (a *alertManagerConfigCache) amReceiptCovers(receipt configdao.ProjectionRe
 
 func (a *alertManagerConfigCache) amCovered(ctx context.Context, journal configdao.AMProjectionJournalDAO, family int8, poolID int, hash [32]byte, plans []amNamespacePlan, receipts []configdao.ProjectionReceipt) (bool, error) {
 	selected := map[string]configdao.ArtifactReceipt{}
-	used := map[uint64]configdao.ProjectionReceipt{}
 	var full *configdao.ProjectionReceipt
 	for i := range receipts {
 		receipt := &receipts[i]
@@ -374,7 +376,6 @@ func (a *alertManagerConfigCache) amCovered(ctx context.Context, journal configd
 			key := fmt.Sprintf("%d/%s", artifact.ConfigType, artifact.InstanceKey)
 			if selected[key].EventID < artifact.EventID {
 				selected[key] = artifact
-				used[receipt.Reservation.OperationID] = *receipt
 			}
 		}
 	}
@@ -404,7 +405,6 @@ func (a *alertManagerConfigCache) amCovered(ctx context.Context, journal configd
 			request.Receipts = append(request.Receipts, receipt)
 		}
 	}
-	_ = used
 	healthy := false
 	matched, err := journal.WithAMCoverage(ctx, request, func(snapshot configdao.AMCoverageSnapshot) error {
 		for _, ns := range plans {

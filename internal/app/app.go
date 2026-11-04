@@ -35,6 +35,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	cron "github.com/GoSimplicity/AI-CloudOps/internal/cron"
 	cronHandler "github.com/GoSimplicity/AI-CloudOps/internal/cron/handler"
+	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/cache"
 	"github.com/GoSimplicity/AI-CloudOps/internal/startup"
 	"github.com/GoSimplicity/AI-CloudOps/internal/workorder/notification"
 	workorderService "github.com/GoSimplicity/AI-CloudOps/internal/workorder/service"
@@ -50,19 +51,22 @@ import (
 )
 
 type App struct {
-	cfg                     *config.Config
-	logger                  *zap.Logger
-	db                      *gorm.DB
-	redis                   redis.Cmdable
-	server                  *gin.Engine
-	bootstrap               startup.ApplicationBootstrap
-	cronManager             cron.CronManager
-	asynqServer             *asynq.Server
-	scheduler               *asynq.Scheduler
-	cronHandlers            *cronHandler.CronHandlers
-	notificationProcessor   *notification.Processor
-	notificationEventWorker *workorderService.NotificationEventWorker
-	notificationEventDone   chan struct{}
+	projectionRecoveryWorker *cache.ProjectionRecoveryWorker
+	projectionRecoveryDone   chan struct{}
+	projectionRecoveryCancel context.CancelFunc
+	cfg                      *config.Config
+	logger                   *zap.Logger
+	db                       *gorm.DB
+	redis                    redis.Cmdable
+	server                   *gin.Engine
+	bootstrap                startup.ApplicationBootstrap
+	cronManager              cron.CronManager
+	asynqServer              *asynq.Server
+	scheduler                *asynq.Scheduler
+	cronHandlers             *cronHandler.CronHandlers
+	notificationProcessor    *notification.Processor
+	notificationEventWorker  *workorderService.NotificationEventWorker
+	notificationEventDone    chan struct{}
 }
 
 func NewApp(
@@ -78,6 +82,7 @@ func NewApp(
 	cronHandlers *cronHandler.CronHandlers,
 	notificationProcessor *notification.Processor,
 	notificationEventWorker *workorderService.NotificationEventWorker,
+	projectionRecoveryWorker *cache.ProjectionRecoveryWorker,
 ) (*App, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("配置不能为空")
@@ -117,7 +122,11 @@ func NewApp(
 		return nil, fmt.Errorf("工单通知事件工作器不能为空")
 	}
 
+	if projectionRecoveryWorker == nil {
+		return nil, fmt.Errorf("持久投影恢复工作器不能为空")
+	}
 	return &App{
+		projectionRecoveryWorker: projectionRecoveryWorker, projectionRecoveryDone: make(chan struct{}),
 		cfg:                     cfg,
 		logger:                  logger,
 		db:                      db,
@@ -191,6 +200,12 @@ func (a *App) Run(ctx context.Context) error {
 	a.showBootInfo()
 
 	g, runCtx := errgroup.WithContext(ctx)
+	recoveryCtx, recoveryCancel := context.WithCancel(runCtx)
+	a.projectionRecoveryCancel = recoveryCancel
+	g.Go(func() error {
+		defer close(a.projectionRecoveryDone)
+		return a.projectionRecoveryWorker.Run(recoveryCtx)
+	})
 
 	g.Go(func() error {
 		a.logger.Info("HTTP服务开始监听", zap.String("port", a.cfg.Server.Port))
@@ -266,6 +281,9 @@ func (a *App) Shutdown(ctx context.Context, srv *http.Server) error {
 		a.logger.Warn("Cron管理器停止失败", zap.Error(err))
 	}
 
+	if a.projectionRecoveryCancel != nil {
+		a.projectionRecoveryCancel()
+	}
 	a.asynqServer.Shutdown()
 	a.scheduler.Shutdown()
 
@@ -279,6 +297,10 @@ func (a *App) Shutdown(ctx context.Context, srv *http.Server) error {
 	case <-a.notificationEventDone:
 	case <-ctx.Done():
 		a.logger.Warn("通知事件工作器未在关闭期限内退出")
+	}
+
+	if err := a.waitProjectionRecovery(ctx); err != nil {
+		return err
 	}
 
 	if a.db != nil {
@@ -343,5 +365,20 @@ func (a *App) showBootInfo() {
 	a.logger.Info("服务启动成功", zap.String("port", a.cfg.Server.Port))
 	for _, ip := range ips {
 		a.logger.Info("服务访问地址", zap.String("url", fmt.Sprintf("http://%s:%s/", ip, a.cfg.Server.Port)))
+	}
+}
+
+// The application must settle every lease before closing SQL or returning to
+// Wire's dedicated Store cleanup. Cancellation alone does not stop a writer.
+func (a *App) waitProjectionRecovery(ctx context.Context) error {
+	if a.projectionRecoveryCancel == nil {
+		return nil
+	}
+	a.projectionRecoveryCancel()
+	select {
+	case <-a.projectionRecoveryDone:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("等待持久投影恢复工作器退出: %w", ctx.Err())
 	}
 }

@@ -310,12 +310,17 @@ type K8sConfig struct {
 
 // PrometheusConfig Prometheus配置
 type PrometheusConfig struct {
-	RefreshCron         string `mapstructure:"refresh_cron" env:"PROMETHEUS_REFRESH_CRON" default:"@every 15s"`
-	EnableAlert         int    `mapstructure:"enable_alert" env:"PROMETHEUS_ENABLE_ALERT" default:"0"`
-	EnableRecord        int    `mapstructure:"enable_record" env:"PROMETHEUS_ENABLE_RECORD" default:"0"`
-	AlertWebhookAddr    string `mapstructure:"alert_webhook_addr" env:"PROMETHEUS_ALERT_WEBHOOK_ADDR" default:"http://localhost:8889/api/v1/alerts/receive"`
-	AlertWebhookFileDir string `mapstructure:"alert_webhook_file_dir" env:"PROMETHEUS_ALERT_WEBHOOK_FILE_DIR" default:"/tmp/webhook_files"`
-	HttpSdAPI           string `mapstructure:"httpSdAPI" env:"PROMETHEUS_HTTP_SD_API" default:"http://localhost:8889/api/not_auth/getTreeNodeBindIps"`
+	ProjectionRecoveryInterval     time.Duration `mapstructure:"projection_recovery_interval" env:"PROMETHEUS_PROJECTION_RECOVERY_INTERVAL" default:"15s"`
+	ProjectionRecoveryItemTimeout  time.Duration `mapstructure:"projection_recovery_item_timeout" env:"PROMETHEUS_PROJECTION_RECOVERY_ITEM_TIMEOUT" default:"30s"`
+	ProjectionRecoveryCycleTimeout time.Duration `mapstructure:"projection_recovery_cycle_timeout" env:"PROMETHEUS_PROJECTION_RECOVERY_CYCLE_TIMEOUT" default:"1m"`
+	ProjectionRecoveryPageSize     int           `mapstructure:"projection_recovery_page_size" env:"PROMETHEUS_PROJECTION_RECOVERY_PAGE_SIZE" default:"100"`
+	ProjectionRecoveryMaxPerCycle  int           `mapstructure:"projection_recovery_max_per_cycle" env:"PROMETHEUS_PROJECTION_RECOVERY_MAX_PER_CYCLE" default:"1000"`
+	RefreshCron                    string        `mapstructure:"refresh_cron" env:"PROMETHEUS_REFRESH_CRON" default:"@every 15s"`
+	EnableAlert                    int           `mapstructure:"enable_alert" env:"PROMETHEUS_ENABLE_ALERT" default:"0"`
+	EnableRecord                   int           `mapstructure:"enable_record" env:"PROMETHEUS_ENABLE_RECORD" default:"0"`
+	AlertWebhookAddr               string        `mapstructure:"alert_webhook_addr" env:"PROMETHEUS_ALERT_WEBHOOK_ADDR" default:"http://localhost:8889/api/v1/alerts/receive"`
+	AlertWebhookFileDir            string        `mapstructure:"alert_webhook_file_dir" env:"PROMETHEUS_ALERT_WEBHOOK_FILE_DIR" default:"/tmp/webhook_files"`
+	HttpSdAPI                      string        `mapstructure:"httpSdAPI" env:"PROMETHEUS_HTTP_SD_API" default:"http://localhost:8889/api/not_auth/getTreeNodeBindIps"`
 }
 
 // CronConfig 定时任务配置

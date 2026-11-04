@@ -19,10 +19,11 @@ var (
 )
 
 type PoolOperationRequest struct {
-	Family                int8
-	PoolID                int
-	Nonce                 [16]byte
-	RecoveryOfOperationID *uint64
+	ExpectedLastCommittedOperationID *uint64
+	Family                           int8
+	PoolID                           int
+	Nonce                            [16]byte
+	RecoveryOfOperationID            *uint64
 }
 type PoolReservation struct {
 	OperationID uint64
@@ -46,9 +47,10 @@ type GeneratedPlanItem struct {
 	Binding  *ProjectionBinding
 }
 type GeneratedPlanRequest struct {
-	Reservation PoolReservation
-	SourceHash  [32]byte
-	Items       []GeneratedPlanItem
+	ExpectedLastCommittedOperationID *uint64
+	Reservation                      PoolReservation
+	SourceHash                       [32]byte
+	Items                            []GeneratedPlanItem
 }
 type ArtifactReceipt struct {
 	SourceID         uint64

@@ -711,3 +711,10 @@
 - 修复连续改名取消旧索引、不同row恢复后二次ABA，以及同hash重放遇到畸形索引时先写后拒的问题；只允许已签归属证明取消旧locator，custom/foreign继续拒绝。schema/Store/Lua未变。
 - 最终owned53叶、旧AM58main310leaf、全cache/service/DAO/DI race、全Go/vet/tags及173工具通过，Record五发布金样保持；修复既有gitleaks shell参数引用并通过actionlint和实际range回归。
 - Webfd42255/AIba187来源锁保持；上个134db5ae三仓CI成功不替代新AM提交验收。独立worker/性能/剩余ESLint继续，本机预览未从WIP重建，未上线。
+
+## 2026-11-05：独立持久投影恢复 worker
+
+- App独立立即/周期恢复当前committed未projected，不依赖Cron/普通生成开关；固定高水位、keyset/cursor、公平cap、错误隔离及item/cycle超时，毒manifest不堵后页。
+- 复用实际publisher与SQL租约，重签绑定锁内ExpectedLastCommitted；AM stale peer按fresh源恢复且不拼旧main/新subset。恢复锁等待可取消，App等待worker结束后清理SQL/Store；日志只含locator及分类。
+- Root59原生全绿、worker16leaf race及全Go/vet/tags通过；此前完整cache/service与DAO/DI/App race、Record五金样、173工具保持，忙锁6项负控由红转绿。schema/Store/Lua不改，MySQL并发与规模验证继续后续。
+- 锁Weba7fd8ff/AI75d4a87独立CI成功版本，新组合另验。预览安全刷新clean304f3386/schema4且业务数据哈希保持，worker未进入预览，无上线或生产连接。

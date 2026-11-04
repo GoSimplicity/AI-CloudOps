@@ -118,6 +118,10 @@ func (d *monitorConfigDAO) reservePoolOperationWithAM(ctx context.Context, req P
 		return PoolReservation{}, ErrJournalInvalid
 	}
 	req.RecoveryOfOperationID = cloneUint64(req.RecoveryOfOperationID)
+	req.ExpectedLastCommittedOperationID = cloneUint64(req.ExpectedLastCommittedOperationID)
+	if req.ExpectedLastCommittedOperationID != nil && (*req.ExpectedLastCommittedOperationID == 0 || !sameOptionalID(req.ExpectedLastCommittedOperationID, req.RecoveryOfOperationID)) {
+		return PoolReservation{}, ErrJournalInvalid
+	}
 	var result PoolReservation
 	err := d.journalTransaction(ctx, func(tx *gorm.DB) error {
 		var control *model.MonitorConfigPoolControl
@@ -143,6 +147,9 @@ func (d *monitorConfigDAO) reservePoolOperationWithAM(ctx context.Context, req P
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
+		}
+		if req.ExpectedLastCommittedOperationID != nil && !sameOptionalID(control.LastCommittedOperationID, req.ExpectedLastCommittedOperationID) {
+			return ErrJournalConflict
 		}
 		if amSource != nil && !pair.matchesSource(*amSource, 0, 0) {
 			return ErrJournalConflict

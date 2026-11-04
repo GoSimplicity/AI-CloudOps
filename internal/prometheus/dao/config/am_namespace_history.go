@@ -2,8 +2,6 @@ package config
 
 import (
 	"context"
-
-	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 )
 
 func validDispositionFamily(family int8) bool { return family >= 1 && family <= 5 }
@@ -63,5 +61,3 @@ func prepareAMReplacements(req AMProjectionPlanRequest) ([]RecordSupersededArtif
 	}
 	return preparePublicationReplacements(RecordProjectionPlanRequest{GeneratedProjectionPlanRequest: req.GeneratedProjectionPlanRequest, History: req.History, Superseded: req.Superseded}, true)
 }
-
-var _ = model.ConfigTypeWebhookFile
