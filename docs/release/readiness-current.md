@@ -1,5 +1,13 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-05：初验 operation 索引与真实规模观测
+
+第二窄阶段仅复用本次初验实际SQL operation/完整manifest索引，逐namespace当前权限、parent及AM完整证明保持。N128初验约75.06→24.24ms、SELECT772→644；命令数与全部帧字节不变。详见[分层实测](projection-scale.md)。
+
+- Root MySQL12/Redis64均race通过，新增5规模用例真实执行Redis/Lua/ACK与SQL完成。独立owner/body、AM cardinality负控能真实检出错误放行；完整DAO193leaf、cache1153leaf、service129leaf race及全Go/vet/全部标签编译/actionlint通过。
+- 前一67df64e9三仓41913094031已54步骤全部success，Root完整日志核实际67df/ceb/75三个SHA及browser5zero；新增初验提交仍须另验，不拿旧绿替代。
+- 最新前端94已本机完整验证并推送9339393，Root实扫1130文件7202errors/5warnings；新前端独立CI另验，来源锁仍保已绿ceb/75。预览clean304f/PID56895/schema4及模拟数据保持，整体1.0未完成，未上线。
+
 ## 2026-11-05：租约内完整初验复用
 
 首次权限/material验证及持锁保持，后续操作在原事务连接实际探活，取消/错误后封闭，不能从健康全局DB续权。Snapshot深复制、MarkComplete条件及Store/Lua/schema保持，见[实测与边界](projection-scale.md)。

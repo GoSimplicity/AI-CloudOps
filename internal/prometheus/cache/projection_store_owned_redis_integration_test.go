@@ -215,6 +215,7 @@ func TestProjectionStoreOwnedRedisProtocol(t *testing.T) {
 		{"recovery_scrape_restart", TestProjectionRecoveryNativeScrapeFamiliesRestart},
 		{"recovery_am_peer", TestProjectionRecoveryNativeAMPeerConverges},
 		{"recovery_poison_page", TestProjectionRecoveryNativePoisonDoesNotBlockLaterPool},
+		{"scale_cost", TestProjectionStoreNativeScaleCost},
 	}
 	for _, group := range groups {
 		skipped := false

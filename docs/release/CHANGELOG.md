@@ -734,3 +734,9 @@
 - lease仅首次完整校验权限与material，后续在原事务连接真实SELECT1探活；错误/取消封闭，保Snapshot深复制与MarkComplete条件，不借新连接续权，Store/Lua/schema保持。
 - 固定N128检查/序列化段SELECT84,876→132、9.651s→21.371ms，初验772查询和全部帧字节不变；真实MySQL12/Redis59及globalDB负控守住失联/权限边界。仍需wire/Lua与容量优化。
 - 来源锁更新至独立CI成功Webceb1cbe/AI75d4a87，新组合另验；预览未应用本次优化，未上线。
+
+## 2026-11-05：初验 operation 索引
+
+- 单次lease初验复用实际SQL严格解析的operation成员索引，保AM完整证明及逐namespace/owner/body/parent验证，普通写路径不新增control锁，不批读event或改payload。
+- 同口径N128初验SELECT772→644、约75→24ms；新增真实Redis5规模场景，原生gate64与MySQL12均通过，完整raw/ACK/SQL完成验收，wire及EVAL次数不变。仍需Lua/线缆与容量优化。
+- Store/Lua/schema及来源锁ceb/75保持，新提交CI另验，预览数据与版本保持，未上线。

@@ -67,6 +67,10 @@ func artifactReceipt(event model.MonitorConfigArtifactEvent, sourceID uint64) (A
 // Only a committed generated root in the same exact namespace authorizes lineage.
 // Do not search behind a broken/N/A latest event and resurrect an older grant.
 func trustedBindingRoot(tx *gorm.DB, event *model.MonitorConfigArtifactEvent, key configNamespaceKey) (*model.MonitorConfigArtifactEvent, error) {
+	return trustedBindingRootWithOperations(tx, event, key, nil)
+}
+
+func trustedBindingRootWithOperations(tx *gorm.DB, event *model.MonitorConfigArtifactEvent, key configNamespaceKey, operations *leaseInitialOperations) (*model.MonitorConfigArtifactEvent, error) {
 	if event == nil {
 		return nil, nil
 	}
@@ -81,6 +85,16 @@ func trustedBindingRoot(tx *gorm.DB, event *model.MonitorConfigArtifactEvent, ke
 			return nil, nil
 		}
 		if current.ProjectionPolicy == model.ConfigProjectionGenerated {
+			if operations != nil {
+				facts, err := operations.operation(*current.OperationID)
+				if err != nil {
+					return nil, err
+				}
+				if facts == nil || !familyAllowsKind(facts.family, current.ConfigType) || !facts.containsEvent(current.EventID) {
+					return nil, nil
+				}
+				return current, nil
+			}
 			var op model.MonitorConfigPoolOperation
 			// Payload is immutable after business commit. No control lock may be acquired
 			// by this namespace-only ordinary path.

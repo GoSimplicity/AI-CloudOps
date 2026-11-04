@@ -113,6 +113,7 @@ func (l *sqlProjectionLease) recheck(ctx context.Context) error {
 
 func (l *sqlProjectionLease) validateInitialCurrent(ctx context.Context) error {
 	tx := l.tx.WithContext(ctx)
+	operations := newLeaseInitialOperations(tx)
 	var artifacts []ArtifactReceipt
 	if l.pool != nil {
 		ref := l.pool.Reservation
@@ -150,6 +151,10 @@ func (l *sqlProjectionLease) validateInitialCurrent(ctx context.Context) error {
 		if !equalProjectionPayload(receipt, *l.pool) || !receipt.CompleteControls {
 			return ErrJournalConflict
 		}
+		if err := operations.seedVerifiedSQLReceipt(op, receipt); err != nil {
+			return err
+		}
+
 		// Intent proofs are persisted, not inferred from an owner digest. Recheck
 		// their original row and generated lineage under the same namespace locks.
 		proofEvents := map[uint64]model.MonitorConfigArtifactEvent{}
@@ -194,7 +199,7 @@ func (l *sqlProjectionLease) validateInitialCurrent(ctx context.Context) error {
 	}
 	materials := make([]ProjectionMaterial, 0, len(artifacts))
 	for _, artifact := range artifacts {
-		material, err := leaseMaterial(tx, artifact, l.ordinary != nil)
+		material, err := leaseMaterialWithOperations(tx, artifact, l.ordinary != nil, operations)
 		if err != nil {
 			return err
 		}
@@ -208,6 +213,9 @@ func (l *sqlProjectionLease) validateInitialCurrent(ctx context.Context) error {
 	return ctx.Err()
 }
 func leaseMaterial(tx *gorm.DB, receipt ArtifactReceipt, ordinary bool) (ProjectionMaterial, error) {
+	return leaseMaterialWithOperations(tx, receipt, ordinary, nil)
+}
+func leaseMaterialWithOperations(tx *gorm.DB, receipt ArtifactReceipt, ordinary bool, operations *leaseInitialOperations) (ProjectionMaterial, error) {
 	key := configNamespaceKey{receipt.ConfigType, receipt.InstanceKey}
 	event, err := latestArtifactEvent(tx, key)
 	if err != nil {
@@ -225,7 +233,7 @@ func leaseMaterial(tx *gorm.DB, receipt ArtifactReceipt, ordinary bool) (Project
 		(receipt.Action != model.ConfigProjectionInvalidate && receipt.Action != model.ConfigProjectionRetire)) {
 		return ProjectionMaterial{}, ErrJournalInvalid
 	}
-	root, err := trustedBindingRoot(tx, event, key)
+	root, err := trustedBindingRootWithOperations(tx, event, key, operations)
 	if err != nil {
 		return ProjectionMaterial{}, err
 	}

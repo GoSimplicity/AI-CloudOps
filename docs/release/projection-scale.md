@@ -53,3 +53,29 @@ N128另测进入lease为78,985,917ns/772 SELECT；单次Recheck为72,005,083ns/6
 完整DAO74main/177leaf、cache236main/1153leaf及alert/scrape service129leaf race全部通过，0fail/skip；全Go、vet、全部integration/e2e/smoke标签编译及actionlint通过。专属MySQL/Redis owner label均验证0残留，未触碰演示实例。
 
 Store/Lua/schema未改，整帧字节完全不降，wire与Lua全量检查仍有二次成本。后续还需处理初验重复解析、真实Redis/Lua及容量边界，不能据本阶段宣称整体线性或整个1.0完成。
+
+## 第二阶段：单次初验的 operation 索引
+
+只在validateInitialCurrent调用内复用实际SQL读取并严格完整解码的operation/manifest成员索引。own operation从实际完整SQL receipt loader校验后初始化；历史parsed membership不冒充AM完整receipt/event/cardinality证明。没有批读event或跳过proofEvents，latest/current的锁、owner/body及ordinary parent逐跳/深度/N/A校验保持；普通写路径继续旧入口，不增加control锁。
+
+同口径15项全通过。N128初验75,061,167→24,235,375ns、772→644 SELECT、38,509,328→7,966,688 B/op、201,175→105,776 allocs/op。后续Recheck仍1 SELECT，命令段仍132 SELECT、131帧、11,856,163帧字节；其单次22.16ms与前次21.37ms不作为改善结论。
+
+独立负控验证温热同operation后，另一namespace的新revision、正文漂移、foreign/custom或重复行仍拒绝；目标以外的坏manifest项不能被索引命中掩盖。移除owner/body或AM完整cardinality校验，原用例分别真实变红。每次初验重新建reader，不跨lease或事务缓存，不从调用方receipt初始化。
+
+## 真实 Redis/Lua 规模观测
+
+另增5项真实投影，使用SQLite、专属Redis及相同微小正文，包含EVAL、ACK和SQL projected，全部通过；命令数与Redis INFO统计核对，所有raw/member/SQL回执验收成功。该表为race检查开启时的单次本机观测，不能与上面的无race微基准直接相减。
+
+| N | 首轮完整投影 ns | 第二阶段后 ns | 第二阶段后 SELECT | EVAL次数 | EVAL RESP参数字节 |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 13,337,708 | 12,727,042 | 18 | 4 | 70,767 |
+| 4 | 22,835,125 | 29,696,250 | 39 | 7 | 140,872 |
+| 16 | 82,017,750 | 113,929,416 | 123 | 19 | 569,449 |
+| 64 | 804,066,834 | 552,313,959 | 459 | 67 | 4,661,267 |
+| 128 | 2,152,262,708 | 1,463,941,250 | 907 | 131 | 16,093,977 |
+
+首轮N128为1035 SELECT，本阶段减少128次同op重读。两轮各规模的frame/body/RESP字节及EVAL次数均保持；N128 Redis累计EVAL约664277/657532微秒，仍有明显Lua及整帧成本。Hook只统计实际参数长度和耗时，不保存脚本/键/正文/凭据；RESP参数包括脚本、keys、JSON及body，不含TCP/TLS封装。这些不是生产SLA，也不是MySQL+Redis组合的性能结论。
+
+新增规模用例接入owned gate后，总数由59增至64。Root MySQL12及Redis64均通过，Store/Lua/schema未改。整体线缆/脚本预检仍需下一阶段优化。
+
+本阶段完整DAO81main/193leaf、cache236main/1153leaf、service129leaf race通过，0fail/skip；全Go/vet/全部标签编译及actionlint通过。独立新增initial review为5main/12leaf，错误去掉owner/body或AM行数校验时，原测试真实失败；正式实现均通过。
