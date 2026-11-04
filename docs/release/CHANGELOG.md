@@ -652,3 +652,11 @@
 - 独立v4三个ALTER扩宽Name255/key128字符、guard/event512字节；共享Go/DTO限制同步，原数据/索引/字符属性与V1–V3校验和不变。
 - 先验证table default及四列源属性，继承已证相同collation；原模型结构硬比对不放宽，dirty/unsupported source拒绝零ALTER但不谎称零history。
 - 47/65合法IPv6 key/106Name原红转绿、五包race/vet/tag、全Go/MySQL六子/完整dbschema-CLI native过，私有资源清理；Web锁已验证192178f，前端表单/权限另阶段。未上线，preview仍0618/schema2。
+
+
+## 2026-11-04：完整投影计划与 SQL 租约
+
+- 新 v2 manifest 持久完整成员、AM退役 intent、artifact/control ACK向量；旧 v1 保持历史语义，旧artifact-only pool marker拒绝v2，损坏SourceID映射不再获得完整租约。
+- 第二事务按control→有序namespace取得sealed callback租约，普通事件仅可invalidate/retire；同连接重验与深拷贝，退出/取消/已知错误封闭，禁止丢连接后另借连接续租。
+- MySQL8.4.11/RR五子实际通过：互斥普通writer及新reserve、空发布与重复ACK保原时间、ordinary最小权限、取消、真实KILL自有会话后fail-closed。业务commit丢ACK按nonce恢复完整控制计划。临时资源已清。
+- 来源锁更新到独立远端验证通过的Web7e3daa5/AIba187；本机预览无损升级clean5feb/schema4，业务数据保留且Cron/外部执行关闭。新组合CI另验，Redis store/发布器/worker仍未接线，未上线。

@@ -55,3 +55,21 @@ Web来源锁19ac2716481c44d145193fe24a6e97095e49b97f自身远端Verify/gitleaks�
 MySQL8.4.11/RR 两独立 session 实际运行6子例、零skip：并发 generation/nonce、非空 JSON receipt/ordinary lineage、empty last-good/new recovery、后段 SQL CHECK 错误整批回滚、commit ACK 丢失独立 session 重载、unsigned counter 耗尽。旧 owner CAS 的 changed/found rows 两模式和7个 namespace 原生回归再次通过。完整 config DAO/cache race、vet、全 Go 与全部标签编译通过；所有专属 schema/user/DSN 已清理。
 
 此提交没有连接发布器、Lua 或 worker。SQL mark API 由内部调用者确认外部投影后使用，测试中调用它不证明 Redis 已写；已复现的旧 A 删除/覆盖新 B 两个窗口仍待后续 fencing 业务闭环。普通 SQL 成功只表示保存与持久 pending，不等于分发成功。Web锁为独立 Verify 已通过的 dd558ce，AIba187；新后端组合CI另验。本地预览仍固定0618/schema2，没有把本次WIP直接应用演示库。
+
+
+## 完整投影计划与 SQL 租约
+
+`ProjectionPlanJournalDAO` 在同一业务事务中持久化 v2 envelope：artifact 事件向量、完整成员集合、Alertmanager 退役 intent 与 ACK 所需控制摘要。full family 1–4 必须包含全量 members 和 full ACK；Alertmanager 另需 intent 控制。family 5 只允许 webhook subset ACK，不能改写完整 Alertmanager 的成员集合或历史 SHA。合法空发布仍持久化空成员集合及控制证明，不能只留下空 artifact 数组。
+
+旧 v1 数组（包括 `[]`）保持历史可读，不能凭版本升级制造完整控制权限；恢复完整投影需签发新的 v2 操作。旧 artifact-only pool marker 拒绝 v2。重试必须匹配原计划摘要与已签发 SourceID/EventID，不能改写原 manifest。损坏的持久 intent SourceID 即使重算本地摘要，也必须因缺少当前 artifact 向量中的精确 EventID 映射而拒绝。
+
+`WithPoolProjectionLease` 在第二个独立 SQL 事务中按 control → 全部有序 namespace → operation/events 取得锁，callback 内只从该连接重建并复核材料。它不推迟或重做已经成功的业务提交。普通配置事件仅取得 namespace 租约，可 invalidate/retire，不能获得渲染正文、成员控制或 pool ACK。跨普通 N/A 接管断开的历史 binding 不能恢复权限，intent 保留确切旧 owner 快照，不从摘要反推名称或猜测新建 ID。
+
+租约快照是深拷贝，句柄不能在 callback 返回、取消或检测到连接失效后继续使用。检测失败后不会另借连接“续租”。完成标记核对完整 artifact/control 向量；重复相同确认保留原 projected 时间和指针。业务提交确认丢失使用 nonce 读取持久事实，未知结果与已回滚失败明确区分。
+
+SQL 租约不证明 Redis 已投影。本阶段仍未连接发布器、Lua 或恢复 worker；外部写前还需 fenced store 与原租约重验，已复现的两个跨 SQL/Redis 窗口尚未据此消除。
+
+本机演示已在完整备份、停写及显式 pending 迁移后更新到干净 5feb4cc/schema v4；业务数据逐字节保留，临时迁移账号与 DSN 已清理。该更新只发生在本机，演示外部执行及 Cron 保持关闭，没有部署生产。
+
+
+本阶段最终验收：完整 Go 测试、vet、integration/e2e/smoke 标签编译通过；完整 config DAO 132 叶 race、cache race 与两包 vet 通过，包含真实提交成功后丢 ACK 的 v2 nonce 重载。独立合同与持久 proof 反例通过。专属 MySQL8.4.11/RR 五子零跳过通过；旧错误封闭行为 overlay 在真实 KILL 后实际失败，旧重复 ACK 实际改写 projected 时间，最终同例转绿。原生测试仅使用新空库的专用账号/会话，未终止演示连接；临时库、账号和 DSN 已清理。

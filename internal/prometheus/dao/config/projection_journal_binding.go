@@ -157,7 +157,7 @@ type poolManifestEntry struct {
 	PlanDigest string `json:"plan_digest"`
 }
 
-func decodePoolManifest(raw *string) ([]poolManifestEntry, error) {
+func decodeLegacyPoolManifest(raw *string) ([]poolManifestEntry, error) {
 	if raw == nil {
 		return nil, ErrJournalConflict
 	}
@@ -177,4 +177,9 @@ func decodePoolManifest(raw *string) ([]poolManifestEntry, error) {
 		seenEvents[entry.EventID] = true
 	}
 	return entries, nil
+}
+
+func decodePoolManifest(raw *string) ([]poolManifestEntry, error) {
+	value, err := decodeProjectionManifest(raw)
+	return value.Artifacts, err
 }

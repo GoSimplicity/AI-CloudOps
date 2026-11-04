@@ -146,6 +146,10 @@ func (d *monitorConfigDAO) MarkPoolProjectedIfCurrent(ctx context.Context, recei
 		if !operationMatches(op, ref) || !sameHash(receipt.SourceHash, op.SourceHash) {
 			return ErrJournalConflict
 		}
+		decoded, decodeErr := decodeProjectionManifest(op.Manifest)
+		if decodeErr != nil || decoded.Version != 1 {
+			return ErrProjectionControlsRequired
+		}
 		stored, err := d.loadReceipt(tx, op)
 		if err != nil {
 			return err

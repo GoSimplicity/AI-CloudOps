@@ -134,9 +134,17 @@ func prepareGeneratedPlan(req GeneratedPlanRequest) ([]preparedPlanItem, []confi
 }
 
 func (d *monitorConfigDAO) CommitGeneratedPlan(ctx context.Context, req GeneratedPlanRequest) (PoolReceipt, error) {
+	return d.commitGeneratedPlan(ctx, req, nil)
+}
+
+func (d *monitorConfigDAO) commitGeneratedPlan(ctx context.Context, req GeneratedPlanRequest, projection *preparedProjectionPlan) (PoolReceipt, error) {
 	prepared, keys, fingerprint, err := prepareGeneratedPlan(req)
 	if err != nil {
 		return PoolReceipt{}, err
+	}
+	if projection != nil {
+		keys = append(keys, projection.keys...)
+		fingerprint = hex.EncodeToString(projection.digest[:])
 	}
 	var receipt PoolReceipt
 	created := map[uint64]*model.MonitorConfig{}
@@ -157,6 +165,13 @@ func (d *monitorConfigDAO) CommitGeneratedPlan(ctx context.Context, req Generate
 		}
 		if op.Manifest != nil {
 			if !sameHash(req.SourceHash, op.SourceHash) {
+				return ErrJournalConflict
+			}
+			decoded, err := decodeProjectionManifest(op.Manifest)
+			if err != nil || (projection == nil && decoded.Version != 1) || (projection != nil && decoded.Version != 2) {
+				return ErrJournalConflict
+			}
+			if projection != nil && decoded.PlanDigest != fingerprint {
 				return ErrJournalConflict
 			}
 			entries, err := decodePoolManifest(op.Manifest)
@@ -196,6 +211,7 @@ func (d *monitorConfigDAO) CommitGeneratedPlan(ctx context.Context, req Generate
 			}
 		}
 		manifest := make([]poolManifestEntry, 0, len(prepared))
+		events := map[uint64]model.MonitorConfigArtifactEvent{}
 		for _, entry := range prepared {
 			event, row, err := commitGeneratedItemTx(tx, op.OperationID, entry.item)
 			if err != nil {
@@ -204,12 +220,21 @@ func (d *monitorConfigDAO) CommitGeneratedPlan(ctx context.Context, req Generate
 			if err := tx.Create(&event).Error; err != nil {
 				return err
 			}
+			events[entry.item.SourceID] = event
 			if row != nil {
 				created[entry.item.SourceID] = row
 			}
 			manifest = append(manifest, poolManifestEntry{SourceID: entry.item.SourceID, EventID: event.EventID, PlanDigest: fingerprint})
 		}
-		encoded, err := json.Marshal(manifest)
+		var payload interface{} = manifest
+		if projection != nil {
+			controls, err := d.resolveProjectionControls(tx, projection, manifest, events)
+			if err != nil {
+				return err
+			}
+			payload = projectionManifestEnvelope{Version: 2, Artifacts: manifest, Controls: controls, PlanDigest: fingerprint}
+		}
+		encoded, err := json.Marshal(payload)
 		if err != nil {
 			return ErrJournalInvalid
 		}

@@ -1,5 +1,14 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-04：完整投影计划与有界 SQL 租约
+
+v2 manifest 将完整成员、退役 intent 与 ACK 向量同业务配置持久化；旧 v1 保留历史可读，不能冒充完整控制计划。pool/ordinary 租约分别遵循 control → namespace 与 namespace-only，callback 使用同一 SQL 连接重建材料，检测失败、取消或退出后失效。见[投影计划合同](config-projection-journal.md)。
+
+- 完整Go测试/vet/全部标签编译、DAO132叶race与cache race通过。独立审查复现的持久 SourceID 映射损坏已拒绝；真实连接中断的旧封闭行为反例与重复 ACK 改写时间反例均转绿。专属 MySQL8.4.11/RR 五子验收通过，临时库、账号和 DSN 清理。
+- Web7e3daa5 的3692项测试、类型及远端 Verify41815648402/gitleaks41815648401成功，长度校验与创建/编辑权限修复已交付。AI保持ba187。新后端组合另跑CI。
+- 本机预览已无损升级干净5feb4cc/schema4，18080/8889/18089健康，模拟标识与外部执行关闭保持。本次租约源码尚未刷新入预览。
+- Redis fencing store、发布器接线及恢复 worker 仍待交付，两个已复现的SQL→Redis窗口不以本阶段测试宣称消除；尚未达到完整1.0交付，也没有上线。
+
 ## 2026-11-04：配置键与生成名称宽化 v4
 
 独立forward v4将metadata Name/key扩至255/128字符，guard/event key扩至512字节，修复合法IPv6 webhook47/65键及长生成名被拒；原字节、索引、字符属性与v1–v3输入保留。见[宽度合同](config-widths.md)。
