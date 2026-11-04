@@ -36,6 +36,8 @@ import (
 )
 
 type MonitorConfigDAO interface {
+	GetGeneratedConfigPoolCandidates(context.Context, GeneratedConfigPoolQuery) ([]*model.MonitorConfig, int64, error)
+	GetGeneratedConfigNamespacePage(context.Context, GeneratedConfigKeysQuery) ([]*model.MonitorConfig, int64, error)
 	UpdateGeneratedMonitorConfigs(context.Context, []GeneratedConfigUpdate) error
 	DeleteGeneratedMonitorConfig(context.Context, GeneratedConfigOwner) error
 	GetGeneratedMonitorConfigByID(context.Context, int) (*model.MonitorConfig, error)

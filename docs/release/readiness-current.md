@@ -1,5 +1,13 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-04：安全定向查询DAO能力
+
+新增按池/type候选与精确实例键全命名空间分页，保留foreign/custom/Status2，字节比较、空集合零查询和100键边界明确；普通CRUD、schema及旧IN查询不变。见[能力合同](config-metadata-snapshot.md)。
+
+- 新18叶、独立SQLite分页/别名/取消、隔离真实MySQL11个PASS节点零skip、全Go test/vet/DAO-cache race/标签只编译通过；临时资源已清理，没有演示数据修改。
+- publisher未接线，N²扫描未改善，atomic absent-owner创建也未添加。后续接线另测，不将DAO能力当作完整优化。
+- CI取消策略与来源锁旧断言已单独修复，当前修复运行的Simple CI成功，三仓集成仍跟踪中；未上线或连接生产。
+
 ## 2026-11-04：Record/Prom完整元数据读取责任
 
 两publisher共用新鲜完整分页与每页复制，保原类型策略、归属及发布次序；取消不返回部分快照。见[读取合同与量化](config-metadata-snapshot.md)。

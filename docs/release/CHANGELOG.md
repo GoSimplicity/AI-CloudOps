@@ -607,3 +607,9 @@
 - 后端Simple CI/三仓集成改为每push或手动run独立组，PR仍替换过时head，补齐与其余工作流一致的完整验收策略。
 - actionlint及YAML结构对照通过；测试步骤、权限、触发条件、发布任务不变。三个仓库当前主分支成功/历史红与cancelled已按真实run核对，新配置远端结果另验。
 - 不删除历史记录、不放宽门禁、不触Release或上线。见[CI完整性说明](ci-run-continuity.md)。
+
+## 2026-11-04：定向元数据查询能力
+
+- 新private DAO分页提供pool/type全部候选及精确键全Pool命名空间，保foreign/custom/Status2/duplicates，空键零查询，100键/页界限与byte比较明确。
+- 新18叶、独立SQLite边界、隔离真实MySQL11 PASS节点零skip、全Go test/vet/DAO-cache race/标签只编译通过；测试资源清理。
+- publisher未接线、扫描量未改善、不添加atomic create/schema/index，未上线。见[查询合同](config-metadata-snapshot.md)。
