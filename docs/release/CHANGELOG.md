@@ -723,3 +723,8 @@
 
 - 新增真实SQLite/lease的15项可复现benchmark，分离entry、Recheck和命令检查/JSON帧成本，不执行Redis或伪造ACK。N128实际84,876 timed SELECT、约9.65s、累计4.87GB分配，明确仍有规模优化工作。
 - 测试fixture参数兼容testing.TB；生产/Store/Lua/schema不改。Web锁提升到独立CI成功的5f5bc8f，AI75d4a87保持，新组合另验。
+
+## 2026-11-05：独立 MySQL 恢复并发验收
+
+- 新owned动态端口mysql8.4.11 fixture与十项真实SQL/两项环境拒绝场景，实证LC竞争、AM双control锁序、真实等待/deadline及KILL后租约失效，12叶race全绿。
+- 私有文件与随机schema/user、精确label/fullID清理且核零；保留首次观测假阴性并按官方锁边模型加强证据，生产及Store/Lua/schema不改。接入三仓CI，未触碰演示库或上线。

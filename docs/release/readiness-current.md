@@ -1,5 +1,11 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-05：真实 MySQL 恢复并发守门
+
+[独立MySQL验收](projection-recovery-mysql.md)最终12叶0fail/skip，覆盖真实候选查询、counter不变但LC更新、AM双控制/锁序、deadline后重试及KILL后旧租约不能续权。两个独立runtime连接实读REPEATABLE-READ，容器、端口、schema和凭据均独立于演示服务，清理后owner label为0。
+
+首次两个失败已定位为观测假阴性，保留原阻塞/顺序/取消断言并改用精确WAITING→GRANTED锁边验证，生产代码未改。tagged vet/actionlint/来源锁合同通过，新守门已接CI，远端新提交另验。MySQL与Redis组合、规模优化及其余交付边界继续推进，整体1.0尚未完成。
+
 ## 2026-11-05：可复现规模基线与新来源锁
 
 新增[投影规模基线](projection-scale.md)：15项实际测试全通过，微小正文N128仅SQL检查/帧序列化段就有84,876 SELECT、约9.65s及累计4.87GB分配，未含Redis/Lua，也不是峰值内存。已确认重复校验成本，尚未实施优化，下一步先补MySQL原连接断开及AM双control验证。
