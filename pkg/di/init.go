@@ -77,6 +77,9 @@ func InitTables(db *gorm.DB) error {
 		&model.MonitorAlertEvent{},
 		&model.MonitorConfig{},
 		&model.MonitorConfigNamespaceGuard{},
+		&model.MonitorConfigPoolControl{},
+		&model.MonitorConfigPoolOperation{},
+		&model.MonitorConfigArtifactEvent{},
 
 		// 工单系统
 		&model.WorkorderFormDesign{},

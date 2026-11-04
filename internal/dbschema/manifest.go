@@ -27,5 +27,9 @@ func CurrentManifest() ([]schema.Migration, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(baseline, guard), nil
+	projection, err := configProjectionV3Migration(configProjectionV3SQL, configProjectionV3Implementation)
+	if err != nil {
+		return nil, err
+	}
+	return append(baseline, guard, projection), nil
 }

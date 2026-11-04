@@ -85,8 +85,8 @@ func TestMySQLCLIFreshBaselineAndLegacyRefusal(t *testing.T) {
 	if err != nil {
 		t.Fatal("current fixture manifest unavailable")
 	}
-	// The reviewed role inventory contains the baseline, v2 guard and ledger.
-	expectedTables := append([]string{configNamespaceTable, schemaHistoryTable}, baselineBusinessTables[:]...)
+	// The reviewed role inventory contains the baseline, retained controls and ledger.
+	expectedTables := append(currentBusinessTables(), schemaHistoryTable)
 	invoke := func(want int, args ...string) string {
 		t.Helper()
 		var out, diagnostic bytes.Buffer

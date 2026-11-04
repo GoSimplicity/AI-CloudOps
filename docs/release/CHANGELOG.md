@@ -633,3 +633,10 @@
 - 批次一个事务，复制输入、commit成功后回填；101后段真实SQL失败零前段提交/零ID时间泄漏，1205/1213安全重试类别与commit不确定类别分开。
 - 独立40叶/旧实现30实红、原publisher2红转绿、完整Go/vet/tag/cache-DAO race、MySQL双连接7场景及原CAS两row-count模式通过；原生无关键1213复现并以IP索引预过滤修复，字节精确检查保留，测试资源清理。
 - Web锁更新已验证9bd9b7c，AIba187不变；SQL→Redis窗口另阶段，不宣称跨存储原子或上线。
+
+## 2026-11-04：持久发布日志schema v3基础
+
+- 三表分别保存池counter/last指针、历代操作与namespace事件；NULL保留未提交语义，[]表示合法空manifest；无YAML正文/软删除/自动GC。新增typed binding授权字段，SQL合法key不直接授权Redis操作。
+- CurrentManifest追加独立自绑定v3，v1/v2字节不变，统一当前额外表目录与最小S/I/U权限，legacy58不改。
+- 357叶race、全Go/vet/tagcompile、MySQL4子例及完整dbschema/CLI Docker原生测试通过，资源清理；Web锁已验证19ac271，AIba187。
+- 当前仅存储基础，不假称DAO journal/Redis fencing或两个窗口闭环；preview仍0618/schema2，未上线。

@@ -1,5 +1,13 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-04：发布日志 v3 存储基础
+
+新增永久池control、逐代operation与artifact事件三表；保留空操作与失败后last-good证明，不复制YAML正文。v3仅追加建表，已发布v1/v2输入不变。见[日志合同与当前边界](config-projection-journal.md)。
+
+- 357叶race、全Go/vet/标签编译通过；专属MySQL4子例及整组dbschema/CLI原生测试通过，覆盖v2→v3数据保留、NULL/[]、角色最小权限、冻结旧库与dirty/drift拒绝；专属资源清理。
+- source lock更新已远端Verify成功19ac271，AIba187不变；新后端三仓组合另验。
+- DAO日志业务、Lua fencing、发布器和恢复worker仍未接入，已复现的2个SQL→Redis窗口不据此称修复。本地预览继续已验0618/schema2，业务数据保留，未上线。
+
 ## 2026-11-04：配置 SQL 命名空间原子写保护
 
 普通单项/批量写与生成器更新/清退全部参与永久guard的固定顺序事务锁，锁内完整namespace当前读保护foreign/custom/非激活冲突；普通迁入和新建拒绝占用，历史重复可明确按ID删除/迁出修复。见[完整SQL合同](config-namespace-guards.md)。

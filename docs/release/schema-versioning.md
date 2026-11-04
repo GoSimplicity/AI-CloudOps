@@ -36,3 +36,7 @@ go test -race -tags=integration ./internal/dbschema -count=1 -timeout=180s
 ## 2026-11-04：v2及确认模式
 
 现代完整目标追加命名空间锁表v2，immutable v1与旧来源升级证明保持。新库继续使用`migrate --confirm-new-database`；已有完整干净非空版本前缀使用`migrate --confirm-pending-migrations --confirm-no-writers`。两种模式在同一迁移锁连接内再次校验；不要用新库确认授权已有版本升级。采用/已知来源升级仍只登记v1，需显式pending迁移后才能运行现代应用或初始化时区。完整合同、角色权限、双连接竞态及原生恢复验证见[namespace锁迁移](config-namespace-guards.md)。
+
+## 2026-11-04：发布日志v3
+
+完整当前目标追加三张内部持久日志表。已有v2库同样需在停写后显式pending迁移；旧采用入口继续冻结v1，现代runtime/时区初始化始终要求完整当前目标。v1/v2执行输入与校验和不改。当前表目录统一由冻结58表加受保留权限控制的附加表组成，避免旧夹具硬编码表数。详见[日志结构及原生验收](config-projection-journal.md)。

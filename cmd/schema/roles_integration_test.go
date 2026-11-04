@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"reflect"
 	"sort"
 	"strings"
@@ -132,6 +133,7 @@ func TestMySQLRolePlanEnforcesRuntimeAndMigratorBoundaries(t *testing.T) {
 	if err := schema.Migrate(ctx, migratorDB, manifest); err != nil {
 		t.Fatal("fresh baseline failed under the generated migration role")
 	}
+	probeVersion := manifest[len(manifest)-1].Version + 1
 	// Runtime table-only DML grants require the actual tables to exist. They
 	// are intentionally applied after baseline rather than giving runtime CREATE.
 	for _, statement := range plan.Runtime {
@@ -177,8 +179,7 @@ func TestMySQLRolePlanEnforcesRuntimeAndMigratorBoundaries(t *testing.T) {
 		}
 		_ = pool.Close()
 	}
-	wantTables := append([]string{}, baselineBusinessTables[:]...)
-	wantTables = append(wantTables, schemaHistoryTable, configNamespaceTable)
+	wantTables := append(currentBusinessTables(), schemaHistoryTable)
 	sort.Strings(wantTables)
 	for _, db := range []*sql.DB{runtimeDB, migratorDB} {
 		if !reflect.DeepEqual(metadata(db), wantTables) {
@@ -212,11 +213,31 @@ func TestMySQLRolePlanEnforcesRuntimeAndMigratorBoundaries(t *testing.T) {
 	if err := runtimeDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM cl_monitor_config_namespaces WHERE config_type=4").Scan(&guards); err != nil || guards != 1 {
 		t.Fatal("runtime guard SELECT denied")
 	}
+	for _, statement := range []string{
+		"INSERT INTO cl_monitor_config_pool_controls(family,pool_id,reserved_generation) VALUES(1,77,0)",
+		"UPDATE cl_monitor_config_pool_controls SET reserved_generation=reserved_generation WHERE family=1 AND pool_id=77",
+		"INSERT INTO cl_monitor_config_pool_operations(family,pool_id,generation,nonce,phase) VALUES(1,77,1,REPEAT('x',16),'reserved')",
+		"UPDATE cl_monitor_config_pool_operations SET phase=phase WHERE family=1 AND pool_id=77",
+		"INSERT INTO cl_monitor_config_artifact_events(config_type,instance_key,action,projection_policy,delivery_state) VALUES(4,'pool:7:ips','invalidate','not_applicable','pending')",
+		"UPDATE cl_monitor_config_artifact_events SET delivery_state=delivery_state WHERE config_type=4",
+	} {
+		if _, err := runtimeDB.ExecContext(ctx, statement); err != nil {
+			t.Fatal("runtime projection journal INSERT/UPDATE denied")
+		}
+	}
+	for _, table := range []string{configPoolControlTable, configPoolOperationTable, configArtifactEventTable} {
+		var count int
+		if runtimeDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM `"+table+"`").Scan(&count) != nil || count != 1 {
+			t.Fatal("runtime projection journal SELECT denied")
+		}
+		denied(runtimeDB, "DELETE FROM `"+table+"`")
+		denied(runtimeDB, "ALTER TABLE `"+table+"` ADD COLUMN forbidden INT")
+	}
 	// In this owned fixture, remove the binary-log creator restriction so the
 	// trigger probe specifically exercises the runtime role's missing TRIGGER.
 	adminSQL("SET GLOBAL log_bin_trust_function_creators=1")
 	for _, statement := range []string{
-		"INSERT INTO cloudops_schema_history (version,name,checksum,state) VALUES (3,'forbidden',REPEAT('a',64),'started')",
+		fmt.Sprintf("INSERT INTO cloudops_schema_history (version,name,checksum,state) VALUES (%d,'forbidden',REPEAT('a',64),'started')", probeVersion),
 		"UPDATE cloudops_schema_history SET state='failed' WHERE version=1",
 		"DELETE FROM cloudops_schema_history WHERE version=1",
 		"INSERT INTO cl_workorder_notification_clock (id,time_zone) VALUES (2,'UTC')",
@@ -248,9 +269,9 @@ func TestMySQLRolePlanEnforcesRuntimeAndMigratorBoundaries(t *testing.T) {
 		"UPDATE cl_tree_cloud_resource_change_log SET old_value='[REDACTED]' WHERE id=-1",
 		"UPDATE cl_workorder_notification SET is_default=2 WHERE id=-1",
 		"UPDATE cl_workorder_notification_clock SET time_zone='UTC' WHERE id=1",
-		"INSERT INTO cloudops_schema_history (version,name,checksum,state) VALUES (3,'fixture',REPEAT('a',64),'started')",
-		"UPDATE cloudops_schema_history SET state='failed' WHERE version=3",
-		"DELETE FROM cloudops_schema_history WHERE version=3",
+		fmt.Sprintf("INSERT INTO cloudops_schema_history (version,name,checksum,state) VALUES (%d,'fixture',REPEAT('a',64),'started')", probeVersion),
+		fmt.Sprintf("UPDATE cloudops_schema_history SET state='failed' WHERE version=%d", probeVersion),
+		fmt.Sprintf("DELETE FROM cloudops_schema_history WHERE version=%d", probeVersion),
 	} {
 		if _, err := migratorDB.ExecContext(ctx, statement); err != nil {
 			t.Fatal("required migration data privilege missing")

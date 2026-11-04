@@ -27,9 +27,12 @@ type RolePlan struct {
 }
 
 const (
-	configNamespaceTable   = "cl_monitor_config_namespaces"
-	schemaHistoryTable     = "cloudops_schema_history"
-	notificationClockTable = "cl_workorder_notification_clock"
+	configPoolControlTable   = "cl_monitor_config_pool_controls"
+	configPoolOperationTable = "cl_monitor_config_pool_operations"
+	configArtifactEventTable = "cl_monitor_config_artifact_events"
+	configNamespaceTable     = "cl_monitor_config_namespaces"
+	schemaHistoryTable       = "cloudops_schema_history"
+	notificationClockTable   = "cl_workorder_notification_clock"
 )
 
 // baselineBusinessTables is the reviewed version-1 inventory, including the
@@ -96,7 +99,25 @@ var baselineBusinessTables = [...]string{
 	"cl_workorder_template",
 }
 
-// BuildRolePlan produces grants for the immutable baseline plus namespace guards. Migrator
+// Current additions are permanent lock addresses and retained journal history.
+// Keep the frozen v1 inventory above unchanged for legacy validators and tests.
+var currentAdditionalTables = [...]string{configNamespaceTable, configPoolControlTable, configPoolOperationTable, configArtifactEventTable}
+
+func currentBusinessTables() []string {
+	tables := make([]string, 0, len(baselineBusinessTables)+len(currentAdditionalTables))
+	tables = append(tables, baselineBusinessTables[:]...)
+	return append(tables, currentAdditionalTables[:]...)
+}
+func retainedControlTable(table string) bool {
+	for _, name := range currentAdditionalTables {
+		if name == table {
+			return true
+		}
+	}
+	return false
+}
+
+// BuildRolePlan produces grants for the baseline and current retained controls. Migrator
 // DDL and DML are table-scoped; schema REFERENCES permits complete metadata
 // inspection without granting unknown tables row access. Schema TRIGGER proves
 // complete trigger visibility; it is restricted to the maintenance account. Applying
@@ -117,10 +138,12 @@ func BuildRolePlan(database string, runtimeRole, migratorRole RoleAccount) (Role
 	// GRANT patterns treat '_' and '%' specially on default MySQL settings;
 	// validDatabase therefore permits ASCII letters and digits only.
 	plan := RolePlan{Migrator: []string{fmt.Sprintf("GRANT REFERENCES, TRIGGER ON `%s`.* TO %s;", database, migratorAccount)}}
-	for _, table := range baselineBusinessTables {
+	for _, table := range currentBusinessTables() {
 		runtimePrivileges := "SELECT, INSERT, UPDATE, DELETE"
 		if table == notificationClockTable {
 			runtimePrivileges = "SELECT"
+		} else if retainedControlTable(table) {
+			runtimePrivileges = "SELECT, INSERT, UPDATE"
 		}
 		plan.Runtime = append(plan.Runtime, grant(runtimePrivileges, table, runtimeAccount))
 		migratorPrivileges := "SELECT, CREATE, ALTER, INDEX"
@@ -132,10 +155,8 @@ func BuildRolePlan(database string, runtimeRole, migratorRole RoleAccount) (Role
 		}
 		plan.Migrator = append(plan.Migrator, grant(migratorPrivileges, table, migratorAccount))
 	}
-	// Namespace guard rows are permanent lock addresses. Runtime cannot delete
-	// them or perform schema changes; migration needs no business-data repair.
-	plan.Runtime = append(plan.Runtime, grant("SELECT, INSERT, UPDATE", configNamespaceTable, runtimeAccount))
-	plan.Migrator = append(plan.Migrator, grant("SELECT, CREATE, ALTER, INDEX", configNamespaceTable, migratorAccount))
+	// Guard/control/history tables cannot be deleted by runtime. Their payload
+	// immutability and permitted status transitions are validated by their DAO.
 	plan.Runtime = append(plan.Runtime, grant("SELECT", schemaHistoryTable, runtimeAccount))
 	// Only the two frozen data repairs need UPDATE on business tables. Clock
 	// initialization inserts a marker; MySQL requires UPDATE for its FOR UPDATE

@@ -14,7 +14,7 @@ func TestCurrentManifestAppendsGuardWithoutChangingReleasedTargets(t *testing.T)
 		t.Fatal("released v1 target changed")
 	}
 	current, err := CurrentManifest()
-	if err != nil || len(current) != 2 || schema.Validate(current) != nil {
+	if err != nil || len(current) < 2 || schema.Validate(current) != nil {
 		t.Fatal("current target invalid")
 	}
 	if current[0].Checksum != legacy[0].Checksum || current[0].Checksum != "92d4474d148d35643dbf8ed4044e6734e2d9268c36b6738bcb26ef220afc0616" || current[1].Version != 2 {

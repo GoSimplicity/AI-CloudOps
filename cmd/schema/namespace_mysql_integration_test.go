@@ -91,7 +91,7 @@ func TestNamespaceSchemaNativeMySQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	allowed := map[string]bool{schemaHistoryTable: true, configNamespaceTable: true}
-	for _, name := range baselineBusinessTables {
+	for _, name := range currentBusinessTables() {
 		allowed[name] = true
 	}
 	inventory := func(t *testing.T) []string {
@@ -165,7 +165,7 @@ func TestNamespaceSchemaNativeMySQL(t *testing.T) {
 		invoke(t, 1, "migrate", "--confirm-pending-migrations", "--confirm-no-writers")
 		invoke(t, 0, "migrate", "--confirm-new-database")
 		if schema.Verify(ctx, db, current) != nil {
-			t.Fatal("fresh v2 history not complete")
+			t.Fatal("fresh current history not complete")
 		}
 		invoke(t, 0, "init-clock", "--confirm-no-writers", "--notification-timezone", "UTC")
 		invoke(t, 0, "verify-clock", "--notification-timezone", "UTC")
@@ -193,7 +193,7 @@ func TestNamespaceSchemaNativeMySQL(t *testing.T) {
 		}
 	})
 	clean(t, false)
-	t.Run("applied v1 appends only v2", func(t *testing.T) {
+	t.Run("applied v1 appends current pending versions", func(t *testing.T) {
 		if schema.Migrate(ctx, db, legacy) != nil {
 			t.Fatal("v1 fixture failed")
 		}
