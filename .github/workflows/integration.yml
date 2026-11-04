@@ -7,9 +7,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Each pushed/manual source receipt must finish independently of later pushes.
+# PRs still replace obsolete heads; run_id keeps pending push runs independent.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

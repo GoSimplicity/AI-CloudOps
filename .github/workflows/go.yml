@@ -10,9 +10,11 @@ on:
 env:
   GO_VERSION: '1.26.10'
 
+# Preserve each pushed stage's validation; only superseded PR heads are canceled.
+# A unique run_id also avoids GitHub replacing an older pending push run.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

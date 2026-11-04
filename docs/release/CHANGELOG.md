@@ -601,3 +601,9 @@
 - 复用完整分页/身份/取消/逐页clone，保持每池fresh读取、类型策略和owner/CAS/hash/写入状态机。
 - 新25叶、独立边界与原调用量probe、全Go test/vet/cacheDAO race/标签只编译通过；N²行量未减少，不夸为性能优化。
 - 不扩Rule/AM、不改schema或公共接口，未上线。见[读取合同](config-metadata-snapshot.md)。
+
+## 2026-11-04：持续push不再互相取消CI
+
+- 后端Simple CI/三仓集成改为每push或手动run独立组，PR仍替换过时head，补齐与其余工作流一致的完整验收策略。
+- actionlint及YAML结构对照通过；测试步骤、权限、触发条件、发布任务不变。三个仓库当前主分支成功/历史红与cancelled已按真实run核对，新配置远端结果另验。
+- 不删除历史记录、不放宽门禁、不触Release或上线。见[CI完整性说明](ci-run-continuity.md)。
