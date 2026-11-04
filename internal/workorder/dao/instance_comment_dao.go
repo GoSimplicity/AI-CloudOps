@@ -88,7 +88,7 @@ func (d *workorderInstanceCommentDAO) GetInstanceComments(ctx context.Context, i
 	var comments []*model.WorkorderInstanceComment
 	err := DBWithContext(ctx, d.db).
 		Where("instance_id = ? AND status = ?", instanceID, model.CommentStatusNormal).
-		Order("created_at ASC").
+		Order("created_at ASC, id ASC").
 		Find(&comments).Error
 
 	if err != nil {
@@ -212,7 +212,7 @@ func (d *workorderInstanceCommentDAO) GetInstanceCommentsTree(ctx context.Contex
 		return nil, err
 	}
 
-	return d.buildCommentTree(comments), nil
+	return d.buildCommentTree(comments)
 }
 
 func (d *workorderInstanceCommentDAO) validateComment(comment *model.WorkorderInstanceComment) error {
@@ -228,31 +228,74 @@ func (d *workorderInstanceCommentDAO) validateComment(comment *model.WorkorderIn
 	return nil
 }
 
-func (d *workorderInstanceCommentDAO) buildCommentTree(comments []*model.WorkorderInstanceComment) []*model.WorkorderInstanceComment {
+// buildCommentTree finishes descendants before copying a child value into its
+// parent. Children deliberately remains a value slice in the public JSON model.
+// Missing-parent components are not promoted to roots, preserving the existing
+// filtered/orphan contract. Invalid cycles fail the read rather than hide part
+// of the available history or recurse without a bound.
+func (d *workorderInstanceCommentDAO) buildCommentTree(comments []*model.WorkorderInstanceComment) ([]*model.WorkorderInstanceComment, error) {
 	if len(comments) == 0 {
-		return comments
+		return comments, nil
 	}
-
-	// 创建ID到评论的映射
-	commentMap := make(map[int]*model.WorkorderInstanceComment)
-	var rootComments []*model.WorkorderInstanceComment
-
-	for _, comment := range comments {
-		commentMap[comment.ID] = comment
-		comment.Children = make([]model.WorkorderInstanceComment, 0)
+	type node struct {
+		source    *model.WorkorderInstanceComment
+		parent    *node
+		children  []*node
+		remaining int
+		built     model.WorkorderInstanceComment
 	}
-
+	byID := make(map[int]*node, len(comments))
+	ordered := make([]*node, 0, len(comments))
+	roots := make([]*node, 0)
 	for _, comment := range comments {
-		if comment.ParentID == nil || *comment.ParentID == 0 {
-			// 根评论
-			rootComments = append(rootComments, comment)
-		} else {
-			// 子评论
-			if parent, exists := commentMap[*comment.ParentID]; exists {
-				parent.Children = append(parent.Children, *comment)
+		if comment == nil || comment.ID <= 0 || byID[comment.ID] != nil {
+			return nil, errors.New("评论关系无效")
+		}
+		current := &node{source: comment}
+		byID[comment.ID] = current
+		ordered = append(ordered, current)
+	}
+	for _, current := range ordered {
+		parentID := current.source.ParentID
+		if parentID == nil || *parentID == 0 {
+			roots = append(roots, current)
+			continue
+		}
+		if parent := byID[*parentID]; parent != nil {
+			current.parent = parent
+			parent.children = append(parent.children, current)
+			parent.remaining++
+		}
+	}
+	ready := make([]*node, 0, len(ordered))
+	for _, current := range ordered {
+		if current.remaining == 0 {
+			ready = append(ready, current)
+		}
+	}
+	for head := 0; head < len(ready); head++ {
+		current := ready[head]
+		current.built = *current.source
+		current.built.Children = make([]model.WorkorderInstanceComment, 0, len(current.children))
+		for _, child := range current.children {
+			current.built.Children = append(current.built.Children, child.built)
+		}
+		if current.parent != nil {
+			current.parent.remaining--
+			if current.parent.remaining == 0 {
+				ready = append(ready, current.parent)
 			}
 		}
 	}
-
-	return rootComments
+	if len(ready) != len(ordered) {
+		return nil, errors.New("评论关系无效")
+	}
+	if len(roots) == 0 {
+		return nil, nil
+	}
+	result := make([]*model.WorkorderInstanceComment, 0, len(roots))
+	for _, root := range roots {
+		result = append(result, &root.built)
+	}
+	return result, nil
 }
