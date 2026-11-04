@@ -241,6 +241,33 @@ class Runner:
         self.owned("container", name)
         return self.command("exec", "-i", name, "mysql", "--protocol=socket", "--default-character-set=utf8mb4", "-uroot", "--batch", "--raw", "--skip-column-names", data=statements.encode())
 
+    def verify_v1_upgrade(self, name: str, fields: dict[str, str], backup_sha256: str) -> None:
+        """Verify this frozen v1 rehearsal, not the modern runtime's later target."""
+        if fields.get("source") != SOURCE or any(not re.fullmatch(r"[a-f0-9]{64}", fields.get(key, "")) for key in ("source_checksum", "implementation_checksum", "target_checksum")) or not re.fullmatch(r"[a-f0-9]{64}", backup_sha256):
+            raise RollbackError("upgrade-baseline-evidence-invalid")
+        literal = lambda value: "X'" + value.encode().hex() + "'"
+        # Exact one-row history and full provenance prevent pending/dirty/future
+        # versions from being accepted merely because the old table count is 58.
+        matching = (
+            "version=1 AND BINARY name=BINARY 'initial_mysql_schema' AND BINARY state=BINARY 'applied' AND BINARY origin=BINARY 'upgraded'"
+            + " AND BINARY checksum=BINARY " + literal(fields["target_checksum"])
+            + " AND BINARY source_revision=BINARY " + literal(SOURCE)
+            + " AND BINARY source_checksum=BINARY " + literal(fields["source_checksum"])
+            + " AND BINARY upgrade_checksum=BINARY " + literal(fields["implementation_checksum"])
+            + " AND BINARY backup_sha256=BINARY " + literal(backup_sha256)
+            + " AND BINARY upgrade_actor=BINARY CURRENT_USER()"
+            + " AND BINARY upgrade_note=BINARY 'owned physical backup/restore acceptance fixture'"
+            + " AND BINARY notification_zone=BINARY 'UTC' AND historical_time_attested=1"
+        )
+        query = (
+            "SELECT (SELECT COUNT(*) FROM cloudops.cloudops_schema_history),"
+            + "(SELECT COUNT(*) FROM cloudops.cloudops_schema_history WHERE " + matching + "),"
+            + "(SELECT COUNT(*) FROM cloudops.cl_workorder_notification_clock),"
+            + "(SELECT COUNT(*) FROM cloudops.cl_workorder_notification_clock WHERE id=1 AND BINARY time_zone=BINARY 'UTC')"
+        )
+        if self.sql(name, query).strip() != b"1\t1\t1\t1":
+            raise RollbackError("upgrade-baseline-ledger-or-provenance-invalid")
+
     def checker(self, name: str) -> dict:
         self.install(name, self.directory / "old-checker", "/tmp/old-checker")
         self.install(name, self.directory / "source.json", "/tmp/source.json")
@@ -346,7 +373,7 @@ class Runner:
             self.private_inside(mysql, "/tmp/upgrade.note", b"owned physical backup/restore acceptance fixture")
             self.private_inside(mysql, "/tmp/upgrade.proof", recovery.canonical({"version": 1, "source_revision": SOURCE, "backup_sha256": manifest_hash, "backup_ready": True}))
             self.command("exec", mysql, "/tmp/schema", "upgrade-a8f1700", "--execute", "--confirm-no-writers", "--dsn-file", "/tmp/upgrade.dsn", "--upgrade-note-file", "/tmp/upgrade.note", "--backup-proof-file", "/tmp/upgrade.proof", "--notification-timezone", "UTC", "--attest-historical-time", timeout=180)
-            self.command("exec", mysql, "/tmp/schema", "verify", "--dsn-file", "/tmp/upgrade.dsn")
+            self.verify_v1_upgrade(mysql, fields, manifest_hash)
             if self.sql(mysql, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='cloudops' AND table_name<>'cloudops_schema_history'").strip() != b"58": raise RollbackError("upgrade-target-inventory")
             self.command("stop", "--time", "60", mysql)
             self.private("upgrade-confirmed.json", recovery.canonical({"business_tables":58,"plan":fields}))

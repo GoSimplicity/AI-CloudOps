@@ -223,7 +223,7 @@ func TestGenerateBaselineSnapshot(t *testing.T) {
 func TestCurrentSchemaMatchesManifest(t *testing.T) {
 	source, address := fixture(t)
 	initializeCurrent(t, source)
-	manifest, err := dbschema.Manifest()
+	manifest, err := dbschema.CurrentManifest()
 	if err != nil {
 		t.Fatal(err)
 	}

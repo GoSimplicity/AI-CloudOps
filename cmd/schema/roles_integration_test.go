@@ -125,7 +125,7 @@ func TestMySQLRolePlanEnforcesRuntimeAndMigratorBoundaries(t *testing.T) {
 	denied(migratorDB, "SELECT * FROM unknown_legacy")
 	adminSQL("DROP TABLE cloudopsroles.unknown_legacy")
 
-	manifest, err := dbschema.Manifest()
+	manifest, err := dbschema.CurrentManifest()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,11 +178,11 @@ func TestMySQLRolePlanEnforcesRuntimeAndMigratorBoundaries(t *testing.T) {
 		_ = pool.Close()
 	}
 	wantTables := append([]string{}, baselineBusinessTables[:]...)
-	wantTables = append(wantTables, schemaHistoryTable)
+	wantTables = append(wantTables, schemaHistoryTable, configNamespaceTable)
 	sort.Strings(wantTables)
 	for _, db := range []*sql.DB{runtimeDB, migratorDB} {
 		if !reflect.DeepEqual(metadata(db), wantTables) {
-			t.Fatal("role cannot enumerate all 58 business tables and ledger")
+			t.Fatal("role cannot enumerate all current business/guard tables and ledger")
 		}
 	}
 
@@ -200,16 +200,30 @@ func TestMySQLRolePlanEnforcesRuntimeAndMigratorBoundaries(t *testing.T) {
 	if _, err := runtimeDB.ExecContext(ctx, "DELETE FROM cl_system_departments WHERE id=901"); err != nil {
 		t.Fatal("runtime business DELETE denied")
 	}
+	// Guard rows are permanent transaction-lock addresses: runtime can acquire
+	// and reread them, including the UPDATE privilege required by a no-op upsert.
+	if _, err := runtimeDB.ExecContext(ctx, "INSERT INTO cl_monitor_config_namespaces(config_type,instance_key) VALUES(4,'runtime-fixture') ON DUPLICATE KEY UPDATE instance_key=instance_key"); err != nil {
+		t.Fatal("runtime guard INSERT/UPDATE denied")
+	}
+	if _, err := runtimeDB.ExecContext(ctx, "UPDATE cl_monitor_config_namespaces SET instance_key=instance_key WHERE config_type=4"); err != nil {
+		t.Fatal("runtime guard UPDATE denied")
+	}
+	var guards int
+	if err := runtimeDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM cl_monitor_config_namespaces WHERE config_type=4").Scan(&guards); err != nil || guards != 1 {
+		t.Fatal("runtime guard SELECT denied")
+	}
 	// In this owned fixture, remove the binary-log creator restriction so the
 	// trigger probe specifically exercises the runtime role's missing TRIGGER.
 	adminSQL("SET GLOBAL log_bin_trust_function_creators=1")
 	for _, statement := range []string{
-		"INSERT INTO cloudops_schema_history (version,name,checksum,state) VALUES (2,'forbidden',REPEAT('a',64),'started')",
+		"INSERT INTO cloudops_schema_history (version,name,checksum,state) VALUES (3,'forbidden',REPEAT('a',64),'started')",
 		"UPDATE cloudops_schema_history SET state='failed' WHERE version=1",
 		"DELETE FROM cloudops_schema_history WHERE version=1",
 		"INSERT INTO cl_workorder_notification_clock (id,time_zone) VALUES (2,'UTC')",
 		"UPDATE cl_workorder_notification_clock SET time_zone='Asia/Shanghai' WHERE id=1",
 		"DELETE FROM cl_workorder_notification_clock WHERE id=1",
+		"DELETE FROM cl_monitor_config_namespaces WHERE config_type=4",
+		"ALTER TABLE cl_monitor_config_namespaces ADD COLUMN forbidden INT",
 		"ALTER TABLE cl_system_departments ADD COLUMN forbidden INT",
 		"CREATE TABLE forbidden (id BIGINT PRIMARY KEY)",
 		"DROP TABLE cl_system_departments",
@@ -234,9 +248,9 @@ func TestMySQLRolePlanEnforcesRuntimeAndMigratorBoundaries(t *testing.T) {
 		"UPDATE cl_tree_cloud_resource_change_log SET old_value='[REDACTED]' WHERE id=-1",
 		"UPDATE cl_workorder_notification SET is_default=2 WHERE id=-1",
 		"UPDATE cl_workorder_notification_clock SET time_zone='UTC' WHERE id=1",
-		"INSERT INTO cloudops_schema_history (version,name,checksum,state) VALUES (2,'fixture',REPEAT('a',64),'started')",
-		"UPDATE cloudops_schema_history SET state='failed' WHERE version=2",
-		"DELETE FROM cloudops_schema_history WHERE version=2",
+		"INSERT INTO cloudops_schema_history (version,name,checksum,state) VALUES (3,'fixture',REPEAT('a',64),'started')",
+		"UPDATE cloudops_schema_history SET state='failed' WHERE version=3",
+		"DELETE FROM cloudops_schema_history WHERE version=3",
 	} {
 		if _, err := migratorDB.ExecContext(ctx, statement); err != nil {
 			t.Fatal("required migration data privilege missing")

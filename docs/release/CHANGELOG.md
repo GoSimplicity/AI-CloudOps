@@ -619,3 +619,10 @@
 - 每池候选仅定位canonical旧键，desired/成员/旧键完整分块读取全namespace；保foreign/custom/inactive/duplicate冲突与两阶段owner漂移拒绝。原写入顺序、CAS和恢复锚点保持，去掉无生产调用的旧wrapper。
 - 新38叶、原pager25叶和真实SQLite28叶通过；全Go test/vet、cache/DAO race及标签编译通过。5/10池样本返回量25/100降为10/20行，查询数增加为10/20次；不宣称真实SQL耗时下降。
 - Web锁更新已远端验证的814214b，来源锁5测试通过；补齐CI修复后638/d478最终成功收据。新组合另验，atomic create-if-none与Rule/AM减量尚未交付，未上线。
+
+## 2026-11-04：命名空间锁表与原子迁移确认
+
+- 新独立v2字节锁地址，保immutable v1与历史duplicate；CurrentManifest用于现代runtime/CLI/clock，旧来源工具仍只证明v1。新锁表最小运行权限禁止删除与DDL。
+- fresh/pending显式确认分流，同持锁连接在任何DDL/ledger写前重新判定；3个真实双连接预检竞态拒绝，无新v2/账本写。修复现代clock遗漏版本与旧回滚演练误用modern verify。
+- 全Go test/vet/标签编译、相关race、173发布工具测试、8个MySQL子场景、原生角色权限及完整旧49表→58表→物理恢复49表12行演练通过，资源清理。数据复制2.948秒不代表整站RTO。
+- Web锁更新已远端验证68bee75/AIba187；新组合CI另验。业务DAO接线与跨SQL/Redis窗口尚未交付，未上线。

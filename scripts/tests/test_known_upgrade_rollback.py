@@ -130,6 +130,33 @@ class KnownRollbackSafetyTests(unittest.TestCase):
         value.sql("owned-fixture", "SELECT 1")
         self.assertIn("--default-character-set=utf8mb4", captured[0])
 
+    def test_frozen_v1_verification_checks_full_provenance_without_modern_migration(self):
+        value = runner()
+        fields = {"source": tool.SOURCE, "source_checksum": "a" * 64, "implementation_checksum": "b" * 64, "target_checksum": "c" * 64}
+        captured = []
+        value.sql = lambda name, query: captured.append((name, query)) or b"1\t1\t1\t1\n"
+        value.command = lambda *args, **kwargs: self.fail("must not invoke modern verify or migrate")
+        value.verify_v1_upgrade("owned-fixture", fields, "d" * 64)
+        self.assertEqual(len(captured), 1)
+        for required in ("version=1", "BINARY state=BINARY 'applied'", "BINARY origin=BINARY 'upgraded'", "BINARY upgrade_actor=BINARY CURRENT_USER()", "historical_time_attested=1", "cloudops.cl_workorder_notification_clock"):
+            self.assertIn(required, captured[0][1])
+        for column in ("name", "state", "origin", "checksum", "source_revision", "source_checksum", "upgrade_checksum", "backup_sha256", "upgrade_actor", "upgrade_note", "notification_zone", "time_zone"):
+            self.assertIn(f"BINARY {column}=BINARY ", captured[0][1])
+        for digest in (*fields.values(), "d" * 64):
+            self.assertIn("X'" + digest.encode().hex() + "'", captured[0][1])
+
+    def test_frozen_v1_verification_rejects_extra_dirty_or_incomplete_evidence(self):
+        value = runner()
+        fields = {"source": tool.SOURCE, "source_checksum": "a" * 64, "implementation_checksum": "b" * 64, "target_checksum": "c" * 64}
+        for response in (b"2\t1\t1\t1", b"1\t0\t1\t1", b"1\t1\t2\t1", b"1\t1\t1\t0", b"private-canary"):
+            with self.subTest(response=response), self.assertRaises(tool.RollbackError) as failure:
+                value.sql = lambda *args: response
+                value.verify_v1_upgrade("owned-fixture", fields, "d" * 64)
+            self.assertNotIn("private-canary", str(failure.exception))
+        value.sql = lambda *args: self.fail("invalid evidence must not execute SQL")
+        with self.assertRaises(tool.RollbackError):
+            value.verify_v1_upgrade("owned-fixture", {**fields, "target_checksum": "invalid"}, "d" * 64)
+
     def test_frozen_source_inventory_and_cipher_seed_are_explicit(self):
         source = json.loads((tool.ROOT / "internal/dbschema/known_a8f1700.json").read_bytes())
         statements = tool.source_statements(source)

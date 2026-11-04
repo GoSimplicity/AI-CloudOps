@@ -226,6 +226,10 @@ func migrateConnection(ctx context.Context, conn *sql.Conn, migrations []Migrati
 	if err := inspect(migrations, records); err != nil {
 		return err
 	}
+	return applyPendingMigrations(ctx, conn, migrations, records)
+}
+
+func applyPendingMigrations(ctx context.Context, conn *sql.Conn, migrations []Migration, records []Record) error {
 	for _, migration := range migrations[len(records):] {
 		// Record intent before DDL. If this insert's acknowledgement is lost, no DDL
 		// is attempted; any persisted started record still requires reconciliation.

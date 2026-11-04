@@ -29,7 +29,7 @@ func TestClockInitializationMySQL(t *testing.T) {
 	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()").Scan(&count); err != nil || count != 0 {
 		t.Fatal("clock initialization created schema")
 	}
-	manifest, err := dbschema.Manifest()
+	manifest, err := dbschema.CurrentManifest()
 	if err != nil {
 		t.Fatal(err)
 	}

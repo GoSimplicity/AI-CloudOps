@@ -23,6 +23,7 @@ type fakeDatabase struct {
 	actions         []string
 	verifyErrors    []error
 	preflightError  error
+	pendingError    error
 	migrationError  error
 	clockError      error
 	upgradeError    error
@@ -44,8 +45,16 @@ func (db *fakeDatabase) PreflightFresh(context.Context) error {
 	db.actions = append(db.actions, "preflight")
 	return db.preflightError
 }
-func (db *fakeDatabase) Migrate(context.Context, []schema.Migration) error {
+func (db *fakeDatabase) PreflightPending(context.Context, []schema.Migration) error {
+	db.actions = append(db.actions, "pending-preflight")
+	return db.pendingError
+}
+func (db *fakeDatabase) MigrateFresh(context.Context, []schema.Migration) error {
 	db.actions = append(db.actions, "migrate")
+	return db.migrationError
+}
+func (db *fakeDatabase) MigratePending(context.Context, []schema.Migration) error {
+	db.actions = append(db.actions, "migrate-pending")
 	return db.migrationError
 }
 func (db *fakeDatabase) VerifyClock(context.Context, string) error {

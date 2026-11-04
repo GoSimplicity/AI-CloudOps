@@ -61,7 +61,9 @@ func VerifyClock(ctx context.Context, db *sql.DB, zone string) error {
 // coordinate migration tools, not arbitrary application DML. Existing identical
 // markers are verified without rewriting them. A missing marker can be inserted
 // only when no notification events or scheduled notification values exist.
-// No table is created and no historical DATETIME is converted.
+// The complete current manifest must be applied first; an older clean prefix
+// cannot authorize clock initialization. No table is created and no historical
+// DATETIME is converted.
 func InitializeFreshClock(ctx context.Context, db *sql.DB, zone string) error {
 	if err := ValidateClockZone(zone); err != nil {
 		return err
@@ -69,7 +71,7 @@ func InitializeFreshClock(ctx context.Context, db *sql.DB, zone string) error {
 	if db == nil {
 		return ErrClockDatabase
 	}
-	manifest, err := Manifest()
+	manifest, err := CurrentManifest()
 	if err != nil {
 		return err
 	}

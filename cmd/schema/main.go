@@ -32,6 +32,7 @@ type options struct {
 	dsnFile              string
 	timeout              time.Duration
 	confirm              bool
+	confirmPending       bool
 	confirmClock         bool
 	zone                 string
 	database             string
@@ -52,7 +53,9 @@ type options struct {
 type schemaDatabase interface {
 	Verify(context.Context, []schema.Migration) error
 	PreflightFresh(context.Context) error
-	Migrate(context.Context, []schema.Migration) error
+	PreflightPending(context.Context, []schema.Migration) error
+	MigrateFresh(context.Context, []schema.Migration) error
+	MigratePending(context.Context, []schema.Migration) error
 	VerifyClock(context.Context, string) error
 	InitializeClock(context.Context, string) error
 	ValidateLegacy(context.Context) error
@@ -71,7 +74,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	os.Exit(run(ctx, os.Args[1:], os.Stdout, os.Stderr, dependencies{
-		manifest: dbschema.Manifest,
+		manifest: dbschema.CurrentManifest,
 		getenv:   os.Getenv,
 		open:     openDatabase,
 	}))
@@ -92,7 +95,8 @@ func parseOptions(args []string) (options, error) {
 	flags.SetOutput(io.Discard)
 	flags.StringVar(&result.dsnFile, "dsn-file", "", "private DSN file")
 	flags.DurationVar(&result.timeout, "timeout", result.timeout, "operation deadline")
-	flags.BoolVar(&result.confirm, "confirm-new-database", false, "allow fresh baseline DDL")
+	flags.BoolVar(&result.confirm, "confirm-new-database", false, "allow fresh baseline DDL only")
+	flags.BoolVar(&result.confirmPending, "confirm-pending-migrations", false, "allow pending DDL after an existing clean applied prefix")
 	flags.BoolVar(&result.confirmClock, "confirm-no-writers", false, "confirm every database writer and migration job is stopped")
 	flags.StringVar(&result.zone, "notification-timezone", "", "explicit UTC or IANA timezone")
 	flags.StringVar(&result.database, "database", "", "target database name for offline GRANT plan")
@@ -114,12 +118,17 @@ func parseOptions(args []string) (options, error) {
 	if result.timeout < time.Second || result.timeout > 30*time.Minute {
 		return options{}, errors.New("timeout must be between 1s and 30m")
 	}
-	if result.command == "migrate" && !result.confirm {
-		return options{}, errors.New("migrate requires --confirm-new-database")
+	if result.command == "migrate" {
+		if result.confirm == result.confirmPending {
+			return options{}, errors.New("migrate requires exactly one of --confirm-new-database or --confirm-pending-migrations")
+		}
+		if result.confirmPending && !result.confirmClock {
+			return options{}, errors.New("pending migrations require --confirm-no-writers")
+		}
+	} else if result.confirm || result.confirmPending {
+		return options{}, errors.New("migration confirmations are only valid for migrate")
 	}
-	if result.command != "migrate" && result.confirm {
-		return options{}, errors.New("confirmation is only valid for migrate")
-	}
+
 	if result.command == "init-clock" || result.command == "verify-clock" || (result.command == knownUpgradeCommand && result.upgradeExecute) {
 		if dbschema.ValidateClockZone(result.zone) != nil {
 			return options{}, errors.New("clock commands require an explicit valid notification timezone")
@@ -130,8 +139,8 @@ func parseOptions(args []string) (options, error) {
 	} else if result.zone != "" {
 		return options{}, errors.New("notification-timezone is only valid for clock commands")
 	}
-	if result.command != "init-clock" && result.command != "adopt" && result.command != knownUpgradeCommand && result.confirmClock {
-		return options{}, errors.New("confirm-no-writers is only valid for init-clock or adopt")
+	if result.command != "init-clock" && result.command != "adopt" && result.command != knownUpgradeCommand && !(result.command == "migrate" && result.confirmPending) && result.confirmClock {
+		return options{}, errors.New("confirm-no-writers requires init-clock, adopt, explicit upgrade or pending migrations")
 	}
 	if result.command == "plan" && result.dsnFile != "" {
 		return options{}, errors.New("plan is offline and does not accept credentials")
@@ -178,7 +187,7 @@ func parseOptions(args []string) (options, error) {
 
 func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps dependencies) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
-		fmt.Fprintln(out, "Usage: schema [plan | verify | migrate --confirm-new-database | verify-clock --notification-timezone ZONE | init-clock --confirm-no-writers --notification-timezone ZONE] [--dsn-file PATH] [--timeout 2m]")
+		fmt.Fprintln(out, "Usage: schema [plan | verify | migrate --confirm-new-database | migrate --confirm-pending-migrations --confirm-no-writers | verify-clock --notification-timezone ZONE | init-clock --confirm-no-writers --notification-timezone ZONE] [--dsn-file PATH] [--timeout 2m]")
 		fmt.Fprintln(out, "Known source: upgrade-a8f1700 is an offline plan; --execute requires no-writers, private note/backup attestation and explicit notification timezone. Historical times need separate attestation.")
 		fmt.Fprintln(out, "Legacy inspection: preflight-legacy. Adoption: adopt --confirm-legacy-schema --confirm-no-writers --adoption-note-file PATH. These never convert historical timestamps.")
 		fmt.Fprintln(out, "Default plan and roles are offline. roles requires --database, --runtime-role, --runtime-role-host, --migrator-role and --migrator-role-host. Database commands use a private DSN file or CLOUDOPS_SCHEMA_DSN; no application .env is loaded.")
@@ -286,6 +295,9 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 	ctx, cancel := context.WithTimeout(ctx, config.timeout)
 	defer cancel()
 	if config.command == knownUpgradeCommand {
+		// Frozen legacy upgrade/adoption targets remain v1 only. Later versions
+		// require an explicit migrate; never silently adopt new tables.
+		manifest = manifest[:1]
 		if err := db.UpgradeBaseline(ctx, manifest, upgradeEvidence); err != nil {
 			if errors.Is(err, schema.ErrPreflight) {
 				fmt.Fprintln(diagnostics, "known-source preflight rejected: inspect exact 49-table source, direct table/trigger metadata privileges, zero triggers, disabled unsupported providers and historical-time attestation; no automatic repair is performed")
@@ -302,7 +314,7 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 			fmt.Fprintln(diagnostics, "upgrade schema is present but notification timezone verification failed; inspect before retry")
 			return 1
 		}
-		fmt.Fprintln(out, "Version-1 schema history and explicit timezone verified. Inspect ledger upgrade provenance; backup attestation does not certify full-stack recovery. Historical timestamps and legacy queues were not converted or replayed.")
+		fmt.Fprintln(out, "Version-1 schema history and explicit timezone verified. Inspect ledger upgrade provenance; backup attestation does not certify full-stack recovery. Historical timestamps and legacy queues were not converted or replayed. For later versions, explicitly run: migrate --confirm-pending-migrations --confirm-no-writers before runtime startup.")
 		return 0
 	}
 	if config.command == "preflight-legacy" {
@@ -314,6 +326,7 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 		return 0
 	}
 	if config.command == "adopt" {
+		manifest = manifest[:1]
 		if err := db.AdoptBaseline(ctx, manifest, adoptionNote); err != nil {
 			fmt.Fprintln(diagnostics, safeError(err))
 			return 1
@@ -322,7 +335,7 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 			fmt.Fprintln(diagnostics, "adoption returned but history verification failed; inspect state before retry")
 			return 1
 		}
-		fmt.Fprintln(out, "Schema history verified. Existing business data and notification timezone have not been converted. Inspect ledger adoption audit separately.")
+		fmt.Fprintln(out, "Version-1 baseline history verified. For later versions, explicitly run: migrate --confirm-pending-migrations --confirm-no-writers before runtime startup. Existing business data and notification timezone have not been converted; inspect adoption audit separately.")
 		return 0
 	}
 	verification := db.Verify(ctx, manifest)
@@ -358,19 +371,39 @@ func run(ctx context.Context, args []string, out, diagnostics io.Writer, deps de
 		fmt.Fprintln(diagnostics, safeError(verification))
 		return 1
 	}
-	if err := db.PreflightFresh(ctx); err != nil {
-		fmt.Fprintln(diagnostics, safeError(err))
+	var preflight error
+	if config.confirmPending {
+		if !errors.Is(verification, schema.ErrPending) {
+			fmt.Fprintln(diagnostics, "pending migration mode requires an existing clean nonempty applied prefix")
+			return 1
+		}
+		preflight = db.PreflightPending(ctx, manifest)
+	} else {
+		preflight = db.PreflightFresh(ctx)
+	}
+	if preflight != nil {
+		fmt.Fprintln(diagnostics, safeError(preflight))
 		return 1
 	}
-	if err := db.Migrate(ctx, manifest); err != nil {
-		fmt.Fprintln(diagnostics, safeError(err))
+	var migrationErr error
+	if config.confirmPending {
+		migrationErr = db.MigratePending(ctx, manifest)
+	} else {
+		migrationErr = db.MigrateFresh(ctx, manifest)
+	}
+	if migrationErr != nil {
+		fmt.Fprintln(diagnostics, safeError(migrationErr))
 		return 1
 	}
 	if err := db.Verify(ctx, manifest); err != nil {
 		fmt.Fprintln(diagnostics, "migration returned but verification failed; inspect the database before retry")
 		return 1
 	}
-	fmt.Fprintln(out, "Fresh baseline applied and schema history verified. Application startup is a separate step.")
+	if config.confirmPending {
+		fmt.Fprintln(out, "Confirmed pending schema migrations applied and history verified. Application startup is a separate step.")
+	} else {
+		fmt.Fprintln(out, "Fresh schema initialized and history verified. Application startup is a separate step.")
+	}
 	return 0
 }
 
@@ -402,6 +435,8 @@ func safeError(err error) string {
 		return "unversioned database is not empty; explicit legacy adoption is required"
 	case errors.Is(err, schema.ErrLocked):
 		return "schema migration lock is unavailable"
+	case errors.Is(err, schema.ErrMigrationMode):
+		return "migration confirmation does not match the database state under the migration lock; no automatic retry or repair is permitted"
 	case errors.Is(err, schema.ErrPending):
 		return "schema migrations are pending; verify does not execute migrations"
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
@@ -465,8 +500,20 @@ func (db sqlDatabase) PreflightFresh(ctx context.Context) error {
 	defer conn.Close()
 	return dbschema.PreflightFresh(ctx, conn)
 }
-func (db sqlDatabase) Migrate(ctx context.Context, manifest []schema.Migration) error {
-	return schema.Migrate(ctx, db.db, manifest)
+func (db sqlDatabase) PreflightPending(ctx context.Context, manifest []schema.Migration) error {
+	conn, err := db.db.Conn(ctx)
+	if err != nil {
+		return schema.ErrPreflight
+	}
+	defer conn.Close()
+	return schema.VerifyAppliedPrefixConnection(ctx, conn, manifest)
+}
+
+func (db sqlDatabase) MigrateFresh(ctx context.Context, manifest []schema.Migration) error {
+	return schema.MigrateFresh(ctx, db.db, manifest)
+}
+func (db sqlDatabase) MigratePending(ctx context.Context, manifest []schema.Migration) error {
+	return schema.MigratePending(ctx, db.db, manifest)
 }
 func (db sqlDatabase) VerifyClock(ctx context.Context, zone string) error {
 	return dbschema.VerifyClock(ctx, db.db, zone)

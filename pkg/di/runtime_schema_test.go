@@ -39,7 +39,7 @@ func TestRuntimeStartupOnlyVerifiesSchemaAndClock(t *testing.T) {
 			return true
 		})
 	}
-	if !found["schema.Verify"] || !found["dbschema.VerifyClock"] {
+	if !found["schema.Verify"] || !found["dbschema.VerifyClock"] || !found["dbschema.CurrentManifest"] || found["dbschema.Manifest"] {
 		t.Fatal("runtime must verify both ledger and clock")
 	}
 }

@@ -27,6 +27,7 @@ type RolePlan struct {
 }
 
 const (
+	configNamespaceTable   = "cl_monitor_config_namespaces"
 	schemaHistoryTable     = "cloudops_schema_history"
 	notificationClockTable = "cl_workorder_notification_clock"
 )
@@ -95,7 +96,7 @@ var baselineBusinessTables = [...]string{
 	"cl_workorder_template",
 }
 
-// BuildRolePlan produces grants for the immutable version-1 schema. Migrator
+// BuildRolePlan produces grants for the immutable baseline plus namespace guards. Migrator
 // DDL and DML are table-scoped; schema REFERENCES permits complete metadata
 // inspection without granting unknown tables row access. Schema TRIGGER proves
 // complete trigger visibility; it is restricted to the maintenance account. Applying
@@ -131,6 +132,10 @@ func BuildRolePlan(database string, runtimeRole, migratorRole RoleAccount) (Role
 		}
 		plan.Migrator = append(plan.Migrator, grant(migratorPrivileges, table, migratorAccount))
 	}
+	// Namespace guard rows are permanent lock addresses. Runtime cannot delete
+	// them or perform schema changes; migration needs no business-data repair.
+	plan.Runtime = append(plan.Runtime, grant("SELECT, INSERT, UPDATE", configNamespaceTable, runtimeAccount))
+	plan.Migrator = append(plan.Migrator, grant("SELECT, CREATE, ALTER, INDEX", configNamespaceTable, migratorAccount))
 	plan.Runtime = append(plan.Runtime, grant("SELECT", schemaHistoryTable, runtimeAccount))
 	// Only the two frozen data repairs need UPDATE on business tables. Clock
 	// initialization inserts a marker; MySQL requires UPDATE for its FOR UPDATE

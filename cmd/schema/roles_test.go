@@ -21,7 +21,7 @@ func TestRolePlanHasOnlyReviewedTableGrants(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plan.Runtime) != 59 || len(plan.Migrator) != 60 {
+	if len(plan.Runtime) != 60 || len(plan.Migrator) != 61 {
 		t.Fatalf("unexpected grant count: %d / %d", len(plan.Runtime), len(plan.Migrator))
 	}
 	for _, statement := range append(append([]string{}, plan.Runtime...), plan.Migrator...) {
@@ -34,6 +34,8 @@ func TestRolePlanHasOnlyReviewedTableGrants(t *testing.T) {
 		wantPrefix := "GRANT SELECT, INSERT, UPDATE, DELETE ON "
 		if protected {
 			wantPrefix = "GRANT SELECT ON "
+		} else if strings.Contains(statement, "`.`"+configNamespaceTable+"`") {
+			wantPrefix = "GRANT SELECT, INSERT, UPDATE ON "
 		}
 		if !strings.HasPrefix(statement, wantPrefix) || !strings.HasSuffix(statement, "TO 'runtime_role'@'localhost';") {
 			t.Fatal("runtime received incorrect privileges")

@@ -79,7 +79,7 @@ func InitDB(cfg *config.Config, logger *zap.Logger) (*gorm.DB, error) {
 		// Runtime startup only verifies the immutable ledger and explicit
 		// DATETIME interpretation. Schema and clock writes belong to the
 		// separately credentialed maintenance tool before any writer starts.
-		manifest, err := dbschema.Manifest()
+		manifest, err := dbschema.CurrentManifest()
 		if err != nil {
 			return nil, fmt.Errorf("数据库迁移清单无效")
 		}

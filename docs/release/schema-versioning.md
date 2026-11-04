@@ -32,3 +32,7 @@ go test -race -tags=integration ./internal/dbschema -count=1 -timeout=180s
 ```
 
 显式初始化（例如通知时区登记）可复用 `WithMigrationLock` 与 `VerifyConnection`：在同一个物理连接先锁定、再验证账本与操作，避免单连接池再次取连接而死锁。锁获取仍为fail-fast，不暗中重试初始化写入；callback必须在返回前提交或回滚事务，panic会在正确释放事务的回调展开后脱敏并丢弃物理会话；事务回调必须deferRollback及有界上下文，违反契约保留的事务可能等到其上下文取消，不能宣称可立即强制关闭。新测试验证单连接池内核验及panic后的再次获取锁。
+
+## 2026-11-04：v2及确认模式
+
+现代完整目标追加命名空间锁表v2，immutable v1与旧来源升级证明保持。新库继续使用`migrate --confirm-new-database`；已有完整干净非空版本前缀使用`migrate --confirm-pending-migrations --confirm-no-writers`。两种模式在同一迁移锁连接内再次校验；不要用新库确认授权已有版本升级。采用/已知来源升级仍只登记v1，需显式pending迁移后才能运行现代应用或初始化时区。完整合同、角色权限、双连接竞态及原生恢复验证见[namespace锁迁移](config-namespace-guards.md)。
