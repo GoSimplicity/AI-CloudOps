@@ -5,6 +5,7 @@ package config
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -72,7 +73,7 @@ func TestGeneratedOwnerGuardNativeMySQL(t *testing.T) {
 					t.Error("fixture table cleanup failed")
 				}
 			}()
-			if err := db.Exec("ALTER TABLE cl_monitor_configs MODIFY name VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL, MODIFY instance_ip VARCHAR(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL").Error; err != nil {
+			if err := db.Exec(fmt.Sprintf("ALTER TABLE cl_monitor_configs MODIFY name VARCHAR(%d) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL, MODIFY instance_ip VARCHAR(%d) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL", model.MonitorConfigNameMaxRunes, model.MonitorConfigKeyMaxRunes)).Error; err != nil {
 				t.Fatal("fixture CI collation setup failed")
 			}
 			dao := NewMonitorConfigDAO(zap.NewNop(), db).(*monitorConfigDAO)

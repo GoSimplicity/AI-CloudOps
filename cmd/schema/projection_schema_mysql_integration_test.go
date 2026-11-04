@@ -43,7 +43,7 @@ func TestProjectionSchemaNativeMySQL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	current, err := dbschema.CurrentManifest()
-	if err != nil || len(current) != 3 {
+	if err != nil || len(current) < 3 {
 		t.Fatal("current projection manifest unavailable")
 	}
 	allowed := map[string]bool{schemaHistoryTable: true}
@@ -102,7 +102,7 @@ func TestProjectionSchemaNativeMySQL(t *testing.T) {
 			t.Fatal("fresh current ledger invalid")
 		}
 		if dbschema.InitializeFreshClock(ctx, db, "UTC") != nil || dbschema.VerifyClock(ctx, db, "UTC") != nil {
-			t.Fatal("current clock chain rejected v3")
+			t.Fatal("current clock chain rejected current target")
 		}
 		for _, column := range []string{"family", "pool_id"} {
 			var extra string
@@ -160,7 +160,7 @@ func TestProjectionSchemaNativeMySQL(t *testing.T) {
 				t.Fatal("journal byte keys were aliased")
 			}
 		}
-		if _, e := db.ExecContext(ctx, "INSERT INTO cl_monitor_config_artifact_events(config_type,instance_key,action,projection_policy,delivery_state) VALUES(4,?,'invalidate','not_applicable','pending')", []byte(strings.Repeat("🌍", 46))); e == nil {
+		if _, e := db.ExecContext(ctx, "INSERT INTO cl_monitor_config_artifact_events(config_type,instance_key,action,projection_policy,delivery_state) VALUES(4,?,'invalidate','not_applicable','pending')", []byte(strings.Repeat("🌍", 129))); e == nil {
 			t.Fatal("binary schema capacity silently truncated key")
 		}
 		for _, table := range projectionTables {
@@ -182,10 +182,10 @@ func TestProjectionSchemaNativeMySQL(t *testing.T) {
 		if _, e := db.ExecContext(ctx, "INSERT INTO cl_monitor_config_namespaces(config_type,instance_key) VALUES(4,?)", key); e != nil {
 			t.Fatal("released guard fixture failed")
 		}
-		if err := schema.Verify(ctx, db, current); !errors.Is(err, schema.ErrPending) {
+		if err := schema.Verify(ctx, db, current[:3]); !errors.Is(err, schema.ErrPending) {
 			t.Fatal("v2 not recognized as pending current")
 		}
-		if schema.MigratePending(ctx, db, current) != nil || schema.Verify(ctx, db, current) != nil {
+		if schema.MigratePending(ctx, db, current[:3]) != nil || schema.Verify(ctx, db, current[:3]) != nil {
 			t.Fatal("explicit v2 to v3 append failed")
 		}
 		var count int
@@ -214,7 +214,7 @@ func TestProjectionSchemaNativeMySQL(t *testing.T) {
 			if schema.Migrate(ctx, db, current[:2]) != nil {
 				t.Fatal("v2 fixture failed")
 			}
-			last := current[len(current)-1]
+			last := current[2]
 			state, checksum, want := "failed", last.Checksum, schema.ErrDirty
 			if failure == "drift" {
 				state, checksum, want = "applied", strings.Repeat("0", 64), schema.ErrDrift
@@ -222,7 +222,7 @@ func TestProjectionSchemaNativeMySQL(t *testing.T) {
 			if _, e := db.ExecContext(ctx, "INSERT INTO cloudops_schema_history(version,name,checksum,state) VALUES(?,?,?,?)", last.Version, last.Name, checksum, state); e != nil {
 				t.Fatal("dirty/drift fixture failed")
 			}
-			if err := schema.MigratePending(ctx, db, current); !errors.Is(err, want) {
+			if err := schema.MigratePending(ctx, db, current[:3]); !errors.Is(err, want) {
 				t.Fatal("dirty/drift current schema was accepted")
 			}
 			var count int

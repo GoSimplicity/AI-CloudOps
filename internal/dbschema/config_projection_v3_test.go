@@ -11,7 +11,7 @@ import (
 
 func TestProjectionV3AppendsWithoutChangingReleasedInputs(t *testing.T) {
 	current, err := CurrentManifest()
-	if err != nil || len(current) != 3 || schema.Validate(current) != nil {
+	if err != nil || len(current) < 3 || schema.Validate(current) != nil {
 		t.Fatal("current projection target invalid")
 	}
 	if current[0].Checksum != "92d4474d148d35643dbf8ed4044e6734e2d9268c36b6738bcb26ef220afc0616" || current[1].Checksum != "0264ef8ecc9f31ae99067abce868cdebb42348fbcac21019596b476bf70ec9d2" || current[2].Version != 3 {

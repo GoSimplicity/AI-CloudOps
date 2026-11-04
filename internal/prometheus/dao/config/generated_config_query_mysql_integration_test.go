@@ -3,6 +3,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -62,7 +63,7 @@ func TestGeneratedConfigQueriesNativeMySQL(t *testing.T) {
 	}()
 	// A PAD SPACE, case-insensitive column deliberately stresses both byte alias
 	// cases. The private query must override it; the ordinary IN API must not.
-	if err := db.Exec("ALTER TABLE cl_monitor_configs MODIFY instance_ip VARCHAR(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL").Error; err != nil {
+	if err := db.Exec(fmt.Sprintf("ALTER TABLE cl_monitor_configs MODIFY instance_ip VARCHAR(%d) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL", model.MonitorConfigKeyMaxRunes)).Error; err != nil {
 		t.Fatal("fixture weak-collation setup failed")
 	}
 	dao := NewMonitorConfigDAO(zap.NewNop(), db).(*monitorConfigDAO)

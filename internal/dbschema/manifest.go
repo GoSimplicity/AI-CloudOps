@@ -31,5 +31,9 @@ func CurrentManifest() ([]schema.Migration, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(baseline, guard, projection), nil
+	widths, err := configWidthsV4Migration(configWidthsV4SQL, configWidthsV4Implementation)
+	if err != nil {
+		return nil, err
+	}
+	return append(baseline, guard, projection, widths), nil
 }

@@ -1,0 +1,5 @@
+[
+  "ALTER TABLE `cl_monitor_configs` MODIFY COLUMN `name` varchar(255) NOT NULL COMMENT '配置名称', MODIFY COLUMN `instance_ip` varchar(128) NOT NULL COMMENT '实例IP地址'",
+  "ALTER TABLE `cl_monitor_config_namespaces` MODIFY COLUMN `instance_key` varbinary(512) NOT NULL",
+  "ALTER TABLE `cl_monitor_config_artifact_events` MODIFY COLUMN `instance_key` varbinary(512) NOT NULL"
+]

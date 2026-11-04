@@ -26,7 +26,7 @@ type configNamespaceKey struct {
 }
 
 func validConfigKey(raw string) bool {
-	return raw != "" && utf8.ValidString(raw) && utf8.RuneCountInString(raw) <= 45
+	return raw != "" && utf8.ValidString(raw) && utf8.RuneCountInString(raw) <= model.MonitorConfigKeyMaxRunes
 }
 func validConfigNamespace(key configNamespaceKey) bool {
 	return key.kind >= 1 && key.kind <= 5 && validConfigKey(key.raw)

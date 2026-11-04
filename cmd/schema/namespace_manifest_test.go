@@ -33,7 +33,7 @@ func (d *legacyTargetCapture) UpgradeBaseline(ctx context.Context, m []schema.Mi
 }
 func TestModernCLIPlanAndMainUseCurrentManifest(t *testing.T) {
 	var out, diagnostic bytes.Buffer
-	if run(context.Background(), []string{"plan"}, &out, &diagnostic, dependencies{manifest: dbschema.CurrentManifest}) != 0 || !strings.Contains(out.String(), "version=1 ") || !strings.Contains(out.String(), "version=2 ") || !strings.Contains(out.String(), "version=3 ") {
+	if run(context.Background(), []string{"plan"}, &out, &diagnostic, dependencies{manifest: dbschema.CurrentManifest}) != 0 || !strings.Contains(out.String(), "version=1 ") || !strings.Contains(out.String(), "version=2 ") || !strings.Contains(out.String(), "version=3 ") || !strings.Contains(out.String(), "version=4 ") {
 		t.Fatal("current offline plan omitted a released version")
 	}
 	file, err := parser.ParseFile(token.NewFileSet(), "main.go", nil, 0)

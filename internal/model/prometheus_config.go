@@ -41,9 +41,9 @@ const (
 // MonitorConfig 监控配置模型 - 由缓存生成和管理
 type MonitorConfig struct {
 	Model
-	Name              string `json:"name" gorm:"size:100;not null;comment:配置名称"`
+	Name              string `json:"name" gorm:"size:255;not null;comment:配置名称"`
 	PoolID            int    `json:"pool_id" gorm:"index;not null;comment:关联的池ID"`
-	InstanceIP        string `json:"instance_ip" gorm:"size:45;not null;index;comment:实例IP地址"`
+	InstanceIP        string `json:"instance_ip" gorm:"size:128;not null;index;comment:实例IP地址"`
 	ConfigType        int8   `json:"config_type" gorm:"type:tinyint;not null;index;comment:配置类型(1:Prometheus主配置,2:AlertManager主配置,3:告警规则,4:预聚合规则,5:webhook file)"`
 	ConfigContent     string `json:"config_content" gorm:"type:longtext;not null;comment:配置内容(YAML格式)"`
 	ConfigHash        string `json:"config_hash" gorm:"size:64;not null;index;comment:配置内容的哈希值"`
@@ -71,9 +71,9 @@ type GetMonitorConfigByInstanceReq struct {
 }
 
 type CreateMonitorConfigReq struct {
-	Name          string `json:"name" binding:"required,min=1,max=100"`
+	Name          string `json:"name" binding:"required,min=1,max=255"`
 	PoolID        int    `json:"pool_id" binding:"required"`
-	InstanceIP    string `json:"instance_ip" binding:"required"`
+	InstanceIP    string `json:"instance_ip" binding:"required,max=128"`
 	ConfigType    int8   `json:"config_type" binding:"required,oneof=1 2 3 4 5"`
 	ConfigContent string `json:"config_content" binding:"required"`
 	Status        int8   `json:"status" binding:"omitempty,oneof=1 2"`
@@ -81,9 +81,9 @@ type CreateMonitorConfigReq struct {
 
 type UpdateMonitorConfigReq struct {
 	ID            int    `json:"id" binding:"required"`
-	Name          string `json:"name" binding:"required,min=1,max=100"`
+	Name          string `json:"name" binding:"required,min=1,max=255"`
 	PoolID        int    `json:"pool_id" binding:"omitempty"`
-	InstanceIP    string `json:"instance_ip" binding:"omitempty"`
+	InstanceIP    string `json:"instance_ip" binding:"omitempty,max=128"`
 	ConfigType    int8   `json:"config_type" binding:"omitempty,oneof=1 2 3 4 5"`
 	ConfigContent string `json:"config_content" binding:"omitempty"`
 	Status        int8   `json:"status" binding:"omitempty,oneof=1 2"`

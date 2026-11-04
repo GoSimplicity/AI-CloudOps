@@ -74,7 +74,7 @@ type MonitorConfigArtifactEvent struct {
 	EventID          uint64     `json:"-" gorm:"primaryKey;autoIncrement;index:idx_config_artifact_namespace,priority:3;index:idx_config_artifact_delivery,priority:2;index:idx_config_artifact_operation,priority:2"`
 	OperationID      *uint64    `json:"-" gorm:"type:bigint unsigned;index:idx_config_artifact_operation,priority:1"`
 	ConfigType       int8       `json:"-" gorm:"type:tinyint;not null;index:idx_config_artifact_namespace,priority:1"`
-	InstanceKey      []byte     `json:"-" gorm:"type:varbinary(180);not null;index:idx_config_artifact_namespace,priority:2"`
+	InstanceKey      []byte     `json:"-" gorm:"type:varbinary(512);not null;index:idx_config_artifact_namespace,priority:2"`
 	Action           string     `json:"-" gorm:"type:varchar(16);not null"`
 	ProjectionPolicy string     `json:"-" gorm:"type:varchar(20);not null"`
 	ConfigRowID      *int       `json:"-" gorm:"type:bigint"`

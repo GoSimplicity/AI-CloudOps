@@ -1,5 +1,12 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-04：配置键与生成名称宽化 v4
+
+独立forward v4将metadata Name/key扩至255/128字符，guard/event key扩至512字节，修复合法IPv6 webhook47/65键及长生成名被拒；原字节、索引、字符属性与v1–v3输入保留。见[宽度合同](config-widths.md)。
+
+- 旧源码DTO/DAO真实红例、五包race/vet/tag、全Go及MySQL六子与整组dbschema/CLI原生验收通过；原模型DDL一致性失败已修复并保持硬比对，资源清理。
+- Web锁更新独立Verify成功192178f，AIba187；新后端组合另验。Web真实Form规则覆盖与create/edit权限修复仍独立进行。本地预览0618/schema2保留，未上线。
+
 ## 2026-11-04：发布日志事务接口
 
 Reserve/Commit/Load/条件Mark已实现，业务配置、事件、manifest和lastCommitted同SQL事务；普通写口追加谱系或N/A事件，不等待Redis。见[日志事务合同](config-projection-journal.md)。

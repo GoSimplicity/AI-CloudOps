@@ -646,3 +646,9 @@
 - 独立ProjectionJournalDAO reserve/typed business plan/nonce恢复/last-good/条件mark，metadata+events+manifest+lastCommitted单事务；ordinary写同tx记录lineage/N/A，不依赖Redis。保批次rollback/input回填与owner CAS，禁止自由Redis key投影权。
 - 独立12叶及SourceID/状态红转绿、真实commit丢ACK、MySQL双session6子、旧CAS两模式/namespace7子与全Go/vet/tag/cache-DAO race通过，资源清理。
 - Web锁已验证dd558ce/AIba187，新CI另验；发布器/Lua/recovery worker及两窗口闭环仍待接线，未上线。
+
+## 2026-11-04：IPv6 webhook与长生成名称容量修复
+
+- 独立v4三个ALTER扩宽Name255/key128字符、guard/event512字节；共享Go/DTO限制同步，原数据/索引/字符属性与V1–V3校验和不变。
+- 先验证table default及四列源属性，继承已证相同collation；原模型结构硬比对不放宽，dirty/unsupported source拒绝零ALTER但不谎称零history。
+- 47/65合法IPv6 key/106Name原红转绿、五包race/vet/tag、全Go/MySQL六子/完整dbschema-CLI native过，私有资源清理；Web锁已验证192178f，前端表单/权限另阶段。未上线，preview仍0618/schema2。

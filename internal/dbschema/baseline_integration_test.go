@@ -247,6 +247,8 @@ func TestCurrentSchemaMatchesManifest(t *testing.T) {
 	if !reflect.DeepEqual(actual, want) {
 		for name, expected := range want {
 			if actual[name] != expected {
+				// DDL contains schema definitions only, never configuration rows or credentials.
+				t.Logf("normalized migrated DDL (%s):\n%s\nnormalized current-model DDL (%s):\n%s", name, actual[name], name, expected)
 				t.Errorf("table %s differs in columns, indexes or foreign keys; add a new migration instead of editing baseline", name)
 			}
 		}

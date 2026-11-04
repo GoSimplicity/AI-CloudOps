@@ -10,7 +10,7 @@
 | `cl_monitor_config_pool_operations` | 逐代操作、nonce、source hash、manifest、恢复来源与阶段 | append 历史；失败新 attempt 不抹掉旧空操作 |
 | `cl_monitor_config_artifact_events` | namespace 单调事件版本、行/owner/body digest、投影授权与交付状态 | 保留退休与 A→B→C 证明；当前阶段无自动 GC |
 
-这三张表不嵌入普通业务 Model，没有软删除或 YAML/凭据正文副本。`manifest` 的 SQL NULL 表示尚未提交，JSON `[]` 表示合法的空 manifest。operation nonce 使用16个二进制字节，digest使用32字节；namespace原始键使用 VARBINARY(180)，保留45个UTF-8字符的字节身份。
+这三张表不嵌入普通业务 Model，没有软删除或 YAML/凭据正文副本。`manifest` 的 SQL NULL 表示尚未提交，JSON `[]` 表示合法的空 manifest。operation nonce 使用16个二进制字节，digest使用32字节；namespace原始键使用 VARBINARY(512)，保留128个UTF-8字符的字节身份。
 
 发布域包含四类完整发布和独立 AM webhook-only 作用域。后者不表示完整 AM 主配置已经完成。commit 后的 manifest、owner/digest/binding payload 将由后续 DAO 保持不可变，只有交付阶段允许条件推进；模型注释不是这一业务校验已经实现的证据。
 

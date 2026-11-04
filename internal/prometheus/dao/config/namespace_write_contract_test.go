@@ -254,7 +254,7 @@ func TestNamespaceInvalidKeysAndCancelledWritesHaveNoSideEffects(t *testing.T) {
 		for _, invalid := range []struct {
 			name, key string
 			cancel    bool
-		}{{"invalid UTF-8", string([]byte{255, 254}), false}, {"over 45 characters", strings.Repeat("🌍", 46), false}, {"cancelled", "192.0.2.2", true}} {
+		}{{"invalid UTF-8", string([]byte{255, 254}), false}, {"over 128 characters", strings.Repeat("🌍", 129), false}, {"cancelled", "192.0.2.2", true}} {
 			t.Run(operation.name+"/"+invalid.name, func(t *testing.T) {
 				dao, db := newNamespaceWriteContractDB(t)
 				input := namespaceWriteRow(namespaceWriteCanary, invalid.key, 4, 7, 1)
@@ -290,16 +290,16 @@ func TestNamespaceInvalidKeysAndCancelledWritesHaveNoSideEffects(t *testing.T) {
 func TestNamespaceByteDistinctAndCrossKindWritesRemainLegal(t *testing.T) {
 	dao, db := newNamespaceWriteContractDB(t)
 	ctx := context.Background()
-	for i, key := range []string{"2001:db8::1", "2001:DB8::1", "192.0.2.1", "192.0.2.1 ", " 192.0.2.1", strings.Repeat("🌍", 45)} {
+	for i, key := range []string{"2001:db8::1", "2001:DB8::1", "192.0.2.1", "192.0.2.1 ", " 192.0.2.1", strings.Repeat("🌍", 45), strings.Repeat("🌍", 128)} {
 		if dao.CreateMonitorConfig(ctx, namespaceWriteRow(fmt.Sprintf("raw-%d", i), key, 4, 7, 2)) != nil {
-			t.Fatal("byte-distinct key or 45-character UTF-8 input rejected")
+			t.Fatal("byte-distinct key or full UTF-8 input rejected")
 		}
 	}
 	if dao.CreateMonitorConfig(ctx, namespaceWriteRow("other kind", "192.0.2.1", 1, 7, 1)) != nil {
 		t.Fatal("different config kind was treated as occupied")
 	}
 	configs, guards := namespaceWriteCounts(t, db)
-	if configs != 7 || guards != 7 {
+	if configs != 8 || guards != 8 {
 		t.Fatal("byte-distinct namespaces were aliased")
 	}
 }
