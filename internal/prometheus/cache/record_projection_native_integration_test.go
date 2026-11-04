@@ -109,7 +109,7 @@ func rootReadRecordRESP(reader *bufio.Reader, depth int) (rootRecordRESP, error)
 	}
 }
 func rootIsRecordArtifactRequest(frame rootRecordRESP) bool {
-	return rootIsProjectionModeRequest(frame, "artifact")
+	return rootIsProjectionModeRequest(frame, "artifact") || rootIsProjectionModeRequest(frame, "artifact_batch")
 }
 
 func rootIsProjectionModeRequest(frame rootRecordRESP, mode string) bool {
@@ -117,13 +117,20 @@ func rootIsProjectionModeRequest(frame rootRecordRESP, mode string) bool {
 		return false
 	}
 	keys, err := strconv.Atoi(string(frame.args[2]))
-	if err != nil || keys < 0 || keys+5 != len(frame.args) {
+	if err != nil || keys < 0 || keys+5 > len(frame.args) {
 		return false
 	}
 	var wire struct {
 		Mode string `json:"mode"`
 	}
-	return json.Unmarshal(frame.args[keys+3], &wire) == nil && wire.Mode == mode
+	if json.Unmarshal(frame.args[keys+3], &wire) != nil || wire.Mode != mode {
+		return false
+	}
+	if mode != "artifact_batch" {
+		return keys+5 == len(frame.args)
+	}
+	var selected []string
+	return json.Unmarshal(frame.args[keys+4], &selected) == nil && len(selected) > 1 && len(frame.args) == keys+5+len(selected)
 }
 
 type rootRecordQueueReply struct {

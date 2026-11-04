@@ -97,11 +97,6 @@ func (p *PreparedProjection) Acknowledge(ctx context.Context) (configdao.Project
 	return proof, nil
 }
 func (p *PreparedProjection) execute(ctx context.Context, mode, target string, body []byte) error {
-	// Never renew a receipt on another SQL connection. The original sealed lease
-	// must still own its control/namespace locks immediately before every command.
-	if err := p.lease.RecheckCurrent(ctx); err != nil {
-		return err
-	}
 	wire := p.wire
 	wire.Mode = mode
 	wire.Target = target
@@ -109,7 +104,23 @@ func (p *PreparedProjection) execute(ctx context.Context, mode, target string, b
 	if err != nil {
 		return ErrProjectionStore
 	}
-	result, err := p.store.client.Eval(ctx, projectionFenceLua, p.keys, string(raw), string(body)).Text()
+	return p.executeArguments(ctx, []string{string(raw), string(body)})
+}
+
+func (p *PreparedProjection) executeArguments(ctx context.Context, args []string) error {
+	// Every command, including a batch, checks the original sealed SQL lease.
+	// Neither an unknown Redis result nor a definite rejection authorizes retry.
+	if p == nil || p.lease == nil || p.store == nil || p.store.client == nil {
+		return ErrProjectionStore
+	}
+	if err := p.lease.RecheckCurrent(ctx); err != nil {
+		return err
+	}
+	values := make([]interface{}, len(args))
+	for i, value := range args {
+		values[i] = value
+	}
+	result, err := p.store.client.Eval(ctx, projectionFenceLua, p.keys, values...).Text()
 	if err != nil {
 		return errors.Join(ErrProjectionStore, ctx.Err())
 	}

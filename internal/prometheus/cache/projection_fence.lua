@@ -44,7 +44,7 @@ for i,r in ipairs(w.roles) do
  if actual~='none' and actual~=wanted then return 'TYPE' end
 end
 if type(w.fences)~='table' or type(w.artifacts)~='table' or type(w.controls)~='table' then return 'INVALID' end
-if w.mode~='prepare' and w.mode~='artifact' and w.mode~='members' and w.mode~='intent_add' and w.mode~='intent_remove' and w.mode~='ack' then return 'INVALID' end
+if w.mode~='prepare' and w.mode~='artifact' and w.mode~='artifact_batch' and w.mode~='members' and w.mode~='intent_add' and w.mode~='intent_remove' and w.mode~='ack' then return 'INVALID' end
 if pool and (not index(w.pool_fence) or w.roles[w.pool_fence].role~='pool_fence') then return 'ROLE' end
 local fenceSeen={}
 for _,f in ipairs(w.fences) do
@@ -146,7 +146,33 @@ local function allartifacts()
  return true
 end
 local action=nil
-if w.mode=='artifact' then action=artifacts[w.target];if not action then return 'INVALID' end
+local batch=nil
+if w.mode=='artifact_batch' then
+ if not pool or w.target~='' then return 'ROLE' end
+ local decoded,ids=pcall(cjson.decode,ARGV[2] or '')
+ if not decoded or not array(ids) or #ids<1 or #ids>16 or #ARGV~=#ids+2 then return 'INVALID' end
+ batch={}
+ local selected={}
+ local bodybytes=0
+ for i,id in ipairs(ids) do
+  if not digits(id) or selected[id] or not artifacts[id] then return 'INVALID' end
+  selected[id]=true
+  local a=artifacts[id]
+  local kind=w.roles[a.raw].kind
+  if w.family=='2' then if kind~='2' and kind~='5' then return 'ROLE' end
+  elseif kind~=w.family then return 'ROLE' end
+  if w.family=='5' and a.action~='render' then return 'ROLE' end
+  local body=ARGV[i+2]
+  bodybytes=bodybytes+#body
+  -- Go bounds the complete RESP request including script and keys. Lua cannot
+  -- observe the EVAL source bytes; this is an independent raw-body/count bound.
+  if bodybytes>1048576 then return 'LIMIT' end
+  if a.action=='render' then
+   if redis.sha1hex(body)~=a.sha1 then return 'BODY' end
+  elseif body~='' then return 'BODY' end
+  batch[#batch+1]={artifact=a,body=body}
+ end
+elseif w.mode=='artifact' then action=artifacts[w.target];if not action then return 'INVALID' end
  if action.action=='render' and redis.sha1hex(ARGV[2])~=action.sha1 then return 'BODY' end
 elseif w.mode=='members' then action=controls[w.target];if not action or action.kind~='members_full' then return 'ROLE' end
  for _,ip in ipairs(action.desired) do if type(ip)~='string' then return 'INVALID' end end
@@ -183,6 +209,12 @@ if w.mode=='prepare' then
     for _,c in ipairs(w.controls) do redis.call('HSET',KEYS[f.key],'expected:'..c.id,controlfingerprint(c)) end
    end
   end
+ end
+elseif w.mode=='artifact_batch' then
+ for _,entry in ipairs(batch) do
+  local a=entry.artifact
+  if a.action=='render' then redis.call('SET',KEYS[a.raw],entry.body) else redis.call('DEL',KEYS[a.raw]) end
+  redis.call('HSET',KEYS[a.fence],'done',a.signature)
  end
 elseif w.mode=='artifact' then
  if action.action=='render' then redis.call('SET',KEYS[action.raw],ARGV[2]) else redis.call('DEL',KEYS[action.raw]) end

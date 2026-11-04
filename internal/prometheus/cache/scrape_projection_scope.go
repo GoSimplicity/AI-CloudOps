@@ -187,10 +187,12 @@ func (r *scrapeProjectionRunner) Project(ctx context.Context, lease configdao.Pr
 	if err != nil {
 		return err
 	}
+	artifactIDs := make([]uint64, 0, len(snapshot.Pool.Artifacts))
 	for _, artifact := range snapshot.Pool.Artifacts {
-		if err := prepared.ApplyArtifact(ctx, artifact.EventID); err != nil {
-			return err
-		}
+		artifactIDs = append(artifactIDs, artifact.EventID)
+	}
+	if err := prepared.ApplyArtifacts(ctx, artifactIDs); err != nil {
+		return err
 	}
 	for _, control := range snapshot.Pool.Controls {
 		if control.Members != nil {

@@ -79,3 +79,7 @@ Store/Lua/schema未改，整帧字节完全不降，wire与Lua全量检查仍有
 新增规模用例接入owned gate后，总数由59增至64。Root MySQL12及Redis64均通过，Store/Lua/schema未改。整体线缆/脚本预检仍需下一阶段优化。
 
 本阶段完整DAO81main/193leaf、cache236main/1153leaf、service129leaf race通过，0fail/skip；全Go/vet/全部标签编译及actionlint通过。独立新增initial review为5main/12leaf，错误去掉owner/body或AM行数校验时，原测试真实失败；正式实现均通过。
+
+## 第三阶段：有界 artifact batch
+
+在保全原行为帧、全部namespace fencing与控制顺序的前提下，[有界批量](artifact-batch.md)减少artifact RPC。原15项StoreCommandFrames继续测原单项接口，不改变基准口径；当前runner由真实Redis规模场景观测。N128 EVAL131→11、RESP参数16,093,977→1,369,684字节；race单次完整投影约1.464s→0.457s，不能当生产SLA或宣称全帧算法已线性。

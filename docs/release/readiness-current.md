@@ -1,5 +1,14 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-05：有界 artifact 批量投影
+
+新增[批量合同与验收](artifact-batch.md)：Go首发前验证完整选择，最多16项/完整RESP1MiB；Lua每批保完整frame/所有TYPE及全部NS fences，并先验所有body再写。ordinary/subset边界、旧单项路径及控制顺序保持，未知结果不隐式重试。
+
+- Root Redis86/MySQL12、完整cache1175leaf及service129leaf均race通过，0fail/skip，全Go/vet/全部标签编译/actionlint通过；尾项零partial、未选NS接管、raw bytes、expired lease零EVAL及执行后丢reply恢复均实际覆盖。
+- N128真实race观测131→11 EVAL、RESP16.09→1.37MB，正文1408B保持，不代表MySQL+Redis生产容量或线性复杂度。原15项单项微基准保留为legacy对照。
+- 预览已安全更新CI全绿clean67df64e9，PID95480/schema1..4，业务数据哈希保持，三个端口健康、模拟API external_io=false。批量WIP未用于预览，整体1.0未完成，未上线。
+- 来源锁Web更新为独立Verify41916485715/gitleaks41916485566成功的9339393，AI保持75d4a87，新组合提交后另验。
+
 ## 2026-11-05：初验 operation 索引与真实规模观测
 
 第二窄阶段仅复用本次初验实际SQL operation/完整manifest索引，逐namespace当前权限、parent及AM完整证明保持。N128初验约75.06→24.24ms、SELECT772→644；命令数与全部帧字节不变。详见[分层实测](projection-scale.md)。

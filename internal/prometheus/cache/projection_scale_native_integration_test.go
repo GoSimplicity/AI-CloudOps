@@ -4,6 +4,7 @@ package cache
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -65,18 +66,46 @@ func (h *rootProjectionWireTotals) observe(cmd redis.Cmder, elapsed time.Duratio
 		return
 	}
 	keys, ok := args[2].(int)
-	if !ok || keys < 0 || len(args) != keys+5 {
+	if !ok || keys < 0 || len(args) < keys+5 {
 		h.invalid = true
 		return
 	}
 	frame, frameOK := args[keys+3].(string)
-	body, bodyOK := args[keys+4].(string)
-	if !frameOK || !bodyOK {
+	if !frameOK {
+		h.invalid = true
+		return
+	}
+	var envelope struct {
+		Mode string `json:"mode"`
+	}
+	if json.Unmarshal([]byte(frame), &envelope) != nil {
 		h.invalid = true
 		return
 	}
 	h.frameBytes += int64(len(frame))
-	h.bodyBytes += int64(len(body))
+	if envelope.Mode == "artifact_batch" {
+		selection, ok := args[keys+4].(string)
+		var ids []string
+		if !ok || json.Unmarshal([]byte(selection), &ids) != nil || len(ids) < 2 || len(args) != keys+5+len(ids) {
+			h.invalid = true
+			return
+		}
+		for _, arg := range args[keys+5:] {
+			body, ok := arg.(string)
+			if !ok {
+				h.invalid = true
+				return
+			}
+			h.bodyBytes += int64(len(body))
+		}
+	} else {
+		body, ok := args[keys+4].(string)
+		if !ok || len(args) != keys+5 {
+			h.invalid = true
+			return
+		}
+		h.bodyBytes += int64(len(body))
+	}
 	// The actual command arguments are encoded as a RESP array of bulk strings.
 	// Count lengths only; do not retain or log script, keys, bodies or credentials.
 	bytes := 1 + len(strconv.Itoa(len(args))) + 2

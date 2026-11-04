@@ -216,6 +216,11 @@ func TestProjectionStoreOwnedRedisProtocol(t *testing.T) {
 		{"recovery_am_peer", TestProjectionRecoveryNativeAMPeerConverges},
 		{"recovery_poison_page", TestProjectionRecoveryNativePoisonDoesNotBlockLaterPool},
 		{"scale_cost", TestProjectionStoreNativeScaleCost},
+		{"batch_preflight", TestProjectionBatchNativeRejectsBeforeAnyArtifactWrite},
+		{"batch_lost_reply", TestProjectionBatchNativeLostReplyRecoversWithoutRetry},
+		{"batch_expired_lease", TestProjectionBatchNativeExpiredLeaseSendsNoEval},
+		{"batch_independent_review", TestProjectionBatchIndependentNative},
+		{"batch_raw_bytes", TestProjectionBatchNativeRawBodyBytesRemainExact},
 	}
 	for _, group := range groups {
 		skipped := false

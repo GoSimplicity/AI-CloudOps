@@ -740,3 +740,9 @@
 - 单次lease初验复用实际SQL严格解析的operation成员索引，保AM完整证明及逐namespace/owner/body/parent验证，普通写路径不新增control锁，不批读event或改payload。
 - 同口径N128初验SELECT772→644、约75→24ms；新增真实Redis5规模场景，原生gate64与MySQL12均通过，完整raw/ACK/SQL完成验收，wire及EVAL次数不变。仍需Lua/线缆与容量优化。
 - Store/Lua/schema及来源锁ceb/75保持，新提交CI另验，预览数据与版本保持，未上线。
+
+## 2026-11-05：有界 artifact 批量投影
+
+- typed runner合并artifact为最多16项、完整RESP至多1MiB批次，正文独立raw参数；首发前整选择验证，Lua所有批内数据与原完整frame/全NS fencing检查先于首写。控制顺序与原single保留。
+- 超预算发前选择原fenced单项；EVAL错误不fallback/retry，执行后丢回复由持久状态恢复。Root Redis86/MySQL12及全Go/vet/tags通过。
+- 固定微小正文N128实测EVAL131→11、RESP16.09→1.37MB，不宣称生产SLA/整体线性。预览安全更新67df/schema4且数据保持，新批量代码未上线。
