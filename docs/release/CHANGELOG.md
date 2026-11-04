@@ -691,3 +691,11 @@
 - Record public API/DTO/hash/record_superseded保持；Alert独立rule_superseded并严格cross/mixed拒。UTF8、for0s、首个等号、稳定DB-ID group和目标原序分片renderer未动，两family共用一个有生命周期cleanup的Store。
 - Root真实owned27叶0skip/fail、旧Record与新Alert全部回归、全Go/vet/tag、173工具/actionlint通过；clean db65五金样对当前原字节兼容通过。同数据库/Redis双family启停互不跨写，实例清理0。
 - 来源锁Web955cbf7独立Verify成功/AIba187，新组合CI另验。其它发布器/worker/性能/剩余lint后续继续，无上线或生产连接。
+
+
+## 2026-11-05：Prometheus 主配置持久发布与恢复
+
+- PromMain删除unsafe写链，固定family1 source fence/CAS、full metadata plan/history guard、durable dispositions与已签回执恢复；内部共同scope仅1/3/4，旧public规则scope/Record和Alert序列化保持，独立prom_superseded拒cross/mixed。
+- 原pc.Load、认证/TLS/SD/静态端口/IPv6、排序分片、秘密字段真实bytes marshal与targetHash不改；空目标仍校验任务，真实deleted清退不读坏job。
+- Root实际owned35叶0skip/fail与全Go/vet/tag/cache-service-DAO-DI race、173工具/actionlint通过，credential-only轮换/旧源/迟到包/三family隔离均覆盖，资源清理0；Record五发布金样保持。
+- Web锁b3ec3e6已独立Verify成功/AIba187，新CI另验；AM/worker/性能/剩余lint后续，未上线或连接生产。

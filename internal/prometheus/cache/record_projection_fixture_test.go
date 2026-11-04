@@ -165,8 +165,8 @@ func (r *recordFixtureRunner) Project(ctx context.Context, lease configdao.Proje
 		return errors.New("fixture missing durable full plan")
 	}
 	family := snapshot.Pool.Reservation.Family
-	if family != model.ConfigTypeAlertRule && family != model.ConfigTypeRecordRule {
-		return errors.New("fixture only accepts sealed scrape-rule families")
+	if family != model.ConfigTypePrometheus && family != model.ConfigTypeAlertRule && family != model.ConfigTypeRecordRule {
+		return errors.New("fixture only accepts sealed main/rule families")
 	}
 
 	if recordFixtureRedisFailure(r.store) == "pending" || recordFixtureRedisFailure(r.store) == "sadd" {
@@ -267,6 +267,10 @@ func recordFixtureRedisFailure(store redis.Cmdable) string {
 	case *supportRedis:
 		return s.failure
 	case *alertRulePubRedis:
+		return s.failure
+	case *promReconcileRedis:
+		return s.failure
+	case *promPublicationRedis:
 		return s.failure
 	}
 	return ""

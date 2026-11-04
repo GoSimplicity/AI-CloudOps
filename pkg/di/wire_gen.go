@@ -154,23 +154,27 @@ func ProvideApp(cfg *config.Config) (*app.App, func(), error) {
 	scrapeJobDAO := scrape.NewScrapeJobDAO(db, logger)
 	monitorConfigDAO := config2.NewMonitorConfigDAO(logger, db)
 	batchConfigManager := cache.NewBatchConfigManager(monitorConfigDAO, logger)
-	prometheusConfigCache, err := cache.NewPrometheusConfigCache(cfg, logger, scrapePoolDAO, scrapeJobDAO, monitorConfigDAO, batchConfigManager, cmdable)
+	projectionPlanJournalDAO := config2.NewProjectionPlanJournalDAO(logger, db)
+	promMainHistoryReader := config2.NewPromMainHistoryReader(logger, db)
+	projectionStore, cleanup, err := ProvideProjectionStore(redisClient)
 	if err != nil {
+		return nil, nil, err
+	}
+	promMainProjectionRunner := cache.NewPromMainProjectionRunner(projectionStore)
+	prometheusConfigCache, err := cache.NewPrometheusConfigCache(cfg, logger, scrapePoolDAO, scrapeJobDAO, monitorConfigDAO, batchConfigManager, cmdable, projectionPlanJournalDAO, promMainHistoryReader, promMainProjectionRunner)
+	if err != nil {
+		cleanup()
 		return nil, nil, err
 	}
 	alertManagerPoolDAO := alert.NewAlertManagerPoolDAO(db, logger)
 	alertManagerSendDAO := alert.NewAlertManagerSendDAO(db, logger)
 	alertManagerConfigCache, err := cache.NewAlertManagerConfigCache(cfg, logger, alertManagerPoolDAO, alertManagerSendDAO, monitorConfigDAO, batchConfigManager, cmdable)
 	if err != nil {
+		cleanup()
 		return nil, nil, err
 	}
 	alertManagerRuleDAO := alert.NewAlertManagerRuleDAO(db, logger, userDAO)
-	projectionPlanJournalDAO := config2.NewProjectionPlanJournalDAO(logger, db)
 	alertRuleHistoryReader := config2.NewAlertRuleHistoryReader(logger, db)
-	projectionStore, cleanup, err := ProvideProjectionStore(redisClient)
-	if err != nil {
-		return nil, nil, err
-	}
 	alertRuleProjectionRunner := cache.NewAlertRuleProjectionRunner(projectionStore)
 	alertRuleConfigCache := cache.NewAlertRuleConfigCache(logger, scrapePoolDAO, alertManagerRuleDAO, monitorConfigDAO, batchConfigManager, cmdable, projectionPlanJournalDAO, alertRuleHistoryReader, alertRuleProjectionRunner)
 	alertManagerRecordDAO := alert.NewAlertManagerRecordDAO(db, logger, userDAO)
@@ -355,7 +359,7 @@ var Injector = wire.NewSet(
 )
 
 var CacheSet = wire.NewSet(
-	ProvideProjectionStore, config2.NewProjectionPlanJournalDAO, config2.NewGeneratedConfigHistoryReader, cache.NewRecordProjectionRunner, config2.NewAlertRuleHistoryReader, cache.NewAlertRuleProjectionRunner, cache.NewMonitorCache, cache.NewAlertManagerConfigCache, cache.NewAlertRuleConfigCache, cache.NewRecordRuleConfigCache, cache.NewPrometheusConfigCache, cache.NewBatchConfigManager,
+	ProvideProjectionStore, config2.NewProjectionPlanJournalDAO, config2.NewGeneratedConfigHistoryReader, cache.NewRecordProjectionRunner, config2.NewAlertRuleHistoryReader, cache.NewAlertRuleProjectionRunner, config2.NewPromMainHistoryReader, cache.NewPromMainProjectionRunner, cache.NewMonitorCache, cache.NewAlertManagerConfigCache, cache.NewAlertRuleConfigCache, cache.NewRecordRuleConfigCache, cache.NewPrometheusConfigCache, cache.NewBatchConfigManager,
 )
 
 var ClientSet = wire.NewSet(client.NewK8sClient)

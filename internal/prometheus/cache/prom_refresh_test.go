@@ -63,7 +63,9 @@ func TestJobTokenRotationRefreshesCachedOperationalConfig(t *testing.T) {
 	job := &model.MonitorScrapeJob{Name: "fixture", ServiceDiscoveryType: model.ServiceDiscoveryTypeStatic, Scheme: "https", MetricsPath: "/metrics", ScrapeInterval: 30, ScrapeTimeout: 10, IpAddress: "127.0.0.1:9100", BearerToken: "fixture-token-before"}
 	storage := &refreshRedis{values: map[string]string{}}
 	client := &promPublicationRedis{recordingPublicationRedis: &recordingPublicationRedis{refreshRedis: storage, members: map[string]bool{}}}
-	cache := &prometheusConfigCache{logger: logger, redis: client, scrapeJobDAO: scrapeJobsStub{jobs: []*model.MonitorScrapeJob{job}}, scrapePoolDAO: refreshPools{pool: &model.MonitorScrapePool{Model: model.Model{ID: 1}, Name: "fixture", PrometheusInstances: model.StringList{"127.0.0.1"}, ScrapeInterval: 30, ScrapeTimeout: 10}}, batchManager: NewBatchConfigManager(&recordingPublicationConfigs{rows: map[string]*model.MonitorConfig{}}, logger)}
+	configs := &recordingPublicationConfigs{rows: map[string]*model.MonitorConfig{}}
+	cache := &prometheusConfigCache{logger: logger, redis: client, scrapeJobDAO: scrapeJobsStub{jobs: []*model.MonitorScrapeJob{job}}, scrapePoolDAO: refreshPools{pool: &model.MonitorScrapePool{Model: model.Model{ID: 1}, Name: "fixture", PrometheusInstances: model.StringList{"127.0.0.1"}, ScrapeInterval: 30, ScrapeTimeout: 10}}, batchManager: NewBatchConfigManager(configs, logger)}
+	attachPromPublicationProjection(t, cache, configs, client)
 	if err := cache.GenerateMainConfig(context.Background()); err != nil {
 		t.Fatal(err)
 	}

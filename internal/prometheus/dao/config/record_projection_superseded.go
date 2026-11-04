@@ -25,8 +25,8 @@ type RecordSupersededArtifact struct {
 }
 
 func (d *monitorConfigDAO) GetSupersededRecordArtifacts(ctx context.Context, previous ProjectionReceipt) ([]RecordSupersededArtifact, error) {
-	return d.getSupersededScrapeRuleArtifacts(ctx, ScrapeRecordRule, previous)
+	return d.getSupersededScrapeRuleArtifacts(ctx, scrapeRecordPublication, previous)
 }
 func (d *monitorConfigDAO) GetLegacySupersededRecordArtifacts(ctx context.Context, poolID int, owners []GeneratedConfigOwner) ([]RecordSupersededArtifact, error) {
-	return d.getLegacySupersededScrapeRuleArtifacts(ctx, ScrapeRecordRule, poolID, owners)
+	return d.getLegacySupersededScrapeRuleArtifacts(ctx, scrapeRecordPublication, poolID, owners)
 }

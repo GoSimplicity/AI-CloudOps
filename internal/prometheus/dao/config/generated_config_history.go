@@ -63,5 +63,5 @@ func (d *monitorConfigDAO) GetGeneratedConfigHistoryCandidates(ctx context.Conte
 // Only an applied retirement inside a fully projected v2 operation proves that
 // an old owner no longer needs cleanup. A raw key may now belong to a new pool.
 func (d *monitorConfigDAO) GetProjectedRecordRetirements(ctx context.Context, poolID int, owners []GeneratedConfigOwner) ([]GeneratedConfigOwner, error) {
-	return d.getProjectedScrapeRuleRetirements(ctx, ScrapeRecordRule, poolID, owners)
+	return d.getProjectedScrapeRuleRetirements(ctx, scrapeRecordPublication, poolID, owners)
 }

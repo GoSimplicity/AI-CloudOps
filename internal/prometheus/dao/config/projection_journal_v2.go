@@ -24,6 +24,7 @@ type projectionManifestEnvelope struct {
 	PlanDigest       string                     `json:"plan_digest"`
 	RecordSuperseded []RecordSupersededArtifact `json:"record_superseded,omitempty"`
 	RuleSuperseded   []RecordSupersededArtifact `json:"rule_superseded,omitempty"`
+	PromSuperseded   []RecordSupersededArtifact `json:"prom_superseded,omitempty"`
 }
 type preparedProjectionPlan struct {
 	request    GeneratedProjectionPlanRequest
@@ -426,7 +427,7 @@ func decodeProjectionManifest(raw *string) (projectionManifestEnvelope, error) {
 			return envelope, ErrJournalConflict
 		}
 	}
-	if envelope.RecordSuperseded != nil && envelope.RuleSuperseded != nil {
+	if boolCount(envelope.RecordSuperseded != nil, envelope.RuleSuperseded != nil, envelope.PromSuperseded != nil) > 1 {
 		return envelope, ErrJournalConflict
 	}
 	if err := validateIssuedControlShape(envelope.Controls, envelope.Artifacts); err != nil {
@@ -600,7 +601,7 @@ func (d *monitorConfigDAO) loadProjectionReceipt(tx *gorm.DB, op model.MonitorCo
 			}
 		}
 	}
-	proofs, err := scopedRuleSuperseded(envelope, op.Family)
+	proofs, err := scopedScrapeSuperseded(envelope, op.Family)
 	if err != nil {
 		return ProjectionReceipt{}, err
 	}
@@ -670,15 +671,31 @@ func (d *monitorConfigDAO) LoadLastProjectedProjection(ctx context.Context, fami
 	return &receipt, nil
 }
 
-func scopedRuleSuperseded(envelope projectionManifestEnvelope, family int8) ([]RecordSupersededArtifact, error) {
+func scopedScrapeSuperseded(envelope projectionManifestEnvelope, family int8) ([]RecordSupersededArtifact, error) {
 	if envelope.RecordSuperseded != nil && family != 4 {
 		return nil, ErrJournalConflict
 	}
 	if envelope.RuleSuperseded != nil && family != 3 {
 		return nil, ErrJournalConflict
 	}
+	if envelope.PromSuperseded != nil && family != 1 {
+		return nil, ErrJournalConflict
+	}
+	if family == 1 {
+		return envelope.PromSuperseded, nil
+	}
 	if family == 3 {
 		return envelope.RuleSuperseded, nil
 	}
 	return envelope.RecordSuperseded, nil
+}
+
+func boolCount(values ...bool) int {
+	count := 0
+	for _, value := range values {
+		if value {
+			count++
+		}
+	}
+	return count
 }

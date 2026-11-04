@@ -18,6 +18,9 @@ import (
 func TestGeneratedCreationRejectsOwnerArrivingAfterPreflight(t *testing.T) {
 	runGeneratedCreationConflict(t, model.ConfigTypeRecordRule)
 }
+func TestPromMainCreationRejectsOwnerArrivingAfterPreflight(t *testing.T) {
+	runGeneratedCreationConflict(t, model.ConfigTypePrometheus)
+}
 func TestAlertRuleCreationRejectsOwnerArrivingAfterPreflight(t *testing.T) {
 	runGeneratedCreationConflict(t, model.ConfigTypeAlertRule)
 }

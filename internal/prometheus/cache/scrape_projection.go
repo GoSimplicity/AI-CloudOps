@@ -20,7 +20,7 @@ import (
 	configdao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
 )
 
-func (r *scrapeRuleProjection) publish(ctx context.Context, pool *model.MonitorScrapePool, generated map[string]string, targetHash string, sourceVersion uint64, fail func(string) error) error {
+func (r *scrapeProjection) publish(ctx context.Context, pool *model.MonitorScrapePool, generated map[string]string, targetHash string, sourceVersion uint64, fail func(string) error) error {
 	decoded, err := hex.DecodeString(targetHash)
 	if err != nil || len(decoded) != 32 {
 		return fail("发布指纹无效")
@@ -84,11 +84,11 @@ func (r *scrapeRuleProjection) publish(ctx context.Context, pool *model.MonitorS
 		}
 	}
 	oldIPs = append(filtered, historyIPs...)
-	plan, err := planScrapeRulePublication(ctx, r.scope, r.configDAO, pool.ID, generated, oldIPs)
+	plan, err := planScrapePublication(ctx, r.scope, r.configDAO, pool.ID, generated, oldIPs)
 	if err != nil {
 		return fail("检查配置归属")
 	}
-	if previous != nil && previous.SourceHash == sourceHash && previous.ManifestVersion == 2 && previous.CompleteControls && len(plan.create) == 0 && len(plan.update) == 0 && scrapeRuleReceiptCoversPlan(*previous, generated, plan) {
+	if previous != nil && previous.SourceHash == sourceHash && previous.ManifestVersion == 2 && previous.CompleteControls && len(plan.create) == 0 && len(plan.update) == 0 && scrapeReceiptCoversPlan(*previous, generated, plan) {
 		err := r.journal.WithPoolProjectionLease(ctx, *previous, func(lease configdao.ProjectionLease) error {
 			healthy, err := r.healthy(ctx, *previous, generated)
 			if err != nil {
@@ -130,7 +130,7 @@ func (r *scrapeRuleProjection) publish(ctx context.Context, pool *model.MonitorS
 	if err != nil {
 		return fail("预留持久发布版本")
 	}
-	request := scrapeRuleGeneratedPlan(reservation, sourceHash, generated, plan)
+	request := scrapeGeneratedPlan(reservation, sourceHash, generated, plan)
 	commitRequest := configdao.ScrapeRuleProjectionPlanRequest{
 		GeneratedProjectionPlanRequest: request,
 		History:                        historyGuards,
@@ -157,7 +157,7 @@ func (r *scrapeRuleProjection) publish(ctx context.Context, pool *model.MonitorS
 	return nil
 }
 
-func scrapeRuleGeneratedPlan(ref configdao.PoolReservation, hash [32]byte, generated map[string]string, plan scrapeRulePublicationPlan) configdao.GeneratedProjectionPlanRequest {
+func scrapeGeneratedPlan(ref configdao.PoolReservation, hash [32]byte, generated map[string]string, plan scrapePublicationPlan) configdao.GeneratedProjectionPlanRequest {
 	keys := make([]string, 0, len(generated)+len(plan.stale))
 	for ip := range generated {
 		keys = append(keys, ip)
@@ -173,7 +173,7 @@ func scrapeRuleGeneratedPlan(ref configdao.PoolReservation, hash [32]byte, gener
 		if body, wanted := generated[ip]; wanted {
 			item.Action = model.ConfigProjectionRender
 			row := &model.MonitorConfig{
-				Name: fmt.Sprintf(scrapeRuleScope(ref.Family).pattern(), ref.PoolID, ip), PoolID: ref.PoolID,
+				Name: fmt.Sprintf(scrapePublicationScope(ref.Family).pattern(), ref.PoolID, ip), PoolID: ref.PoolID,
 				ConfigType: ref.Family, InstanceIP: ip, Status: model.ConfigStatusActive,
 				ConfigContent: body, ConfigHash: calculateConfigHash(body), LastGeneratedTime: time.Now().Unix(),
 			}
@@ -201,7 +201,7 @@ func scrapeRuleGeneratedPlan(ref configdao.PoolReservation, hash [32]byte, gener
 	}}
 }
 
-func (r *scrapeRuleProjection) resolveRetirements(ctx context.Context, poolID int, plan *scrapeRulePublicationPlan, previous *configdao.ProjectionReceipt) error {
+func (r *scrapeProjection) resolveRetirements(ctx context.Context, poolID int, plan *scrapePublicationPlan, previous *configdao.ProjectionReceipt) error {
 	known := map[string]int{}
 	if previous != nil {
 		for _, artifact := range previous.Artifacts {
@@ -218,7 +218,7 @@ func (r *scrapeRuleProjection) resolveRetirements(ctx context.Context, poolID in
 		}
 		if id, ok := known[ip]; ok {
 			row, err := r.configDAO.GetGeneratedMonitorConfigByID(ctx, id)
-			if err != nil || !ownedScrapeRuleArtifact(row, r.scope, poolID) || row.InstanceIP != ip {
+			if err != nil || !ownedScrapeArtifact(row, r.scope, poolID) || row.InstanceIP != ip {
 				return errors.New("历史发布归属已变化")
 			}
 			knownRows[ip] = row
@@ -256,7 +256,7 @@ func (r *scrapeRuleProjection) resolveRetirements(ctx context.Context, poolID in
 		for _, ip := range batch {
 			matches := byKey[ip]
 			for _, row := range matches {
-				if !ownedScrapeRuleArtifact(row, r.scope, poolID) {
+				if !ownedScrapeArtifact(row, r.scope, poolID) {
 					return errors.New("历史命名空间含其他归属，保留原始缓存")
 				}
 			}
@@ -279,7 +279,7 @@ func (r *scrapeRuleProjection) resolveRetirements(ctx context.Context, poolID in
 	return nil
 }
 
-func (r *scrapeRuleProjection) healthy(ctx context.Context, receipt configdao.ProjectionReceipt, generated map[string]string) (bool, error) {
+func (r *scrapeProjection) healthy(ctx context.Context, receipt configdao.ProjectionReceipt, generated map[string]string) (bool, error) {
 	if receipt.Phase != model.ConfigPublicationProjected {
 		return false, nil
 	}
@@ -351,7 +351,7 @@ func (r *scrapeRuleProjection) healthy(ctx context.Context, receipt configdao.Pr
 	return true, nil
 }
 
-func (r *scrapeRuleProjection) historicalLocators(ctx context.Context, poolID int, desired map[string]string, superseded map[int]configdao.GeneratedConfigOwner) ([]string, []string, []configdao.ScrapeRuleSupersededArtifact, error) {
+func (r *scrapeProjection) historicalLocators(ctx context.Context, poolID int, desired map[string]string, superseded map[int]configdao.GeneratedConfigOwner) ([]string, []string, []configdao.ScrapeRuleSupersededArtifact, error) {
 	rows, err := readConfigMetadataPages(ctx, func(page, size int) ([]*model.MonitorConfig, int64, error) {
 		return r.history.GetGeneratedConfigHistoryCandidates(ctx, configdao.GeneratedConfigPoolQuery{PoolID: poolID, ConfigType: int8(r.scope), Page: page, Size: size})
 	})
@@ -363,7 +363,7 @@ func (r *scrapeRuleProjection) historicalLocators(ctx context.Context, poolID in
 		if row.PoolID != poolID || row.ConfigType != int8(r.scope) {
 			return nil, nil, nil, errors.New("历史候选超出查询范围")
 		}
-		if row.DeletedAt > 0 && ownedScrapeRuleArtifact(row, r.scope, poolID) {
+		if row.DeletedAt > 0 && ownedScrapeArtifact(row, r.scope, poolID) {
 			candidates = append(candidates, configdao.GeneratedConfigOwnerOf(row))
 		}
 	}
@@ -442,7 +442,7 @@ func (r *scrapeRuleProjection) historicalLocators(ctx context.Context, poolID in
 		if row.PoolID != poolID || row.ConfigType != int8(r.scope) {
 			return nil, nil, nil, errors.New("历史候选超出查询范围")
 		}
-		if row.DeletedAt == 0 || !ownedScrapeRuleArtifact(row, r.scope, poolID) || resolvedKey[row.InstanceIP] {
+		if row.DeletedAt == 0 || !ownedScrapeArtifact(row, r.scope, poolID) || resolvedKey[row.InstanceIP] {
 			continue
 		}
 		if _, wanted := desired[row.InstanceIP]; wanted {
@@ -471,7 +471,7 @@ func (r *scrapeRuleProjection) historicalLocators(ctx context.Context, poolID in
 	return discovered, resolved, legacyProofs, nil
 }
 
-func (r *scrapeRuleProjection) captureHistoryGuards(ctx context.Context, poolID int, plan scrapeRulePublicationPlan) ([]configdao.ScrapeRuleHistoryGuard, error) {
+func (r *scrapeProjection) captureHistoryGuards(ctx context.Context, poolID int, plan scrapePublicationPlan) ([]configdao.ScrapeRuleHistoryGuard, error) {
 	guards := make([]configdao.ScrapeRuleHistoryGuard, 0, len(plan.stale))
 	seen := map[int]bool{}
 	for start := 0; start < len(plan.stale); start += configdao.GeneratedConfigQueryLimit {
@@ -508,14 +508,14 @@ func (r *scrapeRuleProjection) captureHistoryGuards(ctx context.Context, poolID 
 			if !found {
 				return nil, errors.New("退休配置历史归属已变化")
 			}
-			guard, err := configdao.ScrapeRuleHistoryGuardOf(configdao.ScrapeRuleScope(r.scope), ip, byKey[ip])
+			guard, err := r.scope.historyGuard(ip, byKey[ip])
 			if err != nil {
 				return nil, err
 			}
 			if plan.retired[ip].PoolID != poolID {
 				return nil, errors.New("退休配置归属不一致")
 			}
-			if err := configdao.ValidateScrapeRuleRetirementHistory(configdao.ScrapeRuleScope(r.scope), plan.retired[ip], guard); err != nil {
+			if err := r.scope.validateHistory(plan.retired[ip], guard); err != nil {
 				return nil, err
 			}
 			guards = append(guards, guard)
@@ -524,7 +524,7 @@ func (r *scrapeRuleProjection) captureHistoryGuards(ctx context.Context, poolID 
 	return guards, nil
 }
 
-func (r *scrapeRuleProjection) sourceVersions(ctx context.Context) (map[int]uint64, error) {
+func (r *scrapeProjection) sourceVersions(ctx context.Context) (map[int]uint64, error) {
 	if err := r.ready(); err != nil {
 		return nil, err
 	}
@@ -545,7 +545,7 @@ func (r *scrapeRuleProjection) sourceVersions(ctx context.Context) (map[int]uint
 	return versions, nil
 }
 
-func scrapeRuleReceiptCoversPlan(receipt configdao.ProjectionReceipt, desired map[string]string, plan scrapeRulePublicationPlan) bool {
+func scrapeReceiptCoversPlan(receipt configdao.ProjectionReceipt, desired map[string]string, plan scrapePublicationPlan) bool {
 	issued := map[string]configdao.ArtifactReceipt{}
 	for _, artifact := range receipt.Artifacts {
 		if artifact.ConfigType != receipt.Reservation.Family {

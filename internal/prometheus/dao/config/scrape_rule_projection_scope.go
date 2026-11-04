@@ -47,3 +47,17 @@ func NewAlertRuleProjectionJournalDAO(logger *zap.Logger, db *gorm.DB) AlertRule
 func NewAlertRuleHistoryReader(logger *zap.Logger, db *gorm.DB) AlertRuleHistoryReader {
 	return &monitorConfigDAO{l: logger, db: db}
 }
+
+// Private publication scope includes exactly the three real Scrape consumers.
+// The published ScrapeRuleScope and its helpers remain restricted to 3/4.
+type scrapePublicationScope int8
+
+const (
+	scrapePromPublication   scrapePublicationScope = 1
+	scrapeAlertPublication  scrapePublicationScope = 3
+	scrapeRecordPublication scrapePublicationScope = 4
+)
+
+func validScrapePublicationScope(scope scrapePublicationScope) bool {
+	return scope == scrapePromPublication || scope == scrapeAlertPublication || scope == scrapeRecordPublication
+}

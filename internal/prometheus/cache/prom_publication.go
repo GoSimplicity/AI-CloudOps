@@ -8,14 +8,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"sort"
-	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	configDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/utils"
 	pc "github.com/prometheus/prometheus/config"
-	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
@@ -51,119 +48,30 @@ func (p *prometheusConfigCache) promConfigDAO() configDao.MonitorConfigDAO {
 	return nil
 }
 
-func ownedPromArtifact(row *model.MonitorConfig, poolID int) bool {
-	return row != nil && row.ID > 0 && row.PoolID == poolID && row.ConfigType == model.ConfigTypePrometheus &&
-		validateInstanceIPs([]string{row.InstanceIP}) == nil && row.Name == fmt.Sprintf(ConfigNamePrometheus, poolID, row.InstanceIP)
-}
+type promPublicationPlan = scrapePublicationPlan
 
-type promPublicationPlan struct {
-	create  []*model.MonitorConfig
-	update  []configDao.GeneratedConfigUpdate
-	stale   []string
-	retired map[string]configDao.GeneratedConfigOwner
-}
-
-// Inspect every metadata page before any write. This also discovers canonical
-// rows left without membership by an older failed publication.
 func (p *prometheusConfigCache) planPromPublication(ctx context.Context, poolID int, desired map[string]string, oldIPs []string) (promPublicationPlan, error) {
-	plan := promPublicationPlan{retired: map[string]configDao.GeneratedConfigOwner{}}
-	dao := p.promConfigDAO()
-	if dao == nil {
-		return plan, errors.New("配置存储不可用")
-	}
-	kind := model.ConfigTypePrometheus
-	byKey := map[string][]*model.MonitorConfig{}
-	stale := map[string]bool{}
-	for _, ip := range oldIPs {
-		if err := validateInstanceIPs([]string{ip}); err != nil {
-			return plan, errors.New("实例成员无效")
-		}
-		if _, wanted := desired[ip]; !wanted {
-			stale[ip] = true
-		}
-	}
-	candidates, err := readPoolConfigCandidates(ctx, dao, poolID, kind)
-	if err != nil {
-		return plan, err
-	}
-	queryKeys := make([]string, 0, len(desired)+len(oldIPs)+len(candidates))
-	for ip := range desired {
-		queryKeys = append(queryKeys, ip)
-	}
-	queryKeys = append(queryKeys, oldIPs...)
-	var locators []configDao.GeneratedConfigOwner
-	for _, row := range candidates {
-		if ownedPromArtifact(row, poolID) {
-			queryKeys = append(queryKeys, row.InstanceIP)
-			locators = append(locators, configDao.GeneratedConfigOwnerOf(row))
-			if _, wanted := desired[row.InstanceIP]; !wanted {
-				stale[row.InstanceIP] = true
-			}
-		}
-	}
-	rows, err := readConfigKeyNamespace(ctx, dao, kind, queryKeys)
-	if err != nil {
-		return plan, err
-	}
-	if err := validateConfigLocatorOwners(locators, rows); err != nil {
-		return plan, err
-	}
-	for _, row := range rows {
-		byKey[row.InstanceIP] = append(byKey[row.InstanceIP], row)
-	}
-	keys := make([]string, 0, len(desired))
-	for ip := range desired {
-		keys = append(keys, ip)
-	}
-	sort.Strings(keys)
-	for _, ip := range keys {
-		rows := byKey[ip]
-		if len(rows) > 1 || len(rows) == 1 && !ownedPromArtifact(rows[0], poolID) {
-			return plan, errors.New("配置归属冲突")
-		}
-		content := desired[ip]
-		hash := calculateConfigHash(content)
-		name := fmt.Sprintf(ConfigNamePrometheus, poolID, ip)
-		if len(rows) == 0 {
-			plan.create = append(plan.create, &model.MonitorConfig{Name: name, PoolID: poolID, InstanceIP: ip, ConfigType: kind, ConfigContent: content, ConfigHash: hash, Status: model.ConfigStatusActive, LastGeneratedTime: time.Now().Unix()})
-		} else {
-			row := rows[0]
-			if row.ConfigContent == content && row.ConfigHash == hash && row.Status == model.ConfigStatusActive {
-				continue
-			}
-			copy := *row
-			copy.ConfigContent, copy.ConfigHash, copy.Status = content, hash, model.ConfigStatusActive
-			copy.LastGeneratedTime = time.Now().Unix()
-			plan.update = append(plan.update, configDao.GeneratedConfigUpdate{Expected: configDao.GeneratedConfigOwnerOf(row), Desired: copy})
-		}
-	}
-	for ip := range stale {
-		rows := byKey[ip]
-		if len(rows) > 1 || len(rows) == 1 && !ownedPromArtifact(rows[0], poolID) {
-			return plan, errors.New("旧配置归属冲突")
-		}
-		if len(rows) == 1 {
-			plan.retired[ip] = configDao.GeneratedConfigOwnerOf(rows[0])
-		}
-		plan.stale = append(plan.stale, ip)
-	}
-	sort.Strings(plan.stale)
-	return plan, nil
+	return planScrapePublication(ctx, scrapePromScope, p.promConfigDAO(), poolID, desired, oldIPs)
 }
 
-// Collect the complete pool inventory before publication; incomplete pages do not
-// authorize any writes. Count checks detect observed drift, not SQL snapshot isolation.
 func (p *prometheusConfigCache) readPromPoolSnapshot(ctx context.Context) ([]*model.MonitorScrapePool, error) {
 	return readScrapePoolSnapshot(ctx, p.scrapePoolDAO)
 }
 
 func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
+	if err := p.promPublicationReady(); err != nil {
+		return err
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+	versions, err := p.promSourceVersions(ctx)
+	if err != nil {
 		return err
 	}
 	pools, err := p.readPromPoolSnapshot(ctx)
@@ -175,14 +83,17 @@ func (p *prometheusConfigCache) GenerateMainConfig(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return errors.Join(append(failures, err)...)
 		}
-		if err := p.publishPromPool(ctx, pool); err != nil {
+		if err := p.publishPromPool(ctx, pool, versions[pool.ID]); err != nil {
 			failures = append(failures, err)
 		}
 	}
 	return errors.Join(append(failures, ctx.Err())...)
 }
 
-func (p *prometheusConfigCache) publishPromPool(ctx context.Context, sourcePool *model.MonitorScrapePool) error {
+func (p *prometheusConfigCache) publishPromPool(ctx context.Context, sourcePool *model.MonitorScrapePool, version uint64) error {
+	if err := p.promPublicationReady(); err != nil {
+		return err
+	}
 	pool, _ := detachedPromInput(sourcePool, nil)
 	fail := func(stage string) error { return p.promPublicationError(pool.ID, stage) }
 	if pool.DeletedAt > 0 {
@@ -204,6 +115,9 @@ func (p *prometheusConfigCache) publishPromPool(ctx context.Context, sourcePool 
 	generated := map[string]string{}
 	targetHash := calculateConfigHash(fmt.Sprintf("deleted:%d:%d", pool.ID, pool.DeletedAt))
 	if pool.DeletedAt == 0 {
+		if p.scrapeJobDAO == nil {
+			return fail("采集任务存储不可用")
+		}
 		jobs, err := p.scrapeJobDAO.GetMonitorScrapeJobsByPoolId(ctx, pool.ID)
 		if err != nil {
 			return fail("读取采集任务")
@@ -250,109 +164,5 @@ func (p *prometheusConfigCache) publishPromPool(ctx context.Context, sourcePool 
 		// sharding. Public/redacted job JSON is not an adequate version fingerprint.
 		targetHash = fmt.Sprintf("%x", sha256.Sum256(append([]byte(utils.CalculatePromHash(pool)), serialized...)))
 	}
-	key := promPublicationKey(pool.ID)
-	previous, err := p.redis.Get(ctx, key).Result()
-	if err != nil && !errors.Is(err, redis.Nil) {
-		return fail("读取发布版本")
-	}
-	membersKey := buildRedisSetKeyPrometheusMainPoolIPs(pool.ID)
-	oldIPs, err := p.redis.SMembers(ctx, membersKey).Result()
-	if err != nil {
-		return fail("读取实例成员")
-	}
-	plan, err := p.planPromPublication(ctx, pool.ID, generated, oldIPs)
-	if err != nil {
-		return fail("检查配置归属")
-	}
-	sameMembers := len(oldIPs) == len(desiredIPs)
-	for _, ip := range oldIPs {
-		if !desiredIPs[ip] {
-			sameMembers = false
-		}
-	}
-	sameArtifacts := true
-	for _, ip := range pool.PrometheusInstances {
-		body, err := p.redis.Get(ctx, buildRedisKeyPrometheusMain(ip)).Result()
-		if err != nil && !errors.Is(err, redis.Nil) {
-			return fail("读取配置缓存")
-		}
-		if body != generated[ip] {
-			sameArtifacts = false
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if previous == targetHash && sameMembers && sameArtifacts && len(plan.create) == 0 && len(plan.update) == 0 && len(plan.stale) == 0 {
-		return nil
-	}
-	if err := p.redis.Set(ctx, key, "pending:"+targetHash, 0).Err(); err != nil {
-		return fail("标记待发布")
-	}
-	// A historical owned DB row may have no member index. Every retirement,
-	// including live target removal or feature-off, must remain discoverable after
-	// SQL soft-delete succeeds but Redis deletion fails.
-	for _, ip := range plan.stale {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := p.redis.SAdd(ctx, membersKey, ip).Err(); err != nil {
-			return fail("登记待清退实例成员")
-		}
-	}
-	// Register all intended targets before DB or configuration writes. Failed
-	// attempts remain discoverable even when no configuration row was created.
-	for _, ip := range pool.PrometheusInstances {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := p.redis.SAdd(ctx, membersKey, ip).Err(); err != nil {
-			return fail("登记实例成员")
-		}
-	}
-	dao := p.promConfigDAO()
-	if len(plan.create) > 0 {
-		if err := dao.BatchCreateMonitorConfigs(ctx, plan.create); err != nil {
-			return fail("创建配置")
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if len(plan.update) > 0 {
-		if err := dao.UpdateGeneratedMonitorConfigs(ctx, plan.update); err != nil {
-			return fail("更新配置")
-		}
-	}
-	for _, ip := range pool.PrometheusInstances {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err := p.redis.Set(ctx, buildRedisKeyPrometheusMain(ip), generated[ip], 0).Err(); err != nil {
-			return fail("写入配置缓存")
-		}
-	}
-	for _, ip := range plan.stale {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if expected, ok := plan.retired[ip]; ok {
-			if err := dao.DeleteGeneratedMonitorConfig(ctx, expected); err != nil {
-				return fail("清理旧配置归属")
-			}
-		}
-		if err := p.redis.Del(ctx, buildRedisKeyPrometheusMain(ip)).Err(); err != nil {
-			return fail("清理旧配置缓存")
-		}
-		if err := p.redis.SRem(ctx, membersKey, ip).Err(); err != nil {
-			return fail("清理旧实例成员")
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if err := p.redis.Set(ctx, key, targetHash, 0).Err(); err != nil {
-		return fail("确认发布版本")
-	}
-	return nil
+	return p.publishPromProjection(ctx, pool, generated, targetHash, version, fail)
 }

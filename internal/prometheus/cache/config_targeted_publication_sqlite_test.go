@@ -74,7 +74,7 @@ func TestGeneratedPublicationNamespaceConflictsWithRealSQLite(t *testing.T) {
 							t.Fatal("ambiguous namespace authorized publication")
 						}
 					} else if kind == model.ConfigTypeAlertRule {
-						if _, err := planScrapeRulePublication(context.Background(), scrapeAlertScope, dao, 7, desired, old); err == nil {
+						if _, err := planScrapePublication(context.Background(), scrapeAlertScope, dao, 7, desired, old); err == nil {
 							t.Fatal("ambiguous Alert namespace authorized publication")
 						}
 					} else {
@@ -147,7 +147,7 @@ func TestGeneratedPublicationUnindexedOrphanNamespaceWithRealSQLite(t *testing.T
 					plan, planErr := cache.planPromPublication(context.Background(), 7, nil, nil)
 					stale, retired, err = plan.stale, plan.retired, planErr
 				} else if kind == model.ConfigTypeAlertRule {
-					plan, planErr := planScrapeRulePublication(context.Background(), scrapeAlertScope, dao, 7, nil, nil)
+					plan, planErr := planScrapePublication(context.Background(), scrapeAlertScope, dao, 7, nil, nil)
 					stale, retired, err = plan.stale, plan.retired, planErr
 				} else {
 					cache := &recordRuleConfigCache{configDAO: dao}
@@ -237,7 +237,7 @@ func TestGeneratedPublicationReturnedRowsScaleWithRealSQLite(t *testing.T) {
 							t.Fatal("stable Prom metadata did not produce an empty plan", err)
 						}
 					} else if kind == model.ConfigTypeAlertRule {
-						plan, err := planScrapeRulePublication(context.Background(), scrapeAlertScope, dao, poolID, map[string]string{ip: "owned"}, []string{ip})
+						plan, err := planScrapePublication(context.Background(), scrapeAlertScope, dao, poolID, map[string]string{ip: "owned"}, []string{ip})
 						if err != nil || len(plan.create)+len(plan.update)+len(plan.stale) != 0 {
 							t.Fatal("stable Alert metadata did not produce an empty plan", err)
 						}

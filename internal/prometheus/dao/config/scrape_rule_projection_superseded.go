@@ -11,8 +11,8 @@ import (
 	"gorm.io/gorm"
 )
 
-func (d *monitorConfigDAO) getSupersededScrapeRuleArtifacts(ctx context.Context, scope ScrapeRuleScope, previous ProjectionReceipt) ([]RecordSupersededArtifact, error) {
-	if !validScrapeRuleScope(scope) {
+func (d *monitorConfigDAO) getSupersededScrapeRuleArtifacts(ctx context.Context, scope scrapePublicationScope, previous ProjectionReceipt) ([]RecordSupersededArtifact, error) {
+	if !validScrapePublicationScope(scope) {
 		return nil, ErrJournalInvalid
 	}
 	result := []RecordSupersededArtifact{}
@@ -42,7 +42,7 @@ func (d *monitorConfigDAO) readAcceptedScrapeRuleReplacement(tx *gorm.DB, operat
 	if err := tx.Where("operation_id = ?", operationID).First(&oldOp).Error; err != nil {
 		return nil, err
 	}
-	if !validScrapeRuleScope(ScrapeRuleScope(oldOp.Family)) || (oldOp.Phase != model.ConfigPublicationCommitted && oldOp.Phase != model.ConfigPublicationProjected) {
+	if !validScrapePublicationScope(scrapePublicationScope(oldOp.Family)) || (oldOp.Phase != model.ConfigPublicationCommitted && oldOp.Phase != model.ConfigPublicationProjected) {
 		return nil, nil
 	}
 	old, err := d.loadProjectionReceipt(tx, oldOp)
@@ -226,7 +226,7 @@ func prepareScrapeRuleReplacements(req RecordProjectionPlanRequest) ([]RecordSup
 // the replacement that was checked under the business transaction's NS lock.
 func (d *monitorConfigDAO) validateScrapeRuleReplacementHistory(tx *gorm.DB, recovery model.MonitorConfigPoolOperation, proofs []RecordSupersededArtifact) error {
 	for _, proof := range proofs {
-		if !validScrapeRuleScope(ScrapeRuleScope(recovery.Family)) || proof.RetiredOwner.ConfigType != recovery.Family || proof.RetiredOwner.PoolID != recovery.PoolID {
+		if !validScrapePublicationScope(scrapePublicationScope(recovery.Family)) || proof.RetiredOwner.ConfigType != recovery.Family || proof.RetiredOwner.PoolID != recovery.PoolID {
 			return ErrJournalConflict
 		}
 		if proof.Origin == RecordSupersededAcceptedArtifact {
@@ -283,7 +283,7 @@ func (d *monitorConfigDAO) loadScrapeRuleIssuedArtifact(tx *gorm.DB, opID, event
 	if err := tx.Where("operation_id = ?", opID).First(&op).Error; err != nil {
 		return op, ArtifactReceipt{}, event, err
 	}
-	if !validScrapeRuleScope(ScrapeRuleScope(op.Family)) {
+	if !validScrapePublicationScope(scrapePublicationScope(op.Family)) {
 		return op, ArtifactReceipt{}, event, ErrJournalConflict
 	}
 	base, err := d.loadReceipt(tx, op)
@@ -354,7 +354,7 @@ func (d *monitorConfigDAO) readLegacyScrapeRuleReplacement(tx *gorm.DB, owner Ge
 	if err := tx.Unscoped().First(&row, owner.ID).Error; err != nil {
 		return nil, err
 	}
-	if row.DeletedAt == 0 || GeneratedConfigOwnerOf(&row) != owner || !validScrapeRuleScope(ScrapeRuleScope(owner.ConfigType)) || !generatedRowNameValid(&row) {
+	if row.DeletedAt == 0 || GeneratedConfigOwnerOf(&row) != owner || !validScrapePublicationScope(scrapePublicationScope(owner.ConfigType)) || !generatedRowNameValid(&row) {
 		return nil, nil
 	}
 	proof, err := d.readProjectedScrapeRuleReplacement(tx, owner)
@@ -365,8 +365,8 @@ func (d *monitorConfigDAO) readLegacyScrapeRuleReplacement(tx *gorm.DB, owner Ge
 	proof.RetiredDeletedAt = uint64(row.DeletedAt)
 	return proof, nil
 }
-func (d *monitorConfigDAO) getLegacySupersededScrapeRuleArtifacts(ctx context.Context, scope ScrapeRuleScope, poolID int, owners []GeneratedConfigOwner) ([]RecordSupersededArtifact, error) {
-	if !validScrapeRuleScope(scope) {
+func (d *monitorConfigDAO) getLegacySupersededScrapeRuleArtifacts(ctx context.Context, scope scrapePublicationScope, poolID int, owners []GeneratedConfigOwner) ([]RecordSupersededArtifact, error) {
+	if !validScrapePublicationScope(scope) {
 		return nil, ErrJournalInvalid
 	}
 	if err := ctx.Err(); err != nil {
@@ -394,8 +394,8 @@ func (d *monitorConfigDAO) getLegacySupersededScrapeRuleArtifacts(ctx context.Co
 }
 
 func (d *monitorConfigDAO) GetSupersededAlertRuleArtifacts(ctx context.Context, previous ProjectionReceipt) ([]ScrapeRuleSupersededArtifact, error) {
-	return d.getSupersededScrapeRuleArtifacts(ctx, ScrapeAlertRule, previous)
+	return d.getSupersededScrapeRuleArtifacts(ctx, scrapeAlertPublication, previous)
 }
 func (d *monitorConfigDAO) GetLegacySupersededAlertRuleArtifacts(ctx context.Context, poolID int, owners []GeneratedConfigOwner) ([]ScrapeRuleSupersededArtifact, error) {
-	return d.getLegacySupersededScrapeRuleArtifacts(ctx, ScrapeAlertRule, poolID, owners)
+	return d.getLegacySupersededScrapeRuleArtifacts(ctx, scrapeAlertPublication, poolID, owners)
 }

@@ -13,14 +13,14 @@ type RecordProjectionRunner interface {
 }
 
 func NewRecordProjectionRunner(store *ProjectionStore) RecordProjectionRunner {
-	return &scrapeRuleProjectionRunner{store: store, scope: scrapeRecordScope}
+	return &scrapeProjectionRunner{store: store, scope: scrapeRecordScope}
 }
-func (r *recordRuleConfigCache) projectionContext() (*scrapeRuleProjection, error) {
+func (r *recordRuleConfigCache) projectionContext() (*scrapeProjection, error) {
 	journal, ok := r.journal.(configdao.RecordProjectionJournalDAO)
 	if !ok || journal == nil || r.history == nil || r.projection == nil {
 		return nil, errors.New("预聚合持久发布依赖不可用")
 	}
-	result := &scrapeRuleProjection{scope: scrapeRecordScope, redis: r.redis, configDAO: r.recordConfigDAO(), journal: recordJournalFacade{journal}, history: recordHistoryFacade{r.history}, projection: r.projection}
+	result := &scrapeProjection{scope: scrapeRecordScope, redis: r.redis, configDAO: r.recordConfigDAO(), journal: recordJournalFacade{journal}, history: recordHistoryFacade{r.history}, projection: r.projection}
 	return result, result.ready()
 }
 func (r *recordRuleConfigCache) recordPublicationReady() error {

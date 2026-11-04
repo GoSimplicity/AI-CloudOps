@@ -195,6 +195,12 @@ func TestProjectionStoreOwnedRedisProtocol(t *testing.T) {
 		{"alert_same_hash_metadata", TestAlertRuleProjectionNativeSameHashFindsNewDatabaseOnlyRetirement},
 		{"alert_source_snapshot", TestAlertRuleProjectionNativeOlderSourceCannotReserveAfterNewerPublication},
 		{"scrape_rule_family_isolation", TestScrapeRuleProjectionNativeFamiliesShareDatabaseWithoutCrossWrites},
+		{"prom_publishers", TestPromMainProjectionNativeLatePacketsCannotDamageNewOwner},
+		{"prom_legacy_owner", TestPromMainProjectionNativeLegacyOwnerCanFinishAfterReplacement},
+		{"prom_same_hash_metadata", TestPromMainProjectionNativeSameHashFindsNewDatabaseOnlyRetirement},
+		{"prom_source_snapshot", TestPromMainProjectionNativeOlderSourceCannotReplaceNewer},
+		{"prom_credential_rotation", TestPromMainProjectionNativeCredentialRotationUsesOperationalBytes},
+		{"prom_deleted_pool", TestPromMainProjectionNativeDeletedPoolRetiresWithoutJobRead},
 	}
 	for _, group := range groups {
 		skipped := false

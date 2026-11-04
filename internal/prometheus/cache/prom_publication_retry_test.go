@@ -67,7 +67,7 @@ type promPublicationFixture struct {
 	pool    *model.MonitorScrapePool
 }
 
-func newPromPublicationFixture() promPublicationFixture {
+func newPromPublicationFixture(t *testing.T) promPublicationFixture {
 	jobs := &promPublicationJobs{jobs: []*model.MonitorScrapeJob{{
 		Name: "fixture", ServiceDiscoveryType: model.ServiceDiscoveryTypeStatic,
 		Scheme: "https", MetricsPath: "/metrics", ScrapeInterval: 30, ScrapeTimeout: 10,
@@ -82,6 +82,7 @@ func newPromPublicationFixture() promPublicationFixture {
 	logger := zap.NewNop()
 	cache := &prometheusConfigCache{logger: logger, redis: storage, scrapeJobDAO: jobs,
 		scrapePoolDAO: refreshPools{pool: pool}, batchManager: NewBatchConfigManager(configs, logger)}
+	attachPromPublicationProjection(t, cache, configs, storage)
 	return promPublicationFixture{cache: cache, jobs: jobs, storage: storage, configs: configs, pool: pool}
 }
 
@@ -116,7 +117,7 @@ func TestPromPublicationRetriesFailedSnapshot(t *testing.T) {
 		{name: "completion marker", failure: "hash"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			fixture := newPromPublicationFixture()
+			fixture := newPromPublicationFixture(t)
 			if test.multiple {
 				fixture.pool.PrometheusInstances = append(fixture.pool.PrometheusInstances, "127.0.0.2")
 			}
@@ -136,6 +137,11 @@ func TestPromPublicationRetriesFailedSnapshot(t *testing.T) {
 			if test.stale {
 				fixture.storage.members["127.0.0.2"] = true
 				fixture.storage.values[buildRedisKeyPrometheusMain("127.0.0.2")] = previousConfig
+				// The member is only a locator. Authorize stale cleanup through an
+				// actual canonical SQL fixture row, not by inventing owner permission.
+				fixture.configs.next++
+				fixture.configs.rows["127.0.0.2"] = &model.MonitorConfig{Model: model.Model{ID: fixture.configs.next}, PoolID: fixture.pool.ID, ConfigType: 1, InstanceIP: "127.0.0.2", Name: fmt.Sprintf(ConfigNamePrometheus, fixture.pool.ID, "127.0.0.2"), ConfigContent: previousConfig, ConfigHash: calculateConfigHash(previousConfig), Status: 1}
+
 			}
 			fixture.jobs.jobs[0].BearerToken = "fixture-token-after"
 			fixture.storage.failure = test.failure
@@ -147,7 +153,7 @@ func TestPromPublicationRetriesFailedSnapshot(t *testing.T) {
 				if fixture.storage.values[hashKey] != previousHash {
 					t.Error("preflight read failure changed the acknowledged generation")
 				}
-			} else if !strings.HasPrefix(fixture.storage.values[hashKey], "pending:") {
+			} else if !promFixturePending(fixture.cache, fixture.pool.ID) {
 				t.Error("partial publication retained a trusted completion marker")
 			}
 			if test.failure == "set" && fixture.storage.values[configKey] != previousConfig {
@@ -190,7 +196,7 @@ func TestPromPublicationRetriesFailedSnapshot(t *testing.T) {
 }
 
 func TestPromPublicationEmptyActiveJobsStopsOldScraping(t *testing.T) {
-	fixture := newPromPublicationFixture()
+	fixture := newPromPublicationFixture(t)
 	ctx := context.Background()
 	if err := fixture.cache.GenerateMainConfig(ctx); err != nil {
 		t.Fatal(err)
@@ -213,7 +219,7 @@ func TestPromPublicationEmptyActiveJobsStopsOldScraping(t *testing.T) {
 func TestPromPublicationInvalidSnapshotRetainsLastGood(t *testing.T) {
 	for _, kind := range []string{"DAO error", "invalid auth", "invalid timing", "invalid relabel", "nil job"} {
 		t.Run(kind, func(t *testing.T) {
-			fixture := newPromPublicationFixture()
+			fixture := newPromPublicationFixture(t)
 			ctx := context.Background()
 			if err := fixture.cache.GenerateMainConfig(ctx); err != nil {
 				t.Fatal(err)
@@ -243,7 +249,7 @@ func TestPromPublicationInvalidSnapshotRetainsLastGood(t *testing.T) {
 }
 
 func TestPromPublicationUsesOneJobSnapshotIncludingRotation(t *testing.T) {
-	fixture := newPromPublicationFixture()
+	fixture := newPromPublicationFixture(t)
 	for iteration := 0; iteration < 3; iteration++ {
 		if iteration == 1 {
 			fixture.jobs.jobs[0].BearerToken = "fixture-token-after"
@@ -265,7 +271,7 @@ func TestPromPublicationErrorsDoNotExposePrivateConfig(t *testing.T) {
 	const privateValue = "fixture-private-configuration-canary"
 	for _, kind := range []string{"DAO", "relabel", "remote write", "remote read"} {
 		t.Run(kind, func(t *testing.T) {
-			fixture := newPromPublicationFixture()
+			fixture := newPromPublicationFixture(t)
 			core, logs := observer.New(zap.DebugLevel)
 			fixture.cache.logger = zap.New(core)
 			switch kind {

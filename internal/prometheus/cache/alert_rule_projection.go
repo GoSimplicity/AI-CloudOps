@@ -13,14 +13,14 @@ type AlertRuleProjectionRunner interface {
 }
 
 func NewAlertRuleProjectionRunner(store *ProjectionStore) AlertRuleProjectionRunner {
-	return &scrapeRuleProjectionRunner{store: store, scope: scrapeAlertScope}
+	return &scrapeProjectionRunner{store: store, scope: scrapeAlertScope}
 }
-func (r *alertRuleConfigCache) projectionContext() (*scrapeRuleProjection, error) {
+func (r *alertRuleConfigCache) projectionContext() (*scrapeProjection, error) {
 	journal, ok := r.journal.(configdao.AlertRuleProjectionJournalDAO)
 	if !ok || journal == nil || r.history == nil || r.projection == nil {
 		return nil, errors.New("告警规则持久发布依赖不可用")
 	}
-	result := &scrapeRuleProjection{scope: scrapeAlertScope, redis: r.redis, configDAO: r.ruleConfigDAO(), journal: alertJournalFacade{journal}, history: alertHistoryFacade{r.history}, projection: r.projection}
+	result := &scrapeProjection{scope: scrapeAlertScope, redis: r.redis, configDAO: r.ruleConfigDAO(), journal: alertJournalFacade{journal}, history: alertHistoryFacade{r.history}, projection: r.projection}
 	return result, result.ready()
 }
 func (r *alertRuleConfigCache) alertRulePublicationReady() error {

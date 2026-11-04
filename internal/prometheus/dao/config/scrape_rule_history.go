@@ -7,8 +7,8 @@ import (
 	"gorm.io/gorm"
 )
 
-func (d *monitorConfigDAO) getProjectedScrapeRuleRetirements(ctx context.Context, scope ScrapeRuleScope, poolID int, owners []GeneratedConfigOwner) ([]GeneratedConfigOwner, error) {
-	if !validScrapeRuleScope(scope) {
+func (d *monitorConfigDAO) getProjectedScrapeRuleRetirements(ctx context.Context, scope scrapePublicationScope, poolID int, owners []GeneratedConfigOwner) ([]GeneratedConfigOwner, error) {
+	if !validScrapePublicationScope(scope) {
 		return nil, ErrJournalInvalid
 	}
 	if err := ctx.Err(); err != nil {
@@ -142,7 +142,7 @@ func (d *monitorConfigDAO) scrapeRuleRetirementResolvedByRecovery(tx *gorm.DB, o
 		if err != nil {
 			return false, err
 		}
-		proofs, err := scopedRuleSuperseded(envelope, operation.Family)
+		proofs, err := scopedScrapeSuperseded(envelope, operation.Family)
 		if err != nil {
 			return false, err
 		}
@@ -168,7 +168,7 @@ func (d *monitorConfigDAO) scrapeRuleLegacyOwnersResolvedByManifests(tx *gorm.DB
 		if err != nil {
 			return nil, err
 		}
-		proofs, err := scopedRuleSuperseded(envelope, operation.Family)
+		proofs, err := scopedScrapeSuperseded(envelope, operation.Family)
 		if err != nil {
 			return nil, err
 		}
@@ -198,10 +198,13 @@ func (d *monitorConfigDAO) scrapeRuleLegacyOwnersResolvedByManifests(tx *gorm.DB
 }
 
 func (d *monitorConfigDAO) GetProjectedAlertRuleRetirements(ctx context.Context, poolID int, owners []GeneratedConfigOwner) ([]GeneratedConfigOwner, error) {
-	return d.getProjectedScrapeRuleRetirements(ctx, ScrapeAlertRule, poolID, owners)
+	return d.getProjectedScrapeRuleRetirements(ctx, scrapeAlertPublication, poolID, owners)
 }
 
 func scrapeRuleSidePattern(family int8) string {
+	if family == 1 {
+		return `%"prom_superseded"%`
+	}
 	if family == 3 {
 		return `%"rule_superseded"%`
 	}

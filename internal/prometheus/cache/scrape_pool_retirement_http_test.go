@@ -138,7 +138,8 @@ func TestDeletedPoolHTTPAndDatabaseRetirementRecoverFromPersistentTombstone(t *t
 			// Unknown legacy-only data has no trustworthy ownership and is untouched.
 			store.values["unknown-legacy-key"] = "keep"
 			makeManager := func() cache.MonitorCache {
-				prom, err := cache.NewPrometheusConfigCache(&config.Config{}, log, pools, nil, configs, nil, store)
+				promJournal, promHistory, promProjection := cache.PromMainProjectionDependenciesForTest(db, store)
+				prom, err := cache.NewPrometheusConfigCache(&config.Config{}, log, pools, nil, configs, nil, store, promJournal, promHistory, promProjection)
 				if err != nil {
 					t.Fatal(err)
 				}

@@ -72,9 +72,9 @@ func recordPublicationAckHarness(t *testing.T) publicationAckHarness {
 
 func promPublicationAckHarness(t *testing.T) publicationAckHarness {
 	t.Helper()
-	fixture := newPromPublicationFixture()
+	fixture := newPromPublicationFixture(t)
 	return publicationAckHarness{
-		poolID: fixture.pool.ID,
+		poolID: fixture.pool.ID, pending: func() bool { return promFixturePending(fixture.cache, fixture.pool.ID) },
 		valueA: "/metrics", valueB: "/metrics-b",
 		publish:  func() error { return fixture.cache.GenerateMainConfig(context.Background()) },
 		setValue: func(value string) { fixture.jobs.jobs[0].MetricsPath = value },
@@ -93,7 +93,7 @@ func promPublicationAckHarness(t *testing.T) publicationAckHarness {
 		restart: func() {
 			fixture.cache = &prometheusConfigCache{logger: fixture.cache.logger, redis: fixture.storage,
 				scrapePoolDAO: fixture.cache.scrapePoolDAO, scrapeJobDAO: fixture.jobs,
-				batchManager: NewBatchConfigManager(fixture.configs, fixture.cache.logger)}
+				batchManager: NewBatchConfigManager(fixture.configs, fixture.cache.logger), configDAO: fixture.cache.configDAO, journal: fixture.cache.journal, history: fixture.cache.history, projection: fixture.cache.projection}
 		},
 		state: func() (string, string, string) {
 			redisConfig := parsePublishedPromConfig(t, fixture.storage.values[buildRedisKeyPrometheusMain("127.0.0.1")])

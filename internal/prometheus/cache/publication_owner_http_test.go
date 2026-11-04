@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -102,6 +103,9 @@ func (s *ownerHTTPRedis) Del(_ context.Context, keys ...string) *redis.IntCmd {
 func TestGeneratedPublicationOwnerGuardThroughRealConfigCRUD(t *testing.T) {
 	runPublicationOwnerHTTPContract(t, model.ConfigTypeRecordRule)
 }
+func TestPromMainPublicationOwnerGuardThroughRealConfigCRUD(t *testing.T) {
+	runPublicationOwnerHTTPContract(t, model.ConfigTypePrometheus)
+}
 func TestAlertRulePublicationOwnerGuardThroughRealConfigCRUD(t *testing.T) {
 	runPublicationOwnerHTTPContract(t, model.ConfigTypeAlertRule)
 }
@@ -162,7 +166,11 @@ func runPublicationOwnerHTTPContract(t *testing.T, family int8) {
 			if mode == "delete" {
 				pool.PrometheusInstances = model.StringList{"127.0.0.1"}
 			} else {
-				setExpression("sum(up)")
+				if family == model.ConfigTypePrometheus {
+					setExpression("/metrics-next")
+				} else {
+					setExpression("sum(up)")
+				}
 			}
 			publishErr := cache.GenerateMainConfig(context.Background())
 			after, readErr := dao.GetMonitorConfigByID(context.Background(), id)
@@ -219,6 +227,18 @@ func ownerHTTPPublisherForFamily(t *testing.T, family int8, db *gorm.DB, dao con
 			hook()
 		}
 	}
+	if family == model.ConfigTypePrometheus {
+		pool.ScrapeInterval = 30
+		pool.ScrapeTimeout = 10
+		job := &model.MonitorScrapeJob{Model: model.Model{ID: 31}, PoolID: 7, Name: "fixture", Enable: 1, ServiceDiscoveryType: model.ServiceDiscoveryTypeStatic, Scheme: "http", MetricsPath: "/metrics", ScrapeInterval: 30, ScrapeTimeout: 10, IpAddress: "127.0.0.1:9100"}
+		journal, history, projection := cachepkg.PromMainProjectionDependenciesForTest(db, storage)
+		journal = &ownerHTTPPromJournal{PromMainProjectionJournalDAO: journal, before: before}
+		cache, err := cachepkg.NewPrometheusConfigCache(&config.Config{}, zap.NewNop(), ownerHTTPPools{pool: pool}, ownerHTTPPromSource{job: job}, dao, cachepkg.NewBatchConfigManager(dao, zap.NewNop()), storage, journal, history, projection)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cache, func(path string) { job.MetricsPath = path }
+	}
 	if family == model.ConfigTypeAlertRule {
 		pool.SupportAlert = 1
 		pool.SupportRecord = 2
@@ -234,4 +254,25 @@ func ownerHTTPPublisherForFamily(t *testing.T, family int8, db *gorm.DB, dao con
 	journal, history, projection := cachepkg.RecordProjectionDependenciesForTest(db, storage)
 	journal = &ownerHTTPJournal{RecordProjectionJournalDAO: journal, before: before}
 	return cachepkg.NewRecordRuleConfigCache(zap.NewNop(), ownerHTTPPools{pool: pool}, ownerHTTPRecordSource{rule: rule}, dao, cachepkg.NewBatchConfigManager(dao, zap.NewNop()), storage, journal, history, projection), func(expr string) { rule.Expr = expr }
+}
+
+type ownerHTTPPromSource struct {
+	scrapedao.ScrapeJobDAO
+	job *model.MonitorScrapeJob
+}
+
+func (s ownerHTTPPromSource) GetMonitorScrapeJobsByPoolId(context.Context, int) ([]*model.MonitorScrapeJob, error) {
+	return []*model.MonitorScrapeJob{s.job}, nil
+}
+
+type ownerHTTPPromJournal struct {
+	configdao.PromMainProjectionJournalDAO
+	before func()
+}
+
+func (j *ownerHTTPPromJournal) CommitPromMainProjectionPlan(ctx context.Context, req configdao.PromMainProjectionPlanRequest) (configdao.ProjectionReceipt, error) {
+	if j.before != nil {
+		j.before()
+	}
+	return j.PromMainProjectionJournalDAO.CommitPromMainProjectionPlan(ctx, req)
 }

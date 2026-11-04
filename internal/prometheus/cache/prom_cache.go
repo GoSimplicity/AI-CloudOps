@@ -77,6 +77,9 @@ type prometheusConfigCache struct {
 	configDAO     configDao.MonitorConfigDAO
 	httpSdAPI     string
 	batchManager  *BatchConfigManager
+	journal       configDao.ProjectionPlanJournalDAO
+	history       configDao.PromMainHistoryReader
+	projection    PromMainProjectionRunner
 	cacheStats    struct {
 		hits   int64
 		misses int64
@@ -92,6 +95,9 @@ func NewPrometheusConfigCache(
 	configDAO configDao.MonitorConfigDAO,
 	batchManager *BatchConfigManager,
 	redisClient redis.Cmdable,
+	journal configDao.ProjectionPlanJournalDAO,
+	history configDao.PromMainHistoryReader,
+	projection PromMainProjectionRunner,
 ) (PrometheusConfigCache, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("配置不能为空")
@@ -105,6 +111,7 @@ func NewPrometheusConfigCache(
 		logger:        logger,
 		mu:            sync.RWMutex{},
 		batchManager:  batchManager,
+		journal:       journal, history: history, projection: projection,
 	}, nil
 }
 

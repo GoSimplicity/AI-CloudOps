@@ -17,6 +17,12 @@ func ScrapeRuleHistoryGuardOf(scope ScrapeRuleScope, instanceKey string, rows []
 	if !validScrapeRuleScope(scope) {
 		return RecordHistoryGuard{}, ErrJournalInvalid
 	}
+	return scrapePublicationHistoryGuardOf(scrapePublicationScope(scope), instanceKey, rows)
+}
+func scrapePublicationHistoryGuardOf(scope scrapePublicationScope, instanceKey string, rows []*model.MonitorConfig) (RecordHistoryGuard, error) {
+	if !validScrapePublicationScope(scope) {
+		return RecordHistoryGuard{}, ErrJournalInvalid
+	}
 	if !validConfigNamespace(configNamespaceKey{int8(scope), instanceKey}) {
 		return RecordHistoryGuard{}, ErrJournalInvalid
 	}
@@ -36,7 +42,7 @@ func ScrapeRuleHistoryGuardOf(scope ScrapeRuleScope, instanceKey string, rows []
 	return result, nil
 }
 func prepareScrapeRuleHistory(req RecordProjectionPlanRequest) ([]RecordHistoryGuard, error) {
-	if !validScrapeRuleScope(ScrapeRuleScope(req.Reservation.Family)) {
+	if !validScrapePublicationScope(scrapePublicationScope(req.Reservation.Family)) {
 		return nil, ErrJournalInvalid
 	}
 	retired := map[string]GeneratedConfigOwner{}
@@ -61,7 +67,7 @@ func prepareScrapeRuleHistory(req RecordProjectionPlanRequest) ([]RecordHistoryG
 		seenKeys[guard.InstanceKey] = true
 		copied := RecordHistoryGuard{InstanceKey: guard.InstanceKey, Rows: append([]GeneratedConfigHistoryRow(nil), guard.Rows...)}
 		sort.Slice(copied.Rows, func(i, j int) bool { return copied.Rows[i].Owner.ID < copied.Rows[j].Owner.ID })
-		if err := ValidateScrapeRuleRetirementHistory(ScrapeRuleScope(req.Reservation.Family), expected, copied); err != nil {
+		if err := validateScrapePublicationRetirementHistory(scrapePublicationScope(req.Reservation.Family), expected, copied); err != nil {
 			return nil, err
 		}
 		result = append(result, copied)
@@ -124,7 +130,7 @@ func validateScrapeRuleHistoryTx(tx *gorm.DB, family int8, guards []RecordHistor
 		if err := query.Clauses(clause.Locking{Strength: "UPDATE"}).Order("id ASC").Find(&rows).Error; err != nil {
 			return err
 		}
-		actual, err := ScrapeRuleHistoryGuardOf(ScrapeRuleScope(family), guard.InstanceKey, rows)
+		actual, err := scrapePublicationHistoryGuardOf(scrapePublicationScope(family), guard.InstanceKey, rows)
 		if err != nil {
 			return err
 		}
@@ -140,6 +146,12 @@ func validateScrapeRuleHistoryTx(tx *gorm.DB, family int8, guards []RecordHistor
 // A tombstone-only lookup has no such live permission and stays strict.
 func ValidateScrapeRuleRetirementHistory(scope ScrapeRuleScope, expected GeneratedConfigOwner, guard RecordHistoryGuard) error {
 	if !validScrapeRuleScope(scope) {
+		return ErrJournalInvalid
+	}
+	return validateScrapePublicationRetirementHistory(scrapePublicationScope(scope), expected, guard)
+}
+func validateScrapePublicationRetirementHistory(scope scrapePublicationScope, expected GeneratedConfigOwner, guard RecordHistoryGuard) error {
+	if !validScrapePublicationScope(scope) {
 		return ErrJournalInvalid
 	}
 	if !validGeneratedOwner(expected) || expected.ConfigType != int8(scope) || expected.InstanceIP != guard.InstanceKey || !generatedRowNameValid(scrapeRuleOwnerModel(expected)) {

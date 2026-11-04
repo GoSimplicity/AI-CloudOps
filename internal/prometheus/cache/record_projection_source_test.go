@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"reflect"
 	"sync"
 	"testing"
@@ -74,10 +75,14 @@ func TestRecordProjectionOlderSourceCannotReplaceNewerCompletedGeneration(t *tes
 	runScrapeRuleOlderSourceContract(t, model.ConfigTypeRecordRule)
 }
 func runScrapeRuleOlderSourceContract(t *testing.T, family int8) {
-	if family != model.ConfigTypeAlertRule && family != model.ConfigTypeRecordRule {
+	if family != model.ConfigTypePrometheus && family != model.ConfigTypeAlertRule && family != model.ConfigTypeRecordRule {
 		t.Fatal("unsupported source test family")
 	}
-	for _, mode := range []string{"pool", "rule", "lifecycle", "tombstone"} {
+	modes := []string{"pool", "rule", "lifecycle", "tombstone"}
+	if family == model.ConfigTypePrometheus {
+		modes[1] = "job"
+	}
+	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
 			f := newRecordProjectionFixture(t, nil, nil, nil, nil)
 			db := f.db
@@ -87,19 +92,26 @@ func runScrapeRuleOlderSourceContract(t *testing.T, family int8) {
 				sourceModel = &model.MonitorAlertRule{}
 				sourceSeed = &model.MonitorAlertRule{Model: model.Model{ID: 31}, PoolID: 7, Name: "snapshot alert", Expr: "up", ForTime: "0s", Enable: 1}
 			}
+			if family == model.ConfigTypePrometheus {
+				sourceModel = &model.MonitorScrapeJob{}
+				sourceSeed = &model.MonitorScrapeJob{Model: model.Model{ID: 31}, PoolID: 7, Name: "snapshot job", Enable: 1, ServiceDiscoveryType: model.ServiceDiscoveryTypeStatic, Scheme: "http", MetricsPath: "/metrics", ScrapeInterval: 30, ScrapeTimeout: 10, IpAddress: "127.0.0.1:9100"}
+			}
 			if err := db.AutoMigrate(&model.MonitorScrapePool{}, sourceModel); err != nil {
 				t.Fatal("real source tables unavailable")
 			}
 			pool := &model.MonitorScrapePool{Model: model.Model{ID: 7}, Name: "source-snapshot", SupportRecord: 1, PrometheusInstances: model.StringList{"127.0.0.41"}}
 			if family == model.ConfigTypeAlertRule {
 				pool.SupportAlert = 1
+			} else if family == model.ConfigTypePrometheus {
+				pool.ScrapeInterval = 30
+				pool.ScrapeTimeout = 10
 			}
 			deleted := mode == "lifecycle" || mode == "tombstone"
 			if deleted {
 				pool.DeletedAt = 17
 				if family == model.ConfigTypeAlertRule {
 					pool.SupportAlert = 2
-				} else {
+				} else if family == model.ConfigTypeRecordRule {
 					pool.SupportRecord = 2
 				}
 			}
@@ -110,8 +122,17 @@ func runScrapeRuleOlderSourceContract(t *testing.T, family int8) {
 			pools := scrapedao.NewScrapePoolDAO(db, log, nil)
 			rules := alertdao.NewAlertManagerRecordDAO(db, log, nil)
 			alerts := alertdao.NewAlertManagerRuleDAO(db, log, nil)
+			jobs := scrapedao.NewScrapeJobDAO(db, log)
 			store := &supportRedis{values: map[string]string{}, sets: map[string]map[string]bool{}}
-			makeCache := func(p scrapedao.ScrapePoolDAO, r alertdao.AlertManagerRecordDAO, a alertdao.AlertManagerRuleDAO) scrapeRuleTestPublisher {
+			makeCache := func(p scrapedao.ScrapePoolDAO, r alertdao.AlertManagerRecordDAO, a alertdao.AlertManagerRuleDAO, j scrapedao.ScrapeJobDAO) scrapeRuleTestPublisher {
+				if family == model.ConfigTypePrometheus {
+					journal, history, projection := PromMainProjectionDependenciesForTest(db, store)
+					cache, err := NewPrometheusConfigCache(&config.Config{}, log, p, j, f, NewBatchConfigManager(f, log), store, journal, history, projection)
+					if err != nil {
+						t.Fatal("main source fixture constructor failed", err)
+					}
+					return cache
+				}
 				if family == model.ConfigTypeAlertRule {
 					journal, history, projection := AlertRuleProjectionDependenciesForTest(db, store)
 					return NewAlertRuleConfigCache(log, p, a, f, NewBatchConfigManager(f, log), store, journal, history, projection)
@@ -127,16 +148,19 @@ func runScrapeRuleOlderSourceContract(t *testing.T, family int8) {
 			var aPools scrapedao.ScrapePoolDAO = pools
 			var aRules alertdao.AlertManagerRecordDAO = rules
 			var aAlerts alertdao.AlertManagerRuleDAO = alerts
-			if mode == "rule" {
+			var aJobs scrapedao.ScrapeJobDAO = jobs
+			if mode == "rule" || mode == "job" {
 				if family == model.ConfigTypeAlertRule {
 					aAlerts = &alertRuleReadBarrier{AlertManagerRuleDAO: alerts, barrier: barrier}
-				} else {
+				} else if family == model.ConfigTypeRecordRule {
 					aRules = &recordRuleReadBarrier{AlertManagerRecordDAO: rules, barrier: barrier}
+				} else {
+					aJobs = &promJobReadBarrier{ScrapeJobDAO: jobs, barrier: barrier}
 				}
 			} else {
 				aPools = &recordPoolReadBarrier{ScrapePoolDAO: pools, mode: mode, barrier: barrier}
 			}
-			a, b := makeCache(aPools, aRules, aAlerts), makeCache(pools, rules, alerts)
+			a, b := makeCache(aPools, aRules, aAlerts, aJobs), makeCache(pools, rules, alerts, jobs)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			result := make(chan error, 1)
@@ -173,6 +197,10 @@ func runScrapeRuleOlderSourceContract(t *testing.T, family int8) {
 			} else if mode == "pool" {
 				if db.Model(&model.MonitorScrapePool{}).Where("id=7").Update("prometheus_instances", model.StringList{"127.0.0.42"}).Error != nil {
 					t.Fatal("source target update failed")
+				}
+			} else if family == model.ConfigTypePrometheus {
+				if db.Model(sourceModel).Where("id=31").Update("metrics_path", "/metrics-new").Error != nil {
+					t.Fatal("source job update failed")
 				}
 			} else {
 				if db.Model(sourceModel).Where("id=31").Update("expr", "sum(up)").Error != nil {

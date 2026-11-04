@@ -23,7 +23,7 @@ func TestPrometheusCacheUsesInjectedDiscoveryEndpoint(t *testing.T) {
 			viper.Set("prometheus.httpSdAPI", test.global)
 			cfg := &config.Config{Prometheus: config.PrometheusConfig{HttpSdAPI: "https://typed-discovery.invalid/api/targets?existing=kept&port=1&tree_node_ids=old"}}
 			job := &model.MonitorScrapeJob{Name: "typed-http", ServiceDiscoveryType: model.ServiceDiscoveryTypeHttp, Scheme: "https", MetricsPath: "/metrics", ScrapeInterval: 30, ScrapeTimeout: 10, RefreshInterval: 20, Port: 9100, TreeNodeIDs: model.StringList{"7", "8"}}
-			cache, err := NewPrometheusConfigCache(cfg, zap.NewNop(), nil, scrapeJobsStub{jobs: []*model.MonitorScrapeJob{job}}, nil, nil, nil)
+			cache, err := NewPrometheusConfigCache(cfg, zap.NewNop(), nil, scrapeJobsStub{jobs: []*model.MonitorScrapeJob{job}}, nil, nil, nil, nil, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -64,7 +64,7 @@ func TestPrometheusCacheKeepsInvalidDiscoveryBehavior(t *testing.T) {
 			viper.Set("prometheus.httpSdAPI", "https://global-valid.invalid/targets")
 			cfg := &config.Config{Prometheus: config.PrometheusConfig{HttpSdAPI: test.endpoint}}
 			job := &model.MonitorScrapeJob{Name: "invalid-endpoint", ServiceDiscoveryType: model.ServiceDiscoveryTypeHttp}
-			cache, err := NewPrometheusConfigCache(cfg, zap.NewNop(), nil, scrapeJobsStub{jobs: []*model.MonitorScrapeJob{job}}, nil, nil, nil)
+			cache, err := NewPrometheusConfigCache(cfg, zap.NewNop(), nil, scrapeJobsStub{jobs: []*model.MonitorScrapeJob{job}}, nil, nil, nil, nil, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -82,7 +82,7 @@ func TestPrometheusCacheRequiresConfiguration(t *testing.T) {
 		valid bool
 	}{{"missing", nil, false}, {"provided", &config.Config{}, true}} {
 		t.Run(test.name, func(t *testing.T) {
-			cache, err := NewPrometheusConfigCache(test.cfg, zap.NewNop(), nil, nil, nil, nil, nil)
+			cache, err := NewPrometheusConfigCache(test.cfg, zap.NewNop(), nil, nil, nil, nil, nil, nil, nil, nil)
 			if (err == nil) != test.valid {
 				t.Fatalf("constructor result differs: %v", err)
 			}

@@ -276,7 +276,7 @@ func TestTargetedPublisherRejectsLocatorOwnerDriftButUsesFreshOwnedContent(t *te
 						case "status":
 							target.Status = 2
 						}
-						if domain == "record" || domain == "alert" {
+						if domain == "record" || domain == "alert" || domain == "prom" {
 							fixture := base.(*recordProjectionFixture)
 							seed := fixture.db.Session(&gorm.Session{SkipHooks: true}).Unscoped()
 							if change == "missing" {

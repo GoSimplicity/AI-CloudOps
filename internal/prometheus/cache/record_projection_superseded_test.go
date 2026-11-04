@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"gorm.io/gorm"
 	"reflect"
 	"testing"
@@ -19,6 +20,8 @@ type scrapeRuleTestPublisher interface {
 
 type recordReuseFixture struct {
 	family       int8
+	test         *testing.T
+	promSources  map[int]*promReconcileSource
 	alertSources map[int]*alertRulePubSource
 	sql          *recordProjectionFixture
 	store        *supportRedis
@@ -31,10 +34,10 @@ func newRecordReuseFixture(t *testing.T) *recordReuseFixture {
 }
 func newRuleFamilyReuseFixture(t *testing.T, family int8) *recordReuseFixture {
 	t.Helper()
-	if family != model.ConfigTypeAlertRule && family != model.ConfigTypeRecordRule {
+	if family != model.ConfigTypePrometheus && family != model.ConfigTypeAlertRule && family != model.ConfigTypeRecordRule {
 		t.Fatal("unsupported test family")
 	}
-	f := &recordReuseFixture{family: family, alertSources: map[int]*alertRulePubSource{}, sql: newRecordProjectionFixture(t, nil, nil, nil, nil), store: &supportRedis{values: map[string]string{}, sets: map[string]map[string]bool{}}, pools: map[int]*model.MonitorScrapePool{}, sources: map[int]*recordReconcileSource{}}
+	f := &recordReuseFixture{family: family, test: t, promSources: map[int]*promReconcileSource{}, alertSources: map[int]*alertRulePubSource{}, sql: newRecordProjectionFixture(t, nil, nil, nil, nil), store: &supportRedis{values: map[string]string{}, sets: map[string]map[string]bool{}}, pools: map[int]*model.MonitorScrapePool{}, sources: map[int]*recordReconcileSource{}}
 	for _, id := range []int{7, 99} {
 		f.pools[id] = &model.MonitorScrapePool{Model: model.Model{ID: id}, Name: fmt.Sprintf("reuse-%d", id), SupportRecord: 1, PrometheusInstances: model.StringList{"127.0.0.27"}}
 		if family == model.ConfigTypeAlertRule {
@@ -42,10 +45,25 @@ func newRuleFamilyReuseFixture(t *testing.T, family int8) *recordReuseFixture {
 		}
 		f.sources[id] = &recordReconcileSource{rows: []*model.MonitorRecordRule{{Model: model.Model{ID: id}, PoolID: id, Name: fmt.Sprintf("fixture_%d:up", id), Expr: "up", Enable: 1}}}
 		f.alertSources[id] = &alertRulePubSource{rows: []*model.MonitorAlertRule{{Model: model.Model{ID: id}, PoolID: id, Name: fmt.Sprintf("fixture_%d_alert", id), Expr: "up", ForTime: "0s", Enable: 1}}}
+		if family == model.ConfigTypePrometheus {
+			f.pools[id].ScrapeInterval = 30
+			f.pools[id].ScrapeTimeout = 10
+			f.promSources[id] = &promReconcileSource{rows: []*model.MonitorScrapeJob{{Model: model.Model{ID: id}, PoolID: id, Name: fmt.Sprintf("fixture_%d", id), ServiceDiscoveryType: model.ServiceDiscoveryTypeStatic, Scheme: "http", MetricsPath: "/metrics", ScrapeInterval: 30, ScrapeTimeout: 10, IpAddress: "127.0.0.1:9100"}}}
+		}
+
 	}
 	return f
 }
 func (f *recordReuseFixture) cache(id int) scrapeRuleTestPublisher {
+	if f.family == model.ConfigTypePrometheus {
+		journal, history, projection := PromMainProjectionDependenciesForTest(f.sql.db, f.store)
+		cache, err := NewPrometheusConfigCache(&config.Config{}, zap.NewNop(), &retirementInventory{pool: f.pools[id]}, f.promSources[id], f.sql, NewBatchConfigManager(f.sql, zap.NewNop()), f.store, journal, history, projection)
+		if err != nil {
+			f.test.Fatal("Prom fixture constructor failed", err)
+		}
+		return cache
+	}
+
 	if f.family == model.ConfigTypeAlertRule {
 		journal, history, projection := AlertRuleProjectionDependenciesForTest(f.sql.db, f.store)
 		return NewAlertRuleConfigCache(zap.NewNop(), &retirementInventory{pool: f.pools[id]}, f.alertSources[id], f.sql, NewBatchConfigManager(f.sql, zap.NewNop()), f.store, journal, history, projection)
@@ -101,7 +119,7 @@ func runRecordProjectionCompletedRetirementDoesNotReclaimReusedIP(t *testing.T, 
 			if err := a.GenerateMainConfig(ctx); err != nil {
 				t.Fatal(err)
 			}
-			f.setSupport(7, 2)
+			f.setDesiredEnabled(7, 2)
 			retire := func(c scrapeRuleTestPublisher) error {
 				if mode == "delete" {
 					return c.RetireDeletedScrapePool(ctx, 7)
@@ -114,7 +132,11 @@ func runRecordProjectionCompletedRetirementDoesNotReclaimReusedIP(t *testing.T, 
 			if err := retire(a); err != nil {
 				t.Fatal("initial A retirement failed", err)
 			}
-			f.breakSource(7)
+			// Main's empty target set must still validate jobs. Only a deleted
+			// main pool may ignore the broken source; rules have explicit off.
+			if f.family != model.ConfigTypePrometheus || mode == "delete" {
+				f.breakSource(7)
+			}
 			if err := f.cache(99).GenerateMainConfig(ctx); err != nil {
 				t.Fatal("B cannot reuse fully retired namespace", err)
 			}
@@ -149,7 +171,7 @@ func runRecordProjectionPendingRetirementRequiresProjectedReplacement(t *testing
 			if err := a.GenerateMainConfig(ctx); err != nil {
 				t.Fatal(err)
 			}
-			f.setSupport(7, 2)
+			f.setDesiredEnabled(7, 2)
 			f.store.failure = "del"
 			if err := a.GenerateMainConfig(ctx); err == nil {
 				t.Fatal("retirement deletion failure was acknowledged")
@@ -266,7 +288,7 @@ func runRecordProjectionSupersededRecoveryRetainsProofBeforeACK(t *testing.T, ne
 	if err := f.cache(7).GenerateMainConfig(ctx); err != nil {
 		t.Fatal(err)
 	}
-	f.setSupport(7, 2)
+	f.setDesiredEnabled(7, 2)
 	f.store.failure = "del"
 	if err := f.cache(7).GenerateMainConfig(ctx); err == nil {
 		t.Fatal("A retirement unexpectedly completed")
@@ -355,7 +377,7 @@ func runRecordProjectionAcceptedRenderCanCloseOnlyAfterTargetRemoved(t *testing.
 			oldAck := f.store.values[projectionPoolKey(f.family, 7, "ack")]
 			switch mode {
 			case "off":
-				f.setSupport(7, 2)
+				f.setDesiredEnabled(7, 2)
 			case "remove target":
 				f.pools[7].PrometheusInstances = nil
 			}
@@ -463,7 +485,7 @@ func runRecordProjectionLegacyOwnerRequiresCompletedReplacement(t *testing.T, ne
 			}
 			want := f.replacement(t)
 			if mode != "still desired" {
-				f.setSupport(7, 2)
+				f.setDesiredEnabled(7, 2)
 			}
 			err := f.cache(7).GenerateMainConfig(ctx)
 			if mode != "projected replacement" {
@@ -540,12 +562,12 @@ func runRecordProjectionCurrentOwnerCanRetireWithDeletedForeignHistory(t *testin
 			if kind == "canonical foreign" {
 				// First finish A's proven legacy control-only resolution while B is current.
 				f.store.sets[f.memberKey(7)] = map[string]bool{ip: true}
-				f.setSupport(7, 2)
+				f.setDesiredEnabled(7, 2)
 				if err := f.cache(7).GenerateMainConfig(ctx); err != nil {
 					t.Fatal("legacy A resolution failed before B retirement", err)
 				}
 			}
-			f.setSupport(99, 2)
+			f.setDesiredEnabled(99, 2)
 			if err := f.cache(99).GenerateMainConfig(ctx); err != nil {
 				t.Fatal("live canonical B could not retire because of deleted foreign history", err)
 			}
@@ -588,7 +610,7 @@ func runRecordProjectionIssuedRetirementRetriesWithDeletedForeignHistory(t *test
 	if err := f.cache(99).GenerateMainConfig(ctx); err != nil {
 		t.Fatal(err)
 	}
-	f.setSupport(99, 2)
+	f.setDesiredEnabled(99, 2)
 	f.store.failure = "del"
 	if err := f.cache(99).GenerateMainConfig(ctx); err == nil {
 		t.Fatal("failed retirement delete was acknowledged")
@@ -626,7 +648,7 @@ func runRecordProjectionRetirementReplayDoesNotHideNewDBOnlyStale(t *testing.T, 
 	if err := f.cache(7).GenerateMainConfig(ctx); err != nil {
 		t.Fatal(err)
 	}
-	f.setSupport(7, 2)
+	f.setDesiredEnabled(7, 2)
 	f.store.failure = "del"
 	if err := f.cache(7).GenerateMainConfig(ctx); err == nil {
 		t.Fatal("pending retirement fixture unexpectedly completed")
@@ -663,30 +685,50 @@ func runRecordProjectionRetirementReplayDoesNotHideNewDBOnlyStale(t *testing.T, 
 }
 
 func (f *recordReuseFixture) rawKey(ip string) string {
+	if f.family == model.ConfigTypePrometheus {
+		return buildRedisKeyPrometheusMain(ip)
+	}
 	if f.family == model.ConfigTypeAlertRule {
 		return buildRedisKeyAlertRule(ip)
 	}
 	return buildRedisKeyRecordRule(ip)
 }
 func (f *recordReuseFixture) memberKey(pool int) string {
+	if f.family == model.ConfigTypePrometheus {
+		return buildRedisSetKeyPrometheusMainPoolIPs(pool)
+	}
 	if f.family == model.ConfigTypeAlertRule {
 		return buildRedisSetKeyAlertRulePoolIPs(pool)
 	}
 	return buildRedisSetKeyRecordRulePoolIPs(pool)
 }
 func (f *recordReuseFixture) legacyKey(pool int) string {
+	if f.family == model.ConfigTypePrometheus {
+		return promPublicationKey(pool)
+	}
 	if f.family == model.ConfigTypeAlertRule {
 		return alertRulePublicationKey(pool)
 	}
 	return recordPublicationKey(pool)
 }
 func (f *recordReuseFixture) configName(pool int, ip string) string {
+	if f.family == model.ConfigTypePrometheus {
+		return fmt.Sprintf(ConfigNamePrometheus, pool, ip)
+	}
 	if f.family == model.ConfigTypeAlertRule {
 		return fmt.Sprintf(ConfigNameAlertRule, pool, ip)
 	}
 	return fmt.Sprintf(ConfigNameRecordRule, pool, ip)
 }
-func (f *recordReuseFixture) setSupport(pool int, flag int8) {
+func (f *recordReuseFixture) setDesiredEnabled(pool int, flag int8) {
+	if f.family == model.ConfigTypePrometheus {
+		if flag == 2 {
+			f.pools[pool].PrometheusInstances = nil
+		} else {
+			f.pools[pool].PrometheusInstances = model.StringList{"127.0.0.27"}
+		}
+		return
+	}
 	if f.family == model.ConfigTypeAlertRule {
 		f.pools[pool].SupportAlert = flag
 	} else {
@@ -694,6 +736,10 @@ func (f *recordReuseFixture) setSupport(pool int, flag int8) {
 	}
 }
 func (f *recordReuseFixture) breakSource(pool int) {
+	if f.family == model.ConfigTypePrometheus {
+		f.promSources[pool].failure = true
+		return
+	}
 	if f.family == model.ConfigTypeAlertRule {
 		f.alertSources[pool].failure = true
 	} else {

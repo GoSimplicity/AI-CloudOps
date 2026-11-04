@@ -40,10 +40,10 @@ func (r *recordRuleConfigCache) recordConfigDAO() configDao.MonitorConfigDAO {
 	return nil
 }
 
-type recordPublicationPlan = scrapeRulePublicationPlan
+type recordPublicationPlan = scrapePublicationPlan
 
 func (r *recordRuleConfigCache) planRecordPublication(ctx context.Context, poolID int, desired map[string]string, oldIPs []string) (recordPublicationPlan, error) {
-	return planScrapeRulePublication(ctx, scrapeRecordScope, r.recordConfigDAO(), poolID, desired, oldIPs)
+	return planScrapePublication(ctx, scrapeRecordScope, r.recordConfigDAO(), poolID, desired, oldIPs)
 }
 
 func (r *recordRuleConfigCache) GenerateMainConfig(ctx context.Context) error {

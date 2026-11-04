@@ -6,8 +6,8 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 )
 
-func (d *monitorConfigDAO) readScrapeRuleSourceVersions(ctx context.Context, scope ScrapeRuleScope) ([]RecordSourceVersion, error) {
-	if !validScrapeRuleScope(scope) {
+func (d *monitorConfigDAO) readScrapeRuleSourceVersions(ctx context.Context, scope scrapePublicationScope) ([]RecordSourceVersion, error) {
+	if !validScrapePublicationScope(scope) {
 		return nil, ErrJournalInvalid
 	}
 	result := []RecordSourceVersion{}
@@ -57,7 +57,7 @@ func (d *monitorConfigDAO) readScrapeRuleSourceVersions(ctx context.Context, sco
 	}
 }
 func (d *monitorConfigDAO) ReadAlertRuleSourceVersions(ctx context.Context) ([]ScrapeRuleSourceVersion, error) {
-	return d.readScrapeRuleSourceVersions(ctx, ScrapeAlertRule)
+	return d.readScrapeRuleSourceVersions(ctx, scrapeAlertPublication)
 }
 func (d *monitorConfigDAO) ReserveAlertRulePoolOperation(ctx context.Context, req PoolOperationRequest, counter uint64) (PoolReservation, error) {
 	if req.Family != int8(ScrapeAlertRule) {

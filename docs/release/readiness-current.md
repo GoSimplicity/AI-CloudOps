@@ -1,5 +1,13 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-05：Prometheus 主配置接入
+
+PromMain固定family1入口已复用内部1/3/4发布核心，正常/empty/deleted走同SQL日志与原租约/Store；原auth/TLS/SD/目标顺序分片/真实秘密字节marshal/pc.Load和operational hash保持。见[Prom合同与验收](prom-main-projection.md)。
+
+- Root owned35叶0skip/fail通过，含实际TCP迟到命令、pool/job旧读、credential-only轮换、真实deleted入口与三family隔离；全Go/vet/tags、cache224main1131leaf及服务/DAO/DI race、173工具/actionlint通过，实例清理0。
+- Record published五金样保持；Web锁b3ec3e6已独立Verify/gitleaks成功，AIba187，新组合CI另验。上一a986三CI/pins/Linux27gate/browser5zero已成功，不当新提交证据。
+- AM主配置/webhook、独立恢复worker、性能与剩余lint未完，预览仍clean5feb/schema4，无真实外部执行，未上线。
+
 ## 2026-11-05：AlertRule 接入与 family3/4 共享闭环
 
 AlertRule已删除旧unsafe写链，共用真实source版本CAS、完整元数据计划、历史ABA与disposition、原SQL租约和typed Store；Record保持固定family4外层与已发数据格式。shared scope仅3/4，Alert专属rule_superseded拒混用，renderer与分片合同未变。见[共享边界与验收](scrape-rule-projection.md)。

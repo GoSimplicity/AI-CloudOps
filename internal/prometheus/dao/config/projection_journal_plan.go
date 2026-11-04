@@ -251,6 +251,8 @@ func (d *monitorConfigDAO) commitGeneratedPlan(ctx context.Context, req Generate
 				envelope.RecordSuperseded = projection.superseded
 			} else if req.Reservation.Family == 3 {
 				envelope.RuleSuperseded = projection.superseded
+			} else if req.Reservation.Family == 1 {
+				envelope.PromSuperseded = projection.superseded
 			} else if len(projection.superseded) > 0 {
 				return ErrJournalInvalid
 			}

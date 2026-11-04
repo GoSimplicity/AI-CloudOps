@@ -178,10 +178,10 @@ func (r *alertRuleConfigCache) ruleConfigDAO() configDao.MonitorConfigDAO {
 	return nil
 }
 
-type alertRulePublicationPlan = scrapeRulePublicationPlan
+type alertRulePublicationPlan = scrapePublicationPlan
 
 func (r *alertRuleConfigCache) planAlertRulePublication(ctx context.Context, poolID int, desired map[string]string, oldIPs []string) (alertRulePublicationPlan, error) {
-	return planScrapeRulePublication(ctx, scrapeAlertScope, r.ruleConfigDAO(), poolID, desired, oldIPs)
+	return planScrapePublication(ctx, scrapeAlertScope, r.ruleConfigDAO(), poolID, desired, oldIPs)
 }
 
 func (r *alertRuleConfigCache) GenerateMainConfig(ctx context.Context) error {

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	appconfig "github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	alertdao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/alert"
 	configdao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
@@ -41,6 +42,8 @@ func (s rootAlertNativeRules) GetMonitorAlertRuleByPoolID(context.Context, int) 
 }
 func rootNativeScrapeRuleJournal(kind int8, db *gorm.DB) configdao.ProjectionPlanJournalDAO {
 	switch kind {
+	case 1:
+		return configdao.NewPromMainProjectionJournalDAO(zap.NewNop(), db)
 	case 3:
 		return configdao.NewAlertRuleProjectionJournalDAO(zap.NewNop(), db)
 	case 4:
@@ -51,6 +54,8 @@ func rootNativeScrapeRuleJournal(kind int8, db *gorm.DB) configdao.ProjectionPla
 }
 func rootNativeScrapeRuleRaw(kind int8, ip string) string {
 	switch kind {
+	case 1:
+		return buildRedisKeyPrometheusMain(ip)
 	case 3:
 		return buildRedisKeyAlertRule(ip)
 	case 4:
@@ -61,6 +66,8 @@ func rootNativeScrapeRuleRaw(kind int8, ip string) string {
 }
 func rootNativeScrapeRuleLegacy(kind int8, pool int) string {
 	switch kind {
+	case 1:
+		return promPublicationKey(pool)
 	case 3:
 		return alertRulePublicationKey(pool)
 	case 4:
@@ -71,6 +78,8 @@ func rootNativeScrapeRuleLegacy(kind int8, pool int) string {
 }
 func rootNativeScrapeRuleMembers(kind int8, pool int) string {
 	switch kind {
+	case 1:
+		return buildRedisSetKeyPrometheusMainPoolIPs(pool)
 	case 3:
 		return buildRedisSetKeyAlertRulePoolIPs(pool)
 	case 4:
@@ -83,6 +92,16 @@ func rootNativeScrapeRuleCache(kind int8, pool int, ip string, enabled int8, exp
 	logger := zap.NewNop()
 	source := model.MonitorScrapePool{Model: model.Model{ID: pool}, Name: "native-pool-" + strconv.Itoa(pool), PrometheusInstances: model.StringList{ip}}
 	switch kind {
+	case 1:
+		source.ScrapeInterval, source.ScrapeTimeout, source.RemoteTimeoutSeconds = 30, 10, 5
+		if enabled == 2 {
+			source.PrometheusInstances = nil
+		}
+		result, err := NewPrometheusConfigCache(&appconfig.Config{}, logger, rootRecordNativePool{pool: source}, rootPromNativeJobs{pool: pool, version: expr}, metadata, NewBatchConfigManager(metadata, logger), client, configdao.NewPromMainProjectionJournalDAO(logger, db), configdao.NewPromMainHistoryReader(logger, db), NewPromMainProjectionRunner(store))
+		if err != nil {
+			panic("invalid native PromMain fixture")
+		}
+		return result
 	case 3:
 		source.SupportAlert = enabled
 		return NewAlertRuleConfigCache(logger, rootRecordNativePool{pool: source}, rootAlertNativeRules{pool: pool, expr: expr, forbidden: enabled == 2}, metadata, NewBatchConfigManager(metadata, logger), client, configdao.NewAlertRuleProjectionJournalDAO(logger, db), configdao.NewAlertRuleHistoryReader(logger, db), NewAlertRuleProjectionRunner(store))
@@ -99,7 +118,7 @@ func TestAlertRuleProjectionNativeLatePacketsCannotDamageNewOwner(t *testing.T) 
 }
 
 func rootScrapeRuleNativeLatePackets(t *testing.T, kind int8) {
-	if kind != 3 && kind != 4 {
+	if kind != 1 && kind != 3 && kind != 4 {
 		t.Fatal("unsupported native test scope")
 	}
 	client := projectionRedisNative(t)
@@ -281,7 +300,7 @@ func rootScrapeRuleNativeLatePackets(t *testing.T, kind int8) {
 }
 
 func rootScrapeRuleNativeLegacyOwner(t *testing.T, kind int8) {
-	if kind != 3 && kind != 4 {
+	if kind != 1 && kind != 3 && kind != 4 {
 		t.Fatal("unsupported native test scope")
 	}
 	client := projectionRedisNative(t)
@@ -376,7 +395,7 @@ func TestAlertRuleProjectionNativeLegacyOwnerCanFinishAfterReplacement(t *testin
 }
 
 func rootScrapeRuleNativeSameHash(t *testing.T, kind int8) {
-	if kind != 3 && kind != 4 {
+	if kind != 1 && kind != 3 && kind != 4 {
 		t.Fatal("unsupported native test scope")
 	}
 	client := projectionRedisNative(t)
@@ -460,6 +479,8 @@ func TestAlertRuleProjectionNativeSameHashFindsNewDatabaseOnlyRetirement(t *test
 
 func rootNativeScrapeRuleName(kind int8, pool int, ip string) string {
 	switch kind {
+	case 1:
+		return fmt.Sprintf(ConfigNamePrometheus, pool, ip)
 	case 3:
 		return fmt.Sprintf(ConfigNameAlertRule, pool, ip)
 	case 4:
@@ -486,7 +507,7 @@ func TestAlertRuleProjectionNativeOlderSourceCannotReserveAfterNewerPublication(
 	rootScrapeRuleNativeOlderSource(t, 3)
 }
 func rootScrapeRuleNativeOlderSource(t *testing.T, kind int8) {
-	if kind != 3 && kind != 4 {
+	if kind != 1 && kind != 3 && kind != 4 {
 		t.Fatal("unsupported native scope")
 	}
 	client := projectionRedisNative(t)
@@ -632,7 +653,7 @@ func TestScrapeRuleProjectionNativeFamiliesShareDatabaseWithoutCrossWrites(t *te
 		return []string{rootNativeScrapeRuleRaw(kind, ip), projectionNamespaceKey(kind, ip), projectionPoolKey(kind, pool, "fence"), projectionPoolKey(kind, pool, "ack"), rootNativeScrapeRuleLegacy(kind, pool), rootNativeScrapeRuleMembers(kind, pool)}
 	}
 	t.Cleanup(func() {
-		for _, kind := range []int8{3, 4} {
+		for _, kind := range []int8{1, 3, 4} {
 			client.Del(context.Background(), keys(kind)...)
 		}
 	})
@@ -648,12 +669,24 @@ func TestScrapeRuleProjectionNativeFamiliesShareDatabaseWithoutCrossWrites(t *te
 	if !reflect.DeepEqual(rootProjectionValues(t, client, keys(4)), recordState) {
 		t.Fatal("Alert modified Record's data or fences")
 	}
+	prom := rootNativeScrapeRuleCache(1, pool, ip, 1, "sum(up)", metadata, db, client, store)
+	alertBeforeProm := rootProjectionValues(t, client, keys(3))
+	if err := prom.GenerateMainConfig(ctx); err != nil {
+		t.Fatal("PromMain on shared SQL failed", err)
+	}
+	if !reflect.DeepEqual(rootProjectionValues(t, client, keys(4)), recordState) || !reflect.DeepEqual(rootProjectionValues(t, client, keys(3)), alertBeforeProm) {
+		t.Fatal("PromMain modified a rule family's data or fences")
+	}
+	promState := rootProjectionValues(t, client, keys(1))
 	alertOff := rootNativeScrapeRuleCache(3, pool, ip, 2, "must not be read", metadata, db, client, store)
 	if err := alertOff.GenerateMainConfig(ctx); err != nil {
 		t.Fatal("Alert off on shared SQL failed", err)
 	}
 	if client.Exists(ctx, rootNativeScrapeRuleRaw(3, ip)).Val() != 0 || record.GetConfigByIP(ip) == "" || !reflect.DeepEqual(rootProjectionValues(t, client, keys(4)), recordState) {
 		t.Fatal("Alert off crossed family boundaries")
+	}
+	if !reflect.DeepEqual(rootProjectionValues(t, client, keys(1)), promState) {
+		t.Fatal("Alert off modified PromMain")
 	}
 	records, err := metadata.GetMonitorConfigsByInstances(ctx, []string{ip}, 4)
 	if err != nil || len(records) != 1 {
@@ -667,10 +700,50 @@ func TestScrapeRuleProjectionNativeFamiliesShareDatabaseWithoutCrossWrites(t *te
 	if !reflect.DeepEqual(rootProjectionValues(t, client, keys(3)), alertState) || client.Exists(ctx, rootNativeScrapeRuleRaw(4, ip)).Val() != 0 {
 		t.Fatal("Record off crossed family boundaries")
 	}
-	for _, kind := range []int8{3, 4} {
+	if !reflect.DeepEqual(rootProjectionValues(t, client, keys(1)), promState) {
+		t.Fatal("Record off modified PromMain")
+	}
+	otherStates := rootProjectionValues(t, client, append(keys(3), keys(4)...))
+	if err := rootNativeScrapeRuleCache(1, pool, ip, 2, "still validate jobs", metadata, db, client, store).GenerateMainConfig(ctx); err != nil {
+		t.Fatal("PromMain empty on shared SQL failed", err)
+	}
+	if client.Exists(ctx, rootNativeScrapeRuleRaw(1, ip)).Val() != 0 || !reflect.DeepEqual(rootProjectionValues(t, client, append(keys(3), keys(4)...)), otherStates) {
+		t.Fatal("PromMain empty crossed family boundaries")
+	}
+	for _, kind := range []int8{1, 3, 4} {
 		receipt, err := rootNativeScrapeRuleJournal(kind, db).LoadLastProjectedProjection(ctx, kind, pool)
 		if err != nil || receipt == nil || receipt.Reservation.Family != kind {
 			t.Fatal("separate family receipt lost", err)
 		}
 	}
+}
+
+// PromMain has no support-off flag. enabled=2 in the shared state-machine
+// fixture means an authoritative empty target set; its jobs still get validated.
+type rootPromNativeJobs struct {
+	scrapedao.ScrapeJobDAO
+	pool    int
+	version string
+}
+
+func (s rootPromNativeJobs) GetMonitorScrapeJobsByPoolId(context.Context, int) ([]*model.MonitorScrapeJob, error) {
+	port := 9101
+	switch s.version {
+	case "sum(up) * 2":
+		port = 9102
+	case "sum(up) * 3":
+		port = 9103
+	case "sum(up) * 4":
+		port = 9104
+	}
+	return []*model.MonitorScrapeJob{{Model: model.Model{ID: 1}, PoolID: s.pool, Name: "native_static", Enable: 1, ServiceDiscoveryType: model.ServiceDiscoveryTypeStatic, IpAddress: "127.0.0.1", Port: port, MetricsPath: "/metrics", Scheme: "http", ScrapeInterval: 30, ScrapeTimeout: 10}}, nil
+}
+func TestPromMainProjectionNativeLatePacketsCannotDamageNewOwner(t *testing.T) {
+	rootScrapeRuleNativeLatePackets(t, 1)
+}
+func TestPromMainProjectionNativeLegacyOwnerCanFinishAfterReplacement(t *testing.T) {
+	rootScrapeRuleNativeLegacyOwner(t, 1)
+}
+func TestPromMainProjectionNativeSameHashFindsNewDatabaseOnlyRetirement(t *testing.T) {
+	rootScrapeRuleNativeSameHash(t, 1)
 }

@@ -98,7 +98,7 @@ func newRetirementFixture(t *testing.T, kind string) *retirementFixture {
 		h.writes = func() int { return store.writes + db.writes }
 		h.onRead = func(fn func()) { store.onRead = fn }
 		h.rebuild = func() {
-			c = &prometheusConfigCache{logger: c.logger, redis: store, scrapePoolDAO: h.inventory, scrapeJobDAO: source, configDAO: db, batchManager: c.batchManager}
+			c = &prometheusConfigCache{logger: c.logger, redis: store, scrapePoolDAO: h.inventory, scrapeJobDAO: source, configDAO: c.configDAO, batchManager: c.batchManager, journal: c.journal, history: c.history, projection: c.projection}
 			h.publisher = c
 		}
 	case "alert":
@@ -239,12 +239,14 @@ func TestDeletedScrapePoolPartialFailuresRecoverAfterRebuild(t *testing.T) {
 							t.Fatal("failed pending write changed visible artifact")
 						}
 					}
-					if kind == "record" || kind == "alert" {
+					if kind == "record" || kind == "alert" || kind == "prom" {
 						pending := false
 						if kind == "record" {
 							pending = recordFixturePending(h.publisher.(*recordRuleConfigCache))
-						} else {
+						} else if kind == "alert" {
 							pending = alertFixturePending(h.publisher.(*alertRuleConfigCache))
+						} else {
+							pending = promFixturePending(h.publisher.(*prometheusConfigCache), 7)
 						}
 						if !pending || len(h.members) != 2 {
 							t.Fatal("failed prepare lost durable retirement or changed members")
@@ -423,12 +425,14 @@ func TestLiveScrapePoolRetirementAnchorsDBOnlyArtifactsBeforeSQLDelete(t *testin
 						t.Fatal("injected retirement failure reported complete")
 					}
 					if stage == "sadd" {
-						if kind == "record" || kind == "alert" {
+						if kind == "record" || kind == "alert" || kind == "prom" {
 							pending := false
 							if kind == "record" {
 								pending = recordFixturePending(h.publisher.(*recordRuleConfigCache))
-							} else {
+							} else if kind == "alert" {
 								pending = alertFixturePending(h.publisher.(*alertRuleConfigCache))
+							} else {
+								pending = promFixturePending(h.publisher.(*prometheusConfigCache), 7)
 							}
 							if !pending {
 								t.Fatal("failed projection control lost durable retirement")

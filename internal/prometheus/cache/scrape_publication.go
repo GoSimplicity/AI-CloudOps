@@ -11,7 +11,7 @@ import (
 	configDao "github.com/GoSimplicity/AI-CloudOps/internal/prometheus/dao/config"
 )
 
-type scrapeRulePublicationPlan struct {
+type scrapePublicationPlan struct {
 	create  []*model.MonitorConfig
 	update  []configDao.GeneratedConfigUpdate
 	stale   []string
@@ -21,11 +21,11 @@ type scrapeRulePublicationPlan struct {
 
 // Inspect every metadata page before any write. This also discovers canonical
 // rows left without membership by an older failed publication.
-func planScrapeRulePublication(ctx context.Context, scope scrapeRuleScope, dao configDao.MonitorConfigDAO, poolID int, desired map[string]string, oldIPs []string) (scrapeRulePublicationPlan, error) {
+func planScrapePublication(ctx context.Context, scope scrapePublicationScope, dao configDao.MonitorConfigDAO, poolID int, desired map[string]string, oldIPs []string) (scrapePublicationPlan, error) {
 	if !scope.valid() {
-		return scrapeRulePublicationPlan{}, errors.New("规则发布作用域无效")
+		return scrapePublicationPlan{}, errors.New("规则发布作用域无效")
 	}
-	plan := scrapeRulePublicationPlan{retired: map[string]configDao.GeneratedConfigOwner{}, owners: map[string]*model.MonitorConfig{}}
+	plan := scrapePublicationPlan{retired: map[string]configDao.GeneratedConfigOwner{}, owners: map[string]*model.MonitorConfig{}}
 
 	if dao == nil {
 		return plan, errors.New("配置存储不可用")
@@ -52,7 +52,7 @@ func planScrapeRulePublication(ctx context.Context, scope scrapeRuleScope, dao c
 	queryKeys = append(queryKeys, oldIPs...)
 	var locators []configDao.GeneratedConfigOwner
 	for _, row := range candidates {
-		if ownedScrapeRuleArtifact(row, scope, poolID) {
+		if ownedScrapeArtifact(row, scope, poolID) {
 			queryKeys = append(queryKeys, row.InstanceIP)
 			locators = append(locators, configDao.GeneratedConfigOwnerOf(row))
 			if _, wanted := desired[row.InstanceIP]; !wanted {
@@ -77,7 +77,7 @@ func planScrapeRulePublication(ctx context.Context, scope scrapeRuleScope, dao c
 	sort.Strings(keys)
 	for _, ip := range keys {
 		rows := byKey[ip]
-		if len(rows) > 1 || len(rows) == 1 && !ownedScrapeRuleArtifact(rows[0], scope, poolID) {
+		if len(rows) > 1 || len(rows) == 1 && !ownedScrapeArtifact(rows[0], scope, poolID) {
 			return plan, errors.New("规则配置归属冲突")
 		}
 		content := desired[ip]
@@ -100,7 +100,7 @@ func planScrapeRulePublication(ctx context.Context, scope scrapeRuleScope, dao c
 	}
 	for ip := range stale {
 		rows := byKey[ip]
-		if len(rows) > 1 || len(rows) == 1 && !ownedScrapeRuleArtifact(rows[0], scope, poolID) {
+		if len(rows) > 1 || len(rows) == 1 && !ownedScrapeArtifact(rows[0], scope, poolID) {
 			return plan, errors.New("旧规则配置归属冲突")
 		}
 		if len(rows) == 1 {

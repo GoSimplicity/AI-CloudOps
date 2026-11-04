@@ -90,6 +90,9 @@ func (s *promReconcileRedis) Set(_ context.Context, key string, value interface{
 	return redis.NewStatusResult("OK", nil)
 }
 func (s *promReconcileRedis) SMembers(context.Context, string) *redis.StringSliceCmd {
+	if s.onRead != nil {
+		s.onRead()
+	}
 	if s.failure == "members read" {
 		return redis.NewStringSliceResult(nil, errors.New("fixture membership read failure"))
 	}
@@ -132,6 +135,7 @@ func (s *promReconcileRedis) Del(_ context.Context, keys ...string) *redis.IntCm
 }
 
 type promReconcileDB struct {
+	projection *promMainProjectionFixture
 	configdao.MonitorConfigDAO
 	rows         map[int]*model.MonitorConfig
 	next, writes int
@@ -224,6 +228,7 @@ func newPromReconcile(t *testing.T) (*prometheusConfigCache, *promReconcileSourc
 	db := &promReconcileDB{rows: map[int]*model.MonitorConfig{}}
 	logger := zap.NewNop()
 	cache := &prometheusConfigCache{logger: logger, redis: store, scrapeJobDAO: source, scrapePoolDAO: &promReconcilePools{pool: pool}, configDAO: db, batchManager: NewBatchConfigManager(db, logger)}
+	attachPromReconcileProjection(t, cache, db)
 	return cache, source, store, db, pool
 }
 func promReconcileACK(poolID int) string {
@@ -337,11 +342,12 @@ func TestPromReconcileFailureThenReturnToEitherSnapshot(t *testing.T) {
 						pool.PrometheusInstances = model.StringList{"127.0.0.1", "127.0.0.2"}
 					}
 					if restart {
-						replacement, err := NewPrometheusConfigCache(&config.Config{}, zap.NewNop(), c.scrapePoolDAO, source, db, NewBatchConfigManager(db, zap.NewNop()), store)
+						replacement, err := NewPrometheusConfigCache(&config.Config{}, zap.NewNop(), c.scrapePoolDAO, source, db, NewBatchConfigManager(db, zap.NewNop()), store, db.projection.journal, db.projection.history, nil)
 						if err != nil {
 							t.Fatal(err)
 						}
 						c = replacement.(*prometheusConfigCache)
+						db.projection.attach(c)
 					}
 					if err := c.GenerateMainConfig(ctx); err != nil {
 						t.Fatal(err)
@@ -388,8 +394,8 @@ func TestPromReconcilePendingFailureIsZeroArtifact(t *testing.T) {
 	if c.GenerateMainConfig(context.Background()) == nil {
 		t.Fatal("pending failure acknowledged")
 	}
-	if len(store.values) != 0 || len(store.members) != 0 || len(db.rows) != 0 || db.writes != 0 {
-		t.Fatal("artifact appeared before reliable pending marker")
+	if len(store.values) != 0 || len(store.members) != 0 || len(db.rows) != 2 || !promFixturePending(c, 7) {
+		t.Fatal("failed prepare changed raw/ACK or lost its committed unprojected SQL plan")
 	}
 }
 func TestPromReconcileSameInstanceSerializes(t *testing.T) {
@@ -529,11 +535,12 @@ func TestPromReconcileEmptyTargetFailureRecovery(t *testing.T) {
 						pool.PrometheusInstances = model.StringList{"127.0.0.1", "127.0.0.2"}
 					}
 					if restart {
-						replacement, err := NewPrometheusConfigCache(&config.Config{}, zap.NewNop(), c.scrapePoolDAO, source, db, NewBatchConfigManager(db, zap.NewNop()), store)
+						replacement, err := NewPrometheusConfigCache(&config.Config{}, zap.NewNop(), c.scrapePoolDAO, source, db, NewBatchConfigManager(db, zap.NewNop()), store, db.projection.journal, db.projection.history, nil)
 						if err != nil {
 							t.Fatal(err)
 						}
 						c = replacement.(*prometheusConfigCache)
+						db.projection.attach(c)
 					}
 					if err := c.GenerateMainConfig(ctx); err != nil {
 						t.Fatal(err)
@@ -811,5 +818,46 @@ func TestPromReconcilePoolInventoryMustCompleteBeforePublication(t *testing.T) {
 				t.Fatal("pool inventory failure published a partial inventory")
 			}
 		})
+	}
+}
+
+func TestPromProjectionPreservesOrderedJobOperationalBytes(t *testing.T) {
+	c, source, store, _, pool := newPromReconcile(t)
+	ctx := context.Background()
+	pool.PrometheusInstances = model.StringList{"127.0.0.1"}
+	first, second := *source.rows[0], *source.rows[0]
+	first.ID = 31
+	first.Name = "z-last"
+	second.ID = 32
+	second.Name = "a-first"
+	source.rows = []*model.MonitorScrapeJob{&first, &second}
+	if err := c.GenerateMainConfig(ctx); err != nil {
+		t.Fatal(err)
+	}
+	body := store.values[buildRedisKeyPrometheusMain("127.0.0.1")]
+	parsed := parsePromReconcile(t, body)
+	if len(parsed.ScrapeConfigs) != 2 || parsed.ScrapeConfigs[0].JobName != "z-last" || parsed.ScrapeConfigs[1].JobName != "a-first" {
+		t.Fatal("job source sequence was sorted or lost")
+	}
+	before, err := c.journal.LoadLastProjectedProjection(ctx, 1, pool.ID)
+	if err != nil || before == nil {
+		t.Fatal("first native job sequence was not projected")
+	}
+	if source.rows[0].Name != "z-last" || source.rows[1].Name != "a-first" {
+		t.Fatal("rendering/hash mutated the caller's source slice")
+	}
+	source.rows = []*model.MonitorScrapeJob{&second, &first}
+	if err := c.GenerateMainConfig(ctx); err != nil {
+		t.Fatal(err)
+	}
+	nextBody := store.values[buildRedisKeyPrometheusMain("127.0.0.1")]
+	next := parsePromReconcile(t, nextBody)
+	after, err := c.journal.LoadLastProjectedProjection(ctx, 1, pool.ID)
+	if err != nil || after == nil || after.SourceHash == before.SourceHash || nextBody == body || len(next.ScrapeConfigs) != 2 || next.ScrapeConfigs[0].JobName != "a-first" || next.ScrapeConfigs[1].JobName != "z-last" {
+		t.Fatal("ordered operational bytes were omitted from native output/fingerprint")
+	}
+	rows, err := c.configDAO.GetMonitorConfigsByInstances(ctx, []string{"127.0.0.1"}, 1)
+	if err != nil || len(rows) != 1 || rows[0].ConfigContent != nextBody {
+		t.Fatal("SQL/Redis native job order differs")
 	}
 }

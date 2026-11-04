@@ -289,6 +289,8 @@ var CacheSet = wire.NewSet(
 	cache.NewRecordProjectionRunner,
 	configDao.NewAlertRuleHistoryReader,
 	cache.NewAlertRuleProjectionRunner,
+	configDao.NewPromMainHistoryReader,
+	cache.NewPromMainProjectionRunner,
 	cache.NewMonitorCache,
 	cache.NewAlertManagerConfigCache,
 	cache.NewAlertRuleConfigCache,

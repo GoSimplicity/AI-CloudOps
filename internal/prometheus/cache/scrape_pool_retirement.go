@@ -51,12 +51,24 @@ func reconcileDeletedScrapePools(ctx context.Context, dao scrapedao.ScrapePoolDA
 func (p *prometheusConfigCache) RetireDeletedScrapePool(ctx context.Context, poolID int) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return retireDeletedScrapePool(ctx, p.scrapePoolDAO, poolID, p.publishPromPool)
+	versions, err := p.promSourceVersions(ctx)
+	if err != nil {
+		return err
+	}
+	return retireDeletedScrapePool(ctx, p.scrapePoolDAO, poolID, func(ctx context.Context, pool *model.MonitorScrapePool) error {
+		return p.publishPromPool(ctx, pool, versions[pool.ID])
+	})
 }
 func (p *prometheusConfigCache) ReconcileDeletedScrapePools(ctx context.Context) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return reconcileDeletedScrapePools(ctx, p.scrapePoolDAO, p.publishPromPool)
+	versions, err := p.promSourceVersions(ctx)
+	if err != nil {
+		return err
+	}
+	return reconcileDeletedScrapePools(ctx, p.scrapePoolDAO, func(ctx context.Context, pool *model.MonitorScrapePool) error {
+		return p.publishPromPool(ctx, pool, versions[pool.ID])
+	})
 }
 func (r *alertRuleConfigCache) RetireDeletedScrapePool(ctx context.Context, poolID int) error {
 	r.mu.Lock()
