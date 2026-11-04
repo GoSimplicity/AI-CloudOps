@@ -29,4 +29,27 @@ N128另测进入lease为78,985,917ns/772 SELECT；单次Recheck为72,005,083ns/6
 - trusted binding读取同一operation的manifest并逐artifact查找，造成额外解析与分配；查询次数不能完整表达这部分CPU成本。
 - 每条命令又序列化整帧，Lua同样需要全帧角色/类型/fence检查；本次未计Lua。只优化SQL后仍不能宣称整个Store线性。
 
-后续先验证真实MySQL原连接失效及双control并发，再考虑在同一已持锁事务内复用完整初验结果。每个外部写之前仍须在原事务连接检查存活，任何错误、取消或回调结束都必须seal，不能借新连接续权。原生迟到请求、权限、AM双向量、Record旧payload和取消反例须保持。当前未实施性能优化；大正文、MySQL锁成本、Redis/Lua及端到端容量还需单独测量。
+基线采样后先验证真实MySQL原连接失效及双control并发，再考虑在同一已持锁事务内复用完整初验结果。每个外部写之前仍须在原事务连接检查存活，任何错误、取消或回调结束都必须seal，不能借新连接续权。原生迟到请求、权限、AM双向量、Record旧payload和取消反例须保持。基线采样时尚未实施优化；大正文、MySQL锁成本、Redis/Lua及端到端容量仍需单独测量。
+
+## 第一阶段：同一租约内复用完整初验
+
+仅在本次lease首次完整校验成功后设置initialized。原control/AM双control、namespace及当前owner/event锁持续持有；历史manifest/lineage依赖既有append-only、已完成状态及payload不可变合同，不声称所有历史行都被锁定。后续Recheck在原l.tx执行真实SELECT 1验证该事务连接仍活着，不从全局DB借新连接。错误、取消或退出后封闭；Snapshot深复制和MarkComplete的proof/条件状态更新保持。
+
+相同代码口径、相同15项基准全部通过。N128检查/帧序列化段：
+
+| 指标 | 基线 | 初验复用后 |
+| --- | ---: | ---: |
+| ns/op | 9,651,352,708 | 21,370,874 |
+| SELECT/op | 84,876 | 132 |
+| B/op（累计分配） | 4,873,801,480 | 15,484,272 |
+| allocs/op | 23,974,562 | 16,179 |
+| JSON帧字节/op | 11,856,163 | 11,856,163 |
+| 帧数 / Snapshot数 | 131 / 2 | 131 / 2 |
+
+完整初验的772 SELECT保持；单Recheck从643 SELECT变成1，退出检查从643变成1。初验仍约75ms，且不计入21.37ms命令段，不能把这个数字当作完整发布延迟。基线及after均为单次本机微小正文测量，不代表稳定分位数、MySQL或大YAML性能。
+
+独立回归把probe临时改成全局DB时，原事务失效测试真实变红；正式实现通过原tx rollback后新SQL写入、快照/输入隔离、退出失效、ordinary权限及AM新旧lease隔离。Root真实MySQL12与Redis59全部通过，含KILL原连接、deadline及迟到请求；Record旧payload保持。
+
+完整DAO74main/177leaf、cache236main/1153leaf及alert/scrape service129leaf race全部通过，0fail/skip；全Go、vet、全部integration/e2e/smoke标签编译及actionlint通过。专属MySQL/Redis owner label均验证0残留，未触碰演示实例。
+
+Store/Lua/schema未改，整帧字节完全不降，wire与Lua全量检查仍有二次成本。后续还需处理初验重复解析、真实Redis/Lua及容量边界，不能据本阶段宣称整体线性或整个1.0完成。

@@ -728,3 +728,9 @@
 
 - 新owned动态端口mysql8.4.11 fixture与十项真实SQL/两项环境拒绝场景，实证LC竞争、AM双control锁序、真实等待/deadline及KILL后租约失效，12叶race全绿。
 - 私有文件与随机schema/user、精确label/fullID清理且核零；保留首次观测假阴性并按官方锁边模型加强证据，生产及Store/Lua/schema不改。接入三仓CI，未触碰演示库或上线。
+
+## 2026-11-05：复用同事务完整初验
+
+- lease仅首次完整校验权限与material，后续在原事务连接真实SELECT1探活；错误/取消封闭，保Snapshot深复制与MarkComplete条件，不借新连接续权，Store/Lua/schema保持。
+- 固定N128检查/序列化段SELECT84,876→132、9.651s→21.371ms，初验772查询和全部帧字节不变；真实MySQL12/Redis59及globalDB负控守住失联/权限边界。仍需wire/Lua与容量优化。
+- 来源锁更新至独立CI成功Webceb1cbe/AI75d4a87，新组合另验；预览未应用本次优化，未上线。

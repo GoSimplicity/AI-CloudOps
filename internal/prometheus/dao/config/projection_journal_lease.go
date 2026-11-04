@@ -31,14 +31,15 @@ type ProjectionLeaseSnapshot struct {
 	Artifacts []ProjectionMaterial
 }
 type sqlProjectionLease struct {
-	mu       sync.Mutex
-	active   bool
-	ctx      context.Context
-	tx       *gorm.DB
-	dao      *monitorConfigDAO
-	pool     *ProjectionReceipt
-	ordinary *ArtifactReceipt
-	snapshot ProjectionLeaseSnapshot
+	mu          sync.Mutex
+	active      bool
+	initialized bool
+	ctx         context.Context
+	tx          *gorm.DB
+	dao         *monitorConfigDAO
+	pool        *ProjectionReceipt
+	ordinary    *ArtifactReceipt
+	snapshot    ProjectionLeaseSnapshot
 }
 
 func (*sqlProjectionLease) projectionLease() {}
@@ -74,6 +75,7 @@ func (l *sqlProjectionLease) RecheckCurrent(ctx context.Context) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if err := l.usable(ctx); err != nil {
+		l.active = false
 		return err
 	}
 	err := l.recheck(ctx)
@@ -82,7 +84,34 @@ func (l *sqlProjectionLease) RecheckCurrent(ctx context.Context) error {
 	}
 	return err
 }
+
+// Initial authority is validated once while the original transaction holds its
+// control(s), all namespace guards, and current owner/event row locks. Those
+// locks remain held for the whole callback; its sealed API exposes no SQL writer.
+// Rebuilding immutable material cannot add authority after this point. Every
+// later command must still prove this exact transaction connection is alive.
 func (l *sqlProjectionLease) recheck(ctx context.Context) error {
+	if !l.initialized {
+		if err := l.validateInitialCurrent(ctx); err != nil {
+			return err
+		}
+		if err := l.usable(ctx); err != nil {
+			return err
+		}
+		l.initialized = true
+		return nil
+	}
+	var alive int
+	if err := l.tx.WithContext(ctx).Raw("SELECT 1").Scan(&alive).Error; err != nil {
+		return err
+	}
+	if alive != 1 {
+		return ErrJournalConflict
+	}
+	return l.usable(ctx)
+}
+
+func (l *sqlProjectionLease) validateInitialCurrent(ctx context.Context) error {
 	tx := l.tx.WithContext(ctx)
 	var artifacts []ArtifactReceipt
 	if l.pool != nil {

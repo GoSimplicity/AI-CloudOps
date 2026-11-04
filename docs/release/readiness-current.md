@@ -1,5 +1,13 @@
 # 当前开发完成度与验收边界
 
+## 2026-11-05：租约内完整初验复用
+
+首次权限/material验证及持锁保持，后续操作在原事务连接实际探活，取消/错误后封闭，不能从健康全局DB续权。Snapshot深复制、MarkComplete条件及Store/Lua/schema保持，见[实测与边界](projection-scale.md)。
+
+- 同口径N128命令检查/JSON段9.651s→21.371ms，SELECT84,876→132，累计分配4.87GB→15.48MB；初验772 SELECT及131帧/11,856,163字节保持。不代表完整发布延迟或Lua线性。
+- Root真实MySQL12和Redis59全部race通过，独立globalDB负控由绿变红证明可识别跨连接续权；完整DAO177leaf、cache1153leaf、service129leaf race及全Go/vet/全部标签编译/actionlint通过，owner实例清理0。
+- 来源锁Web提升至独立Verify41906033362/gitleaks41906033385成功的ceb1cbe，AI保持75d4a87；最新前端实扫1130文件7293errors/5warnings，仍未清零。当前预览304f/schema4及模拟数据保持，新提交远端CI另验，未上线。
+
 ## 2026-11-05：真实 MySQL 恢复并发守门
 
 [独立MySQL验收](projection-recovery-mysql.md)最终12叶0fail/skip，覆盖真实候选查询、counter不变但LC更新、AM双控制/锁序、deadline后重试及KILL后旧租约不能续权。两个独立runtime连接实读REPEATABLE-READ，容器、端口、schema和凭据均独立于演示服务，清理后owner label为0。
