@@ -91,9 +91,29 @@ func legacySnapshotStatement(t *testing.T, prefix string) string {
 
 func TestLegacyCurrentMySQL(t *testing.T) {
 	db, address := fixture(t)
-	initializeCurrent(t, db)
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
+
+	// This validator adopts exactly the released v1 baseline. Current model
+	// registration can legitimately contain later migrations and is not a v1
+	// fixture. Apply the frozen release without creating a version ledger.
+	baseline, err := dbschema.Manifest()
+	if err != nil || len(baseline) != 1 || baseline[0].Version != 1 {
+		t.Fatal("frozen sole-v1 fixture manifest unavailable")
+	}
+	baselineConn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal("frozen v1 fixture connection unavailable")
+	}
+	err = baseline[0].Apply(ctx, baselineConn)
+	baselineConn.Close()
+	if err != nil {
+		t.Fatal("frozen v1 fixture creation failed; details withheld")
+	}
+	definitions := tableDDL(t, db)
+	if len(definitions) != 58 || definitions["cl_monitor_config_namespaces"] != "" || definitions["cloudops_schema_history"] != "" {
+		t.Fatal("legacy fixture must contain exactly 58 frozen v1 tables without v2 or ledger")
+	}
 	exec := func(statement string) {
 		t.Helper()
 		if _, err := db.ExecContext(ctx, statement); err != nil {
@@ -118,7 +138,7 @@ func TestLegacyCurrentMySQL(t *testing.T) {
 	defer conn.Close()
 	before := legacyFixtureRows(t, db)
 	if err := dbschema.ValidateLegacyCurrent(ctx, conn); err != nil {
-		t.Fatal("current InitTables schema must pass without claiming a version", err)
+		t.Fatal("frozen v1 schema must pass without claiming a version", err)
 	}
 	if after := legacyFixtureRows(t, db); after != before {
 		t.Fatal("read-only validator changed business rows or timestamps")

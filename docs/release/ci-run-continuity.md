@@ -15,3 +15,9 @@
 修复提交638c1bda的[三仓集成41765868496](https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41765868496)及Simple CI/gitleaks成功。后续d478ac7的[三仓集成41766503939](https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41766503939)、Simple CI及gitleaks也成功；两个同分支运行独立完成，后push没有取消前run。
 
 两次集成均核对实际checkout的Web813fb305、AIOpsba1876a，5项owned浏览器业务检查零跳过、失败或重试。Web93decdd自身Verify成功，166文件3619项单测及生产构建登录启动检查通过；这项Web独立结果不代表上述集成锁已覆盖93decdd。历史失败与取消记录保留。
+
+## v2模型与冻结v1采用夹具的边界
+
+1145f07c的Simple CI/gitleaks成功，三仓集成[41773617342](https://github.com/GoSimplicity/AI-CloudOps/actions/runs/41773617342)在`TestLegacyCurrentMySQL`失败：夹具仍使用现代InitTables（现在包含v2锁表），却要求sole-v1采用校验接受它。现代模型与当前迁移一致性检查本身已通过。
+
+修复仅让该旧库夹具从冻结v1 Apply创建无账本58表，并明确检查无v2锁表；原有只读数据指纹、时间戳、权限可见性、未知表/视图、结构与数据拒绝全部保留。没有放宽validator、修改v2 SQL或校验和。实际本机独立MySQL容器运行完整`TestLegacyCurrentMySQL`通过，资源由既有所有权清理完成；修复提交的远端集成仍需独立核对。
