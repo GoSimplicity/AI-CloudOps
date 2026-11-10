@@ -26,30 +26,17 @@
 package di
 
 import (
-	"strings"
-	"time"
-
 	"github.com/GoSimplicity/AI-CloudOps/internal/middleware"
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
+// InitMiddlewares 只保留访问日志。
+// webhook 没有浏览器跨域调用方：Alertmanager 的 /receive 是服务端请求，
+// 飞书卡片是顶层导航，确认页表单与页面同源。原先 AllowOriginFunc 对任意 Origin 返回 true
+// 且 AllowCredentials 为 true，因此这里不再挂 CORS。
 func InitMiddlewares(l *zap.Logger) []gin.HandlerFunc {
 	return []gin.HandlerFunc{
-		cors.New(cors.Config{
-			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
-			AllowCredentials: true,
-			AllowHeaders:     []string{"Content-Type", "Authorization", "X-Refresh-Token"},
-			ExposeHeaders:    []string{"x-jwt-token", "x-refresh-token"},
-			AllowOriginFunc: func(origin string) bool {
-				if strings.HasPrefix(origin, "http://localhost") {
-					return true
-				}
-				return strings.Contains(origin, "")
-			},
-			MaxAge: 12 * time.Hour,
-		}),
 		middleware.NewLogMiddleware(l).Log(),
 	}
 }

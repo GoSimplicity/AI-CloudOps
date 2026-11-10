@@ -139,6 +139,12 @@ class ReleaseEnvTests(unittest.TestCase):
             "WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API": "http://127.0.0.1:9/open-apis/bot/v2/hook",
         }
         self.assertEqual({key: values.get(key) for key in expected}, expected)
+        self.assertEqual(values["WEBHOOK_BACKEND_DOMAIN"], "http://127.0.0.1:8889/api/v1/alerts")
+        self.assertRegex(values["WEBHOOK_ACTION_SIGNING_KEY"], r"^[0-9a-f]{64}$")
+        self.assertRegex(values["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"], r"^[0-9a-f]{64}$")
+        self.assertNotEqual(values["WEBHOOK_ACTION_SIGNING_KEY"], values["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"])
+        self.assertNotIn(values["WEBHOOK_ACTION_SIGNING_KEY"], result.stdout + result.stderr)
+        self.assertNotIn(values["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"], result.stdout + result.stderr)
         self.assertNotIn("@tcp(", result.stdout + result.stderr)
 
     def test_generated_dsn_parses_with_go_sql_driver(self):
@@ -220,8 +226,19 @@ class ReleaseEnvTests(unittest.TestCase):
         before = destination.read_bytes()
         result = self.run_script("--env-file", str(destination), "--add-missing")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(destination.read_bytes(), before)
-        self.assert_no_value_leak(result, FIXTURE_PASSWORD, custom)
+        after = destination.read_text()
+        self.assertTrue(after.startswith(before.decode()))
+        settings = read_env(destination)
+        self.assertEqual(settings["WEBHOOK_MYSQL_ADDR"], custom)
+        self.assertEqual(settings["WEBHOOK_BACKEND_DOMAIN"], "http://127.0.0.1:8889/api/v1/alerts")
+        self.assertRegex(settings["WEBHOOK_ACTION_SIGNING_KEY"], r"^[0-9a-f]{64}$")
+        self.assertRegex(settings["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"], r"^[0-9a-f]{64}$")
+        self.assertNotEqual(settings["WEBHOOK_ACTION_SIGNING_KEY"], settings["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"])
+        self.assert_no_value_leak(result, FIXTURE_PASSWORD, custom, settings["WEBHOOK_ACTION_SIGNING_KEY"], settings["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"])
+        again = self.run_script("--env-file", str(destination), "--add-missing")
+        self.assertEqual(again.returncode, 0, again.stderr)
+        self.assertEqual(destination.read_text(), after)
+        self.assert_no_value_leak(again, settings["WEBHOOK_ACTION_SIGNING_KEY"], settings["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"])
 
     def test_add_missing_refusals_leave_file_unchanged(self):
         cases = (

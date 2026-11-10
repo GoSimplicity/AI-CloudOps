@@ -179,140 +179,7 @@ var (
     {
       "tag": "hr"
     },
-    {
-      "tag": "div",
-      "text": {
-        "tag": "lark_md",
-        "content": "🔴 告警屏蔽按钮 [单一告警屏蔽👇]"
-      }
-    },
-    {
-      "tag": "action",
-      "actions": [
-        {
-          "tag": "button",
-          "text": {
-            "tag": "plain_text",
-            "content": "认领告警"
-          },
-          "type": "primary",
-          "url": "%s",
-          "confirm": {
-            "title": {
-              "tag": "plain_text",
-              "content": "确定认领吗"
-            },
-            "text": {
-              "tag": "plain_text",
-              "content": ""
-            }
-          }
-        },
-        {
-          "tag": "button",
-          "text": {
-            "tag": "plain_text",
-            "content": "屏蔽1小时"
-          },
-          "type": "default",
-          "url": "%s",
-          "confirm": {
-            "title": {
-              "tag": "plain_text",
-              "content": "确定屏蔽吗"
-            },
-            "text": {
-              "tag": "plain_text",
-              "content": ""
-            }
-          }
-        },
-        {
-          "tag": "button",
-          "text": {
-            "tag": "plain_text",
-            "content": "屏蔽24小时"
-          },
-          "type": "danger",
-          "url": "%s",
-          "confirm": {
-            "title": {
-              "tag": "plain_text",
-              "content": "确定屏蔽吗"
-            },
-            "text": {
-              "tag": "plain_text",
-              "content": ""
-            }
-          }
-        }
-      ]
-    },
-    {
-      "tag": "hr"
-    },
-    {
-      "tag": "action",
-      "actions": [
-        {
-          "tag": "button",
-          "text": {
-            "tag": "plain_text",
-            "content": "取消屏蔽"
-          },
-          "type": "primary",
-          "url": "%s",
-          "confirm": {
-            "title": {
-              "tag": "plain_text",
-              "content": "确定取消吗"
-            },
-            "text": {
-              "tag": "plain_text",
-              "content": ""
-            }
-          }
-        },
-        {
-          "tag": "button",
-          "text": {
-            "tag": "plain_text",
-            "content": "屏蔽6小时"
-          },
-          "type": "default",
-          "url": "%s",
-          "confirm": {
-            "title": {
-              "tag": "plain_text",
-              "content": "确定屏蔽吗"
-            },
-            "text": {
-              "tag": "plain_text",
-              "content": ""
-            }
-          }
-        },
-        {
-          "tag": "button",
-          "text": {
-            "tag": "plain_text",
-            "content": "屏蔽7天"
-          },
-          "type": "danger",
-          "url": "%s",
-          "confirm": {
-            "title": {
-              "tag": "plain_text",
-              "content": "确定屏蔽吗"
-            },
-            "text": {
-              "tag": "plain_text",
-              "content": ""
-            }
-          }
-        }
-      ]
-    },
+    %s,
     {
       "tag": "hr"
     },
@@ -333,6 +200,73 @@ var (
     "card": %s
 }
 `
+
+	// CardActionButtons 认领和静默按钮。只在配置了签名密钥时拼进卡片。
+	CardActionButtons = `{
+      "tag": "div",
+      "text": {
+        "tag": "lark_md",
+        "content": "🔴 告警屏蔽按钮 [单一告警屏蔽👇]"
+      }
+    },
+    {
+      "tag": "action",
+      "actions": [
+        {
+          "tag": "button",
+          "text": {"tag": "plain_text", "content": "认领告警"},
+          "type": "primary",
+          "url": "%s"
+        },
+        {
+          "tag": "button",
+          "text": {"tag": "plain_text", "content": "屏蔽1小时"},
+          "type": "default",
+          "url": "%s"
+        },
+        {
+          "tag": "button",
+          "text": {"tag": "plain_text", "content": "屏蔽24小时"},
+          "type": "danger",
+          "url": "%s"
+        }
+      ]
+    },
+    {
+      "tag": "hr"
+    },
+    {
+      "tag": "action",
+      "actions": [
+        {
+          "tag": "button",
+          "text": {"tag": "plain_text", "content": "取消屏蔽"},
+          "type": "primary",
+          "url": "%s"
+        },
+        {
+          "tag": "button",
+          "text": {"tag": "plain_text", "content": "屏蔽6小时"},
+          "type": "default",
+          "url": "%s"
+        },
+        {
+          "tag": "button",
+          "text": {"tag": "plain_text", "content": "屏蔽7天"},
+          "type": "danger",
+          "url": "%s"
+        }
+      ]
+    }`
+
+	// CardActionsUnavailable 未配置签名密钥时替代操作按钮，避免发出无法校验的链接。
+	CardActionsUnavailable = `{
+      "tag": "div",
+      "text": {
+        "tag": "lark_md",
+        "content": "未配置签名密钥，认领、静默和取消静默按钮已关闭"
+      }
+    }`
 )
 
 const (
@@ -361,13 +295,5 @@ var StatusChineseMap = map[AlertStatus]string{
 	AlertStatusResolved: "已恢复", // 已恢复
 }
 
-// URL 模板常量
-const (
-	SendGroupURLTemplate = "http://%s/%s?id=%v"                  // 发送组 URL 模板
-	RenderingURLTemplate = "http://%s/%s?fingerprint=%v"         // 渲染 URL 模板
-	SilenceURLTemplate   = "http://%s/%s?fingerprint=%v&hour=%v" // 静音 URL 模板
-	UnsilenceURLTemplate = "http://%s/%s?fingerprint=%v"         // 取消静音 URL 模板
-
-	// DefaultUpgradeMinutes 默认告警升级时间（分钟）
-	DefaultUpgradeMinutes = 30 // 默认告警升级时间为30分钟
-)
+// DefaultUpgradeMinutes 默认告警升级时间（分钟）
+const DefaultUpgradeMinutes = 30

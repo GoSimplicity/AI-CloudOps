@@ -52,7 +52,7 @@ func TestSilenceHandlersPersistThroughRealDAO(t *testing.T) {
 			if err := db.Create(&event).Error; err != nil {
 				t.Fatal(err)
 			}
-			handler, err := NewWebHookHandler(&config.WebhookConfig{AlertManagerAPI: "https://fixture.invalid", ImFeishu: config.ImFeishuConfig{RequestTimeoutSeconds: 7}}, zap.NewNop(), dao.NewWebhookDao(zap.NewNop(), db), nil)
+			handler, err := NewWebHookHandler(withActionKey(&config.WebhookConfig{AlertManagerAPI: "https://fixture.invalid", ImFeishu: config.ImFeishuConfig{RequestTimeoutSeconds: 7}}), zap.NewNop(), dao.NewWebhookDao(zap.NewNop(), db), nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -80,8 +80,11 @@ func TestSilenceHandlersPersistThroughRealDAO(t *testing.T) {
 			engine := gin.New()
 			handler.RegisterRouters(engine)
 			recorder := httptest.NewRecorder()
-			path := "/api/v1/alerts/" + test.action + "?fingerprint=fixture&hour=1"
-			engine.ServeHTTP(recorder, httptest.NewRequest("GET", path, nil))
+			hour := ""
+			if test.action == "silence" {
+				hour = "1"
+			}
+			engine.ServeHTTP(recorder, signActionRequest(t, http.MethodPost, test.action, "fixture", hour))
 			var result struct {
 				Code    int
 				Message string

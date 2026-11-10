@@ -33,8 +33,10 @@
 | --- | --- | --- | --- |
 | `WEBHOOK_PORT` | `webhook.port` | `8889` | `"8889"` |
 | `WEBHOOK_FIXED_WORKERS` | `webhook.fixed_workers` | `10` | 未设置 |
-| `WEBHOOK_FRONT_DOMAIN` | `webhook.front_domain` | `http://localhost:3000` | `localhost:3000` |
-| `WEBHOOK_BACKEND_DOMAIN` | `webhook.backend_domain` | `http://localhost:8889` | `localhost:8889/api/v1/alerts` |
+| `WEBHOOK_FRONT_DOMAIN` | `webhook.front_domain` | `http://localhost:3000` | `http://localhost:3000` |
+| `WEBHOOK_BACKEND_DOMAIN` | `webhook.backend_domain` | `http://localhost:8889/api/v1/alerts` | `http://localhost:8889/api/v1/alerts` |
+| `WEBHOOK_ACTION_SIGNING_KEY` | `webhook.action_signing_key` | 空 | 空 |
+| `WEBHOOK_ALERTMANAGER_BEARER_TOKEN` | `webhook.alertmanager_bearer_token` | 空 | 空 |
 | `WEBHOOK_DEFAULT_UPGRADE_MINUTES` | `webhook.default_upgrade_minutes` | `60` | `30` |
 | `WEBHOOK_ALERT_MANAGER_API` | `webhook.alert_manager_api` | `http://localhost:9093` | `http://localhost:9093` |
 | `WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS` | `webhook.common_map_renew_interval_seconds` | `300` | `10` |
@@ -43,6 +45,10 @@
 | `WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_ID` | `webhook.im_feishu.private_robot_app_id` | 空 | 占位 `xxx` |
 | `WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET` | `webhook.im_feishu.private_robot_app_secret` | 空 | 占位 `xxx`（**凭据**，请用环境变量注入，不要写进文件） |
 | `WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API` | `webhook.im_feishu.tenant_access_token_api` | `https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal` | 同默认值 |
+
+`ENV` 按 `pkg/envmode` 判断。只有 `development` / `dev` 允许签名密钥、Alertmanager bearer token 和卡片对外地址为空，进程打警告后继续启动：`/receive` 不校验令牌，飞书卡片不放认领和静默按钮。`production` / `prod` / `prd`、未设置，以及 `test` 这类无法识别的取值，只要有一项为空就拒绝启动。发布栈由 `scripts/release-env.py` 生成两个密钥（与 `openssl rand -hex 32` 同长度），并把同一个 bearer token 交给 Alertmanager 启动脚本写入 `credentials_file`，配置文件里不写真实值。
+
+签名链接默认 24 小时内有效，有效期内可以重复使用。卡片被转发后，拿到链接的人也能提交。重复静默、取消静默或认领是幂等的：认领只在状态仍是触发或已升级时把 `status` 改成已认领，不写认领人，也不改静默 ID。
 
 说明：
 

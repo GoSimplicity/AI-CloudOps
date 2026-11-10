@@ -31,6 +31,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -69,6 +71,7 @@ type webhookContent struct {
 	client                *http.Client
 	frontDomain           string
 	backendDomain         string
+	signingKey            string
 	defaultUpgradeMinutes int
 	groupMessageAPI       string
 	privateMessageAPI     string
@@ -83,6 +86,7 @@ func NewWebhookContent(cfg *config.WebhookConfig, l *zap.Logger, dao dao.Webhook
 		l:                     l,
 		frontDomain:           settings.FrontDomain,
 		backendDomain:         settings.BackendDomain,
+		signingKey:            strings.TrimSpace(settings.ActionSigningKey),
 		defaultUpgradeMinutes: settings.DefaultUpgradeMinutes,
 		groupMessageAPI:       settings.ImFeishu.GroupMessageAPI,
 		privateMessageAPI:     settings.ImFeishu.PrivateMessageAPI,
@@ -119,11 +123,12 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	var msgGrafana, msgExpr string
 	if rule != nil {
 		msgGrafana = fmt.Sprintf(`**🗳查看grafana大盘图**\n[链接地址](%s)`, rule.GrafanaLink)
+		ruleURL, err := wc.frontURL("monitor/rule/detail", url.Values{"ruleid": {strconv.Itoa(rule.ID)}})
+		if err != nil {
+			return ErrCardBuild
+		}
 		msgExpr = fmt.Sprintf(`**🏹修改告警规则** \n[规则地址](%s) \n<font color='red'>%s</font>`,
-			fmt.Sprintf("%s/%s?ruleid=%v",
-				wc.frontDomain,
-				"monitor/rule/detail",
-				rule.ID),
+			ruleURL,
 			rule.Expr,
 		)
 	}
@@ -138,11 +143,10 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 		return ErrNotificationLookup
 	}
 
-	onDutyGroupUrl := fmt.Sprintf(constant.SendGroupURLTemplate,
-		wc.frontDomain,
-		"monitor/onduty/detail",
-		onDutyGroup.ID,
-	)
+	onDutyGroupUrl, err := wc.frontURL("monitor/onduty/detail", url.Values{"id": {strconv.Itoa(onDutyGroup.ID)}})
+	if err != nil {
+		return ErrCardBuild
+	}
 
 	// 填充当天的值班用户
 	onDutyGroup, err = wc.dao.FillTodayOnDutyUser(ctx, onDutyGroup)
@@ -219,24 +223,35 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 	msgLabel := fmt.Sprintf(`**🛶标签信息：**\n%s`, utils.FormatMap(labelMap))
 	msgAnno := fmt.Sprintf(`**🚂注释信息：**\n%s`, utils.FormatMap(anno))
 
-	sendGroupUrl := fmt.Sprintf(constant.SendGroupURLTemplate,
-		wc.frontDomain,
-		"monitor/sendgroup/detail",
-		sendGroup.ID,
-	)
+	sendGroupUrl, err := wc.frontURL("monitor/sendgroup/detail", url.Values{"id": {strconv.Itoa(sendGroup.ID)}})
+	if err != nil {
+		return ErrCardBuild
+	}
 	msgSendGroup := fmt.Sprintf(`**📝修改发送组：**\n[%s](%s)`,
 		sendGroup.Name,
 		sendGroupUrl,
 	)
-	BackendDomain := wc.backendDomain
-	// 构建各类操作的 URL
-	buttonURLs := []string{
-		fmt.Sprintf(constant.RenderingURLTemplate, BackendDomain, "renling", alert.Fingerprint),    // 认领告警
-		fmt.Sprintf(constant.SilenceURLTemplate, BackendDomain, "silence", alert.Fingerprint, 1),   // 屏蔽1小时
-		fmt.Sprintf(constant.SilenceURLTemplate, BackendDomain, "silence", alert.Fingerprint, 24),  // 屏蔽24小时
-		fmt.Sprintf(constant.UnsilenceURLTemplate, BackendDomain, "unsilence", alert.Fingerprint),  // 取消屏蔽
-		fmt.Sprintf(constant.SilenceURLTemplate, BackendDomain, "silence", alert.Fingerprint, 6),   // 屏蔽6小时
-		fmt.Sprintf(constant.SilenceURLTemplate, BackendDomain, "silence", alert.Fingerprint, 168), // 屏蔽7天
+	actions := constant.CardActionsUnavailable
+	if strings.TrimSpace(wc.signingKey) != "" {
+		issuedAt := time.Now()
+		buttonURLs := make([]string, 6)
+		specs := []struct {
+			name, hour string
+		}{
+			{"renling", ""},
+			{"silence", "1"},
+			{"silence", "24"},
+			{"unsilence", ""},
+			{"silence", "6"},
+			{"silence", "168"},
+		}
+		for i, spec := range specs {
+			buttonURLs[i], err = wc.signedActionURL(spec.name, alert.Fingerprint, spec.hour, issuedAt)
+			if err != nil {
+				return ErrCardBuild
+			}
+		}
+		actions = fmt.Sprintf(constant.CardActionButtons, buttonURLs[0], buttonURLs[1], buttonURLs[2], buttonURLs[3], buttonURLs[4], buttonURLs[5])
 	}
 
 	// 使用 feiShuCardContent 模板构建 Feishu 卡片内容
@@ -253,12 +268,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 		msgGrafana,       // 查看 Grafana 大盘图
 		msgSendGroup,     // 修改发送组
 		msgExpr,          // 修改告警规则
-		buttonURLs[0],    // 认领告警 URL
-		buttonURLs[1],    // 屏蔽1小时 URL
-		buttonURLs[2],    // 屏蔽24小时 URL
-		buttonURLs[3],    // 取消屏蔽 URL
-		buttonURLs[4],    // 屏蔽6小时 URL
-		buttonURLs[5],    // 屏蔽7天 URL
+		actions,
 	)
 	if err != nil {
 		return ErrCardBuild
@@ -285,31 +295,23 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 // buildFeishuCardContent 构建 Feishu 卡片内容的 JSON 字符串
 func (wc *webhookContent) buildFeishuCardContent(
 	alertHeaderColor, alertHeader, msgLabel, msgAnno, msgSeverity, msgStatus,
-	msgTime, msgUpgrade, msgOnduty, msgGrafana, msgSendGroup, msgExpr string,
-	buttonURL1, buttonURL2, buttonURL3,
-	buttonURL4, buttonURL5, buttonURL6 string,
+	msgTime, msgUpgrade, msgOnduty, msgGrafana, msgSendGroup, msgExpr, actions string,
 ) (string, error) {
-
-	// 格式化 feiShuCardContent 模板
 	cardContent := fmt.Sprintf(constant.CardContent,
-		alertHeaderColor, // header.template
-		alertHeader,      // header.title.content
-		msgLabel,         // 第一行标签信息
-		msgAnno,          // 第一行 anno 信息
-		msgSeverity,      // 第二行告警级别
-		msgStatus,        // 第二行当前状态
-		msgTime,          // 触发时间
-		msgUpgrade,       // 升级状态
-		msgOnduty,        // 值班组信息
-		msgGrafana,       // 查看 Grafana 大盘图
-		msgSendGroup,     // 修改发送组
-		msgExpr,          // 修改告警规则
-		buttonURL1,       // 认领告警 URL
-		buttonURL2,       // 屏蔽1小时 URL
-		buttonURL3,       // 屏蔽24小时 URL
-		buttonURL4,       // 取消屏蔽 URL
-		buttonURL5,       // 屏蔽6小时 URL
-		buttonURL6,       // 屏蔽7天 URL
+		alertHeaderColor,
+		alertHeader,
+		msgLabel,
+		msgAnno,
+		msgSeverity,
+		msgStatus,
+		msgTime,
+		msgUpgrade,
+		msgOnduty,
+		msgGrafana,
+		msgSendGroup,
+		msgExpr,
+		msgExpr,
+		actions,
 	)
 
 	// 验证生成的 JSON 是否有效

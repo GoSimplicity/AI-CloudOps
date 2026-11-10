@@ -45,6 +45,7 @@ type AlertEventSilenceState struct {
 
 var ErrAlertSilenceConflict = errors.New("alert silence state missing or changed")
 var ErrAlertSilenceStore = errors.New("alert silence persistence outcome unconfirmed")
+var ErrAlertClaimConflict = errors.New("alert claim state missing or changed")
 
 type WebhookDao interface {
 	GetOnDutyGroupById(ctx context.Context, id int) (*model.MonitorOnDutyGroup, error)
@@ -60,6 +61,8 @@ type WebhookDao interface {
 	CreateOrUpdateEvent(ctx context.Context, event *model.MonitorAlertEvent) error
 	UpdateMonitorAlertEvent(ctx context.Context, event *model.MonitorAlertEvent) error
 	UpdateMonitorAlertEventSilence(ctx context.Context, id int, expected, desired AlertEventSilenceState) error
+	// ClaimMonitorAlertEvent 仅当当前状态等于 expected 且 expected 为触发或已升级时，把状态改为已认领。
+	ClaimMonitorAlertEvent(ctx context.Context, id int, expected model.MonitorAlertEventStatus) error
 
 	FillTodayOnDutyUser(ctx context.Context, onDutyGroup *model.MonitorOnDutyGroup) (*model.MonitorOnDutyGroup, error)
 }
@@ -348,6 +351,42 @@ func (wd *webhookDao) UpdateMonitorAlertEventSilence(ctx context.Context, id int
 		return ErrAlertSilenceConflict
 	}
 	return nil
+}
+
+// ClaimMonitorAlertEvent 只改 status。expected 只能是触发或已升级。
+// 并发下后到的请求如果发现状态已经是已认领，按幂等成功返回，不改其他列。
+func (wd *webhookDao) ClaimMonitorAlertEvent(ctx context.Context, id int, expected model.MonitorAlertEventStatus) error {
+	if id <= 0 || (expected != model.MonitorAlertEventStatusFiring && expected != model.MonitorAlertEventStatusUpgraded) {
+		return ErrAlertClaimConflict
+	}
+	result := wd.db.WithContext(ctx).Model(&model.MonitorAlertEvent{}).
+		Where("id = ? AND status = ?", id, expected).
+		Update("status", model.MonitorAlertEventStatusClaimed)
+	if result.Error != nil {
+		wd.l.Error("保存认领状态失败", zap.String("operation", "alert_claim_update"))
+		return ErrAlertSilenceStore
+	}
+	if result.RowsAffected == 1 {
+		return nil
+	}
+	if result.RowsAffected != 0 {
+		return ErrAlertSilenceStore
+	}
+	var current struct {
+		Status model.MonitorAlertEventStatus
+	}
+	err := wd.db.WithContext(ctx).Model(&model.MonitorAlertEvent{}).Select("status").Where("id = ?", id).Take(&current).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrAlertClaimConflict
+	}
+	if err != nil {
+		wd.l.Error("核对认领状态失败", zap.String("operation", "alert_claim_readback"))
+		return ErrAlertSilenceStore
+	}
+	if current.Status == model.MonitorAlertEventStatusClaimed {
+		return nil
+	}
+	return ErrAlertClaimConflict
 }
 
 // GetMonitorOnDutyGroupList 获取所有 MonitorOnDutyGroup
