@@ -159,16 +159,21 @@ func (s *nodeService) UpdateNodeLabels(ctx context.Context, req *model.UpdateNod
 		return err
 	}
 
-	// 允许传入空标签，表示清空所有标签
-	if req.Labels != nil {
-
-		if err := utils.ValidateNodeLabelsMap(req.Labels); err != nil {
-			s.logger.Error("标签验证失败", zap.Error(err))
-			return fmt.Errorf("标签验证失败: %w", err)
-		}
+	// 未提交 labels 时不改节点标签。{} 才是清空用户标签。
+	if req.Labels == nil {
+		return nil
 	}
-
-	err := s.nodeManager.UpdateNodeLabels(ctx, req.ClusterID, req.NodeName, req.Labels)
+	if err := utils.ValidateNodeLabelsMap(req.Labels); err != nil {
+		s.logger.Error("标签验证失败", zap.Error(err))
+		return fmt.Errorf("标签验证失败: %w", err)
+	}
+	node, err := s.nodeManager.GetNode(ctx, req.ClusterID, req.NodeName)
+	if err != nil {
+		s.logger.Error("获取节点失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName))
+		return fmt.Errorf("获取节点失败: %w", err)
+	}
+	labels := utils.OverwriteUserLabels(node.Labels, req.Labels)
+	err = s.nodeManager.UpdateNodeLabels(ctx, req.ClusterID, req.NodeName, labels)
 	if err != nil {
 		s.logger.Error("更新节点标签失败", zap.Error(err), zap.Int("clusterID", req.ClusterID), zap.String("nodeName", req.NodeName), zap.Any("labels", req.Labels))
 		return fmt.Errorf("更新节点标签失败: %w", err)
