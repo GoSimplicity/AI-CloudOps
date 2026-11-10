@@ -30,9 +30,8 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os/exec"
 	"reflect"
-	"runtime"
+	"strings"
 	"time"
 )
 
@@ -70,33 +69,22 @@ func StringSliceToMap(inputSlice []string) (map[string]string, error) {
 	return result, nil
 }
 
-// Ping 检查指定的 IP 地址是否可达
+// Ping 检查地址的 TCP 80 是否接受连接。
+// 不调用系统 ping：发布容器丢掉全部 capability 后，ICMP 需要 CAP_NET_RAW。
 func Ping(ipAddr string) bool {
-	// 检查IP地址是否为空
-	if ipAddr == "" {
+	return probeTCP(ipAddr, "80", 3*time.Second)
+}
+
+func probeTCP(ipAddr, port string, timeout time.Duration) bool {
+	if strings.TrimSpace(ipAddr) == "" {
 		return false
 	}
-
-	// 使用系统命令执行ping操作
-	var cmd *exec.Cmd
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// 根据操作系统选择不同的ping命令参数
-	if runtime.GOOS == "windows" {
-		cmd = exec.CommandContext(ctx, "ping", "-n", "1", "-w", "3000", ipAddr)
-	} else {
-		cmd = exec.CommandContext(ctx, "ping", "-c", "1", "-W", "3", ipAddr)
-	}
-
-	// 执行命令并捕获输出
-	output, err := cmd.CombinedOutput()
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(ipAddr, port), timeout)
 	if err != nil {
-		// 记录错误信息和输出以便调试
-		log.Printf("ping %s 失败: %v, 输出: %s", ipAddr, err, string(output))
+		log.Printf("tcp probe %s:%s 失败: %v", ipAddr, port, err)
 		return false
 	}
-
+	_ = conn.Close()
 	return true
 }
 

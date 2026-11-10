@@ -72,8 +72,10 @@ services:
     <<: *runtime
     image: cloudops-backend:${RELEASE_VERSION:-local}
     # 与 Dockerfile runtime 的 UID/GID 10001 一致。
-    # 未启用 read_only：本地 Cron 的 work_dir 不固定，只读根文件系统会让这些写入失败。
-    # 进程实际要写的是 /app/logs；/tmp 给解释器临时文件。内存和 CPU 是上限，不是预留。
+    # 未填 work_dir 的命令和脚本任务使用 /tmp/cloudops-cron（属主 10001）。显式 work_dir 必须对该用户可写。
+    # 未启用 read_only：显式工作目录不固定，只读根文件系统会让这些写入失败。
+    # 进程还要写 /app/logs；/tmp 给解释器临时文件。内存和 CPU 是上限，不是预留。
+    # 不追加 NET_RAW：主机可达性检查已改为 TCP，不再调用 ICMP ping。
     user: "10001:10001"
     cap_drop:
       - ALL

@@ -38,11 +38,13 @@ RUN apk --no-cache add ca-certificates tzdata wget curl bash python3 nodejs && \
     echo $TZ > /etc/timezone && \
     addgroup -g 10001 -S cloudops && \
     adduser -S -D -H -u 10001 -G cloudops -h /tmp cloudops && \
-    mkdir -p /app/logs && \
-    chown 10001:10001 /app/logs && \
-    chmod 0755 /app/logs
+    mkdir -p /app/logs /tmp/cloudops-cron && \
+    chown 10001:10001 /app/logs /tmp/cloudops-cron && \
+    chmod 0755 /app/logs && \
+    chmod 0750 /tmp/cloudops-cron
 WORKDIR /app
-# 二进制保持 root 所有、不可被运行用户改写；日志目录 /app/logs 归 10001。/tmp 维持 1777。
+# 二进制保持 root 所有、不可被运行用户改写。
+# /app/logs 归 10001。未填 work_dir 的 Cron 命令和脚本写 /tmp/cloudops-cron，不写 /app。
 COPY --from=builder /app/main .
 RUN chmod 0755 ./main
 USER 10001:10001

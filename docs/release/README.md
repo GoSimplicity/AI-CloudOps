@@ -98,7 +98,9 @@ AIOps 飞书自定义机器人可在服务端私有 `.env` 设置 `FEISHU_WEBHOO
 
 后端发布镜像包含 Bash、Python3 和 Node.js，分别支持现有 shell、Python、JavaScript 脚本类型。运行命令具有后端容器的权限，应限制相关菜单/API 的角色授权。任务输出按持久化字段预算截断并标明，不将超限数据无限缓存在内存中。
 
-运行阶段用户是 `cloudops`（UID/GID `10001`），`deploy/release/compose.yaml` 的 `user` 与此一致，并丢掉全部 Linux capabilities、设置 `no-new-privileges`。进程要写的本地路径是日志目录（默认 `./logs`，镜像中为 `/app/logs`，属主 10001）；`/tmp` 保持可写，`HOME` 也指向这里，供解释器放临时文件。告警 webhook 文件目录只出现在下发给 Alertmanager 的配置里，backend 不在本地创建这些文件。配置文件不在镜像中，缺失时继续使用环境变量和默认值。`SSH_KNOWN_HOSTS` 只读，文件需要对 UID 10001 可读，见 `deploy/release/ssh.yaml`。根文件系统没有设 `read_only`：本地定时任务的工作目录不固定，只读根文件系统会让这些写入失败。资源上限默认 2 CPU、2GiB 内存、512 个进程，可按机器规格上调。
+运行阶段用户是 `cloudops`（UID/GID `10001`），`deploy/release/compose.yaml` 的 `user` 与此一致，并丢掉全部 Linux capabilities、设置 `no-new-privileges`。进程要写的本地路径是日志目录（默认 `./logs`，镜像中为 `/app/logs`，属主 10001）和 `/tmp`。`HOME` 指向 `/tmp`，供解释器放临时文件。`/app` 本身属 root，运行用户不能在那里建文件。
+
+未填写 `work_dir` 的命令任务，以及脚本任务（没有工作目录字段），默认在 `/tmp/cloudops-cron` 执行。该目录在镜像中建好，属主是 10001，权限 `0750`。任务里写了 `work_dir` 时仍使用该路径，并且必须对 10001 可写；相对路径相对于进程工作目录 `/app`。告警 webhook 文件目录只出现在下发给 Alertmanager 的配置里，backend 不在本地创建这些文件。配置文件不在镜像中，缺失时继续使用环境变量和默认值。`SSH_KNOWN_HOSTS` 只读，文件需要对 UID 10001 可读，见 `deploy/release/ssh.yaml`。kubeconfig 存在数据库里，不在容器内落盘。根文件系统没有设 `read_only`：显式 `work_dir` 不固定，只读根文件系统会让这些写入失败。资源上限默认 2 CPU、2GiB 内存、512 个进程，可按机器规格上调。主机可达性检查（`pkg/base.Ping`）改为连接目标的 TCP 80，不再调用系统 `ping`，因此不需要 `CAP_NET_RAW`。
 
 `GET /health` 仅确认 HTTP 进程存活；`GET /ready` 在两秒总期限内检查数据库与 Redis，依赖不可用返回 503。就绪不包含模型、集群或外部通知能力，相关能力仍需分别验收。发布 smoke 的检查在 Python 优化模式下也生效。
 
