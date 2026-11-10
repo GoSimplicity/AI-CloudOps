@@ -71,6 +71,20 @@ services:
   backend:
     <<: *runtime
     image: cloudops-backend:${RELEASE_VERSION:-local}
+    # 与 Dockerfile runtime 的 UID/GID 10001 一致。
+    # 未启用 read_only：本地 Cron 的 work_dir 不固定，只读根文件系统会让这些写入失败。
+    # 进程实际要写的是 /app/logs；/tmp 给解释器临时文件。内存和 CPU 是上限，不是预留。
+    user: "10001:10001"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+          pids: 512
     build:
       context: ../..
       args:

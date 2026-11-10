@@ -1,4 +1,6 @@
-# 可选：将经过可信渠道核验的主机公钥库只读挂载到后端
+# 可选：将经过可信渠道核验的主机公钥库只读挂载到后端。
+# backend 以 UID/GID 10001 运行，该文件必须对这个用户可读（例如 mode 0644）。
+# root:root 且 mode 0600 时进程读不到文件，生产环境会拒绝 SSH 连接。
 services:
   backend:
     environment:

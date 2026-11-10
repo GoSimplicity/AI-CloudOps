@@ -98,6 +98,8 @@ AIOps 飞书自定义机器人可在服务端私有 `.env` 设置 `FEISHU_WEBHOO
 
 后端发布镜像包含 Bash、Python3 和 Node.js，分别支持现有 shell、Python、JavaScript 脚本类型。运行命令具有后端容器的权限，应限制相关菜单/API 的角色授权。任务输出按持久化字段预算截断并标明，不将超限数据无限缓存在内存中。
 
+运行阶段用户是 `cloudops`（UID/GID `10001`），`deploy/release/compose.yaml` 的 `user` 与此一致，并丢掉全部 Linux capabilities、设置 `no-new-privileges`。进程要写的本地路径是日志目录（默认 `./logs`，镜像中为 `/app/logs`，属主 10001）；`/tmp` 保持可写，`HOME` 也指向这里，供解释器放临时文件。告警 webhook 文件目录只出现在下发给 Alertmanager 的配置里，backend 不在本地创建这些文件。配置文件不在镜像中，缺失时继续使用环境变量和默认值。`SSH_KNOWN_HOSTS` 只读，文件需要对 UID 10001 可读，见 `deploy/release/ssh.yaml`。根文件系统没有设 `read_only`：本地定时任务的工作目录不固定，只读根文件系统会让这些写入失败。资源上限默认 2 CPU、2GiB 内存、512 个进程，可按机器规格上调。
+
 `GET /health` 仅确认 HTTP 进程存活；`GET /ready` 在两秒总期限内检查数据库与 Redis，依赖不可用返回 503。就绪不包含模型、集群或外部通知能力，相关能力仍需分别验收。发布 smoke 的检查在 Python 优化模式下也生效。
 
 内部 MCP 可用确定性工具做无外部变更的实际验收：
