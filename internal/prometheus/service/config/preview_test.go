@@ -742,6 +742,56 @@ func TestAlertManagerCredentialsRedactAndRestore(t *testing.T) {
 	}
 }
 
+func TestUpdateRejectsAlertmanagerTargetChange(t *testing.T) {
+	const original = "" +
+		"alerting:\n" +
+		"  alertmanagers:\n" +
+		"    - timeout: 12s\n" +
+		"      scheme: http\n" +
+		"      path_prefix: /\n" +
+		"      api_version: v2\n" +
+		"      static_configs:\n" +
+		"        - targets: ['am.internal:9093']\n" +
+		"      authorization:\n" +
+		"        credentials: fixture-am-token\n"
+	svc, store := newPreviewService(original, nil)
+	detail, err := svc.GetMonitorConfigByID(context.Background(), &model.GetMonitorConfigReq{ID: 7})
+	if err != nil || strings.Contains(detail.ConfigContent, "fixture-am-token") {
+		t.Fatal("alertmanager credential was returned")
+	}
+	moved, err := replaceScalarValue(detail.ConfigContent, "am.internal:9093", "evil.example:9093")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = svc.UpdateMonitorConfig(context.Background(), &model.UpdateMonitorConfigReq{ID: 7, Name: "old-name", ConfigContent: moved})
+	if !errors.Is(err, errCredentialPlaceholderUnmapped) || store.updates != 0 || store.stored.ConfigContent != original {
+		t.Fatal("alertmanager target change restored the credential")
+	}
+	edited, err := replaceScalarValue(detail.ConfigContent, "12s", "5s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.UpdateMonitorConfig(context.Background(), &model.UpdateMonitorConfigReq{ID: 7, Name: "old-name", ConfigContent: edited}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(store.stored.ConfigContent, redactedCredential) || !strings.Contains(store.stored.ConfigContent, "fixture-am-token") || !strings.Contains(store.stored.ConfigContent, "5s") || strings.Contains(store.stored.ConfigContent, "evil.example") {
+		t.Fatal("timeout-only alertmanager edit did not keep the credential")
+	}
+}
+
+func TestUpdateRejectsUnscopedPlaceholder(t *testing.T) {
+	const original = "custom:\n  bearer_token: fixture-custom-token\n"
+	svc, store := newPreviewService(original, nil)
+	detail, err := svc.GetMonitorConfigByID(context.Background(), &model.GetMonitorConfigReq{ID: 7})
+	if err != nil || !strings.Contains(detail.ConfigContent, redactedCredential) || strings.Contains(detail.ConfigContent, "fixture-custom-token") {
+		t.Fatal("unscoped credential was returned")
+	}
+	err = svc.UpdateMonitorConfig(context.Background(), &model.UpdateMonitorConfigReq{ID: 7, Name: "old-name", ConfigContent: detail.ConfigContent})
+	if !errors.Is(err, errCredentialPlaceholderUnmapped) || store.updates != 0 || store.stored.ConfigContent != original {
+		t.Fatal("unscoped placeholder was written")
+	}
+}
+
 type previewStore struct {
 	configDao.MonitorConfigDAO
 	stored  *model.MonitorConfig

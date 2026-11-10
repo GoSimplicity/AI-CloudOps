@@ -143,6 +143,9 @@ func restoreSubmittedConfig(stored, submitted string) (string, error) {
 		if err := ensureCredentialPlaceholderAbsent(stored); err != nil {
 			return "", err
 		}
+		if err := ensureScopedCredentials(stored); err != nil {
+			return "", err
+		}
 		return stored, nil
 	}
 	submittedDoc, err := parseYAMLDocument(submitted)
@@ -305,7 +308,7 @@ func walkSequence(current *yaml.Node, pos credentialPos, stack []*yaml.Node, ref
 			next := credentialPos{job: mappingValue(child, "name"), inJob: true, sdIndex: -1, scopeKind: "receiver", scopeIndex: -1, scope: resolved}
 			walkYAML(child, next, stack, refs)
 		}
-	case "remote_write", "remote_read":
+	case "remote_write", "remote_read", "alertmanagers":
 		for i, child := range current.Content {
 			next := pos
 			next.scopeKind = pos.parent
@@ -462,13 +465,26 @@ func secretAPIURLContainer(container string) bool {
 
 func destinationsMatch(storedRoot *yaml.Node, want credentialRef) bool {
 	if want.scopeKind == "" {
-		return true
+		return false
 	}
 	storedScope, ok := findScope(storedRoot, want)
 	if !ok || want.scope == nil || storedScope == nil {
 		return false
 	}
 	return mappingDestinationEqual(want.scope, storedScope)
+}
+
+func ensureScopedCredentials(content string) error {
+	doc, err := parseYAMLDocument(content)
+	if err != nil {
+		return errCredentialPlaceholderUnmapped
+	}
+	for _, ref := range collectCredentials(doc) {
+		if ref.node.Value != "" && ref.scopeKind == "" {
+			return errCredentialPlaceholderUnmapped
+		}
+	}
+	return nil
 }
 
 func findScope(root *yaml.Node, want credentialRef) (*yaml.Node, bool) {
@@ -479,6 +495,12 @@ func findScope(root *yaml.Node, want credentialRef) (*yaml.Node, bool) {
 		return uniqueNamedItem(sequenceByKey(root, "receivers"), "name", want.job)
 	case "remote_write", "remote_read":
 		items := sequenceByKey(root, want.scopeKind)
+		if want.scopeIndex < 0 || want.scopeIndex >= len(items) {
+			return nil, false
+		}
+		return followAlias(items[want.scopeIndex]), true
+	case "alertmanagers":
+		items := alertmanagerConfigs(root)
 		if want.scopeIndex < 0 || want.scopeIndex >= len(items) {
 			return nil, false
 		}
@@ -503,6 +525,24 @@ func uniqueNamedItem(items []*yaml.Node, key, name string) (*yaml.Node, bool) {
 		found = followAlias(item)
 	}
 	return found, found != nil
+}
+
+func alertmanagerConfigs(root *yaml.Node) []*yaml.Node {
+	alerting := mappingByKey(root, "alerting")
+	if alerting == nil || alerting.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(alerting.Content); i += 2 {
+		if alerting.Content[i].Value != "alertmanagers" {
+			continue
+		}
+		seq := followAlias(alerting.Content[i+1])
+		if seq == nil || seq.Kind != yaml.SequenceNode {
+			return nil
+		}
+		return seq.Content
+	}
+	return nil
 }
 
 func sequenceByKey(root *yaml.Node, key string) []*yaml.Node {
@@ -680,8 +720,8 @@ func isDestinationKey(key string) bool {
 		return true
 	}
 	switch key {
-	case "targets", "labels", "static_configs", "scheme", "proxy_url", "proxy_from_environment",
-		"relabel_configs", "url", "api_url", "smtp_smarthost", "smarthost", "to", "host",
+	case "targets", "labels", "static_configs", "scheme", "path_prefix", "proxy_url", "proxy_from_environment",
+		"relabel_configs", "api_version", "url", "api_url", "smtp_smarthost", "smarthost", "to", "host",
 		"api_server", "role", "namespaces", "oauth2":
 		return true
 	default:
