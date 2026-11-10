@@ -28,6 +28,10 @@ func TestProductionBackendDomain(t *testing.T) {
 		{"no-scheme", "production", "127.0.0.1:8889/api/v1/alerts", "无法解析"},
 		{"empty-host", "production", "http://", "无法解析"},
 		{"bare-ipv6", "prd", "[::1]:8889", "无法解析"},
+		{"unspecified-v4", "production", "http://0.0.0.0/api/v1/alerts", "未指定地址"},
+		{"unspecified-v6", "production", "http://[::]/api/v1/alerts", "未指定地址"},
+		{"unspecified-v6-brackets", "production", "https://[::]/api/v1/alerts", "未指定地址"},
+		{"unspecified-v4-port", "production", "http://0.0.0.0:8889/api/v1/alerts", "未指定地址"},
 	}
 	for _, tt := range reject {
 		t.Run("reject/"+tt.name, func(t *testing.T) {
@@ -61,6 +65,8 @@ func TestProductionBackendDomain(t *testing.T) {
 		{"development", "development", "http://127.0.0.1:8889/api/v1/alerts"},
 		{"dev", "dev", "http://[::1]:8889/api/v1/alerts"},
 		{"dev-blank", " Dev ", "http://LOCALHOST/api/v1/alerts"},
+		{"dev-unspecified", "development", "http://0.0.0.0:8889/api/v1/alerts"},
+		{"dev-unspecified-v6", "dev", "http://[::]/api/v1/alerts"},
 	}
 	for _, tt := range allow {
 		t.Run("allow/"+tt.name, func(t *testing.T) {

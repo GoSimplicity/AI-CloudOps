@@ -97,7 +97,7 @@ func NewWebHookHandler(cfg *config.WebhookConfig, l *zap.Logger, dao dao.Webhook
 
 // requireRuntimeSecrets 按 envmode.IsProduction 判断。
 // 只有 development/dev 允许缺省并在上面打警告；生产别名、未设置和无法识别的 ENV（含 test）拒绝启动。
-// 卡片对外地址在同一套环境下还拒绝回环主机和无法解析的 URL。
+// 卡片对外地址在同一套环境下还拒绝回环主机、未指定地址和无法解析的 URL。
 func requireRuntimeSecrets(cfg *config.WebhookConfig) error {
 	if !envmode.IsProduction() {
 		return nil
@@ -119,15 +119,16 @@ func requireRuntimeSecrets(cfg *config.WebhookConfig) error {
 	return validateProductionBackendDomain(domain)
 }
 
-// validateProductionBackendDomain 拒绝无法解析，或主机为回环地址的卡片对外地址。
-// 回环包括 localhost（忽略大小写，以及 *.localhost）、127.0.0.0/8 和 ::1。错误不含配置值。
+// validateProductionBackendDomain 拒绝无法解析，或主机为回环、未指定地址的卡片对外地址。
+// 回环包括 localhost（忽略大小写，以及 *.localhost）、127.0.0.0/8 和 ::1。
+// 未指定地址是 0.0.0.0 和 ::（含 [::]）。错误不含配置值。
 func validateProductionBackendDomain(raw string) error {
 	parsed, err := url.Parse(raw)
 	if err != nil || !httpURLWithHost(parsed) {
 		return fmt.Errorf("生产或无法识别的环境拒绝使用 WEBHOOK_BACKEND_DOMAIN: 无法解析为带主机名的 http 或 https 地址")
 	}
-	if isLoopbackHost(parsed.Hostname()) {
-		return fmt.Errorf("生产或无法识别的环境拒绝使用 WEBHOOK_BACKEND_DOMAIN: 主机是回环地址")
+	if reason := nonPublicHostReason(parsed.Hostname()); reason != "" {
+		return fmt.Errorf("生产或无法识别的环境拒绝使用 WEBHOOK_BACKEND_DOMAIN: 主机是%s", reason)
 	}
 	return nil
 }
@@ -143,18 +144,28 @@ func httpURLWithHost(parsed *url.URL) bool {
 	return strings.TrimRight(parsed.Hostname(), ".") != ""
 }
 
-func isLoopbackHost(host string) bool {
+// nonPublicHostReason 识别不能当作卡片对外主机的地址。普通域名返回空串。
+func nonPublicHostReason(host string) string {
 	name := strings.TrimRight(strings.TrimSpace(host), ".")
 	folded := strings.ToLower(name)
 	if folded == "localhost" || strings.HasSuffix(folded, ".localhost") {
-		return true
+		return "回环地址"
 	}
 	ipText := name
 	if zone := strings.IndexByte(ipText, '%'); zone >= 0 {
 		ipText = ipText[:zone]
 	}
 	ip := net.ParseIP(ipText)
-	return ip != nil && ip.IsLoopback()
+	if ip == nil {
+		return ""
+	}
+	if ip.IsLoopback() {
+		return "回环地址"
+	}
+	if ip.IsUnspecified() {
+		return "未指定地址"
+	}
+	return ""
 }
 
 // RegisterRouters 注册Webhook相关的HTTP路由
