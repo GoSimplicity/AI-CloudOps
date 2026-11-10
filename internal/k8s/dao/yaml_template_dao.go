@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -38,7 +39,7 @@ type YamlTemplateDAO interface {
 	ListAllYamlTemplates(ctx context.Context, req *model.YamlTemplateListReq) ([]*model.K8sYamlTemplate, error)
 	CreateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error
 	UpdateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error
-	DeleteYamlTemplate(ctx context.Context, id int, clusterId int) error
+	DeleteYamlTemplate(ctx context.Context, id int, clusterId int, userID int) error
 	GetYamlTemplateByID(ctx context.Context, id int, clusterId int) (*model.K8sYamlTemplate, error)
 }
 
@@ -108,17 +109,32 @@ func (d *yamlTemplateDAO) UpdateYamlTemplate(ctx context.Context, yaml *model.K8
 	return nil
 }
 
-func (d *yamlTemplateDAO) DeleteYamlTemplate(ctx context.Context, id int, clusterId int) error {
+func (d *yamlTemplateDAO) DeleteYamlTemplate(ctx context.Context, id int, clusterId int, userID int) error {
 	if id == 0 {
 		d.l.Error("DeleteYamlTemplate ID 不能为空", zap.Int("id", id))
 		return fmt.Errorf("invalid yaml template ID")
 	}
-
-	if err := d.db.WithContext(ctx).Where("id = ? AND cluster_id = ?", id, clusterId).Delete(&model.K8sYamlTemplate{}).Error; err != nil {
-		d.l.Error("DeleteYamlTemplate 删除Yaml模板失败", zap.Int("yamlID", id), zap.Error(err))
-		return err
+	if userID <= 0 {
+		return fmt.Errorf("%w: user id", constants.ErrInvalidParam)
 	}
 
+	template, err := d.GetYamlTemplateByID(ctx, id, clusterId)
+	if err != nil {
+		return err
+	}
+	if template.UserID != userID {
+		d.l.Warn("YAML模板归属校验失败", zap.Int("yamlID", id), zap.Int("clusterID", clusterId), zap.Int("userID", userID))
+		return constants.ErrNotResourceOwner
+	}
+
+	result := d.db.WithContext(ctx).Where("id = ? AND cluster_id = ? AND user_id = ?", id, clusterId, userID).Delete(&model.K8sYamlTemplate{})
+	if result.Error != nil {
+		d.l.Error("DeleteYamlTemplate 删除Yaml模板失败", zap.Int("yamlID", id), zap.Error(result.Error))
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return constants.ErrNotResourceOwner
+	}
 	return nil
 }
 

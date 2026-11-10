@@ -27,9 +27,12 @@ package service
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"go.uber.org/zap"
 )
 
@@ -72,6 +75,9 @@ func (s *yamlTaskService) GetYamlTaskList(ctx context.Context, req *model.YamlTa
 }
 
 func (s *yamlTaskService) CreateYamlTask(ctx context.Context, req *model.YamlTaskCreateReq) error {
+	if req == nil {
+		return base.NewBusinessError(constants.ErrInvalidParam, "创建YAML任务请求不能为空")
+	}
 	task := &model.K8sYamlTask{
 		Name:       req.Name,
 		UserID:     req.UserID,
@@ -84,6 +90,9 @@ func (s *yamlTaskService) CreateYamlTask(ctx context.Context, req *model.YamlTas
 }
 
 func (s *yamlTaskService) UpdateYamlTask(ctx context.Context, req *model.YamlTaskUpdateReq) error {
+	if req == nil {
+		return base.NewBusinessError(constants.ErrInvalidParam, "更新YAML任务请求不能为空")
+	}
 	task := &model.K8sYamlTask{
 		Model:      model.Model{ID: req.ID},
 		Name:       req.Name,
@@ -96,11 +105,30 @@ func (s *yamlTaskService) UpdateYamlTask(ctx context.Context, req *model.YamlTas
 }
 
 func (s *yamlTaskService) DeleteYamlTask(ctx context.Context, req *model.YamlTaskDeleteReq) error {
+	if req == nil {
+		return base.NewBusinessError(constants.ErrInvalidParam, "删除YAML任务请求不能为空")
+	}
 	return s.manager.DeleteYamlTask(ctx, req.ID, req.ClusterID)
 }
 
 func (s *yamlTaskService) ApplyYamlTask(ctx context.Context, req *model.YamlTaskExecuteReq) error {
-	return s.manager.ApplyYamlTask(ctx, req.ID, req.ClusterID, req.DryRun)
+	if req == nil {
+		return base.NewBusinessError(constants.ErrInvalidParam, "执行YAML任务请求不能为空")
+	}
+	if req.UserID <= 0 {
+		return base.NewBusinessError(constants.ErrInvalidParam, "执行YAML任务参数错误")
+	}
+	task, err := s.manager.GetYamlTaskDetail(ctx, req.ID, req.ClusterID)
+	if err != nil {
+		return err
+	}
+	if task == nil {
+		return fmt.Errorf("YAML 任务不存在或不属于指定集群")
+	}
+	if task.UserID != req.UserID {
+		return base.NewBusinessError(constants.ErrNotResourceOwner, "当前用户无权限操作该YAML任务")
+	}
+	return s.manager.ApplyYamlTask(ctx, req.ID, req.ClusterID, req.DryRun, req.UserID)
 }
 
 func (s *yamlTaskService) GetYamlTaskDetail(ctx context.Context, req *model.YamlTaskDetailReq) (*model.K8sYamlTask, error) {

@@ -129,10 +129,15 @@ func (h *K8sYamlTaskHandler) ApplyYamlTask(ctx *gin.Context) {
 		return
 	}
 
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 	req.ID = id
 	req.ClusterID = clusterId
+	req.UserID = uc.Uid
 
-	base.HandleRequest(ctx, &req, func() (interface{}, error) {
+	handleMappedRequest(ctx, &req, func() (interface{}, error) {
+		req.ID = id
+		req.ClusterID = clusterId
+		req.UserID = uc.Uid
 		return nil, h.yamlTaskService.ApplyYamlTask(ctx.Request.Context(), &req)
 	})
 }

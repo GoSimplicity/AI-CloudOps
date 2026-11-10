@@ -126,7 +126,7 @@ func TestMySQLStartupMigrationAndYAMLCRUD(t *testing.T) {
 	if err := tasks.DeleteYamlTask(ctx, task.ID, 42); err != nil {
 		t.Fatal("task delete failed")
 	}
-	if err := templates.DeleteYamlTemplate(ctx, template.ID, 42); err != nil {
+	if err := templates.DeleteYamlTemplate(ctx, template.ID, 42, template.UserID); err != nil {
 		t.Fatal("template delete failed")
 	}
 	taskList, err = tasks.ListAllYamlTasks(ctx, &model.YamlTaskListReq{ClusterID: 42})

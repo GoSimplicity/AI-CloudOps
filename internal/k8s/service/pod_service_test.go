@@ -11,9 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -225,7 +227,12 @@ func TestPodLogsPortsAndExecValidation(t *testing.T) {
 	fixture.err = errors.New("exec denied")
 	conn := serviceWebsocket(t)
 	err = svc.PodExec(context.Background(), &model.PodExecReq{ClusterID: 1, Namespace: "ops", PodName: "app", Container: "app", Shell: "bash -c 'echo hi'"}, conn)
-	if err == nil || fixture.shell != "bash -c 'echo hi'" || !strings.Contains(err.Error(), "exec denied") {
+	var shellErr *base.BusinessError
+	if err == nil || fixture.shell != "" || !errors.As(err, &shellErr) || !errors.Is(shellErr.Code, constants.ErrInvalidParam) || !strings.Contains(err.Error(), "不支持的shell类型") {
+		t.Fatalf("exec shell = %v forwarded=%q", err, fixture.shell)
+	}
+	err = svc.PodExec(context.Background(), &model.PodExecReq{ClusterID: 1, Namespace: "ops", PodName: "app", Container: "app", Shell: "bash"}, conn)
+	if err == nil || fixture.shell != "bash" || !strings.Contains(err.Error(), "exec denied") {
 		t.Fatalf("exec = %v shell=%q", err, fixture.shell)
 	}
 
@@ -245,7 +252,53 @@ func TestPodLogsPortsAndExecValidation(t *testing.T) {
 }
 
 func TestPodFilePathsAndYAMLIdentity(t *testing.T) {
-	t.Skip("PodFileUpload/PodFileDownload 不校验路径穿越，原样交给 manager（pod_service.go:578 与 pod_service.go:639）。未改生产代码。")
+	fixture := &podManagerFixture{}
+	svc := NewPodService(fixture, zap.NewNop())
+	form := &multipart.Form{}
+	rejected := []string{
+		"..",
+		"../etc/passwd",
+		"/tmp/../etc/passwd",
+		"foo/../../etc/shadow",
+		"/var/log/../../etc/passwd",
+		"a\x00b",
+		"foo\nbar",
+		"~/secret",
+	}
+	for _, path := range rejected {
+		fixture.filePath = ""
+		err := svc.PodFileUpload(context.Background(), &model.PodFileUploadReq{
+			ClusterID: 1, Namespace: "ops", PodName: "app", ContainerName: "app", FilePath: path,
+		}, form)
+		var biz *base.BusinessError
+		if err == nil || fixture.filePath != "" || !errors.As(err, &biz) || !errors.Is(biz.Code, constants.ErrInvalidParam) {
+			t.Fatalf("upload %q = %v path=%q", path, err, fixture.filePath)
+		}
+		_, _, err = svc.PodFileDownload(context.Background(), &model.PodFileDownloadReq{
+			ClusterID: 1, Namespace: "ops", PodName: "app", ContainerName: "app", FilePath: path,
+		})
+		if err == nil || fixture.filePath != "" || !errors.As(err, &biz) || !errors.Is(biz.Code, constants.ErrInvalidParam) {
+			t.Fatalf("download %q = %v path=%q", path, err, fixture.filePath)
+		}
+	}
+
+	fixture.err = errors.New("upload denied")
+	err := svc.PodFileUpload(context.Background(), &model.PodFileUploadReq{
+		ClusterID: 1, Namespace: "ops", PodName: "app", ContainerName: "app", FilePath: "foo..bar",
+	}, form)
+	if err == nil || fixture.filePath != "foo..bar" || !strings.Contains(err.Error(), "上传文件到Pod失败") {
+		t.Fatalf("dotted name = %v path=%q", err, fixture.filePath)
+	}
+	for _, shell := range []string{"zsh", "fish", "ash", "/bin/bash", "bash -c id"} {
+		conn := serviceWebsocket(t)
+		err = svc.PodExec(context.Background(), &model.PodExecReq{
+			ClusterID: 1, Namespace: "ops", PodName: "app", Container: "app", Shell: shell,
+		}, conn)
+		var biz *base.BusinessError
+		if err == nil || !errors.As(err, &biz) || !errors.Is(biz.Code, constants.ErrInvalidParam) {
+			t.Fatalf("shell %q = %v", shell, err)
+		}
+	}
 }
 
 func TestPodFileNameAndYAMLChecks(t *testing.T) {

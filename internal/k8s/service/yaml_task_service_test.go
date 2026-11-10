@@ -5,8 +5,10 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"go.uber.org/zap"
 )
 
@@ -22,8 +24,10 @@ type yamlManagerFixture struct {
 	deletedTemplate bool
 	applyID         int
 	applyCluster    int
+	applyUserID     int
 	dryRun          bool
 	applied         bool
+	deletedUserID   int
 }
 
 func (m *yamlManagerFixture) CreateYamlTask(_ context.Context, task *model.K8sYamlTask) error {
@@ -47,8 +51,8 @@ func (m *yamlManagerFixture) DeleteYamlTask(_ context.Context, id, cluster int) 
 	return m.err
 }
 
-func (m *yamlManagerFixture) ApplyYamlTask(_ context.Context, id, cluster int, dryRun bool) error {
-	m.applyID, m.applyCluster, m.dryRun, m.applied = id, cluster, dryRun, true
+func (m *yamlManagerFixture) ApplyYamlTask(_ context.Context, id, cluster int, dryRun bool, userID int) error {
+	m.applyID, m.applyCluster, m.applyUserID, m.dryRun, m.applied = id, cluster, userID, dryRun, true
 	return m.err
 }
 
@@ -78,8 +82,8 @@ func (m *yamlManagerFixture) GetYamlTemplateList(context.Context, *model.YamlTem
 	return m.templates, m.err
 }
 
-func (m *yamlManagerFixture) DeleteYamlTemplate(_ context.Context, id, cluster int) error {
-	m.deletedID, m.deletedCluster, m.deletedTemplate = id, cluster, true
+func (m *yamlManagerFixture) DeleteYamlTemplate(_ context.Context, id, cluster, userID int) error {
+	m.deletedID, m.deletedCluster, m.deletedUserID, m.deletedTemplate = id, cluster, userID, true
 	return m.err
 }
 
@@ -108,7 +112,7 @@ func TestYamlTaskPreservesOwnerAndDryRun(t *testing.T) {
 	if fixture.task.UserID != 8 || fixture.task.ID != 4 {
 		t.Fatalf("updated owner = %+v", fixture.task)
 	}
-	if err := svc.ApplyYamlTask(context.Background(), &model.YamlTaskExecuteReq{ID: 4, ClusterID: 9, DryRun: true, UserID: 8}); err != nil || !fixture.applied || !fixture.dryRun || fixture.applyID != 4 || fixture.applyCluster != 9 {
+	if err := svc.ApplyYamlTask(context.Background(), &model.YamlTaskExecuteReq{ID: 4, ClusterID: 9, DryRun: true, UserID: 8}); err != nil || !fixture.applied || !fixture.dryRun || fixture.applyID != 4 || fixture.applyCluster != 9 || fixture.applyUserID != 8 {
 		t.Fatalf("apply = %+v", fixture)
 	}
 	if err := svc.DeleteYamlTask(context.Background(), &model.YamlTaskDeleteReq{ID: 4, ClusterID: 9}); err != nil || fixture.deletedID != 4 || fixture.deletedCluster != 9 {
@@ -126,11 +130,54 @@ func TestYamlTaskPreservesOwnerAndDryRun(t *testing.T) {
 }
 
 func TestYamlTaskNilRequestPanics(t *testing.T) {
-	t.Skip("CreateYamlTask 在 req 为 nil 时直接解引用（yaml_task_service.go:75），Apply/Delete/Update 同样没有空请求校验。未改生产代码。")
+	fixture := &yamlManagerFixture{}
+	svc := NewYamlTaskService(fixture, zap.NewNop())
+	ctx := context.Background()
+	calls := []struct {
+		name string
+		call func() error
+	}{
+		{"create", func() error { return svc.CreateYamlTask(ctx, nil) }},
+		{"update", func() error { return svc.UpdateYamlTask(ctx, nil) }},
+		{"delete", func() error { return svc.DeleteYamlTask(ctx, nil) }},
+		{"apply", func() error { return svc.ApplyYamlTask(ctx, nil) }},
+	}
+	for _, tc := range calls {
+		err := tc.call()
+		var biz *base.BusinessError
+		if !errors.As(err, &biz) || !errors.Is(biz.Code, constants.ErrInvalidParam) || fixture.task != nil || fixture.applied || fixture.deletedID != 0 {
+			t.Fatalf("%s = %v fixture=%+v", tc.name, err, fixture)
+		}
+	}
 }
 
 func TestYamlApplyDoesNotReceiveActor(t *testing.T) {
-	t.Skip("YamlTaskExecuteReq.UserID 与 YamlTemplateDeleteReq.UserID 没有传给 manager（yaml_task_service.go:103、yaml_template_service.go:99），服务层不做任务归属校验。未改生产代码。")
+	fixture := &yamlManagerFixture{task: &model.K8sYamlTask{Model: model.Model{ID: 4}, UserID: 7, ClusterID: 9}}
+	taskSvc := NewYamlTaskService(fixture, zap.NewNop())
+	err := taskSvc.ApplyYamlTask(context.Background(), &model.YamlTaskExecuteReq{ID: 4, ClusterID: 9, DryRun: true, UserID: 8})
+	var biz *base.BusinessError
+	if err == nil || fixture.applied || !errors.As(err, &biz) || !errors.Is(biz.Code, constants.ErrNotResourceOwner) || err.Error() != "当前用户无权限操作该YAML任务" {
+		t.Fatalf("non-owner apply = %v applied=%v", err, fixture.applied)
+	}
+	if err := taskSvc.ApplyYamlTask(context.Background(), &model.YamlTaskExecuteReq{ID: 4, ClusterID: 9, DryRun: false, UserID: 7}); err != nil || !fixture.applied || fixture.applyUserID != 7 || fixture.dryRun {
+		t.Fatalf("owner apply = %v fixture=%+v", err, fixture)
+	}
+	if err := taskSvc.ApplyYamlTask(context.Background(), &model.YamlTaskExecuteReq{ID: 4, ClusterID: 9, UserID: 0}); err == nil || !errors.As(err, &biz) || !errors.Is(biz.Code, constants.ErrInvalidParam) {
+		t.Fatalf("missing user = %v", err)
+	}
+
+	fixture.template = &model.K8sYamlTemplate{Model: model.Model{ID: 2}, UserID: 7, ClusterID: 9}
+	templateSvc := NewYamlTemplateService(fixture, zap.NewNop())
+	err = templateSvc.DeleteYamlTemplate(context.Background(), &model.YamlTemplateDeleteReq{ID: 2, ClusterID: 9, UserID: 8})
+	if err == nil || fixture.deletedTemplate || !errors.As(err, &biz) || !errors.Is(biz.Code, constants.ErrNotResourceOwner) || err.Error() != "当前用户无权限操作该YAML模板" {
+		t.Fatalf("non-owner delete = %v deleted=%v", err, fixture.deletedTemplate)
+	}
+	if err := templateSvc.DeleteYamlTemplate(context.Background(), &model.YamlTemplateDeleteReq{ID: 2, ClusterID: 9, UserID: 7}); err != nil || !fixture.deletedTemplate || fixture.deletedUserID != 7 || fixture.deletedID != 2 {
+		t.Fatalf("owner delete = %v fixture=%+v", err, fixture)
+	}
+	if err := templateSvc.DeleteYamlTemplate(context.Background(), nil); err == nil || !errors.As(err, &biz) || !errors.Is(biz.Code, constants.ErrInvalidParam) {
+		t.Fatalf("nil template delete = %v", err)
+	}
 }
 
 func TestYamlTemplateOwnerIsStoredOnWrite(t *testing.T) {
@@ -155,7 +202,8 @@ func TestYamlTemplateOwnerIsStoredOnWrite(t *testing.T) {
 		t.Fatalf("check error = %v", err)
 	}
 	fixture.err = nil
-	if err := svc.DeleteYamlTemplate(context.Background(), &model.YamlTemplateDeleteReq{ID: 2, ClusterID: 9, UserID: 7}); err != nil || !fixture.deletedTemplate || fixture.deletedID != 2 {
+	fixture.template = &model.K8sYamlTemplate{Model: model.Model{ID: 2}, Name: "deploy", UserID: 8, ClusterID: 9}
+	if err := svc.DeleteYamlTemplate(context.Background(), &model.YamlTemplateDeleteReq{ID: 2, ClusterID: 9, UserID: 8}); err != nil || !fixture.deletedTemplate || fixture.deletedID != 2 || fixture.deletedUserID != 8 {
 		t.Fatalf("delete = %+v", fixture)
 	}
 }

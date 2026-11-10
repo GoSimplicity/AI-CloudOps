@@ -27,9 +27,12 @@ package service
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"go.uber.org/zap"
 )
 
@@ -96,7 +99,23 @@ func (s *yamlTemplateService) UpdateYamlTemplate(ctx context.Context, req *model
 }
 
 func (s *yamlTemplateService) DeleteYamlTemplate(ctx context.Context, req *model.YamlTemplateDeleteReq) error {
-	return s.manager.DeleteYamlTemplate(ctx, req.ID, req.ClusterID)
+	if req == nil {
+		return base.NewBusinessError(constants.ErrInvalidParam, "删除YAML模板请求不能为空")
+	}
+	if req.UserID <= 0 {
+		return base.NewBusinessError(constants.ErrInvalidParam, "删除YAML模板参数错误")
+	}
+	template, err := s.manager.GetYamlTemplateDetail(ctx, req.ID, req.ClusterID)
+	if err != nil {
+		return err
+	}
+	if template == nil {
+		return fmt.Errorf("YAML 模板不存在或不属于指定集群")
+	}
+	if template.UserID != req.UserID {
+		return base.NewBusinessError(constants.ErrNotResourceOwner, "当前用户无权限操作该YAML模板")
+	}
+	return s.manager.DeleteYamlTemplate(ctx, req.ID, req.ClusterID, req.UserID)
 }
 
 func (s *yamlTemplateService) GetYamlTemplateDetail(ctx context.Context, req *model.YamlTemplateDetailReq) (*model.K8sYamlTemplate, error) {

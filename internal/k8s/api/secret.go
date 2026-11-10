@@ -349,7 +349,8 @@ func handleMappedRequest(ctx *gin.Context, req interface{}, action func() (inter
 }
 
 // respondBusinessError 业务错误映射：BusinessError{constants.ErrInvalidParam} → HTTP 400；
-// BusinessError{constants.ErrK8sResourceConflict}（乐观锁冲突）→ HTTP 409；其余保持项目约定的 HTTP 200 + code=1
+// BusinessError{constants.ErrK8sResourceConflict}（乐观锁冲突）→ HTTP 409；
+// BusinessError{constants.ErrNotResourceOwner} → HTTP 403；其余保持项目约定的 HTTP 200 + code=1
 func respondBusinessError(ctx *gin.Context, err error) {
 	var bizErr *base.BusinessError
 	if errors.As(err, &bizErr) {
@@ -360,6 +361,9 @@ func respondBusinessError(ctx *gin.Context, err error) {
 			return
 		case errors.Is(bizErr.Code, constants.ErrK8sResourceConflict):
 			base.ConflictError(ctx, err.Error())
+			return
+		case errors.Is(bizErr.Code, constants.ErrNotResourceOwner):
+			base.ForbiddenError(ctx, err.Error())
 			return
 		}
 	}

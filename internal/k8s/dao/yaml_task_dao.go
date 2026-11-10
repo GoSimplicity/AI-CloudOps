@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -40,6 +41,7 @@ type YamlTaskDAO interface {
 	UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
 	DeleteYamlTask(ctx context.Context, id int, clusterID int) error
 	GetYamlTaskByID(ctx context.Context, id int, clusterID int) (*model.K8sYamlTask, error)
+	GetOwnedYamlTask(ctx context.Context, id int, clusterID int, userID int) (*model.K8sYamlTask, error)
 	GetYamlTaskByTemplateID(ctx context.Context, templateID int) ([]*model.K8sYamlTask, error)
 }
 
@@ -133,6 +135,21 @@ func (d *yamlTaskDAO) GetYamlTaskByID(ctx context.Context, id int, clusterID int
 		return nil, fmt.Errorf("YAML 任务 ID %d (集群 %d) 未找到: %w", id, clusterID, err)
 	}
 	return &task, nil
+}
+
+func (d *yamlTaskDAO) GetOwnedYamlTask(ctx context.Context, id int, clusterID int, userID int) (*model.K8sYamlTask, error) {
+	if userID <= 0 {
+		return nil, fmt.Errorf("%w: user id", constants.ErrInvalidParam)
+	}
+	task, err := d.GetYamlTaskByID(ctx, id, clusterID)
+	if err != nil {
+		return nil, err
+	}
+	if task.UserID != userID {
+		d.logger.Warn("YAML任务归属校验失败", zap.Int("taskID", id), zap.Int("clusterID", clusterID), zap.Int("userID", userID))
+		return nil, constants.ErrNotResourceOwner
+	}
+	return task, nil
 }
 
 func (d *yamlTaskDAO) GetYamlTaskByTemplateID(ctx context.Context, templateID int) ([]*model.K8sYamlTask, error) {
