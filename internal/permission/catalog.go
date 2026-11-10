@@ -19,7 +19,8 @@ var skipAuthorizationPaths = map[string]bool{
 	"/favicon.ico":                     true,
 }
 
-// SkipsAuthorization 判断路径是否不经角色授权（登录态仍由登录中间件负责）。
+// SkipsAuthorization 判断路径是否不经角色授权。
+// 用户接口的登录态仍由登录中间件负责；HTTP-SD 不走用户登录，由自身的 bearer token 校验。
 func SkipsAuthorization(path string) bool {
 	return skipAuthorizationPaths[path]
 }

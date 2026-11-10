@@ -127,6 +127,8 @@ class ReleaseEnvTests(unittest.TestCase):
         self.assertRegex(settings["FRESH_STACK_OWNER"], r"^[a-f0-9]{32}$")
         self.assertEqual(settings["NOTIFICATION_ENABLED"], "false")
         self.assertEqual(settings["LLM_BASE_URL"], "http://127.0.0.1:9/v1")
+        self.assertRegex(settings["PROMETHEUS_HTTP_SD_TOKEN"], r"^[a-f0-9]{48}$")
+        self.assertNotIn(settings["PROMETHEUS_HTTP_SD_TOKEN"], result.stdout + result.stderr)
 
     def test_generated_webhook_bot_defaults_are_fully_isolated(self):
         destination, result = self.generate()
@@ -211,40 +213,61 @@ class ReleaseEnvTests(unittest.TestCase):
         expected = f"cloudops:{FIXTURE_PASSWORD}@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=UTC"
         self.assertEqual(settings["WEBHOOK_MYSQL_ADDR"], expected)
         self.assertEqual(after.count("WEBHOOK_MYSQL_ADDR="), 1)
-        self.assert_no_value_leak(result, FIXTURE_PASSWORD, expected)
+        self.assertRegex(settings["PROMETHEUS_HTTP_SD_TOKEN"], r"^[a-f0-9]{48}$")
+        self.assertEqual(after.count("PROMETHEUS_HTTP_SD_TOKEN="), 1)
+        self.assertRegex(settings["WEBHOOK_ACTION_SIGNING_KEY"], r"^[0-9a-f]{64}$")
+        self.assertRegex(settings["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"], r"^[0-9a-f]{64}$")
+        self.assert_no_value_leak(
+            result, FIXTURE_PASSWORD, expected, settings["PROMETHEUS_HTTP_SD_TOKEN"],
+            settings["WEBHOOK_ACTION_SIGNING_KEY"], settings["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"],
+            settings["WEBHOOK_BACKEND_DOMAIN"],
+        )
         # 再次执行：已有值不覆盖、不重复追加
         again = self.run_script("--env-file", str(destination), "--add-missing", "--mysql-host", "other:3306")
         self.assertEqual(again.returncode, 0, again.stderr)
         self.assertEqual(destination.read_text(), after)
-        self.assert_no_value_leak(again, FIXTURE_PASSWORD, expected)
+        self.assert_no_value_leak(
+            again, FIXTURE_PASSWORD, expected, settings["PROMETHEUS_HTTP_SD_TOKEN"],
+            settings["WEBHOOK_ACTION_SIGNING_KEY"], settings["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"],
+        )
 
     def test_add_missing_keeps_existing_custom_value(self):
         destination = self.dir / "custom.env"
         custom = "hook:fixture-custom@tcp(db.internal:3306)/hookdb?parseTime=True"
         destination.write_text(f"MYSQL_PASSWORD={FIXTURE_PASSWORD}\nWEBHOOK_MYSQL_ADDR={custom}\n")
         destination.chmod(0o600)
-        before = destination.read_bytes()
+        before = destination.read_text()
         result = self.run_script("--env-file", str(destination), "--add-missing")
         self.assertEqual(result.returncode, 0, result.stderr)
         after = destination.read_text()
-        self.assertTrue(after.startswith(before.decode()))
+        self.assertTrue(after.startswith(before))
         settings = read_env(destination)
         self.assertEqual(settings["WEBHOOK_MYSQL_ADDR"], custom)
+        self.assertEqual(settings["MYSQL_PASSWORD"], FIXTURE_PASSWORD)
         self.assertEqual(settings["WEBHOOK_BACKEND_DOMAIN"], "http://127.0.0.1:8889/api/v1/alerts")
         self.assertRegex(settings["WEBHOOK_ACTION_SIGNING_KEY"], r"^[0-9a-f]{64}$")
         self.assertRegex(settings["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"], r"^[0-9a-f]{64}$")
         self.assertNotEqual(settings["WEBHOOK_ACTION_SIGNING_KEY"], settings["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"])
-        self.assert_no_value_leak(result, FIXTURE_PASSWORD, custom, settings["WEBHOOK_ACTION_SIGNING_KEY"], settings["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"])
+        self.assertRegex(settings["PROMETHEUS_HTTP_SD_TOKEN"], r"^[a-f0-9]{48}$")
+        self.assertEqual(after.count("PROMETHEUS_HTTP_SD_TOKEN="), 1)
+        self.assert_no_value_leak(
+            result, FIXTURE_PASSWORD, custom, settings["WEBHOOK_ACTION_SIGNING_KEY"],
+            settings["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"], settings["PROMETHEUS_HTTP_SD_TOKEN"],
+        )
         again = self.run_script("--env-file", str(destination), "--add-missing")
         self.assertEqual(again.returncode, 0, again.stderr)
         self.assertEqual(destination.read_text(), after)
-        self.assert_no_value_leak(again, settings["WEBHOOK_ACTION_SIGNING_KEY"], settings["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"])
+        self.assert_no_value_leak(
+            again, FIXTURE_PASSWORD, custom, settings["WEBHOOK_ACTION_SIGNING_KEY"],
+            settings["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"], settings["PROMETHEUS_HTTP_SD_TOKEN"],
+        )
 
     def test_add_missing_refusals_leave_file_unchanged(self):
         cases = (
             ("missing-password", "OTHER=keep\n", "MYSQL_PASSWORD"),
             ("empty-password", "MYSQL_PASSWORD=\n", "MYSQL_PASSWORD"),
             ("empty-placeholder", f"MYSQL_PASSWORD={FIXTURE_PASSWORD}\nWEBHOOK_MYSQL_ADDR=\n", "remove that line"),
+            ("empty-http-sd-token", f"MYSQL_PASSWORD={FIXTURE_PASSWORD}\nWEBHOOK_MYSQL_ADDR=cloudops:{FIXTURE_PASSWORD}@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=UTC\nPROMETHEUS_HTTP_SD_TOKEN=\n", "PROMETHEUS_HTTP_SD_TOKEN"),
             ("unsafe-password", "MYSQL_PASSWORD=fixture@pw/x\n", "unsafe"),
         )
         for name, content, message in cases:
@@ -283,7 +306,8 @@ class ReleaseEnvTests(unittest.TestCase):
         self.assertEqual(kept_result.returncode, 0, kept_result.stderr)
         self.assertNotIn(note, kept_result.stdout + kept_result.stderr)
         self.assertEqual(read_env(kept)["WEBHOOK_BACKEND_DOMAIN"], "https://alerts.example/api/v1/alerts")
-        self.assert_no_value_leak(kept_result, FIXTURE_PASSWORD)
+        self.assertRegex(read_env(kept)["PROMETHEUS_HTTP_SD_TOKEN"], r"^[a-f0-9]{48}$")
+        self.assert_no_value_leak(kept_result, FIXTURE_PASSWORD, read_env(kept)["PROMETHEUS_HTTP_SD_TOKEN"])
 
         added = self.dir / "need-domain.env"
         added.write_text(
@@ -298,7 +322,8 @@ class ReleaseEnvTests(unittest.TestCase):
         self.assertIn(note, added_result.stderr)
         self.assertNotIn("127.0.0.1", added_output)
         self.assertEqual(read_env(added)["WEBHOOK_BACKEND_DOMAIN"], "http://127.0.0.1:8889/api/v1/alerts")
-        self.assert_no_value_leak(added_result, FIXTURE_PASSWORD, "fixture-only-pw@tcp")
+        self.assertRegex(read_env(added)["PROMETHEUS_HTTP_SD_TOKEN"], r"^[a-f0-9]{48}$")
+        self.assert_no_value_leak(added_result, FIXTURE_PASSWORD, "fixture-only-pw@tcp", read_env(added)["PROMETHEUS_HTTP_SD_TOKEN"])
 
     def test_webhook_backend_domain_argument(self):
         domain = "http://alerts.ci.invalid/api/v1/alerts"
@@ -328,18 +353,21 @@ class ReleaseEnvTests(unittest.TestCase):
         self.assertEqual(added_result.returncode, 0, added_result.stderr)
         self.assertEqual(read_env(added)["WEBHOOK_BACKEND_DOMAIN"], domain)
         self.assertEqual(added.read_text().count("WEBHOOK_BACKEND_DOMAIN="), 1)
+        self.assertRegex(read_env(added)["PROMETHEUS_HTTP_SD_TOKEN"], r"^[a-f0-9]{48}$")
         added_output = added_result.stdout + added_result.stderr
         self.assertNotIn("loopback placeholder", added_output)
         self.assertNotIn(domain, added_output)
-        self.assert_no_value_leak(added_result, FIXTURE_PASSWORD)
+        self.assert_no_value_leak(added_result, FIXTURE_PASSWORD, read_env(added)["PROMETHEUS_HTTP_SD_TOKEN"])
 
         # 不传时两条写入路径仍是回环占位，并保留 stderr 提示
         omitted = self.dir / "omitted.env"
         omitted_result = self.run_script("--env-file", str(omitted))
         self.assertEqual(omitted_result.returncode, 0, omitted_result.stderr)
         self.assertEqual(read_env(omitted)["WEBHOOK_BACKEND_DOMAIN"], "http://127.0.0.1:8889/api/v1/alerts")
+        self.assertRegex(read_env(omitted)["PROMETHEUS_HTTP_SD_TOKEN"], r"^[a-f0-9]{48}$")
         self.assertIn("loopback placeholder", omitted_result.stderr)
         self.assertNotIn("127.0.0.1", omitted_result.stdout + omitted_result.stderr)
+        self.assertNotIn(read_env(omitted)["PROMETHEUS_HTTP_SD_TOKEN"], omitted_result.stdout + omitted_result.stderr)
 
         omitted_add = self.dir / "omitted-add.env"
         omitted_add.write_text(
@@ -351,8 +379,10 @@ class ReleaseEnvTests(unittest.TestCase):
         omitted_add_result = self.run_script("--env-file", str(omitted_add), "--add-missing")
         self.assertEqual(omitted_add_result.returncode, 0, omitted_add_result.stderr)
         self.assertEqual(read_env(omitted_add)["WEBHOOK_BACKEND_DOMAIN"], "http://127.0.0.1:8889/api/v1/alerts")
+        self.assertRegex(read_env(omitted_add)["PROMETHEUS_HTTP_SD_TOKEN"], r"^[a-f0-9]{48}$")
         self.assertIn("loopback placeholder", omitted_add_result.stderr)
         self.assertNotIn("127.0.0.1", omitted_add_result.stdout + omitted_add_result.stderr)
+        self.assertNotIn(read_env(omitted_add)["PROMETHEUS_HTTP_SD_TOKEN"], omitted_add_result.stdout + omitted_add_result.stderr)
 
         # 已有值不覆盖，即使传入了另一个地址
         kept = self.dir / "keep-custom.env"
@@ -363,11 +393,13 @@ class ReleaseEnvTests(unittest.TestCase):
             f"WEBHOOK_BACKEND_DOMAIN={custom}\n"
             "WEBHOOK_ACTION_SIGNING_KEY=ab\n"
             "WEBHOOK_ALERTMANAGER_BEARER_TOKEN=cd\n"
+            "PROMETHEUS_HTTP_SD_TOKEN=fixture-http-sd-token\n"
         )
         kept_before = kept.read_bytes()
         kept_result = self.run_script("--env-file", str(kept), "--add-missing", "--webhook-backend-domain", domain)
         self.assertEqual(kept_result.returncode, 0, kept_result.stderr)
         self.assertEqual(kept.read_bytes(), kept_before)
+        self.assert_no_value_leak(kept_result, FIXTURE_PASSWORD, "fixture-http-sd-token", custom, domain)
         self.assertNotIn("loopback placeholder", kept_result.stdout + kept_result.stderr)
         self.assertNotIn(domain, kept_result.stdout + kept_result.stderr)
 

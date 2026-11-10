@@ -66,7 +66,7 @@
 
 ### 2.4 不出现在列表中的接口
 
-- 登录后即可访问、不经角色授权的接口：`/api/user/login`、`/api/user/logout`、`/api/user/refresh_token`、`/api/user/profile`、`/api/user/codes`、`/api/user/permissions`、`/api/not_auth/getBindIps`、`/api/not_auth/getTreeNodeBindIps`。
+- 不经角色授权的接口：`/api/user/login`、`/api/user/logout`、`/api/user/refresh_token`、`/api/user/profile`、`/api/user/codes`、`/api/user/permissions`。其中登录、退出和刷新不要求已登录；profile、codes、permissions 仍要先通过登录中间件。`/api/not_auth/getBindIps` 与 `/api/not_auth/getTreeNodeBindIps` 也不进角色目录，但它们使用 `PROMETHEUS_HTTP_SD_TOKEN` 的 bearer token，不是用户登录态。
 - 仅超管可用的接口，即使角色里授予了也不会出现（后端同样会拒绝非超管）：`POST /api/user/signup`、`/api/department` 下全部接口。
 - 非 `/api/` 前缀的路由（`/`、`/health`、`/ready` 等）。
 

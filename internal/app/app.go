@@ -197,6 +197,7 @@ func (a *App) Run(ctx context.Context) error {
 		IdleTimeout:       60 * time.Second,
 	}
 
+	a.logHTTPServiceDiscovery()
 	a.showBootInfo()
 
 	g, runCtx := errgroup.WithContext(ctx)
@@ -354,6 +355,18 @@ func (a *App) initMockData(ctx context.Context) error {
 		return fmt.Errorf("初始化用户 Mock失败: %w", err)
 	}
 	return nil
+}
+
+func (a *App) logHTTPServiceDiscovery() {
+	if a == nil || a.cfg == nil || a.logger == nil {
+		return
+	}
+	warn, message := a.cfg.Prometheus.HTTPServiceDiscoveryStartup()
+	if warn {
+		a.logger.Warn(message)
+		return
+	}
+	a.logger.Info(message)
 }
 
 func (a *App) showBootInfo() {

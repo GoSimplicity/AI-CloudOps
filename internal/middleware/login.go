@@ -53,7 +53,7 @@ func NewJWTMiddleware(hdl ijwt.Handler, users service.UserService) *JWTMiddlewar
 func (m *JWTMiddleware) CheckLogin() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		path := ctx.Request.URL.Path
-		// 跳过token验证的路径
+		// 跳过用户 JWT 的路径。HTTP-SD 不使用用户登录态，由 handler 校验 PROMETHEUS_HTTP_SD_TOKEN。
 		if path == "/api/user/login" ||
 			path == "/api/user/logout" ||
 			path == "/api/user/refresh_token" ||

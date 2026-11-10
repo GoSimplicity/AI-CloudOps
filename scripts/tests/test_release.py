@@ -33,11 +33,29 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(destination.stat().st_mode), 0o600)
         settings = dict(line.split("=", 1) for line in content.splitlines() if "=" in line)
         self.assertEqual(len(settings["TREE_PASSWORD_ENCRYPTION_KEY"]), 32)
-        for name in ("MYSQL_PASSWORD", "JWT_KEY1", "JWT_KEY2", "AIOPS_API_KEY", "WEBHOOK_ACTION_SIGNING_KEY", "WEBHOOK_ALERTMANAGER_BEARER_TOKEN"):
+        for name in ("MYSQL_PASSWORD", "JWT_KEY1", "JWT_KEY2", "AIOPS_API_KEY", "PROMETHEUS_HTTP_SD_TOKEN"):
+            self.assertRegex(settings[name], r"^[a-f0-9]{48}$")
+            self.assertNotIn(settings[name], result.stdout + result.stderr)
+        for name in ("WEBHOOK_ACTION_SIGNING_KEY", "WEBHOOK_ALERTMANAGER_BEARER_TOKEN"):
+            self.assertRegex(settings[name], r"^[a-f0-9]{64}$")
             self.assertNotIn(settings[name], result.stdout + result.stderr)
         again = subprocess.run([sys.executable, str(script)], capture_output=True, text=True)
         self.assertNotEqual(again.returncode, 0)
         self.assertEqual(destination.read_text(), content)
+
+    def test_public_gateway_hides_http_service_discovery(self):
+        import re
+
+        text = (ROOT / "deploy/release/nginx.conf").read_text(encoding="utf-8")
+        for path in ("/api/not_auth/getBindIps", "/api/not_auth/getTreeNodeBindIps"):
+            match = re.search(rf"location = {re.escape(path)} \{{(.*?)\n    \}}", text, re.S)
+            self.assertIsNotNone(match, path)
+            self.assertIn("return 404;", match.group(1))
+            self.assertNotIn("proxy_pass", match.group(1))
+        self.assertIn("location /api/", text)
+        self.assertIn("location = /api/user/login", text)
+        self.assertIn("limit_req zone=cloudops_login", text)
+        self.assertNotIn("location = /api/user/refresh_token", text)
 
     def test_start_defaults_to_offline_plan_without_siblings_or_credentials(self):
         result = subprocess.run(["bash", str(self.root / "scripts/release-start.sh")], capture_output=True, text=True)

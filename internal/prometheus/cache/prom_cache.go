@@ -76,6 +76,7 @@ type prometheusConfigCache struct {
 	scrapeJobDAO  scrapeJobDao.ScrapeJobDAO
 	configDAO     configDao.MonitorConfigDAO
 	httpSdAPI     string
+	httpSdToken   string
 	batchManager  *BatchConfigManager
 	journal       configDao.ProjectionPlanJournalDAO
 	history       configDao.PromMainHistoryReader
@@ -105,6 +106,7 @@ func NewPrometheusConfigCache(
 	return &prometheusConfigCache{
 		redis:         redisClient,
 		httpSdAPI:     cfg.Prometheus.HttpSdAPI,
+		httpSdToken:   cfg.Prometheus.UsableHTTPServiceDiscoveryToken(),
 		scrapePoolDAO: scrapePoolDAO,
 		scrapeJobDAO:  scrapeJobDAO,
 		configDAO:     configDAO,
@@ -328,10 +330,14 @@ func (p *prometheusConfigCache) renderScrapeJobSnapshot(scrapeJobs []*model.Moni
 			query.Set("port", strconv.Itoa(job.Port))
 			query.Set("tree_node_ids", stringSliceToString(job.TreeNodeIDs))
 			sdURL.RawQuery = query.Encode()
+			discoveryClient := pcc.DefaultHTTPClientConfig
+			if p.httpSdToken != "" {
+				discoveryClient.Authorization = &pcc.Authorization{Type: "Bearer", Credentials: pcc.Secret(p.httpSdToken)}
+			}
 			sc.ServiceDiscoveryConfigs = discovery.Configs{
 				&http.SDConfig{
 					URL:              sdURL.String(),
-					HTTPClientConfig: pcc.DefaultHTTPClientConfig,
+					HTTPClientConfig: discoveryClient,
 					RefreshInterval:  utils.GenPromDuration(job.RefreshInterval),
 				},
 			}

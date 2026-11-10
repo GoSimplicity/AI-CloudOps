@@ -1214,6 +1214,7 @@ func setDefaults() {
 	viper.SetDefault("prometheus.alert_webhook_addr", "http://localhost:8889/api/v1/alerts/receive")
 	viper.SetDefault("prometheus.alert_webhook_file_dir", "/tmp/webhook_files")
 	viper.SetDefault("prometheus.httpSdAPI", "http://localhost:8889/api/not_auth/getTreeNodeBindIps")
+	viper.SetDefault("prometheus.httpSdToken", "")
 
 	// mock 默认值随环境变化：生产环境（ENV 为 production/prod/prd，或未设置/无法识别）默认关闭，开发/测试环境保持开启。
 	// 显式配置（配置文件 mock.enabled 或环境变量 MOCK_ENABLED）仍然优先；生产环境开启会被 Validate 拒绝。

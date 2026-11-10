@@ -1,0 +1,97 @@
+package config
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/spf13/viper"
+)
+
+func TestHTTPServiceDiscoveryTokenFromEnvironment(t *testing.T) {
+	viper.Reset()
+	t.Cleanup(viper.Reset)
+	setDefaults()
+	bindEnvVars()
+	if got := viper.GetString("prometheus.httpSdToken"); got != "" {
+		t.Fatal("HTTP SD token default must stay empty")
+	}
+	t.Setenv("PROMETHEUS_HTTP_SD_TOKEN", "fixture-http-sd-token")
+	cfg := Config{}
+	if err := viper.Unmarshal(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Prometheus.HttpSdToken != "fixture-http-sd-token" {
+		t.Fatal("PROMETHEUS_HTTP_SD_TOKEN was not loaded")
+	}
+	if cfg.Prometheus.UsableHTTPServiceDiscoveryToken() != "fixture-http-sd-token" {
+		t.Fatal("usable HTTP SD token did not keep the configured value")
+	}
+}
+
+func TestValidateHTTPServiceDiscoveryToken(t *testing.T) {
+	t.Setenv("ENV", "development")
+	valid := validConfigForTest()
+	valid.Prometheus.HttpSdToken = "fixture-http-sd-token"
+	if err := valid.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []string{" fixture-http-sd-token", "fixture-http-sd-token ", "fixture token", "fixture\nhttp", strings.Repeat("a", 513)} {
+		cfg := validConfigForTest()
+		cfg.Prometheus.HttpSdToken = value
+		err := cfg.Validate()
+		if err == nil || !strings.Contains(err.Error(), "PROMETHEUS_HTTP_SD_TOKEN") {
+			t.Fatalf("invalid token accepted: %v", err)
+		}
+		if strings.Contains(err.Error(), "fixture") || strings.Contains(err.Error(), strings.Repeat("a", 16)) {
+			t.Fatal("validation error revealed the token")
+		}
+		if cfg.Prometheus.UsableHTTPServiceDiscoveryToken() != "" {
+			t.Fatal("invalid token remained usable")
+		}
+	}
+}
+
+func TestHTTPServiceDiscoveryStartupMessageOmitsToken(t *testing.T) {
+	for _, token := range []string{"", "fixture-http-sd-token", "fixture token", "fixture\nhttp"} {
+		warn, message := (PrometheusConfig{HttpSdToken: token}).HTTPServiceDiscoveryStartup()
+		if strings.Contains(message, "fixture") {
+			t.Fatal("startup message contained the token")
+		}
+		if token == "fixture-http-sd-token" {
+			if warn || !strings.Contains(message, "bearer token") {
+				t.Fatal("configured token did not report bearer mode")
+			}
+			continue
+		}
+		if !warn || !strings.Contains(message, "回环") {
+			t.Fatal("unset or invalid token did not report loopback-only mode")
+		}
+	}
+}
+
+func TestHTTPServiceDiscoveryRequestPolicy(t *testing.T) {
+	const token = "fixture-http-sd-token"
+	for _, tt := range []struct {
+		name, token, remote, header string
+		allow                       bool
+	}{
+		{name: "missing token", token: token, remote: "203.0.113.8:4000", allow: false},
+		{name: "wrong token", token: token, remote: "203.0.113.8:4000", header: "Bearer fixture-http-sd-wrong", allow: false},
+		{name: "token prefix", token: token, remote: "203.0.113.8:4000", header: "Bearer fixture-http-sd-token-extra", allow: false},
+		{name: "correct token", token: token, remote: "203.0.113.8:4000", header: "Bearer " + token, allow: true},
+		{name: "bearer case", token: token, remote: "198.51.100.8:4000", header: "bearer " + token, allow: true},
+		{name: "basic auth", token: token, remote: "127.0.0.1:4000", header: "Basic " + token, allow: false},
+		{name: "configured loopback without token", token: token, remote: "127.0.0.1:4000", allow: false},
+		{name: "unconfigured remote", remote: "203.0.113.8:4000", allow: false},
+		{name: "unconfigured private", remote: "172.18.0.4:4000", allow: false},
+		{name: "unconfigured empty peer", allow: false},
+		{name: "unconfigured loopback", remote: "127.0.0.1:4000", allow: true},
+		{name: "unconfigured ipv6 loopback", remote: "[::1]:4000", allow: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HTTPServiceDiscoveryRequestAllowed(tt.token, tt.remote, tt.header); got != tt.allow {
+				t.Fatalf("allowed=%v", got)
+			}
+		})
+	}
+}

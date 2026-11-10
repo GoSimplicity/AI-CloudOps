@@ -14,6 +14,8 @@
 
 本机开发默认 `http://localhost:8889/api/not_auth/getTreeNodeBindIps`，指向主后端而非告警 webhook 服务。主后端（`main.go`，`SERVER_PORT`）和告警 webhook（`cmd/webhook`，`WEBHOOK_PORT`）是两个不同的进程，默认端口都是 8889；在同一台机器上部署时必须用 `WEBHOOK_PORT` 把 webhook 端口错开，HTTP-SD 地址始终指向主后端端口。发布编排默认 `http://backend:8889/api/not_auth/getTreeNodeBindIps`，通过 `PROMETHEUS_HTTP_SD_API` 注入后端配置生成器。该 URL 必须能从真正运行 Prometheus 的网络访问；外置 Prometheus 应显式配置可达地址。原有 `getBindIps` 与 `getTreeNodeBindIps` 路由都保留。
 
+配置了 `PROMETHEUS_HTTP_SD_TOKEN` 后，生成的 `http_sd_configs` 会带上 `authorization.type: Bearer` 和同一令牌。该令牌只用于访问 HTTP-SD，不写入采集目标的 `authorization`，也不放进发现 URL。操作配置导出仍会把 Secret 脱敏值还原成真实令牌，供 Prometheus 使用；普通 SDK 序列化继续脱敏。令牌未配置时，生成的发现配置不带 `authorization`，接口只接受本机回环直连。发布栈的 gateway 对这两条路径直接返回 404，Prometheus 需要走内网访问 backend。`deploy/release/.env` 由 `scripts/release-env.py` 生成 `PROMETHEUS_HTTP_SD_TOKEN`，compose 将其注入 backend。
+
 发布目录当前挂载的 `prometheus.yml` 仍是自身指标采集配置。生成的业务采集配置需要按运维配置分发流程提供给对应 Prometheus，本修复不会将所有数据库作业自动安装到该发布实例。
 
 已有作业若因旧版本遗漏而没有保存树节点 ID，需要重新保存节点选择。存在互斥认证来源的旧作业会在生成时记录字段校验错误并跳过，不会静默选择其中一个来源。凭据详情脱敏与编辑清空的 API 契约另行处理，本阶段未改变详情响应。

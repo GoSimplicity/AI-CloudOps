@@ -122,6 +122,11 @@ def derived_additions(settings, host, backend_domain):
             return None, "WEBHOOK_ALERTMANAGER_BEARER_TOKEN= exists but is empty; remove that line and rerun with --add-missing."
         lines.append("# Bearer token for Alertmanager /receive. Same value is injected into Alertmanager at start.")
         lines.append(f"WEBHOOK_ALERTMANAGER_BEARER_TOKEN={secrets.token_hex(32)}")
+    if not settings.get("PROMETHEUS_HTTP_SD_TOKEN"):
+        if "PROMETHEUS_HTTP_SD_TOKEN" in settings:
+            return None, "PROMETHEUS_HTTP_SD_TOKEN= exists but is empty; remove that line and rerun with --add-missing."
+        lines.append("# HTTP-SD bearer token shared by the backend and generated Prometheus http_sd_configs.")
+        lines.append(f"PROMETHEUS_HTTP_SD_TOKEN={secrets.token_hex(24)}")
     return lines, ""
 
 
@@ -133,7 +138,7 @@ def add_missing(destination, host, backend_domain):
         print(error, file=sys.stderr)
         return 1
     if not lines:
-        print(f"{destination} already has the derived webhook settings; nothing changed. No secrets printed.")
+        print(f"{destination} already has the derived release settings; nothing changed. No secrets printed.")
         return 0
     raw = destination.read_bytes()
     needs_newline = bool(raw) and not raw.endswith(b"\n")
@@ -141,7 +146,7 @@ def add_missing(destination, host, backend_domain):
     with os.fdopen(descriptor, "w") as output:
         output.write(("\n" if needs_newline else "") + "\n".join(lines) + "\n")
     os.chmod(destination, 0o600)
-    print(f"Appended derived webhook settings to {destination} (mode 0600). No secrets printed.")
+    print(f"Appended derived release settings to {destination} (mode 0600). No secrets printed.")
     if wrote_backend_domain(lines) and host_is_loopback(backend_domain):
         note_loopback_backend_placeholder()
     return 0
@@ -169,7 +174,7 @@ def main():
     parser.add_argument("--mysql-host", default=DEFAULT_MYSQL_HOST,
                         help="host:port used in WEBHOOK_MYSQL_ADDR (default: mysql:3306, the Compose service)")
     parser.add_argument("--add-missing", action="store_true",
-                        help="for an existing .env, append missing derived keys (WEBHOOK_MYSQL_ADDR, card link base, signing key) without touching other values")
+                        help="for an existing .env, append missing derived keys (WEBHOOK_MYSQL_ADDR, card link base, signing key, PROMETHEUS_HTTP_SD_TOKEN) without touching other values")
     parser.add_argument("--webhook-backend-domain",
                         help="WEBHOOK_BACKEND_DOMAIN written for a new file or when --add-missing adds that key. "
                              "Must be an http or https URL with a hostname and no whitespace, $, or quotes. "
@@ -196,7 +201,7 @@ def main():
     names = (
         "MYSQL_PASSWORD", "MYSQL_ROOT_PASSWORD", "MYSQL_MIGRATOR_PASSWORD", "REDIS_PASSWORD", "JWT_KEY1",
         "JWT_KEY2", "TREE_PASSWORD_ENCRYPTION_KEY", "BOOTSTRAP_ADMIN_PASSWORD",
-        "AIOPS_API_KEY",
+        "AIOPS_API_KEY", "PROMETHEUS_HTTP_SD_TOKEN",
     )
     # Hex avoids shell, Compose interpolation and MySQL DSN delimiters.
     values = {name: secrets.token_hex(24) for name in names}
