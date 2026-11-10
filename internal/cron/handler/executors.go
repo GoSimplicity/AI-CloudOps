@@ -75,6 +75,11 @@ func (h *CommandExecutor) Execute(ctx context.Context, task *CommandTask) (strin
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	workDir, err := resolveLocalWorkDir(task.WorkDir)
+	if err != nil {
+		return "", err
+	}
+
 	var cmd *exec.Cmd
 	if len(task.Args) > 0 {
 		args := make([]string, len(task.Args))
@@ -85,10 +90,7 @@ func (h *CommandExecutor) Execute(ctx context.Context, task *CommandTask) (strin
 	} else {
 		cmd = exec.CommandContext(ctx, task.Command)
 	}
-
-	if task.WorkDir != "" {
-		cmd.Dir = task.WorkDir
-	}
+	cmd.Dir = workDir
 
 	// 不继承服务进程的完整环境（其中含 JWT/数据库/AIOps 等密钥），只传白名单变量与任务自身配置的变量
 	cmd.Env = buildTaskEnv(task.Environment)
@@ -102,7 +104,7 @@ func (h *CommandExecutor) Execute(ctx context.Context, task *CommandTask) (strin
 		zap.String("command", task.Command),
 		zap.Any("args", task.Args))
 
-	err := runTaskCommand(cmd)
+	err = runTaskCommand(cmd)
 
 	// 合并标准输出和错误输出
 	output := strings.TrimSpace(stdout.String())
@@ -248,8 +250,15 @@ func (h *ScriptExecutor) Execute(ctx context.Context, task *ScriptTask) (string,
 		return "", fmt.Errorf("不支持的脚本类型: %s", task.Type)
 	}
 
+	// 脚本任务没有 work_dir 字段，使用与未填写工作目录的命令相同的默认可写目录
+	workDir, err := resolveLocalWorkDir("")
+	if err != nil {
+		return "", err
+	}
+
 	// 执行脚本
 	cmd := exec.CommandContext(ctx, interpreter, argument, task.Content)
+	cmd.Dir = workDir
 	// 不继承服务进程的完整环境（其中含 JWT/数据库/AIOps 等密钥），只传白名单变量
 	cmd.Env = buildTaskEnv(nil)
 
@@ -262,7 +271,7 @@ func (h *ScriptExecutor) Execute(ctx context.Context, task *ScriptTask) (string,
 		zap.String("type", task.Type),
 		zap.String("interpreter", interpreter))
 
-	err := runTaskCommand(cmd)
+	err = runTaskCommand(cmd)
 
 	// 合并标准输出和错误输出
 	output := strings.TrimSpace(stdout.String())
@@ -283,6 +292,22 @@ func (h *ScriptExecutor) Execute(ctx context.Context, task *ScriptTask) (string,
 
 	h.logger.Info("脚本执行成功", zap.String("type", task.Type))
 	return output, nil
+}
+
+// defaultLocalWorkDir 未填写 work_dir 的命令，以及没有 work_dir 字段的脚本，都在这里执行。
+// 容器 WORKDIR /app 属 root，运行用户不能在那里创建文件。
+const defaultLocalWorkDir = "/tmp/cloudops-cron"
+
+// resolveLocalWorkDir 显式目录原样使用，不代为创建。空目录落到 defaultLocalWorkDir，并确保该目录存在。
+func resolveLocalWorkDir(explicit string) (string, error) {
+	dir := strings.TrimSpace(explicit)
+	if dir != "" {
+		return dir, nil
+	}
+	if err := os.MkdirAll(defaultLocalWorkDir, 0o750); err != nil {
+		return "", fmt.Errorf("创建默认工作目录失败: %w", err)
+	}
+	return defaultLocalWorkDir, nil
 }
 
 // taskEnvAllowlist 任务子进程允许从服务进程继承的环境变量（另外放行所有 LC_* 区域设置变量）
