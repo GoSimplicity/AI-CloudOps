@@ -258,6 +258,48 @@ class ReleaseEnvTests(unittest.TestCase):
                 self.assertEqual(destination.read_bytes(), before)
                 self.assert_no_value_leak(result, FIXTURE_PASSWORD, "fixture@pw/x")
 
+    def test_loopback_backend_placeholder_is_called_out_without_leaking_values(self):
+        destination, result = self.generate()
+        settings = read_env(destination)
+        note = "loopback placeholder"
+        output = result.stdout + result.stderr
+        self.assertIn(note, result.stderr)
+        self.assertNotIn("127.0.0.1", output)
+        self.assertNotIn(settings["WEBHOOK_BACKEND_DOMAIN"], output)
+        self.assertNotIn(settings["WEBHOOK_ACTION_SIGNING_KEY"], output)
+        self.assertNotIn(settings["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"], output)
+        self.assertNotIn(settings["MYSQL_PASSWORD"], output)
+        self.assertIn("Production", result.stderr)
+
+        kept = self.dir / "kept-domain.env"
+        kept.write_text(
+            f"MYSQL_PASSWORD={FIXTURE_PASSWORD}\n"
+            "WEBHOOK_MYSQL_ADDR=cloudops:fixture-only-pw@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=UTC\n"
+            "WEBHOOK_BACKEND_DOMAIN=https://alerts.example/api/v1/alerts\n"
+            "WEBHOOK_ACTION_SIGNING_KEY=ab\n"
+            "WEBHOOK_ALERTMANAGER_BEARER_TOKEN=cd\n"
+        )
+        kept_result = self.run_script("--env-file", str(kept), "--add-missing")
+        self.assertEqual(kept_result.returncode, 0, kept_result.stderr)
+        self.assertNotIn(note, kept_result.stdout + kept_result.stderr)
+        self.assertEqual(read_env(kept)["WEBHOOK_BACKEND_DOMAIN"], "https://alerts.example/api/v1/alerts")
+        self.assert_no_value_leak(kept_result, FIXTURE_PASSWORD)
+
+        added = self.dir / "need-domain.env"
+        added.write_text(
+            f"MYSQL_PASSWORD={FIXTURE_PASSWORD}\n"
+            "WEBHOOK_MYSQL_ADDR=cloudops:fixture-only-pw@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=UTC\n"
+            "WEBHOOK_ACTION_SIGNING_KEY=ab\n"
+            "WEBHOOK_ALERTMANAGER_BEARER_TOKEN=cd\n"
+        )
+        added_result = self.run_script("--env-file", str(added), "--add-missing")
+        self.assertEqual(added_result.returncode, 0, added_result.stderr)
+        added_output = added_result.stdout + added_result.stderr
+        self.assertIn(note, added_result.stderr)
+        self.assertNotIn("127.0.0.1", added_output)
+        self.assertEqual(read_env(added)["WEBHOOK_BACKEND_DOMAIN"], "http://127.0.0.1:8889/api/v1/alerts")
+        self.assert_no_value_leak(added_result, FIXTURE_PASSWORD, "fixture-only-pw@tcp")
+
     def test_add_missing_requires_existing_file(self):
         destination = self.dir / "absent.env"
         result = self.run_script("--env-file", str(destination), "--add-missing")

@@ -51,7 +51,8 @@ def derived_additions(settings, host):
     elif not settings.get("WEBHOOK_MYSQL_ADDR"):
         return None, "WEBHOOK_MYSQL_ADDR= exists but is empty; remove that line and rerun with --add-missing."
     if "WEBHOOK_BACKEND_DOMAIN" not in settings:
-        lines.append("# External base for Feishu card actions. Includes scheme and /api/v1/alerts.")
+        lines.append("# External base for Feishu card actions (scheme and /api/v1/alerts).")
+        lines.append("# Loopback placeholder for local use. Production refuses to start until this is an external address.")
         lines.append("WEBHOOK_BACKEND_DOMAIN=http://127.0.0.1:8889/api/v1/alerts")
     if not settings.get("WEBHOOK_ACTION_SIGNING_KEY"):
         if "WEBHOOK_ACTION_SIGNING_KEY" in settings:
@@ -83,7 +84,23 @@ def add_missing(destination, host):
         output.write(("\n" if needs_newline else "") + "\n".join(lines) + "\n")
     os.chmod(destination, 0o600)
     print(f"Appended derived webhook settings to {destination} (mode 0600). No secrets printed.")
+    if wrote_backend_domain(lines):
+        note_loopback_backend_placeholder()
     return 0
+
+
+def wrote_backend_domain(lines):
+    return any(line.startswith("WEBHOOK_BACKEND_DOMAIN=") for line in lines)
+
+
+def note_loopback_backend_placeholder():
+    """Local placeholder only. Do not print the address or any secret."""
+    print(
+        "WEBHOOK_BACKEND_DOMAIN was filled with a loopback placeholder for local use. "
+        "Production, an unset ENV, and an unrecognized ENV refuse to start until it is replaced "
+        "with the external card action base. No address or secret was printed.",
+        file=sys.stderr,
+    )
 
 
 def main():
@@ -133,7 +150,8 @@ def main():
     content += 'WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API=http://127.0.0.1:9/open-apis/auth/v3/tenant_access_token/internal\n'
     content += 'WEBHOOK_IM_FEISHU_PRIVATE_MESSAGE_API=http://127.0.0.1:9/open-apis/im/v1/messages\n'
     content += 'WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API=http://127.0.0.1:9/open-apis/bot/v2/hook\n'
-    content += "# Feishu card action base. Replace with the external URL (scheme + /api/v1/alerts) before exposing webhook.\n"
+    content += "# Feishu card action base (scheme and /api/v1/alerts). Loopback placeholder for local use.\n"
+    content += "# Production, unset, and unrecognized ENV refuse to start until this host is an external address.\n"
     content += "WEBHOOK_BACKEND_DOMAIN=http://127.0.0.1:8889/api/v1/alerts\n"
     signing_key = secrets.token_hex(32)
     bearer_token = secrets.token_hex(32)
@@ -148,6 +166,7 @@ def main():
     with os.fdopen(descriptor, "w") as output:
         output.write(content)
     print(f"Created {destination} with mode 0600. No secrets printed.")
+    note_loopback_backend_placeholder()
     return 0
 
 
