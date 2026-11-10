@@ -82,6 +82,10 @@ func (s *monitorConfigService) GetMonitorConfigByID(ctx context.Context, req *mo
 }
 
 func (s *monitorConfigService) CreateMonitorConfig(ctx context.Context, req *model.CreateMonitorConfigReq) error {
+	if err := rejectHiddenConfigContent(req.ConfigContent); err != nil {
+		s.l.Error("创建监控配置失败", zap.Error(err))
+		return err
+	}
 	if err := rejectCreateCredentialPlaceholder(req.ConfigContent); err != nil {
 		s.l.Error("创建监控配置失败", zap.Error(err))
 		return err

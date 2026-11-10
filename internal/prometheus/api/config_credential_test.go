@@ -96,6 +96,15 @@ func TestMonitorConfigCredentialHTTPContract(t *testing.T) {
 	if store.updates != 0 {
 		t.Fatal("create wrote a credential placeholder")
 	}
+
+	hiddenCreate := httptest.NewRecorder()
+	hiddenCreateReq := httptest.NewRequest(http.MethodPost, "/api/monitor/configs/create", strings.NewReader("{\"name\":\"created\",\"pool_id\":1,\"instance_ip\":\"127.0.0.1\",\"config_type\":1,\"config_content\":\"  配置解析失败，已隐藏内容\\n\"}"))
+	hiddenCreateReq.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(hiddenCreate, hiddenCreateReq)
+	assertCredentialError(t, hiddenCreate, "配置内容为隐藏占位，请填写完整配置")
+	if store.updates != 0 || store.row.ConfigContent != stored {
+		t.Fatal("hidden placeholder was written")
+	}
 }
 
 func assertCredentialError(t *testing.T, response *httptest.ResponseRecorder, message string) {
@@ -131,8 +140,11 @@ func (s *credentialConfigStore) GetMonitorConfigByID(context.Context, int) (*mod
 	return s.row, nil
 }
 
-func (s *credentialConfigStore) UpdateMonitorConfig(context.Context, *model.MonitorConfig) error {
+func (s *credentialConfigStore) UpdateMonitorConfig(_ context.Context, row *model.MonitorConfig) error {
 	s.updates++
+	if row != nil && row.ConfigContent != "" {
+		s.row.ConfigContent = row.ConfigContent
+	}
 	return nil
 }
 

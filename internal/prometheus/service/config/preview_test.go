@@ -446,17 +446,9 @@ func TestUpdateRestoresHTTPServiceDiscoveryByURLOrIndex(t *testing.T) {
 		"      - authorization:\n" +
 		"          credentials: <secret>\n" +
 		"        refresh_interval: 45s\n"
-	if err := svc.UpdateMonitorConfig(context.Background(), &model.UpdateMonitorConfigReq{ID: 7, Name: "old-name", ConfigContent: swapped}); err != nil {
-		t.Fatal(err)
-	}
-	saved := credentialValues(t, store.stored.ConfigContent)
-	if saved[credID("job-sd", true, "http://fixture.example/sd-a", "authorization.credentials")] != "fixture-sd-a-token" ||
-		saved[credID("job-sd", true, "http://fixture.example/sd-b", "authorization.credentials")] != "fixture-sd-b-token" ||
-		saved["job-sd|index:2|authorization.credentials"] != "fixture-index-token" {
-		t.Fatalf("http_sd credentials rebound incorrectly: %#v", saved)
-	}
-	if !strings.Contains(store.stored.ConfigContent, "45s") || strings.Contains(store.stored.ConfigContent, redactedCredential) {
-		t.Fatal("index-matched http_sd dropped the non-credential edit or kept a placeholder")
+	err := svc.UpdateMonitorConfig(context.Background(), &model.UpdateMonitorConfigReq{ID: 7, Name: "old-name", ConfigContent: swapped})
+	if !errors.Is(err, errCredentialPlaceholderUnmapped) || store.updates != 0 || store.stored.ConfigContent != original {
+		t.Fatal("changed http_sd urls were accepted")
 	}
 }
 
@@ -494,11 +486,36 @@ func TestUpdateHiddenPreviewKeepsStoredContent(t *testing.T) {
 	if err != nil || detail.ConfigContent != hiddenConfigContent {
 		t.Fatal(err)
 	}
-	if err := svc.UpdateMonitorConfig(context.Background(), &model.UpdateMonitorConfigReq{ID: 7, Name: "renamed", ConfigContent: detail.ConfigContent}); err != nil {
+	for _, content := range []string{detail.ConfigContent, "\n" + hiddenConfigContent + " \n"} {
+		if err := svc.UpdateMonitorConfig(context.Background(), &model.UpdateMonitorConfigReq{ID: 7, Name: "renamed", ConfigContent: content}); err != nil {
+			t.Fatal(err)
+		}
+		if store.stored.ConfigContent != broken || store.stored.Name != "renamed" || strings.Contains(store.written.ConfigContent, hiddenConfigContent) {
+			t.Fatal("hidden placeholder replaced the stored body")
+		}
+	}
+}
+
+func TestCreateRejectsHiddenPlaceholder(t *testing.T) {
+	svc, store := newPreviewService(previewFixture, nil)
+	err := svc.CreateMonitorConfig(context.Background(), &model.CreateMonitorConfigReq{
+		Name: "created", PoolID: 1, InstanceIP: "127.0.0.1", ConfigType: model.ConfigTypePrometheus,
+		ConfigContent: "  " + hiddenConfigContent + "\n",
+	})
+	if !errors.Is(err, errHiddenConfigContent) || store.creates != 0 {
+		t.Fatal("create accepted the hidden placeholder")
+	}
+}
+
+func TestUpdateParseFailedConfigAcceptsRealContent(t *testing.T) {
+	const broken = "scrape_configs: [\n  credentials: fixture-unparsed-secret\n"
+	const replacement = "scrape_configs:\n  - job_name: plain\n    metrics_path: /metrics\n"
+	svc, store := newPreviewService(broken, zap.NewNop())
+	if err := svc.UpdateMonitorConfig(context.Background(), &model.UpdateMonitorConfigReq{ID: 7, Name: "renamed", ConfigContent: replacement}); err != nil {
 		t.Fatal(err)
 	}
-	if store.stored.ConfigContent != broken || store.stored.Name != "renamed" || strings.Contains(store.written.ConfigContent, hiddenConfigContent) {
-		t.Fatal("hidden preview replaced the stored body")
+	if store.updates != 1 || store.stored.ConfigContent != replacement || store.stored.Name != "renamed" {
+		t.Fatal("real content did not replace an unparsed config")
 	}
 }
 
@@ -524,6 +541,204 @@ func TestUpdateRejectsAmbiguousPlaceholder(t *testing.T) {
 	err := svc.UpdateMonitorConfig(context.Background(), &model.UpdateMonitorConfigReq{ID: 7, Name: "old-name", ConfigContent: edited})
 	if !errors.Is(err, errCredentialPlaceholderUnmapped) || store.updates != 0 || store.stored.ConfigContent != original {
 		t.Fatal("ambiguous placeholder was written")
+	}
+}
+
+func TestUpdateRejectsDestinationChanges(t *testing.T) {
+	const original = "" +
+		"scrape_configs:\n" +
+		"  - job_name: job-dest\n" +
+		"    scheme: http\n" +
+		"    proxy_url: http://proxy.example\n" +
+		"    scrape_interval: 17s\n" +
+		"    static_configs:\n" +
+		"      - targets: ['fixture-host:9100']\n" +
+		"    authorization:\n" +
+		"      credentials: fixture-dest-token\n" +
+		"remote_write:\n" +
+		"  - url: http://fixture.example/write\n" +
+		"    basic_auth:\n" +
+		"      password: fixture-rw-password\n"
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "targets", body: "" +
+			"scrape_configs:\n" +
+			"  - job_name: job-dest\n" +
+			"    scheme: http\n" +
+			"    proxy_url: http://proxy.example\n" +
+			"    static_configs:\n" +
+			"      - targets: ['other-host:9100']\n" +
+			"    authorization:\n" +
+			"      credentials: <secret>\n" +
+			"remote_write:\n" +
+			"  - url: http://fixture.example/write\n" +
+			"    basic_auth:\n" +
+			"      password: <secret>\n"},
+		{name: "scheme", body: "" +
+			"scrape_configs:\n" +
+			"  - job_name: job-dest\n" +
+			"    scheme: https\n" +
+			"    proxy_url: http://proxy.example\n" +
+			"    static_configs:\n" +
+			"      - targets: ['fixture-host:9100']\n" +
+			"    authorization:\n" +
+			"      credentials: <secret>\n"},
+		{name: "proxy_url", body: "" +
+			"scrape_configs:\n" +
+			"  - job_name: job-dest\n" +
+			"    scheme: http\n" +
+			"    proxy_url: http://other-proxy.example\n" +
+			"    static_configs:\n" +
+			"      - targets: ['fixture-host:9100']\n" +
+			"    authorization:\n" +
+			"      credentials: <secret>\n"},
+		{name: "remote_write url", body: "" +
+			"scrape_configs:\n" +
+			"  - job_name: job-dest\n" +
+			"    scheme: http\n" +
+			"    proxy_url: http://proxy.example\n" +
+			"    static_configs:\n" +
+			"      - targets: ['fixture-host:9100']\n" +
+			"    authorization:\n" +
+			"      credentials: <secret>\n" +
+			"remote_write:\n" +
+			"  - url: http://fixture.example/other-write\n" +
+			"    basic_auth:\n" +
+			"      password: <secret>\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, store := newPreviewService(original, nil)
+			err := svc.UpdateMonitorConfig(context.Background(), &model.UpdateMonitorConfigReq{ID: 7, Name: "old-name", ConfigContent: tc.body})
+			if !errors.Is(err, errCredentialPlaceholderUnmapped) || store.updates != 0 || store.stored.ConfigContent != original {
+				t.Fatal("destination change was written")
+			}
+		})
+	}
+	svc, store := newPreviewService(original, nil)
+	detail, err := svc.GetMonitorConfigByID(context.Background(), &model.GetMonitorConfigReq{ID: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited, err := replaceScalarValue(detail.ConfigContent, "17s", "19s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.UpdateMonitorConfig(context.Background(), &model.UpdateMonitorConfigReq{ID: 7, Name: "old-name", ConfigContent: edited}); err != nil {
+		t.Fatal(err)
+	}
+	saved := credentialValues(t, store.stored.ConfigContent)
+	if saved[credID("job-dest", false, "", "authorization.credentials")] != "fixture-dest-token" || !strings.Contains(store.stored.ConfigContent, "19s") {
+		t.Fatal("scrape interval edit did not keep the credential")
+	}
+}
+
+func TestMultiDocumentYAMLIsHidden(t *testing.T) {
+	const original = "" +
+		"scrape_configs:\n" +
+		"  - job_name: job-a\n" +
+		"    static_configs:\n" +
+		"      - targets: ['fixture-host:9100']\n" +
+		"---\n" +
+		"scrape_configs:\n" +
+		"  - job_name: job-b\n" +
+		"    bearer_token: fixture-second-doc-token\n"
+	svc, store := newPreviewService(original, nil)
+	detail, err := svc.GetMonitorConfigByID(context.Background(), &model.GetMonitorConfigReq{ID: 7})
+	if err != nil || detail.ConfigContent != hiddenConfigContent || strings.Contains(detail.ConfigContent, "fixture-second-doc-token") {
+		t.Fatal("second document was returned")
+	}
+	list, err := svc.GetMonitorConfigList(context.Background(), &model.GetMonitorConfigListReq{})
+	if err != nil || len(list.Items) != 1 || strings.Contains(list.Items[0].ConfigContent, "fixture-second-doc-token") {
+		t.Fatal("list returned the second document")
+	}
+	err = svc.UpdateMonitorConfig(context.Background(), &model.UpdateMonitorConfigReq{
+		ID: 7, Name: "old-name",
+		ConfigContent: "scrape_configs:\n  - job_name: job-a\n    authorization:\n      credentials: <secret>\n---\nscrape_configs:\n  - job_name: job-b\n    bearer_token: <secret>\n",
+	})
+	if !errors.Is(err, errCredentialPlaceholderUnmapped) || store.updates != 0 || store.stored.ConfigContent != original {
+		t.Fatal("multi-document placeholder was written")
+	}
+}
+
+func TestAlertManagerCredentialsRedactAndRestore(t *testing.T) {
+	const original = "" +
+		"global:\n" +
+		"  smtp_smarthost: smtp.example:587\n" +
+		"  smtp_auth_username: fixture-user\n" +
+		"  smtp_auth_password: fixture-smtp-password\n" +
+		"  smtp_auth_password_file: /etc/fixture/smtp.password\n" +
+		"  slack_api_url: http://fixture.example/slack-global\n" +
+		"  wechat_api_secret: fixture-wechat-secret\n" +
+		"  opsgenie_api_key: fixture-opsgenie-key\n" +
+		"  victorops_api_key: fixture-victorops-key\n" +
+		"route:\n" +
+		"  receiver: hook\n" +
+		"  group_wait: 30s\n" +
+		"receivers:\n" +
+		"  - name: hook\n" +
+		"    webhook_configs:\n" +
+		"      - url: http://fixture.example/hook\n" +
+		"        http_config:\n" +
+		"          bearer_token: fixture-hook-bearer\n" +
+		"  - name: chat\n" +
+		"    slack_configs:\n" +
+		"      - api_url: http://fixture.example/slack\n" +
+		"        channel: alerts\n" +
+		"    pagerduty_configs:\n" +
+		"      - routing_key: fixture-routing\n" +
+		"        service_key: fixture-service\n" +
+		"    wechat_configs:\n" +
+		"      - api_secret: fixture-wechat-receiver\n" +
+		"    opsgenie_configs:\n" +
+		"      - api_key: fixture-opsgenie-receiver\n" +
+		"    victorops_configs:\n" +
+		"      - api_key: fixture-victorops-receiver\n" +
+		"        routing_key: fixture-victorops-route\n" +
+		"    telegram_configs:\n" +
+		"      - bot_token: fixture-bot-token\n" +
+		"        api_url: http://fixture.example/telegram\n"
+	secrets := []string{
+		"fixture-smtp-password", "http://fixture.example/slack-global", "fixture-wechat-secret",
+		"fixture-opsgenie-key", "fixture-victorops-key", "http://fixture.example/hook",
+		"fixture-hook-bearer", "http://fixture.example/slack", "fixture-routing", "fixture-service",
+		"fixture-wechat-receiver", "fixture-opsgenie-receiver", "fixture-victorops-receiver",
+		"fixture-victorops-route", "fixture-bot-token", "http://fixture.example/telegram",
+	}
+	svc, store := newPreviewService(original, nil)
+	detail, err := svc.GetMonitorConfigByID(context.Background(), &model.GetMonitorConfigReq{ID: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range secrets {
+		if strings.Contains(detail.ConfigContent, secret) {
+			t.Fatalf("alertmanager preview leaked %s", secret)
+		}
+	}
+	if !strings.Contains(detail.ConfigContent, "/etc/fixture/smtp.password") || !strings.Contains(detail.ConfigContent, "smtp.example:587") || !strings.Contains(detail.ConfigContent, "channel: alerts") {
+		t.Fatal("alertmanager preview dropped a non-secret")
+	}
+	for _, value := range credentialValues(t, detail.ConfigContent) {
+		if value != redactedCredential {
+			t.Fatalf("alertmanager credential = %q", value)
+		}
+	}
+	edited, err := replaceScalarValue(detail.ConfigContent, "30s", "15s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.UpdateMonitorConfig(context.Background(), &model.UpdateMonitorConfigReq{ID: 7, Name: "old-name", ConfigContent: edited}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(store.stored.ConfigContent, redactedCredential) || !strings.Contains(store.stored.ConfigContent, "fixture-smtp-password") || !strings.Contains(store.stored.ConfigContent, "http://fixture.example/hook") || !strings.Contains(store.stored.ConfigContent, "15s") {
+		t.Fatal("alertmanager restore dropped a secret or the non-destination edit")
+	}
+	moved := strings.Replace(detail.ConfigContent, "smtp.example:587", "smtp.other:587", 1)
+	err = svc.UpdateMonitorConfig(context.Background(), &model.UpdateMonitorConfigReq{ID: 7, Name: "old-name", ConfigContent: moved})
+	if !errors.Is(err, errCredentialPlaceholderUnmapped) {
+		t.Fatal("changed smtp destination was accepted")
 	}
 }
 
