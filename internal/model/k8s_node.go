@@ -89,7 +89,7 @@ type GetNodeDetailReq struct {
 type UpdateNodeLabelsReq struct {
 	ClusterID int               `json:"cluster_id" binding:"required"` // 集群ID
 	NodeName  string            `json:"node_name" binding:"required"`  // 节点名称
-	Labels    map[string]string `json:"labels"`                        // 标签（完全覆盖现有标签，传空map表示清空所有标签）
+	Labels    map[string]string `json:"labels"`                        // 缺省保持原标签；{} 清空用户标签
 }
 
 type DrainNodeReq struct {

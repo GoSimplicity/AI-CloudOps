@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -19,16 +20,18 @@ import (
 
 type nodeManagerFixture struct {
 	manager.NodeManager
-	nodes    []corev1.Node
-	err      error
-	cluster  int
-	selector string
-	drain    *k8sutils.DrainOptions
-	drained  string
-	cordoned string
-	labels   map[string]string
-	buildErr string
-	taints   []*model.NodeTaint
+	nodes         []corev1.Node
+	err           error
+	cluster       int
+	selector      string
+	drain         *k8sutils.DrainOptions
+	drained       string
+	cordoned      string
+	labels        map[string]string
+	currentLabels map[string]string
+	buildErr      string
+	taints        []*model.NodeTaint
+	getErr        error
 }
 
 func (m *nodeManagerFixture) GetNodeList(_ context.Context, cluster int, options metav1.ListOptions) (*corev1.NodeList, int64, error) {
@@ -45,10 +48,10 @@ func (m *nodeManagerFixture) BuildK8sNode(_ context.Context, _ int, node corev1.
 }
 
 func (m *nodeManagerFixture) GetNode(_ context.Context, _ int, name string) (*corev1.Node, error) {
-	if m.err != nil {
-		return nil, m.err
+	if m.getErr != nil {
+		return nil, m.getErr
 	}
-	return &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: name}}, nil
+	return &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: m.currentLabels}}, nil
 }
 
 func (m *nodeManagerFixture) DrainNode(_ context.Context, _ int, name string, options *k8sutils.DrainOptions) error {
@@ -114,7 +117,19 @@ func TestNodeListFiltersBeforePagination(t *testing.T) {
 }
 
 func TestNodeListPageZeroIsUnsafe(t *testing.T) {
-	t.Skip("GetNodeList 把 page=0 交给 BuildNodeListPagination，start 为负数会 panic（internal/k8s/utils/node.go:298，调用点 node_service.go:107）。未改生产代码。")
+	fixture := &nodeManagerFixture{nodes: []corev1.Node{
+		readyNode("n1", 1, false),
+		readyNode("n2", 2, false),
+	}}
+	svc := NewNodeService(nil, nil, fixture, zap.NewNop())
+	for _, page := range []int{0, -1} {
+		result, err := svc.GetNodeList(context.Background(), &model.GetNodeListReq{
+			ListReq: model.ListReq{Page: page, Size: 1}, ClusterID: 6,
+		})
+		if err != nil || result.Total != 2 || len(result.Items) != 1 || result.Items[0].Name != "n2" {
+			t.Fatalf("page %d = %+v err=%v", page, result, err)
+		}
+	}
 }
 
 func TestNodeDrainCordonAndLabels(t *testing.T) {
@@ -155,9 +170,11 @@ func TestNodeDrainCordonAndLabels(t *testing.T) {
 	if err := svc.UpdateNodeLabels(context.Background(), &model.UpdateNodeLabelsReq{ClusterID: 6, NodeName: "worker-a", Labels: map[string]string{"role": "worker"}}); err == nil || !strings.Contains(err.Error(), "更新节点标签失败") || fixture.labels["role"] != "worker" {
 		t.Fatalf("label update = %v", err)
 	}
+	fixture.getErr = errors.New("denied")
 	if _, err := svc.GetNodeDetail(context.Background(), &model.GetNodeDetailReq{ClusterID: 6, NodeName: "worker-a"}); err == nil || !strings.Contains(err.Error(), "获取节点失败") {
 		t.Fatalf("detail error = %v", err)
 	}
+	fixture.getErr = nil
 	fixture.err = nil
 	fixture.taints = []*model.NodeTaint{{Key: "dedicated", Value: "ops", Effect: "NoSchedule"}}
 	taints, err := svc.GetNodeTaints(context.Background(), &model.GetNodeTaintsReq{ClusterID: 6, NodeName: "worker-a"})
@@ -167,9 +184,79 @@ func TestNodeDrainCordonAndLabels(t *testing.T) {
 }
 
 func TestNodeEmptyLabelMapConflictsWithComment(t *testing.T) {
-	t.Skip("node_service.go:159 注释称空 map 清空标签，但 utils/node.go:385 的 ValidateNodeLabelsMap 拒绝空 map。未改生产代码。")
+	fixture := &nodeManagerFixture{}
+	svc := NewNodeService(nil, nil, fixture, zap.NewNop())
+	err := svc.UpdateNodeLabels(context.Background(), &model.UpdateNodeLabelsReq{
+		ClusterID: 6, NodeName: "worker-a", Labels: map[string]string{},
+	})
+	if err != nil || fixture.labels == nil || len(fixture.labels) != 0 {
+		t.Fatalf("empty labels = %#v err=%v", fixture.labels, err)
+	}
+}
+
+func TestNodeEmptyLabelsJSONPreservesSystemKeys(t *testing.T) {
+	fixture := &nodeManagerFixture{currentLabels: map[string]string{
+		"kubernetes.io/hostname":                "worker-a",
+		"node-role.kubernetes.io/control-plane": "",
+		"topology.kubernetes.io/zone":           "az-1",
+		"team":                                  "ops",
+		"notkubernetes.io/custom":               "no",
+	}}
+	svc := NewNodeService(nil, nil, fixture, zap.NewNop())
+	var clearReq model.UpdateNodeLabelsReq
+	if err := json.Unmarshal([]byte(`{"cluster_id":6,"node_name":"worker-a","labels":{}}`), &clearReq); err != nil {
+		t.Fatal(err)
+	}
+	if clearReq.Labels == nil {
+		t.Fatal(`{} bound as a nil map`)
+	}
+	if err := svc.UpdateNodeLabels(context.Background(), &clearReq); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.labels["kubernetes.io/hostname"] != "worker-a" || fixture.labels["topology.kubernetes.io/zone"] != "az-1" {
+		t.Fatalf("system labels = %#v", fixture.labels)
+	}
+	if _, ok := fixture.labels["node-role.kubernetes.io/control-plane"]; !ok {
+		t.Fatalf("node-role dropped: %#v", fixture.labels)
+	}
+	if _, ok := fixture.labels["team"]; ok {
+		t.Fatal("team survived {}")
+	}
+	if _, ok := fixture.labels["notkubernetes.io/custom"]; ok {
+		t.Fatal("notkubernetes.io survived {}")
+	}
+
+	var replaceReq model.UpdateNodeLabelsReq
+	if err := json.Unmarshal([]byte(`{"cluster_id":6,"node_name":"worker-a","labels":{"kubernetes.io/hostname":"renamed","app":"api"}}`), &replaceReq); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.UpdateNodeLabels(context.Background(), &replaceReq); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.labels["kubernetes.io/hostname"] != "renamed" || fixture.labels["app"] != "api" || fixture.labels["topology.kubernetes.io/zone"] != "az-1" {
+		t.Fatalf("replacement = %#v", fixture.labels)
+	}
+	if _, ok := fixture.labels["team"]; ok {
+		t.Fatal("previous user label survived replacement")
+	}
 }
 
 func TestNodeBuildFailureDropsItemButKeepsTotal(t *testing.T) {
-	t.Skip("BuildK8sNode 失败时 GetNodeList 丢弃该节点但 Total 仍计入（node_service.go:112-118）。未改生产代码。")
+	fixture := &nodeManagerFixture{nodes: []corev1.Node{
+		readyNode("ok-a", 1, false),
+		readyNode("bad", 3, false),
+		readyNode("ok-b", 2, false),
+	}, buildErr: "bad"}
+	svc := NewNodeService(nil, nil, fixture, zap.NewNop())
+	result, err := svc.GetNodeList(context.Background(), &model.GetNodeListReq{
+		ListReq: model.ListReq{Page: 1, Size: 10}, ClusterID: 6,
+	})
+	if err != nil || result.Total != 2 || len(result.Items) != 2 {
+		t.Fatalf("list = %+v err=%v", result, err)
+	}
+	for _, item := range result.Items {
+		if item.Name == "bad" {
+			t.Fatalf("dropped node still listed: %+v", result.Items)
+		}
+	}
 }

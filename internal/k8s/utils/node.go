@@ -294,6 +294,9 @@ func BuildNodeListPagination(nodes []corev1.Node, page, size int) ([]corev1.Node
 	if total == 0 {
 		return []corev1.Node{}, 0
 	}
+	if page <= 0 {
+		page = 1
+	}
 
 	start := int64((page - 1) * size)
 	end := start + int64(size)
@@ -381,11 +384,67 @@ func ValidateNodeName(nodeName string) error {
 	return nil
 }
 
+// ValidateNodeLabelsMap 校验标签键值。空 map 表示清空用户标签。
 func ValidateNodeLabelsMap(labels map[string]string) error {
 	if len(labels) == 0 {
-		return fmt.Errorf("标签不能为空")
+		return nil
 	}
 	return ValidateNodeLabels(labels)
+}
+
+// IsReservedKubernetesLabelKey 判断键的前缀域是否为 kubernetes.io、k8s.io，或以二者结尾。
+func IsReservedKubernetesLabelKey(key string) bool {
+	domain, _, found := strings.Cut(key, "/")
+	if !found || domain == "" {
+		return false
+	}
+	return domain == "kubernetes.io" || domain == "k8s.io" ||
+		strings.HasSuffix(domain, ".kubernetes.io") || strings.HasSuffix(domain, ".k8s.io")
+}
+
+// KeyValueListToMap 保留 nil 与空切片的差别：nil 仍为 nil，空切片得到空 map。
+func KeyValueListToMap(list model.KeyValueList) map[string]string {
+	if list == nil {
+		return nil
+	}
+	result := make(map[string]string, len(list))
+	for _, item := range list {
+		if item.Key != "" {
+			result[item.Key] = item.Value
+		}
+	}
+	return result
+}
+
+// OverwriteUserLabels 用 requested 覆盖用户标签。requested 为 nil 时保留 existing。
+// 请求里没有出现的 kubernetes.io/k8s.io 键保留原值；请求里带了的键按请求写入。
+func OverwriteUserLabels(existing, requested map[string]string) map[string]string {
+	if requested == nil {
+		return cloneStringMap(existing)
+	}
+	merged := make(map[string]string, len(existing)+len(requested))
+	for key, value := range existing {
+		if IsReservedKubernetesLabelKey(key) {
+			if _, ok := requested[key]; !ok {
+				merged[key] = value
+			}
+		}
+	}
+	for key, value := range requested {
+		merged[key] = value
+	}
+	return merged
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if values == nil {
+		return nil
+	}
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func ValidateLabelKeys(labelKeys []string) error {

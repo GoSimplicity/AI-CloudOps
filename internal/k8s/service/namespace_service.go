@@ -191,14 +191,18 @@ func (s *namespaceService) UpdateNamespace(ctx context.Context, req *model.K8sNa
 		return fmt.Errorf("集群 ID 不能为空")
 	}
 
-	if err := utils.ValidateNodeLabelsMap(utils.ConvertKeyValueListToLabels(req.Labels)); err != nil {
-		s.logger.Error("标签验证失败", zap.Error(err))
-		return fmt.Errorf("标签验证失败: %w", err)
+	// nil 与空切片必须在转成 map 之前分开：len==0 会把缺省和 [] 当成同一种输入。
+	if req.Labels != nil {
+		if err := utils.ValidateNodeLabelsMap(utils.KeyValueListToMap(req.Labels)); err != nil {
+			s.logger.Error("标签验证失败", zap.Error(err))
+			return fmt.Errorf("标签验证失败: %w", err)
+		}
 	}
-
-	if err := utils.ValidateAnnotations(req.Annotations); err != nil {
-		s.logger.Error("注解验证失败", zap.Error(err))
-		return fmt.Errorf("注解验证失败: %w", err)
+	if req.Annotations != nil {
+		if err := utils.ValidateAnnotations(req.Annotations); err != nil {
+			s.logger.Error("注解验证失败", zap.Error(err))
+			return fmt.Errorf("注解验证失败: %w", err)
+		}
 	}
 
 	namespace, err := s.namespaceManager.GetNamespace(ctx, req.ClusterID, req.Name)
@@ -207,11 +211,12 @@ func (s *namespaceService) UpdateNamespace(ctx context.Context, req *model.K8sNa
 		return fmt.Errorf("获取命名空间失败: %w", err)
 	}
 
-	labelsMap := utils.ConvertKeyValueListToLabels(req.Labels)
-	annotationsMap := utils.ConvertKeyValueListToLabels(req.Annotations)
-
-	namespace.Labels = labelsMap
-	namespace.Annotations = annotationsMap
+	if req.Labels != nil {
+		namespace.Labels = utils.OverwriteUserLabels(namespace.Labels, utils.KeyValueListToMap(req.Labels))
+	}
+	if req.Annotations != nil {
+		namespace.Annotations = utils.OverwriteUserLabels(namespace.Annotations, utils.KeyValueListToMap(req.Annotations))
+	}
 
 	_, err = s.namespaceManager.UpdateNamespace(ctx, req.ClusterID, namespace)
 	if err != nil {

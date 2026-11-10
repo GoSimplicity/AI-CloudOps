@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -101,7 +102,22 @@ func TestNamespaceCreateRejectsReservedNamesAndBadMetadata(t *testing.T) {
 }
 
 func TestNamespaceOptionalLabelsAreRejected(t *testing.T) {
-	t.Skip("CreateNamespace/UpdateNamespace 将空标签交给 ValidateNodeLabelsMap，空标签被拒绝（namespace_service.go:82、namespace_service.go:194，utils/node.go:385）。请求模型把标签标成可选。未改生产代码。")
+	fixture := &namespaceManagerFixture{items: []corev1.Namespace{{
+		ObjectMeta: metav1.ObjectMeta{Name: "team-a", Labels: map[string]string{"old": "1"}, UID: "uid-1"},
+	}}}
+	svc := NewNamespaceService(nil, fixture, zap.NewNop())
+	if err := svc.CreateNamespace(context.Background(), &model.K8sNamespaceCreateReq{ClusterID: 2, Name: "team-a"}); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.created == nil || fixture.created.Name != "team-a" || len(fixture.created.Labels) != 0 {
+		t.Fatalf("created = %+v", fixture.created)
+	}
+	if err := svc.UpdateNamespace(context.Background(), &model.K8sNamespaceUpdateReq{ClusterID: 2, Name: "team-a"}); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.updated == nil || fixture.updated.Labels["old"] != "1" {
+		t.Fatalf("omitted labels were not kept: %+v", fixture.updated)
+	}
 }
 
 func TestNamespaceDeleteForceAndListFilters(t *testing.T) {
@@ -168,5 +184,97 @@ func TestNamespaceUpdateReplacesLabels(t *testing.T) {
 		ClusterID: 2, Name: "missing", Labels: model.KeyValueList{{Key: "owner", Value: "team-a"}},
 	}); err == nil || !strings.Contains(err.Error(), "获取命名空间失败") {
 		t.Fatalf("update lookup = %v", err)
+	}
+}
+
+func namespaceWithSystemMetadata() *namespaceManagerFixture {
+	return &namespaceManagerFixture{items: []corev1.Namespace{{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "team-a",
+			UID:  "uid-1",
+			Labels: map[string]string{
+				"kubernetes.io/metadata.name":        "team-a",
+				"pod-security.kubernetes.io/enforce": "restricted",
+				"team":                               "ops",
+				"notkubernetes.io/custom":            "no",
+			},
+			Annotations: map[string]string{
+				"kubernetes.io/metadata.name": "team-a",
+				"example.com/note":            "keep-or-drop",
+			},
+		},
+	}}}
+}
+
+func TestNamespaceUpdateJSONAbsentKeepsEmptyClears(t *testing.T) {
+	svcFor := func() (*namespaceService, *namespaceManagerFixture) {
+		fixture := namespaceWithSystemMetadata()
+		return NewNamespaceService(nil, fixture, zap.NewNop()).(*namespaceService), fixture
+	}
+
+	absentBody := []byte(`{"cluster_id":2,"name":"team-a"}`)
+	var absent model.K8sNamespaceUpdateReq
+	if err := json.Unmarshal(absentBody, &absent); err != nil {
+		t.Fatal(err)
+	}
+	if absent.Labels != nil || absent.Annotations != nil {
+		t.Fatalf("absent fields bound as labels=%#v annotations=%#v", absent.Labels, absent.Annotations)
+	}
+	svc, fixture := svcFor()
+	if err := svc.UpdateNamespace(context.Background(), &absent); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.updated.Labels["team"] != "ops" || fixture.updated.Labels["kubernetes.io/metadata.name"] != "team-a" || fixture.updated.Annotations["example.com/note"] != "keep-or-drop" {
+		t.Fatalf("absent JSON changed stored metadata: %+v", fixture.updated.ObjectMeta)
+	}
+
+	emptyBody := []byte(`{"cluster_id":2,"name":"team-a","labels":[],"annotations":[]}`)
+	var empty model.K8sNamespaceUpdateReq
+	if err := json.Unmarshal(emptyBody, &empty); err != nil {
+		t.Fatal(err)
+	}
+	if empty.Labels == nil || len(empty.Labels) != 0 || empty.Annotations == nil || len(empty.Annotations) != 0 {
+		t.Fatalf("[] bound as labels=%#v annotations=%#v", empty.Labels, empty.Annotations)
+	}
+	svc, fixture = svcFor()
+	if err := svc.UpdateNamespace(context.Background(), &empty); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.updated.Labels["kubernetes.io/metadata.name"] != "team-a" || fixture.updated.Labels["pod-security.kubernetes.io/enforce"] != "restricted" {
+		t.Fatalf("system labels dropped: %#v", fixture.updated.Labels)
+	}
+	if _, ok := fixture.updated.Labels["team"]; ok {
+		t.Fatal("user label team survived []")
+	}
+	if _, ok := fixture.updated.Labels["notkubernetes.io/custom"]; ok {
+		t.Fatal("notkubernetes.io was treated as reserved")
+	}
+	if fixture.updated.Annotations["kubernetes.io/metadata.name"] != "team-a" {
+		t.Fatalf("system annotation dropped: %#v", fixture.updated.Annotations)
+	}
+	if _, ok := fixture.updated.Annotations["example.com/note"]; ok {
+		t.Fatal("user annotation survived []")
+	}
+
+	replaceBody := []byte(`{"cluster_id":2,"name":"team-a","labels":[{"key":"owner","value":"team-a"},{"key":"pod-security.kubernetes.io/enforce","value":"baseline"}],"annotations":[{"key":"note","value":"fresh"}]}`)
+	var replace model.K8sNamespaceUpdateReq
+	if err := json.Unmarshal(replaceBody, &replace); err != nil {
+		t.Fatal(err)
+	}
+	svc, fixture = svcFor()
+	if err := svc.UpdateNamespace(context.Background(), &replace); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.updated.Labels["owner"] != "team-a" || fixture.updated.Labels["pod-security.kubernetes.io/enforce"] != "baseline" || fixture.updated.Labels["kubernetes.io/metadata.name"] != "team-a" {
+		t.Fatalf("replacement labels = %#v", fixture.updated.Labels)
+	}
+	if _, ok := fixture.updated.Labels["team"]; ok {
+		t.Fatal("previous user label survived replacement")
+	}
+	if fixture.updated.Annotations["note"] != "fresh" {
+		t.Fatalf("replacement annotations = %#v", fixture.updated.Annotations)
+	}
+	if _, ok := fixture.updated.Annotations["example.com/note"]; ok || fixture.updated.Annotations["kubernetes.io/metadata.name"] != "team-a" {
+		t.Fatalf("annotation merge = %#v", fixture.updated.Annotations)
 	}
 }

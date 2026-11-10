@@ -257,7 +257,6 @@ func (m *nodeManager) UpdateNodeLabels(ctx context.Context, clusterID int, nodeN
 		return err
 	}
 
-	// 允许传入空标签，用于清空所有标签
 	if labels != nil {
 		if err := utils.ValidateNodeLabelsMap(labels); err != nil {
 			return err
@@ -276,11 +275,8 @@ func (m *nodeManager) UpdateNodeLabels(ctx context.Context, clusterID int, nodeN
 		return fmt.Errorf("获取节点失败: %w", err)
 	}
 
-	// 完全覆盖原有标签
-	if labels == nil {
-		node.Labels = make(map[string]string)
-	} else {
-		node.Labels = labels
+	if labels != nil {
+		node.Labels = utils.OverwriteUserLabels(node.Labels, labels)
 	}
 
 	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})

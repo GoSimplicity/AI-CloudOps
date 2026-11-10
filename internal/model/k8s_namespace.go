@@ -55,8 +55,8 @@ type K8sNamespaceCreateReq struct {
 type K8sNamespaceUpdateReq struct {
 	ClusterID   int          `json:"cluster_id" form:"cluster_id" binding:"required"` // 集群ID，必填
 	Name        string       `json:"name" binding:"required"`                         // 命名空间名称，必填
-	Labels      KeyValueList `json:"labels"`                                          // 标签
-	Annotations KeyValueList `json:"annotations"`                                     // 注解
+	Labels      KeyValueList `json:"labels"`                                          // 缺省保持原标签；[] 清空用户标签
+	Annotations KeyValueList `json:"annotations"`                                     // 缺省保持原注解；[] 清空用户注解
 }
 
 type K8sNamespaceDeleteReq struct {
