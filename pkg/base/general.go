@@ -69,10 +69,15 @@ func StringSliceToMap(inputSlice []string) (map[string]string, error) {
 	return result, nil
 }
 
-// Ping 检查地址的 TCP 80 是否接受连接。
-// 不调用系统 ping：发布容器丢掉全部 capability 后，ICMP 需要 CAP_NET_RAW。
-func Ping(ipAddr string) bool {
+// ProbeTCP80 只探测该地址的 TCP 80 是否接受连接，不是 ICMP。
+// 发布容器丢掉全部 capability 后，系统 ping 需要 CAP_NET_RAW。
+func ProbeTCP80(ipAddr string) bool {
 	return probeTCP(ipAddr, "80", 3*time.Second)
+}
+
+// Deprecated: 使用 ProbeTCP80。本函数不是 ICMP，只探测 TCP 80。
+func Ping(ipAddr string) bool {
+	return ProbeTCP80(ipAddr)
 }
 
 func probeTCP(ipAddr, port string, timeout time.Duration) bool {

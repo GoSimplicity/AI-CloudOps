@@ -62,7 +62,7 @@ AIOps 飞书自定义机器人可在服务端私有 `.env` 设置 `FEISHU_WEBHOO
 
 使用固定 `RELEASE_VERSION` 构建镜像，保留上一版镜像。应用回滚可指定上一版镜像，但数据库结构变化必须依据升级前备份和演练结果处理。`docker compose down` 保留数据卷；不要在生产使用 `down -v`。
 
-未填 `work_dir` 的 Cron 命令和脚本，默认工作目录从 `/app` 改为 `/tmp/cloudops-cron`，依赖相对路径的任务需显式配置 `work_dir`。镜像以非 root 且 `cap_drop: [ALL]` 运行，容器内 ping/ICMP 类 Cron 任务会失败，建议改用 TCP/HTTP 探测。
+未填 `work_dir` 的 Cron 命令和脚本，默认工作目录从 `/app` 改为 `/tmp/cloudops-cron`，依赖相对路径的任务需显式配置 `work_dir`。镜像以非 root 且 `cap_drop: [ALL]` 运行，容器内 ping/ICMP 类 Cron 任务会失败，建议改用 TCP/HTTP 探测。显式写成相对路径的 `work_dir` 是相对 `/app` 的，会没有写权限，应改为 `/tmp` 下的绝对路径。多个任务共用 `/tmp/cloudops-cron`，文件名可能互相覆盖，建议各任务用独立子目录或唯一文件名。
 
 `python3 scripts/release-backup.py` 创建权限受限、不会覆盖已有目录的 MySQL 一致性快照和部署密钥备份，记录三仓 commit。默认输出目录 `deploy/release/backups.local` 被 Git 忽略。该脚本明确不包括 Redis 队列和 AIOps 上传文档；完整恢复点还必须在暂停相关写入后保存对应数据卷。备份含资产密文、用户哈希和部署密钥，应存放在加密存储，限制访问。
 
@@ -102,7 +102,7 @@ AIOps 飞书自定义机器人可在服务端私有 `.env` 设置 `FEISHU_WEBHOO
 
 运行阶段用户是 `cloudops`（UID/GID `10001`），`deploy/release/compose.yaml` 的 `user` 与此一致，并丢掉全部 Linux capabilities、设置 `no-new-privileges`。进程要写的本地路径是日志目录（默认 `./logs`，镜像中为 `/app/logs`，属主 10001）和 `/tmp`。`HOME` 指向 `/tmp`，供解释器放临时文件。`/app` 本身属 root，运行用户不能在那里建文件。
 
-未填写 `work_dir` 的命令任务，以及脚本任务（没有工作目录字段），默认在 `/tmp/cloudops-cron` 执行。该目录在镜像中建好，属主是 10001，权限 `0750`。任务里写了 `work_dir` 时仍使用该路径，并且必须对 10001 可写；相对路径相对于进程工作目录 `/app`。告警 webhook 文件目录只出现在下发给 Alertmanager 的配置里，backend 不在本地创建这些文件。配置文件不在镜像中，缺失时继续使用环境变量和默认值。`SSH_KNOWN_HOSTS` 只读，文件需要对 UID 10001 可读，见 `deploy/release/ssh.yaml`。kubeconfig 存在数据库里，不在容器内落盘。根文件系统没有设 `read_only`：显式 `work_dir` 不固定，只读根文件系统会让这些写入失败。资源上限默认 2 CPU、2GiB 内存、512 个进程，可按机器规格上调。主机可达性检查（`pkg/base.Ping`）改为连接目标的 TCP 80，不再调用系统 `ping`，因此不需要 `CAP_NET_RAW`。
+未填写 `work_dir` 的命令任务，以及脚本任务（没有工作目录字段），默认在 `/tmp/cloudops-cron` 执行。该目录在镜像中建好，属主是 10001，权限 `0750`。任务里写了 `work_dir` 时仍使用该路径，并且必须对 10001 可写；相对路径相对于进程工作目录 `/app`。告警 webhook 文件目录只出现在下发给 Alertmanager 的配置里，backend 不在本地创建这些文件。配置文件不在镜像中，缺失时继续使用环境变量和默认值。`SSH_KNOWN_HOSTS` 只读，文件需要对 UID 10001 可读，见 `deploy/release/ssh.yaml`。kubeconfig 存在数据库里，不在容器内落盘。根文件系统没有设 `read_only`：显式 `work_dir` 不固定，只读根文件系统会让这些写入失败。资源上限默认 2 CPU、2GiB 内存、512 个进程，可按机器规格上调。主机可达性检查（`pkg/base.ProbeTCP80`）只连接目标的 TCP 80，不是 ICMP，因此不需要 `CAP_NET_RAW`。`Ping` 仍保留为已废弃的同名包装。
 
 `GET /health` 仅确认 HTTP 进程存活；`GET /ready` 在两秒总期限内检查数据库与 Redis，依赖不可用返回 503。就绪不包含模型、集群或外部通知能力，相关能力仍需分别验收。发布 smoke 的检查在 Python 优化模式下也生效。
 

@@ -7,6 +7,12 @@ import (
 	"time"
 )
 
+func TestProbeTCP80RejectsEmptyAddress(t *testing.T) {
+	if ProbeTCP80("") || ProbeTCP80("   ") || Ping("") || Ping("   ") {
+		t.Fatal("空地址不应视为可达")
+	}
+}
+
 func TestProbeTCP(t *testing.T) {
 	if probeTCP("", "80", time.Second) || probeTCP("   ", "80", time.Second) {
 		t.Fatal("空地址不应视为可达")
