@@ -42,7 +42,10 @@ import (
 	"go.uber.org/zap"
 )
 
-const loginKeyPrefix = "cloudops:auth:login:"
+// {login} 是固定的 Redis Cluster 哈希标签。
+// 一次失败脚本同时读写用户名+IP、用户名、IP 三组键，成功时的 DEL 也会同时删掉前两组失败计数。
+// 这三组键必须落在同一槽，标签因此固定为 login，全部登录锁定键集中在一个槽。
+const loginKeyPrefix = "cloudops:auth:{login}:"
 
 // ErrLoginUnavailable 表示无法确认或写入锁定状态。
 // 登录会失败关闭，避免 Redis 故障时绕过锁定；错误文本不含内部原因。
@@ -204,11 +207,7 @@ func (g *loginGuard) RecordSuccess(ctx context.Context, username, clientIP strin
 }
 
 func (g *loginGuard) bumpAll(ctx context.Context, user, ip string) ([3]int64, error) {
-	values, err := loginFailScript.Run(ctx, g.client, []string{
-		pairFailKey(user, ip), pairLockKey(user, ip),
-		userFailKey(user), userLockKey(user),
-		ipFailKey(ip), ipLockKey(ip),
-	},
+	values, err := loginFailScript.Run(ctx, g.client, loginScriptKeys(user, ip),
 		positiveMillis(g.policy.PairWindow), g.policy.PairMaxFailures, positiveMillis(g.policy.PairLock),
 		positiveMillis(g.policy.UsernameWindow), g.policy.UsernameMaxFailures, positiveMillis(g.policy.UsernameLock),
 		positiveMillis(g.policy.IPWindow), g.policy.IPMaxFailures, positiveMillis(g.policy.IPLock),
@@ -304,6 +303,15 @@ func canonicalIP(ip string) string {
 }
 
 func pairMaterial(user, ip string) string { return user + "\x00" + ip }
+
+// loginScriptKeys 是失败脚本的 KEYS，顺序与脚本里的三组 bump 一致。
+func loginScriptKeys(user, ip string) []string {
+	return []string{
+		pairFailKey(user, ip), pairLockKey(user, ip),
+		userFailKey(user), userLockKey(user),
+		ipFailKey(ip), ipLockKey(ip),
+	}
+}
 
 func pairFailKey(user, ip string) string {
 	return loginKeyPrefix + "fail:pair:" + digest(pairMaterial(user, ip))

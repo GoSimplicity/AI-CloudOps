@@ -191,6 +191,82 @@ func TestLoginGuardRedisUnavailableFailsClosed(t *testing.T) {
 	}
 }
 
+func TestLoginScriptKeysShareHashTagLogin(t *testing.T) {
+	keys := loginScriptKeys(canonicalUser("Alice"), canonicalIP("203.0.113.8"))
+	want := []string{
+		"cloudops:auth:{login}:fail:pair:a3207baf8628933a3c83a091a422bc3ef17659427445d92b44a6dfecb8e1a2f4",
+		"cloudops:auth:{login}:lock:pair:a3207baf8628933a3c83a091a422bc3ef17659427445d92b44a6dfecb8e1a2f4",
+		"cloudops:auth:{login}:fail:user:2bd806c97f0e00af1a1fc3328fa763a9269723c8db8fac4f93af71db186d6e90",
+		"cloudops:auth:{login}:lock:user:2bd806c97f0e00af1a1fc3328fa763a9269723c8db8fac4f93af71db186d6e90",
+		"cloudops:auth:{login}:fail:ip:ddbea5471056690e5b1dcfe0c39ffca2f91ee81710048d066e2d53c7d012e14e",
+		"cloudops:auth:{login}:lock:ip:ddbea5471056690e5b1dcfe0c39ffca2f91ee81710048d066e2d53c7d012e14e",
+	}
+	if len(keys) != len(want) {
+		t.Fatalf("script keys=%d", len(keys))
+	}
+	seen := map[string]bool{}
+	for i, key := range keys {
+		if key != want[i] {
+			t.Fatalf("key[%d]=%s", i, key)
+		}
+		tag, ok := clusterHashTag(key)
+		if !ok || tag != "login" {
+			t.Fatalf("key %s tag=%q ok=%v", key, tag, ok)
+		}
+		if strings.Count(key, "{") != 1 || strings.Count(key, "}") != 1 {
+			t.Fatalf("key %s has extra braces", key)
+		}
+		seen[key] = true
+	}
+	if len(seen) != len(keys) {
+		t.Fatal("script keys are not distinct")
+	}
+	for _, key := range loginScriptKeys(canonicalUser("bob"), canonicalIP("2001:db8::1")) {
+		tag, ok := clusterHashTag(key)
+		if !ok || tag != "login" {
+			t.Fatalf("key %s tag=%q ok=%v", key, tag, ok)
+		}
+	}
+}
+
+func TestRecordFailureWritesTaggedCounterKeys(t *testing.T) {
+	mr, guard, _ := testGuard(t, testPolicy())
+	if err := guard.RecordFailure(context.Background(), "Alice", "203.0.113.8"); err != nil {
+		t.Fatal(err)
+	}
+	scriptKeys := loginScriptKeys(canonicalUser("Alice"), canonicalIP("203.0.113.8"))
+	want := map[string]bool{
+		scriptKeys[0]: true,
+		scriptKeys[2]: true,
+		scriptKeys[4]: true,
+	}
+	got := mr.Keys()
+	if len(got) != len(want) {
+		t.Fatalf("keys=%v", got)
+	}
+	for _, key := range got {
+		if !want[key] {
+			t.Fatalf("unexpected key %s", key)
+		}
+		tag, ok := clusterHashTag(key)
+		if !ok || tag != "login" {
+			t.Fatalf("key %s tag=%q ok=%v", key, tag, ok)
+		}
+	}
+}
+
+func clusterHashTag(key string) (string, bool) {
+	start := strings.IndexByte(key, '{')
+	if start < 0 || start+1 >= len(key) {
+		return "", false
+	}
+	end := strings.IndexByte(key[start+1:], '}')
+	if end <= 0 {
+		return "", false
+	}
+	return key[start+1 : start+1+end], true
+}
+
 func TestLoginLockedMessageRoundsUp(t *testing.T) {
 	err := &LoginLockedError{RetryAfter: 90 * time.Second}
 	if err.Error() != "登录失败次数过多，请 2 分钟后再试" || err.RetryAfterSeconds() != 90 {
