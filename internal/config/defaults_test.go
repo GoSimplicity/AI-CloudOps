@@ -64,7 +64,10 @@ func TestLoginLockoutDefaults(t *testing.T) {
 	viper.Reset()
 	t.Cleanup(viper.Reset)
 	setDefaults()
-	if got := viper.GetInt("auth.login_lockout.username_max_failures"); got != 5 {
+	if got := viper.GetInt("auth.login_lockout.pair_max_failures"); got != 5 {
+		t.Fatalf("pair_max_failures=%d", got)
+	}
+	if got := viper.GetInt("auth.login_lockout.username_max_failures"); got != 50 {
 		t.Fatalf("username_max_failures=%d", got)
 	}
 	if got := viper.GetDuration("auth.login_lockout.username_window"); got != 15*time.Minute {
@@ -82,8 +85,15 @@ func TestLoginLockoutDefaults(t *testing.T) {
 	if got := viper.GetDuration("auth.login_lockout.ip_lock"); got != 15*time.Minute {
 		t.Fatalf("ip_lock=%s", got)
 	}
+	proxies, err := TrustedProxyList("")
+	if err != nil || len(proxies) != len(defaultTrustedProxies) {
+		t.Fatalf("default proxies: %v %v", proxies, err)
+	}
+	if _, err = TrustedProxyList("not-a-cidr"); err == nil {
+		t.Fatal("invalid proxy CIDR accepted")
+	}
 	got := LoginLockoutConfig{}.Normalized()
-	if got.UsernameMaxFailures != 5 || got.IPMaxFailures != 20 || got.UsernameLock != 15*time.Minute {
+	if got.PairMaxFailures != 5 || got.UsernameMaxFailures != 50 || got.IPMaxFailures != 20 || got.UsernameLock != 15*time.Minute {
 		t.Fatalf("normalized zero config = %+v", got)
 	}
 	custom := LoginLockoutConfig{UsernameMaxFailures: 3, IPMaxFailures: 9, UsernameWindow: time.Minute}.Normalized()
@@ -96,7 +106,7 @@ func TestLoginLockoutDefaults(t *testing.T) {
 		if err := v.ReadInConfig(); err != nil {
 			t.Fatal(err)
 		}
-		if v.GetInt("auth.login_lockout.username_max_failures") != 5 || v.GetInt("auth.login_lockout.ip_max_failures") != 20 {
+		if v.GetInt("auth.login_lockout.pair_max_failures") != 5 || v.GetInt("auth.login_lockout.username_max_failures") != 50 || v.GetInt("auth.login_lockout.ip_max_failures") != 20 {
 			t.Fatalf("%s 登录锁定默认值不正确", f)
 		}
 		if v.GetDuration("auth.login_lockout.username_window") != 15*time.Minute || v.GetDuration("auth.login_lockout.ip_lock") != 15*time.Minute {

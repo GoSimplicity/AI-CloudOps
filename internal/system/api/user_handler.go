@@ -28,9 +28,7 @@ package api
 import (
 	"errors"
 	"fmt"
-	"net"
 	"strconv"
-	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -130,31 +128,15 @@ func (h *UserHandler) Login(ctx *gin.Context) {
 	})
 }
 
-// loginClientIP 优先使用发布栈 nginx 写入的 X-Real-IP（$remote_addr）。
-// 不取 X-Forwarded-For 最左端，避免调用方伪造来源绕过按 IP 锁定。
+// loginClientIP 使用引擎上的可信代理策略：只有直连对端可信时才采用 X-Real-IP。
 func loginClientIP(ctx *gin.Context) string {
-	if ctx == nil || ctx.Request == nil {
+	if ctx == nil {
 		return "unknown"
 	}
-	if ip := parseLoginIP(ctx.GetHeader("X-Real-IP")); ip != "" {
-		return ip
-	}
-	host := ctx.Request.RemoteAddr
-	if split, _, err := net.SplitHostPort(host); err == nil {
-		host = split
-	}
-	if ip := parseLoginIP(host); ip != "" {
+	if ip := ctx.ClientIP(); ip != "" {
 		return ip
 	}
 	return "unknown"
-}
-
-func parseLoginIP(value string) string {
-	parsed := net.ParseIP(strings.TrimSpace(value))
-	if parsed == nil {
-		return ""
-	}
-	return parsed.String()
 }
 
 func (h *UserHandler) Logout(ctx *gin.Context) {

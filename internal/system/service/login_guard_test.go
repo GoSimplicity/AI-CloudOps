@@ -34,7 +34,10 @@ func testGuard(t *testing.T, policy config.LoginLockoutConfig) (*miniredis.Minir
 
 func testPolicy() config.LoginLockoutConfig {
 	return config.LoginLockoutConfig{
-		UsernameMaxFailures: 5,
+		PairMaxFailures:     5,
+		PairWindow:          15 * time.Minute,
+		PairLock:            15 * time.Minute,
+		UsernameMaxFailures: 50,
 		UsernameWindow:      15 * time.Minute,
 		UsernameLock:        15 * time.Minute,
 		IPMaxFailures:       20,
@@ -54,9 +57,9 @@ func TestLoginGuardCountsLocksAndUnlocks(t *testing.T) {
 		}
 	}
 	if err := guard.Check(ctx, "alice", "203.0.113.8"); err != nil {
-		t.Fatalf("shared username bucket locked too early: %v", err)
+		t.Fatalf("pair locked too early: %v", err)
 	}
-	err := guard.RecordFailure(ctx, "alice", "203.0.113.9")
+	err := guard.RecordFailure(ctx, "alice", "203.0.113.8")
 	var locked *LoginLockedError
 	if !errors.As(err, &locked) || locked.Minutes() != 15 {
 		t.Fatalf("fifth failure = %v", err)
@@ -71,21 +74,47 @@ func TestLoginGuardCountsLocksAndUnlocks(t *testing.T) {
 	if len(body.RequestBody) != 0 || strings.Contains(body.ErrorMsg, secret) || strings.Contains(body.TargetID, secret) {
 		t.Fatalf("audit kept a secret or request body: %+v", body)
 	}
-	if !strings.Contains(body.ErrorMsg, "dimension=username") {
+	if !strings.Contains(body.ErrorMsg, "dimension=pair") {
 		t.Fatalf("audit reason=%s", body.ErrorMsg)
 	}
-
-	err = guard.Check(ctx, "ALICE", "198.51.100.10")
-	if !errors.As(err, &locked) {
-		t.Fatalf("locked user from another IP: %v", err)
+	if err = guard.Check(ctx, "ALICE", "198.51.100.10"); err != nil {
+		t.Fatalf("another IP should still be allowed: %v", err)
 	}
-	if _, err = mr.Get(userFailKey(canonicalUser("alice"))); err == nil {
-		t.Fatal("failure counter should be removed once locked")
+	if _, err = mr.Get(pairFailKey(canonicalUser("alice"), canonicalIP("203.0.113.8"))); err == nil {
+		t.Fatal("pair failure counter should be removed once locked")
 	}
 
 	mr.FastForward(15*time.Minute + time.Second)
 	if err = guard.Check(ctx, "alice", "203.0.113.8"); err != nil {
 		t.Fatalf("lock did not expire: %v", err)
+	}
+}
+
+func TestLoginGuardUsernameLocksAfterWideThreshold(t *testing.T) {
+	policy := testPolicy()
+	policy.PairMaxFailures = 1000
+	policy.IPMaxFailures = 1000
+	policy.UsernameMaxFailures = 50
+	_, guard, audit := testGuard(t, policy)
+	ctx := context.Background()
+	for i := 0; i < 49; i++ {
+		if err := guard.RecordFailure(ctx, "alice", "203.0.113.8"); err != nil {
+			t.Fatalf("failure %d: %v", i+1, err)
+		}
+	}
+	if err := guard.Check(ctx, "alice", "198.51.100.20"); err != nil {
+		t.Fatalf("username locked before 50: %v", err)
+	}
+	err := guard.RecordFailure(ctx, "alice", "203.0.113.8")
+	var locked *LoginLockedError
+	if !errors.As(err, &locked) {
+		t.Fatalf("50th failure = %v", err)
+	}
+	if err = guard.Check(ctx, "alice", "198.51.100.21"); !errors.As(err, &locked) {
+		t.Fatalf("username lock did not apply to another IP: %v", err)
+	}
+	if len(audit.reqs) != 1 || !strings.Contains(audit.reqs[0].ErrorMsg, "dimension=username") {
+		t.Fatalf("audit=%v", audit.reqs)
 	}
 }
 
@@ -97,7 +126,7 @@ func TestLoginGuardSuccessClearsUsernameCounterOnly(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := guard.RecordSuccess(ctx, "Bob"); err != nil {
+	if err := guard.RecordSuccess(ctx, "Bob", "203.0.113.20"); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 4; i++ {
@@ -126,7 +155,7 @@ func TestLoginGuardIPLockSurvivesUsernameSuccess(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := guard.RecordSuccess(ctx, "u1"); err != nil {
+	if err := guard.RecordSuccess(ctx, "u1", "203.0.113.30"); err != nil {
 		t.Fatal(err)
 	}
 	err := guard.RecordFailure(ctx, "u3", "203.0.113.30")

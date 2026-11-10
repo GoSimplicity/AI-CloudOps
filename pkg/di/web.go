@@ -26,6 +26,7 @@
 package di
 
 import (
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	cronApi "github.com/GoSimplicity/AI-CloudOps/internal/cron/api"
 	k8sApi "github.com/GoSimplicity/AI-CloudOps/internal/k8s/api"
 	"github.com/GoSimplicity/AI-CloudOps/internal/middleware"
@@ -39,6 +40,7 @@ import (
 
 // InitGinServer 初始化web服务
 func InitGinServer(
+	cfg *config.Config,
 	m []gin.HandlerFunc,
 	userHdl *systemApi.UserHandler,
 	departmentHdl *systemApi.DepartmentHandler,
@@ -93,8 +95,19 @@ func InitGinServer(
 	k8sPVHdl *k8sApi.K8sPVHandler,
 	k8sPVCHdl *k8sApi.K8sPVCHandler,
 	cronJobHdl *cronApi.CronJobHandler,
-) *gin.Engine {
+) (*gin.Engine, error) {
 	server := gin.New()
+	rawProxies := ""
+	if cfg != nil {
+		rawProxies = cfg.Server.TrustedProxies
+	}
+	proxies, err := config.TrustedProxyList(rawProxies)
+	if err != nil {
+		return nil, err
+	}
+	if err = middleware.UseTrustedRealIP(server, proxies); err != nil {
+		return nil, err
+	}
 	server.Use(middleware.SafeRecovery(gin.DefaultErrorWriter))
 	server.Use(m...)
 	userHdl.RegisterRoutes(server)
@@ -150,5 +163,5 @@ func InitGinServer(
 	cronJobHdl.RegisterRouters(server)
 	k8sPVHdl.RegisterRouters(server)
 	k8sPVCHdl.RegisterRouters(server)
-	return server
+	return server, nil
 }

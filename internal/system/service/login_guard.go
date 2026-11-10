@@ -80,11 +80,11 @@ func (e *LoginLockedError) RetryAfterSeconds() int {
 	return retrySeconds(e.RetryAfter)
 }
 
-// LoginGuard 按用户名和 IP 记录登录失败并执行临时锁定。
+// LoginGuard 按「用户名+IP」、用户名和 IP 记录登录失败并执行临时锁定。
 type LoginGuard interface {
 	Check(ctx context.Context, username, clientIP string) error
 	RecordFailure(ctx context.Context, username, clientIP string) error
-	RecordSuccess(ctx context.Context, username string) error
+	RecordSuccess(ctx context.Context, username, clientIP string) error
 }
 
 type loginGuard struct {
@@ -94,21 +94,29 @@ type loginGuard struct {
 	logger *zap.Logger
 }
 
-// 计数键首次写入时设置窗口；达到阈值后写入锁定键且不延长已有锁定。
+// 一次失败同时推进三组计数。每组首次写入时设置窗口；达到阈值后写入锁定键且不延长已有锁定。
+// 返回 {pair, username, ip}：0 未锁定，1 本次新建锁定，2 锁定已存在。
 var loginFailScript = redis.NewScript(`
-local fails = redis.call("INCR", KEYS[1])
-if fails == 1 then
-  redis.call("PEXPIRE", KEYS[1], ARGV[1])
-end
-if tonumber(fails) >= tonumber(ARGV[2]) then
-  local created = redis.call("SET", KEYS[2], "1", "NX", "PX", ARGV[3])
-  redis.call("DEL", KEYS[1])
-  if created then
-    return 1
+local function bump(failKey, lockKey, windowMs, maxn, lockMs)
+  local fails = redis.call("INCR", failKey)
+  if fails == 1 then
+    redis.call("PEXPIRE", failKey, windowMs)
   end
-  return 2
+  if tonumber(fails) >= tonumber(maxn) then
+    local created = redis.call("SET", lockKey, "1", "NX", "PX", lockMs)
+    redis.call("DEL", failKey)
+    if created then
+      return 1
+    end
+    return 2
+  end
+  return 0
 end
-return 0
+return {
+  bump(KEYS[1], KEYS[2], ARGV[1], ARGV[2], ARGV[3]),
+  bump(KEYS[3], KEYS[4], ARGV[4], ARGV[5], ARGV[6]),
+  bump(KEYS[5], KEYS[6], ARGV[7], ARGV[8], ARGV[9])
+}
 `)
 
 func NewLoginGuard(client redis.Cmdable, policy config.LoginLockoutConfig, audit AuditService, logger *zap.Logger) LoginGuard {
@@ -127,20 +135,12 @@ func (g *loginGuard) Check(ctx context.Context, username, clientIP string) error
 	if g == nil || g.client == nil {
 		return ErrLoginUnavailable
 	}
-	userTTL, err := g.remaining(ctx, userLockKey(canonicalUser(username)))
-	if err != nil {
-		g.logger.Error("查询用户名登录锁定失败", zap.String("username", clip(username, 128)), zap.Error(err))
-		return ErrLoginUnavailable
-	}
+	user := canonicalUser(username)
 	ip := canonicalIP(clientIP)
-	ipTTL, err := g.remaining(ctx, ipLockKey(ip))
+	retry, err := g.longestLock(ctx, user, ip)
 	if err != nil {
-		g.logger.Error("查询 IP 登录锁定失败", zap.String("ip", ip), zap.Error(err))
+		g.logger.Error("查询登录锁定失败", zap.String("username", clip(username, 128)), zap.String("ip", ip), zap.Error(err))
 		return ErrLoginUnavailable
-	}
-	retry := userTTL
-	if ipTTL > retry {
-		retry = ipTTL
 	}
 	if retry <= 0 {
 		return nil
@@ -160,32 +160,30 @@ func (g *loginGuard) RecordFailure(ctx context.Context, username, clientIP strin
 	}
 	user := canonicalUser(username)
 	ip := canonicalIP(clientIP)
-	userCode, userTTL, err := g.bump(ctx, userFailKey(user), userLockKey(user), g.policy.UsernameWindow, g.policy.UsernameLock, g.policy.UsernameMaxFailures)
+	codes, err := g.bumpAll(ctx, user, ip)
 	if err != nil {
-		g.logger.Error("记录用户名登录失败次数失败", zap.String("username", clip(username, 128)), zap.Error(err))
+		g.logger.Error("记录登录失败次数失败", zap.String("username", clip(username, 128)), zap.String("ip", ip), zap.Error(err))
 		return ErrLoginUnavailable
 	}
-	ipCode, ipTTL, err := g.bump(ctx, ipFailKey(ip), ipLockKey(ip), g.policy.IPWindow, g.policy.IPLock, g.policy.IPMaxFailures)
-	if err != nil {
-		g.logger.Error("记录 IP 登录失败次数失败", zap.String("ip", ip), zap.Error(err))
-		return ErrLoginUnavailable
-	}
-	if userCode == 0 && ipCode == 0 {
+	if codes[0] == 0 && codes[1] == 0 && codes[2] == 0 {
 		return nil
 	}
+	retry, err := g.longestLock(ctx, user, ip)
+	if err != nil || retry <= 0 {
+		retry = g.policy.PairLock
+		if g.policy.UsernameLock > retry {
+			retry = g.policy.UsernameLock
+		}
+		if g.policy.IPLock > retry {
+			retry = g.policy.IPLock
+		}
+	}
+	names := []string{"pair", "username", "ip"}
 	var dims []string
-	if userCode == 1 {
-		dims = append(dims, "username")
-	}
-	if ipCode == 1 {
-		dims = append(dims, "ip")
-	}
-	retry := userTTL
-	if ipTTL > retry {
-		retry = ipTTL
-	}
-	if retry <= 0 {
-		retry = g.policy.UsernameLock
+	for i, code := range codes {
+		if code == 1 {
+			dims = append(dims, names[i])
+		}
 	}
 	if len(dims) > 0 {
 		g.writeLockAudit(ctx, username, ip, strings.Join(dims, ","), retry)
@@ -193,29 +191,60 @@ func (g *loginGuard) RecordFailure(ctx context.Context, username, clientIP strin
 	return &LoginLockedError{RetryAfter: retry}
 }
 
-func (g *loginGuard) RecordSuccess(ctx context.Context, username string) error {
+func (g *loginGuard) RecordSuccess(ctx context.Context, username, clientIP string) error {
 	if g == nil || g.client == nil {
 		return ErrLoginUnavailable
 	}
-	if err := g.client.Del(ctx, userFailKey(canonicalUser(username))).Err(); err != nil {
+	user := canonicalUser(username)
+	ip := canonicalIP(clientIP)
+	if err := g.client.Del(ctx, pairFailKey(user, ip), userFailKey(user)).Err(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (g *loginGuard) bump(ctx context.Context, failKey, lockKey string, window, lockFor time.Duration, max int) (int64, time.Duration, error) {
-	code, err := loginFailScript.Run(ctx, g.client, []string{failKey, lockKey}, positiveMillis(window), max, positiveMillis(lockFor)).Int64()
+func (g *loginGuard) bumpAll(ctx context.Context, user, ip string) ([3]int64, error) {
+	values, err := loginFailScript.Run(ctx, g.client, []string{
+		pairFailKey(user, ip), pairLockKey(user, ip),
+		userFailKey(user), userLockKey(user),
+		ipFailKey(ip), ipLockKey(ip),
+	},
+		positiveMillis(g.policy.PairWindow), g.policy.PairMaxFailures, positiveMillis(g.policy.PairLock),
+		positiveMillis(g.policy.UsernameWindow), g.policy.UsernameMaxFailures, positiveMillis(g.policy.UsernameLock),
+		positiveMillis(g.policy.IPWindow), g.policy.IPMaxFailures, positiveMillis(g.policy.IPLock),
+	).Slice()
 	if err != nil {
-		return 0, 0, err
+		return [3]int64{}, err
 	}
-	if code == 0 {
-		return 0, 0, nil
+	if len(values) != 3 {
+		return [3]int64{}, fmt.Errorf("登录计数脚本返回 %d 项", len(values))
 	}
-	ttl, ttlErr := g.remaining(ctx, lockKey)
-	if ttlErr != nil || ttl <= 0 {
-		return code, lockFor, nil
+	var codes [3]int64
+	for i, value := range values {
+		switch n := value.(type) {
+		case int64:
+			codes[i] = n
+		case int:
+			codes[i] = int64(n)
+		default:
+			return [3]int64{}, fmt.Errorf("登录计数脚本返回了非整数")
+		}
 	}
-	return code, ttl, nil
+	return codes, nil
+}
+
+func (g *loginGuard) longestLock(ctx context.Context, user, ip string) (time.Duration, error) {
+	var retry time.Duration
+	for _, key := range []string{pairLockKey(user, ip), userLockKey(user), ipLockKey(ip)} {
+		ttl, err := g.remaining(ctx, key)
+		if err != nil {
+			return 0, err
+		}
+		if ttl > retry {
+			retry = ttl
+		}
+	}
+	return retry, nil
 }
 
 func (g *loginGuard) remaining(ctx context.Context, key string) (time.Duration, error) {
@@ -274,6 +303,14 @@ func canonicalIP(ip string) string {
 	return parsed.String()
 }
 
+func pairMaterial(user, ip string) string { return user + "\x00" + ip }
+
+func pairFailKey(user, ip string) string {
+	return loginKeyPrefix + "fail:pair:" + digest(pairMaterial(user, ip))
+}
+func pairLockKey(user, ip string) string {
+	return loginKeyPrefix + "lock:pair:" + digest(pairMaterial(user, ip))
+}
 func userFailKey(user string) string { return loginKeyPrefix + "fail:user:" + digest(user) }
 func userLockKey(user string) string { return loginKeyPrefix + "lock:user:" + digest(user) }
 func ipFailKey(ip string) string     { return loginKeyPrefix + "fail:ip:" + digest(ip) }

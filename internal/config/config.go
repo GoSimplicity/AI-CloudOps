@@ -66,6 +66,9 @@ func (c *Config) Validate() error {
 	if c.Server.Port == "" {
 		return fmt.Errorf("server.port 不能为空")
 	}
+	if _, err := TrustedProxyList(c.Server.TrustedProxies); err != nil {
+		return err
+	}
 	if c.Log.Dir == "" {
 		return fmt.Errorf("log.dir 不能为空")
 	}
@@ -267,6 +270,8 @@ type AIOpsConfig struct {
 type ServerConfig struct {
 	AllowedOrigins string `mapstructure:"allowed_origins" env:"SERVER_ALLOWED_ORIGINS"`
 	Port           string `mapstructure:"port" env:"SERVER_PORT" default:"8889"`
+	// TrustedProxies 逗号分隔的 IP 或 CIDR。空值表示回环和私有网段。
+	TrustedProxies string `mapstructure:"trusted_proxies" env:"SERVER_TRUSTED_PROXIES"`
 }
 
 type LogConfig struct {
@@ -294,9 +299,12 @@ type AuthConfig struct {
 }
 
 // LoginLockoutConfig 登录失败计数与临时锁定。
-// 默认：15 分钟内同一用户名失败 5 次锁定 15 分钟，同一 IP 失败 20 次锁定 15 分钟。
+// 默认：同一用户名+IP 15 分钟内失败 5 次锁定 15 分钟；同一用户名失败 50 次锁定 15 分钟；同一 IP 失败 20 次锁定 15 分钟。
 type LoginLockoutConfig struct {
-	UsernameMaxFailures int           `mapstructure:"username_max_failures" env:"AUTH_LOGIN_USERNAME_MAX_FAILURES" default:"5"`
+	PairMaxFailures     int           `mapstructure:"pair_max_failures" env:"AUTH_LOGIN_PAIR_MAX_FAILURES" default:"5"`
+	PairWindow          time.Duration `mapstructure:"pair_window" env:"AUTH_LOGIN_PAIR_WINDOW" default:"15m"`
+	PairLock            time.Duration `mapstructure:"pair_lock" env:"AUTH_LOGIN_PAIR_LOCK" default:"15m"`
+	UsernameMaxFailures int           `mapstructure:"username_max_failures" env:"AUTH_LOGIN_USERNAME_MAX_FAILURES" default:"50"`
 	UsernameWindow      time.Duration `mapstructure:"username_window" env:"AUTH_LOGIN_USERNAME_WINDOW" default:"15m"`
 	UsernameLock        time.Duration `mapstructure:"username_lock" env:"AUTH_LOGIN_USERNAME_LOCK" default:"15m"`
 	IPMaxFailures       int           `mapstructure:"ip_max_failures" env:"AUTH_LOGIN_IP_MAX_FAILURES" default:"20"`
@@ -306,8 +314,17 @@ type LoginLockoutConfig struct {
 
 // Normalized 把未设置或非正数的项补成默认值。显式的正数配置保持不变。
 func (c LoginLockoutConfig) Normalized() LoginLockoutConfig {
+	if c.PairMaxFailures <= 0 {
+		c.PairMaxFailures = 5
+	}
+	if c.PairWindow <= 0 {
+		c.PairWindow = 15 * time.Minute
+	}
+	if c.PairLock <= 0 {
+		c.PairLock = 15 * time.Minute
+	}
 	if c.UsernameMaxFailures <= 0 {
-		c.UsernameMaxFailures = 5
+		c.UsernameMaxFailures = 50
 	}
 	if c.UsernameWindow <= 0 {
 		c.UsernameWindow = 15 * time.Minute
