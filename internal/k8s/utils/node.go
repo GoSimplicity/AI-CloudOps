@@ -294,6 +294,9 @@ func BuildNodeListPagination(nodes []corev1.Node, page, size int) ([]corev1.Node
 	if total == 0 {
 		return []corev1.Node{}, 0
 	}
+	if page <= 0 {
+		page = 1
+	}
 
 	start := int64((page - 1) * size)
 	end := start + int64(size)
@@ -381,9 +384,10 @@ func ValidateNodeName(nodeName string) error {
 	return nil
 }
 
+// ValidateNodeLabelsMap 校验标签键值。空 map 表示清空，与节点标签更新的约定一致。
 func ValidateNodeLabelsMap(labels map[string]string) error {
 	if len(labels) == 0 {
-		return fmt.Errorf("标签不能为空")
+		return nil
 	}
 	return ValidateNodeLabels(labels)
 }

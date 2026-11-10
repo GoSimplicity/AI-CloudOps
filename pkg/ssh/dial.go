@@ -2,8 +2,11 @@ package ssh
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -26,7 +29,7 @@ func DialContext(ctx context.Context, network, address string, config *ssh.Clien
 	defer cancel()
 	conn, err := (&net.Dialer{}).DialContext(ctx, network, address)
 	if err != nil {
-		return nil, err
+		return nil, normalizeDialError(ctx, err)
 	}
 	deadline, _ := ctx.Deadline()
 	if err := conn.SetDeadline(deadline); err != nil {
@@ -38,18 +41,43 @@ func DialContext(ctx context.Context, network, address string, config *ssh.Clien
 	connection, channels, requests, err := ssh.NewClientConn(conn, address, config)
 	if err != nil {
 		_ = conn.Close()
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, err
+		return nil, normalizeDialError(ctx, err)
 	}
 	if !stop() || ctx.Err() != nil {
 		_ = connection.Close()
-		return nil, ctx.Err()
+		if err := normalizeDialError(ctx, ctx.Err()); err != nil {
+			return nil, err
+		}
+		return nil, context.DeadlineExceeded
 	}
 	if err := conn.SetDeadline(time.Time{}); err != nil {
 		_ = connection.Close()
 		return nil, err
 	}
 	return ssh.NewClient(connection, channels, requests), nil
+}
+
+// normalizeDialError 把连接期限触发的超时统一成 context.DeadlineExceeded。
+func normalizeDialError(ctx context.Context, err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(err, context.Canceled) {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return ctx.Err()
+		}
+		return err
+	}
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) || netTimeout(err) {
+		return fmt.Errorf("%w: %v", context.DeadlineExceeded, err)
+	}
+	return err
+}
+
+func netTimeout(err error) bool {
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	return strings.Contains(err.Error(), "i/o timeout")
 }

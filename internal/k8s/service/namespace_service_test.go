@@ -101,7 +101,22 @@ func TestNamespaceCreateRejectsReservedNamesAndBadMetadata(t *testing.T) {
 }
 
 func TestNamespaceOptionalLabelsAreRejected(t *testing.T) {
-	t.Skip("CreateNamespace/UpdateNamespace 将空标签交给 ValidateNodeLabelsMap，空标签被拒绝（namespace_service.go:82、namespace_service.go:194，utils/node.go:385）。请求模型把标签标成可选。未改生产代码。")
+	fixture := &namespaceManagerFixture{items: []corev1.Namespace{{
+		ObjectMeta: metav1.ObjectMeta{Name: "team-a", Labels: map[string]string{"old": "1"}, UID: "uid-1"},
+	}}}
+	svc := NewNamespaceService(nil, fixture, zap.NewNop())
+	if err := svc.CreateNamespace(context.Background(), &model.K8sNamespaceCreateReq{ClusterID: 2, Name: "team-a"}); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.created == nil || fixture.created.Name != "team-a" || len(fixture.created.Labels) != 0 {
+		t.Fatalf("created = %+v", fixture.created)
+	}
+	if err := svc.UpdateNamespace(context.Background(), &model.K8sNamespaceUpdateReq{ClusterID: 2, Name: "team-a"}); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.updated == nil || len(fixture.updated.Labels) != 0 {
+		t.Fatalf("updated labels = %+v", fixture.updated)
+	}
 }
 
 func TestNamespaceDeleteForceAndListFilters(t *testing.T) {

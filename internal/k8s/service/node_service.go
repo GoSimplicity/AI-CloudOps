@@ -112,6 +112,9 @@ func (s *nodeService) GetNodeList(ctx context.Context, req *model.GetNodeListReq
 		k8sNode, err := s.nodeManager.BuildK8sNode(ctx, req.ClusterID, node)
 		if err != nil {
 			s.logger.Warn("构建节点信息失败", zap.Error(err), zap.String("nodeName", node.Name))
+			if total > 0 {
+				total--
+			}
 			continue
 		}
 		items = append(items, k8sNode)

@@ -114,7 +114,19 @@ func TestNodeListFiltersBeforePagination(t *testing.T) {
 }
 
 func TestNodeListPageZeroIsUnsafe(t *testing.T) {
-	t.Skip("GetNodeList 把 page=0 交给 BuildNodeListPagination，start 为负数会 panic（internal/k8s/utils/node.go:298，调用点 node_service.go:107）。未改生产代码。")
+	fixture := &nodeManagerFixture{nodes: []corev1.Node{
+		readyNode("n1", 1, false),
+		readyNode("n2", 2, false),
+	}}
+	svc := NewNodeService(nil, nil, fixture, zap.NewNop())
+	for _, page := range []int{0, -1} {
+		result, err := svc.GetNodeList(context.Background(), &model.GetNodeListReq{
+			ListReq: model.ListReq{Page: page, Size: 1}, ClusterID: 6,
+		})
+		if err != nil || result.Total != 2 || len(result.Items) != 1 || result.Items[0].Name != "n2" {
+			t.Fatalf("page %d = %+v err=%v", page, result, err)
+		}
+	}
 }
 
 func TestNodeDrainCordonAndLabels(t *testing.T) {
@@ -167,9 +179,32 @@ func TestNodeDrainCordonAndLabels(t *testing.T) {
 }
 
 func TestNodeEmptyLabelMapConflictsWithComment(t *testing.T) {
-	t.Skip("node_service.go:159 注释称空 map 清空标签，但 utils/node.go:385 的 ValidateNodeLabelsMap 拒绝空 map。未改生产代码。")
+	fixture := &nodeManagerFixture{}
+	svc := NewNodeService(nil, nil, fixture, zap.NewNop())
+	err := svc.UpdateNodeLabels(context.Background(), &model.UpdateNodeLabelsReq{
+		ClusterID: 6, NodeName: "worker-a", Labels: map[string]string{},
+	})
+	if err != nil || fixture.labels == nil || len(fixture.labels) != 0 {
+		t.Fatalf("empty labels = %#v err=%v", fixture.labels, err)
+	}
 }
 
 func TestNodeBuildFailureDropsItemButKeepsTotal(t *testing.T) {
-	t.Skip("BuildK8sNode 失败时 GetNodeList 丢弃该节点但 Total 仍计入（node_service.go:112-118）。未改生产代码。")
+	fixture := &nodeManagerFixture{nodes: []corev1.Node{
+		readyNode("ok-a", 1, false),
+		readyNode("bad", 3, false),
+		readyNode("ok-b", 2, false),
+	}, buildErr: "bad"}
+	svc := NewNodeService(nil, nil, fixture, zap.NewNop())
+	result, err := svc.GetNodeList(context.Background(), &model.GetNodeListReq{
+		ListReq: model.ListReq{Page: 1, Size: 10}, ClusterID: 6,
+	})
+	if err != nil || result.Total != 2 || len(result.Items) != 2 {
+		t.Fatalf("list = %+v err=%v", result, err)
+	}
+	for _, item := range result.Items {
+		if item.Name == "bad" {
+			t.Fatalf("dropped node still listed: %+v", result.Items)
+		}
+	}
 }

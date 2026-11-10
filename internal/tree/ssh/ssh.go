@@ -3,13 +3,14 @@ package ssh
 import (
 	"context"
 	"fmt"
-	sshclient "github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	sshclient "github.com/GoSimplicity/AI-CloudOps/pkg/ssh"
 
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
@@ -41,17 +42,45 @@ type ecsSSH struct {
 	sessionMu  sync.RWMutex         // 保护Sessions的读写锁
 	LastResult string               // 最近一次执行命令的结果
 	logger     *zap.Logger          // 日志记录器
+	runTimeout time.Duration        // Run 的执行期限，零值表示 5 分钟
+}
+
+const defaultRunTimeout = 5 * time.Minute
+
+// SSHOption 配置 SSH 客户端。
+type SSHOption func(*ecsSSH)
+
+// WithRunTimeout 设置 Run 的执行期限。小于等于 0 时保持默认 5 分钟。
+func WithRunTimeout(timeout time.Duration) SSHOption {
+	return func(client *ecsSSH) {
+		if timeout > 0 {
+			client.runTimeout = timeout
+		}
+	}
+}
+
+func (s *ecsSSH) effectiveRunTimeout() time.Duration {
+	if s == nil || s.runTimeout <= 0 {
+		return defaultRunTimeout
+	}
+	return s.runTimeout
 }
 
 // NewSSH 创建新的SSH连接管理器
-func NewSSH(logger *zap.Logger) EcsSSH {
+func NewSSH(logger *zap.Logger, opts ...SSHOption) EcsSSH {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-	return &ecsSSH{
+	client := &ecsSSH{
 		logger:   logger,
 		Sessions: make(map[int]*ssh.Session), // 初始化会话映射表
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(client)
+		}
+	}
+	return client
 }
 
 // Connect 建立SSH连接
@@ -66,13 +95,17 @@ func (s *ecsSSH) ConnectContext(ctx context.Context, ip string, port int, userna
 		return fmt.Errorf("用户名不能为空")
 	}
 	if mode != 1 && mode != 2 {
-		return fmt.Errorf("认证方式必须是 'password' 或 'key'")
+		return fmt.Errorf("认证方式必须是 1 或 2")
 	}
 	if mode == 1 && password == "" {
 		return fmt.Errorf("密码认证模式下密码不能为空")
 	}
 	if mode == 2 && key == "" {
 		return fmt.Errorf("私钥认证模式下私钥不能为空")
+	}
+
+	if port < 1 || port > 65535 {
+		return fmt.Errorf("端口必须在 1 到 65535 之间")
 	}
 
 	s.IP = ip
@@ -90,13 +123,6 @@ func (s *ecsSSH) ConnectContext(ctx context.Context, ip string, port int, userna
 			s.Sessions = make(map[int]*ssh.Session)
 		}
 		s.sessionMu.Unlock()
-	}
-
-	// 验证端口范围，默认使用22端口
-	if port <= 0 || port > 65535 {
-		s.logger.Warn("端口号无效，使用默认端口22", zap.Int("原端口", port))
-		s.Port = 22
-		port = 22
 	}
 
 	hostKeyCallback, err := sshclient.HostKeyCallback()
@@ -190,7 +216,7 @@ func (s *ecsSSH) AddPublicKeyToRemoteHost(publicKey string) error {
 
 // Run 执行单个Shell命令
 func (s *ecsSSH) Run(command string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), s.effectiveRunTimeout())
 	defer cancel()
 	return s.RunContext(ctx, command)
 }

@@ -235,7 +235,7 @@ func TestNewSSHNilLoggerAndConnectValidation(t *testing.T) {
 	}{
 		{name: "empty ip", user: "fixture", pass: "x", mode: 1, want: "IP地址不能为空"},
 		{name: "empty user", ip: "127.0.0.1", pass: "x", mode: 1, want: "用户名不能为空"},
-		{name: "bad mode", ip: "127.0.0.1", user: "fixture", pass: "x", mode: 3, want: "认证方式必须是"},
+		{name: "bad mode", ip: "127.0.0.1", user: "fixture", pass: "x", mode: 3, want: "认证方式必须是 1 或 2"},
 		{name: "empty password", ip: "127.0.0.1", user: "fixture", mode: 1, want: "密码不能为空"},
 		{name: "empty key", ip: "127.0.0.1", user: "fixture", mode: 2, want: "私钥不能为空"},
 	}
@@ -253,7 +253,7 @@ func TestConnectRejectsMissingKnownHostsAndRewritesPort(t *testing.T) {
 	t.Setenv("ENV", "production")
 	t.Setenv("SSH_KNOWN_HOSTS", "")
 	client := NewSSH(zap.NewNop()).(*ecsSSH)
-	err := client.ConnectContext(context.Background(), "127.0.0.1", 0, "fixture", fixturePassword, "", 1, 7)
+	err := client.ConnectContext(context.Background(), "127.0.0.1", 22, "fixture", fixturePassword, "", 1, 7)
 	if err == nil || !strings.Contains(err.Error(), "SSH_KNOWN_HOSTS") {
 		t.Fatalf("production host key policy = %v", err)
 	}
@@ -261,9 +261,20 @@ func TestConnectRejectsMissingKnownHostsAndRewritesPort(t *testing.T) {
 		t.Fatalf("credential/port state = %+v", client)
 	}
 	t.Setenv("ENV", "")
-	err = client.Connect("127.0.0.1", 70000, "fixture", fixturePassword, "", 1, 7)
+	err = client.Connect("127.0.0.1", 22, "fixture", fixturePassword, "", 1, 7)
 	if err == nil || !strings.Contains(err.Error(), "SSH_KNOWN_HOSTS") || client.Port != 22 {
 		t.Fatalf("unset ENV did not keep host checking: %v port=%d", err, client.Port)
+	}
+	fresh := NewSSH(zap.NewNop()).(*ecsSSH)
+	for _, port := range []int{0, -1, 65536, 70000} {
+		err = fresh.ConnectContext(context.Background(), "127.0.0.1", port, "fixture", fixturePassword, "", 1, 7)
+		if err == nil || !strings.Contains(err.Error(), "1 到 65535") || fresh.Port == 22 {
+			t.Fatalf("port %d = %v stored=%d", port, err, fresh.Port)
+		}
+	}
+	err = fresh.ConnectContext(context.Background(), "127.0.0.1", 1, "fixture", fixturePassword, "", 1, 7)
+	if err == nil || strings.Contains(err.Error(), "1 到 65535") {
+		t.Fatalf("port 1 = %v", err)
 	}
 }
 
@@ -333,7 +344,7 @@ func TestConnectPasswordKeyAndHandshakeTimeout(t *testing.T) {
 	defer cancel()
 	started := time.Now()
 	err = NewSSH(zap.NewNop()).ConnectContext(ctx, stall.Host, stall.Port, "fixture", fixturePassword, "", 1, 1)
-	if err == nil || time.Since(started) > 2*time.Second || (!errors.Is(err, context.DeadlineExceeded) && !strings.Contains(err.Error(), "i/o timeout")) {
+	if err == nil || time.Since(started) > 2*time.Second || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("handshake timeout = %v after %s", err, time.Since(started))
 	}
 	canceled, cancelNow := context.WithCancel(context.Background())
@@ -418,7 +429,25 @@ func TestRunCommandIsLiteralAndBounded(t *testing.T) {
 }
 
 func TestRunFiveMinuteTimeoutNotInjectable(t *testing.T) {
-	t.Skip("Run 把超时写死为 5 分钟（internal/tree/ssh/ssh.go:193），不改生产代码就无法注入更短期限。")
+	plain := NewSSH(zap.NewNop()).(*ecsSSH)
+	if plain.effectiveRunTimeout() != 5*time.Minute {
+		t.Fatalf("default timeout = %s", plain.effectiveRunTimeout())
+	}
+	server := startLocalSSH(t, false, false, false, false)
+	trust(t, server.Known)
+	client := NewSSH(zap.NewNop(), WithRunTimeout(200*time.Millisecond)).(*ecsSSH)
+	defer client.Close()
+	if client.effectiveRunTimeout() != 200*time.Millisecond {
+		t.Fatalf("injected timeout = %s", client.effectiveRunTimeout())
+	}
+	if err := client.ConnectContext(context.Background(), server.Host, server.Port, "fixture", fixturePassword, "", 1, 8); err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	_, err := client.Run("block")
+	if err == nil || time.Since(started) > 2*time.Second || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("run timeout = %v after %s", err, time.Since(started))
+	}
 }
 
 func TestAddPublicKeyQuotesPayloadAndSurfacesRemoteError(t *testing.T) {
