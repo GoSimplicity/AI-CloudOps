@@ -51,6 +51,43 @@ func TestOriginAllowlistUsesLoadedConfigurationSnapshot(t *testing.T) {
 	}
 }
 
+func TestCORSExposesRetryAfterWithoutRelaxingOriginOrCredentials(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const origin = "https://console.example.com"
+	corsMiddleware := InitMiddlewares(&config.Config{Server: config.ServerConfig{AllowedOrigins: origin}}, nil, zap.NewNop(), nil, nil, nil)[0]
+
+	// 浏览器从实际响应读取 Access-Control-Expose-Headers，登录锁定的 429 走 POST。
+	request := httptest.NewRequest(http.MethodPost, "https://api.example.com/api/user/login", nil)
+	request.Header.Set("Origin", origin)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = request
+	corsMiddleware(ctx)
+
+	if got := recorder.Header().Get("Access-Control-Allow-Origin"); got != origin {
+		t.Fatalf("allow-origin=%q", got)
+	}
+	if got := recorder.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+		t.Fatalf("allow-credentials=%q", got)
+	}
+	if got := recorder.Header().Get("Access-Control-Expose-Headers"); got != "X-Jwt-Token,X-Refresh-Token,Retry-After" {
+		t.Fatalf("expose-headers=%q", got)
+	}
+
+	denied := httptest.NewRequest(http.MethodPost, "https://api.example.com/api/user/login", nil)
+	denied.Header.Set("Origin", "https://evil.example.com")
+	recorder = httptest.NewRecorder()
+	ctx, _ = gin.CreateTestContext(recorder)
+	ctx.Request = denied
+	corsMiddleware(ctx)
+	if got := recorder.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("disallowed origin was allowed: %q", got)
+	}
+	if got := recorder.Header().Get("Access-Control-Expose-Headers"); got != "" {
+		t.Fatalf("disallowed origin exposed headers: %q", got)
+	}
+}
+
 func TestOriginAllowlistWithoutConfigurationFailsClosed(t *testing.T) {
 	t.Setenv("SERVER_ALLOWED_ORIGINS", "https://external.example.com")
 	for _, tc := range []struct {

@@ -158,6 +158,24 @@ func ForbiddenError(c *gin.Context, message string) {
 	Forbidden(c, map[string]interface{}{}, message)
 }
 
+// TooManyRequestsError 请求过于频繁：HTTP 429，业务码仍为 code=1。
+func TooManyRequestsError(c *gin.Context, message string) {
+	c.JSON(http.StatusTooManyRequests, ApiResponse{
+		Code:    StatusError,
+		Data:    map[string]interface{}{},
+		Message: message,
+	})
+}
+
+// ServiceUnavailableError 依赖暂不可用：HTTP 503，业务码仍为 code=1。
+func ServiceUnavailableError(c *gin.Context, message string) {
+	c.JSON(http.StatusServiceUnavailable, ApiResponse{
+		Code:    StatusError,
+		Data:    map[string]interface{}{},
+		Message: message,
+	})
+}
+
 // InternalServerErrorWithDetails 带详细数据和消息的服务器内部错误返回
 func InternalServerErrorWithDetails(c *gin.Context, data interface{}, message string) {
 	InternalServerError(c, StatusError, data, message)

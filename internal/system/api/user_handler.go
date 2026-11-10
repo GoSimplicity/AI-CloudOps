@@ -28,6 +28,9 @@ package api
 import (
 	"errors"
 	"fmt"
+	"net"
+	"strconv"
+	"strings"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
@@ -82,37 +85,76 @@ func (h *UserHandler) SignUp(ctx *gin.Context) {
 	})
 }
 
+// Login 校验用户名和密码。凭证失败统一返回「用户名或密码错误」；
+// 失败次数达到阈值时返回 HTTP 429，不签发令牌。
 func (h *UserHandler) Login(ctx *gin.Context) {
 	var req model.UserLoginReq
+	if err := base.BindRequest(ctx, &req); err != nil {
+		base.BadRequestWithDetails(ctx, err.Error(), "绑定数据失败")
+		return
+	}
 
-	base.HandleRequest(ctx, &req, func() (interface{}, error) {
-		user, err := h.service.Login(ctx.Request.Context(), &req)
-		if err != nil {
-			switch {
-			case errors.Is(err, constants.ErrorUserNotExist):
-				return nil, fmt.Errorf("用户不存在")
-			case errors.Is(err, constants.ErrorPasswordIncorrect):
-				return nil, fmt.Errorf("密码错误")
-			default:
-				return nil, fmt.Errorf("登录失败: %w", err)
-			}
+	user, err := h.service.Login(ctx.Request.Context(), &req, loginClientIP(ctx))
+	if err != nil {
+		var locked *service.LoginLockedError
+		switch {
+		case errors.As(err, &locked):
+			ctx.Header("Retry-After", strconv.Itoa(locked.RetryAfterSeconds()))
+			base.TooManyRequestsError(ctx, locked.Error())
+		case errors.Is(err, service.ErrLoginUnavailable):
+			base.ServiceUnavailableError(ctx, "登录服务暂不可用，请稍后重试")
+		case errors.Is(err, constants.ErrorUserNotExist),
+			errors.Is(err, constants.ErrorPasswordIncorrect),
+			errors.Is(err, constants.ErrorInvalidCredentials):
+			base.ErrorWithMessage(ctx, "用户名或密码错误")
+		default:
+			base.ErrorWithMessage(ctx, "登录失败")
 		}
+		return
+	}
 
-		accessToken, refreshToken, err := h.jwt.SetLoginToken(ctx, user.ID, user.Username, user.AccountType)
-		if err != nil {
-			return nil, fmt.Errorf("生成令牌失败: %w", err)
-		}
+	accessToken, refreshToken, err := h.jwt.SetLoginToken(ctx, user.ID, user.Username, user.AccountType)
+	if err != nil {
+		base.ErrorWithMessage(ctx, "生成令牌失败")
+		return
+	}
 
-		return gin.H{
-			"id":           user.ID,
-			"accessToken":  accessToken,
-			"refreshToken": refreshToken,
-			"desc":         user.Desc,
-			"realName":     user.RealName,
-			"userId":       user.ID,
-			"username":     user.Username,
-		}, nil
+	base.SuccessWithData(ctx, gin.H{
+		"id":           user.ID,
+		"accessToken":  accessToken,
+		"refreshToken": refreshToken,
+		"desc":         user.Desc,
+		"realName":     user.RealName,
+		"userId":       user.ID,
+		"username":     user.Username,
 	})
+}
+
+// loginClientIP 优先使用发布栈 nginx 写入的 X-Real-IP（$remote_addr）。
+// 不取 X-Forwarded-For 最左端，避免调用方伪造来源绕过按 IP 锁定。
+func loginClientIP(ctx *gin.Context) string {
+	if ctx == nil || ctx.Request == nil {
+		return "unknown"
+	}
+	if ip := parseLoginIP(ctx.GetHeader("X-Real-IP")); ip != "" {
+		return ip
+	}
+	host := ctx.Request.RemoteAddr
+	if split, _, err := net.SplitHostPort(host); err == nil {
+		host = split
+	}
+	if ip := parseLoginIP(host); ip != "" {
+		return ip
+	}
+	return "unknown"
+}
+
+func parseLoginIP(value string) string {
+	parsed := net.ParseIP(strings.TrimSpace(value))
+	if parsed == nil {
+		return ""
+	}
+	return parsed.String()
 }
 
 func (h *UserHandler) Logout(ctx *gin.Context) {

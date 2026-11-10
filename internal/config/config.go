@@ -44,6 +44,7 @@ type Config struct {
 	Log          LogConfig          `mapstructure:"log"`
 	JWT          JWTConfig          `mapstructure:"jwt"`
 	Redis        RedisConfig        `mapstructure:"redis"`
+	Auth         AuthConfig         `mapstructure:"auth"`
 	MySQL        MySQLConfig        `mapstructure:"mysql"`
 	Tree         TreeConfig         `mapstructure:"tree"`
 	K8s          K8sConfig          `mapstructure:"k8s"`
@@ -285,6 +286,45 @@ type JWTConfig struct {
 type RedisConfig struct {
 	Addr     string `mapstructure:"addr" env:"REDIS_ADDR" default:"localhost:6379"`
 	Password string `mapstructure:"password" env:"REDIS_PASSWORD" default:""`
+}
+
+// AuthConfig 认证相关配置
+type AuthConfig struct {
+	LoginLockout LoginLockoutConfig `mapstructure:"login_lockout"`
+}
+
+// LoginLockoutConfig 登录失败计数与临时锁定。
+// 默认：15 分钟内同一用户名失败 5 次锁定 15 分钟，同一 IP 失败 20 次锁定 15 分钟。
+type LoginLockoutConfig struct {
+	UsernameMaxFailures int           `mapstructure:"username_max_failures" env:"AUTH_LOGIN_USERNAME_MAX_FAILURES" default:"5"`
+	UsernameWindow      time.Duration `mapstructure:"username_window" env:"AUTH_LOGIN_USERNAME_WINDOW" default:"15m"`
+	UsernameLock        time.Duration `mapstructure:"username_lock" env:"AUTH_LOGIN_USERNAME_LOCK" default:"15m"`
+	IPMaxFailures       int           `mapstructure:"ip_max_failures" env:"AUTH_LOGIN_IP_MAX_FAILURES" default:"20"`
+	IPWindow            time.Duration `mapstructure:"ip_window" env:"AUTH_LOGIN_IP_WINDOW" default:"15m"`
+	IPLock              time.Duration `mapstructure:"ip_lock" env:"AUTH_LOGIN_IP_LOCK" default:"15m"`
+}
+
+// Normalized 把未设置或非正数的项补成默认值。显式的正数配置保持不变。
+func (c LoginLockoutConfig) Normalized() LoginLockoutConfig {
+	if c.UsernameMaxFailures <= 0 {
+		c.UsernameMaxFailures = 5
+	}
+	if c.UsernameWindow <= 0 {
+		c.UsernameWindow = 15 * time.Minute
+	}
+	if c.UsernameLock <= 0 {
+		c.UsernameLock = 15 * time.Minute
+	}
+	if c.IPMaxFailures <= 0 {
+		c.IPMaxFailures = 20
+	}
+	if c.IPWindow <= 0 {
+		c.IPWindow = 15 * time.Minute
+	}
+	if c.IPLock <= 0 {
+		c.IPLock = 15 * time.Minute
+	}
+	return c
 }
 
 // MySQLConfig MySQL配置
