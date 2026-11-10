@@ -51,9 +51,7 @@ func (c PrometheusConfig) HTTPServiceDiscoveryStartup() (warn bool, message stri
 		}
 		return true, "[SECURITY] PROMETHEUS_HTTP_SD_TOKEN 未配置，当前为开发环境，HTTP-SD 仅接受本机回环地址的直连；经反向代理或其他主机的请求会被拒绝。升级后必须重新生成一次 Prometheus 配置，否则 http_sd 会返回 401。"
 	}
-	if validateHTTPServiceDiscoveryToken(c.HttpSdToken) != nil {
-		return true, "[SECURITY] PROMETHEUS_HTTP_SD_TOKEN 无效，已按未配置处理，HTTP-SD 仅接受本机回环地址的直连。请改为不含空白和控制字符、且不超过512字节的令牌。"
-	}
+	// 非空但不合法的令牌已由 Validate 拒绝启动，这里只记录已经启用的校验。
 	return false, "HTTP-SD 已启用 bearer token 校验"
 }
 

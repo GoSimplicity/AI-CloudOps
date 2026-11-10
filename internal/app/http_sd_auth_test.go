@@ -17,7 +17,6 @@ func TestHTTPServiceDiscoveryStartupLogOmitsToken(t *testing.T) {
 		warn              bool
 	}{
 		{name: "unset", want: "未配置", warn: true},
-		{name: "invalid", token: "fixture token", want: "无效", warn: true},
 		{name: "configured", token: "fixture-http-sd-token", want: "bearer token"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

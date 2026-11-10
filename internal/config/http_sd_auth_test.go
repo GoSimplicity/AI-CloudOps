@@ -84,10 +84,10 @@ func TestMissingHTTPServiceDiscoveryTokenFollowsEnvironment(t *testing.T) {
 
 func TestHTTPServiceDiscoveryStartupMessageOmitsToken(t *testing.T) {
 	t.Setenv("ENV", "development")
-	for _, token := range []string{"", "fixture-http-sd-token", "fixture token", "fixture\nhttp"} {
+	for _, token := range []string{"", "fixture-http-sd-token"} {
 		warn, message := (PrometheusConfig{HttpSdToken: token}).HTTPServiceDiscoveryStartup()
-		if strings.Contains(message, "fixture") {
-			t.Fatal("startup message contained the token")
+		if strings.Contains(message, "fixture") || strings.Contains(message, "已按未配置处理") {
+			t.Fatal("startup message contained the token or a stale fallback")
 		}
 		if token == "fixture-http-sd-token" {
 			if warn || !strings.Contains(message, "bearer token") {
@@ -96,7 +96,7 @@ func TestHTTPServiceDiscoveryStartupMessageOmitsToken(t *testing.T) {
 			continue
 		}
 		if !warn || !strings.Contains(message, "回环") {
-			t.Fatal("unset or invalid token did not report loopback-only mode")
+			t.Fatal("unset token did not report loopback-only mode")
 		}
 	}
 	t.Setenv("ENV", "production")
