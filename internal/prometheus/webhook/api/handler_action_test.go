@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -20,6 +21,14 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 )
+
+func TestMain(m *testing.M) {
+	// 请求级测试按开发环境跑。生产缺省拒绝启动由单独用例覆盖。
+	if os.Getenv("ENV") == "" {
+		_ = os.Setenv("ENV", "development")
+	}
+	os.Exit(m.Run())
+}
 
 const fixtureActionKey = "fixture-action-hmac"
 const fixtureReceiveToken = "fixture-receive-auth"
@@ -90,6 +99,7 @@ func TestSignedGetDoesNotMutateAndPostDoes(t *testing.T) {
 	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "<form") || !strings.Contains(recorder.Body.String(), `method="post"`) {
 		t.Fatal("GET silence did not render a confirmation form")
 	}
+	assertActionPageHeaders(t, recorder)
 	recorder = httptest.NewRecorder()
 	engine.ServeHTTP(recorder, signActionRequest(t, http.MethodPost, "silence", "fixture", "1"))
 	if calls != 1 || memory.updates != 1 || memory.event.Status != model.MonitorAlertEventStatusSilenced {
@@ -117,6 +127,19 @@ func TestInvalidOrExpiredSignatureIsRejectedWithoutLookup(t *testing.T) {
 		if recorder.Code != http.StatusForbidden || counting.lookups != 0 {
 			t.Fatalf("status %d lookups %d", recorder.Code, counting.lookups)
 		}
+		if request.Method == http.MethodGet {
+			assertActionPageHeaders(t, recorder)
+		}
+	}
+}
+
+func assertActionPageHeaders(t *testing.T, recorder *httptest.ResponseRecorder) {
+	t.Helper()
+	if recorder.Header().Get("X-Frame-Options") != "DENY" {
+		t.Fatal("confirmation page missing X-Frame-Options")
+	}
+	if recorder.Header().Get("Content-Security-Policy") != "frame-ancestors 'none'; form-action 'self'" {
+		t.Fatalf("content security policy = %q", recorder.Header().Get("Content-Security-Policy"))
 	}
 }
 
@@ -251,6 +274,74 @@ func TestReceiveBearerToken(t *testing.T) {
 		if strings.Contains(blob, fixtureReceiveToken) {
 			t.Fatal("log contained the bearer token")
 		}
+	}
+}
+
+func TestRuntimeSecretsRequiredOutsideDevelopment(t *testing.T) {
+	const canary = "fixture-receive-auth"
+	base := &config.WebhookConfig{
+		BackendDomain:           "http://alerts.example/api/v1/alerts",
+		ActionSigningKey:        "fixture-action-hmac",
+		AlertmanagerBearerToken: canary,
+		ImFeishu:                config.ImFeishuConfig{RequestTimeoutSeconds: 7},
+	}
+	for _, env := range []string{"", "test", "testing", "staging", "production", " Production ", "prd"} {
+		t.Run("reject/"+env, func(t *testing.T) {
+			t.Setenv("ENV", env)
+			for _, mutate := range []func(*config.WebhookConfig){
+				func(cfg *config.WebhookConfig) { cfg.AlertmanagerBearerToken = "  " },
+				func(cfg *config.WebhookConfig) { cfg.ActionSigningKey = "" },
+				func(cfg *config.WebhookConfig) { cfg.BackendDomain = "" },
+			} {
+				cfg := *base
+				mutate(&cfg)
+				handler, err := NewWebHookHandler(&cfg, zap.NewNop(), nil, nil)
+				if err == nil || handler != nil || strings.Contains(err.Error(), canary) || strings.Contains(err.Error(), "fixture-action-hmac") {
+					t.Fatal("missing production secret was accepted or echoed")
+				}
+			}
+		})
+	}
+	for _, env := range []string{"development", "dev", " Dev "} {
+		t.Run("allow/"+env, func(t *testing.T) {
+			t.Setenv("ENV", env)
+			cfg := &config.WebhookConfig{ImFeishu: config.ImFeishuConfig{RequestTimeoutSeconds: 7}}
+			if _, err := NewWebHookHandler(cfg, zap.NewNop(), nil, nil); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+type claimConflictDAO struct {
+	dao.WebhookDao
+	event model.MonitorAlertEvent
+}
+
+func (memory *claimConflictDAO) GetMonitorAlertEventByFingerprintId(context.Context, string) (*model.MonitorAlertEvent, error) {
+	event := memory.event
+	return &event, nil
+}
+func (memory *claimConflictDAO) ClaimMonitorAlertEvent(context.Context, int, model.MonitorAlertEventStatus) error {
+	return dao.ErrAlertClaimConflict
+}
+
+func TestClaimConflictDoesNotReportSuccess(t *testing.T) {
+	memory := &claimConflictDAO{event: model.MonitorAlertEvent{Model: model.Model{ID: 4}, Status: model.MonitorAlertEventStatusFiring, SilenceID: "keep", Labels: model.StringList{"alertname=fixture"}}}
+	handler, err := NewWebHookHandler(withActionKey(&config.WebhookConfig{BackendDomain: "http://localhost:8889/api/v1/alerts", ImFeishu: config.ImFeishuConfig{RequestTimeoutSeconds: 7}}), zap.NewNop(), memory, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := gin.New()
+	handler.RegisterRouters(engine)
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, signActionRequest(t, http.MethodPost, "renling", "fixture", ""))
+	var body struct{ Code int }
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Code == 0 || memory.event.Status != model.MonitorAlertEventStatusFiring || memory.event.SilenceID != "keep" {
+		t.Fatal("conflicting claim was confirmed or rewrote the row")
 	}
 }
 

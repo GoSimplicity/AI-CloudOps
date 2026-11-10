@@ -93,6 +93,36 @@ func TestCardLinksUseConfiguredBaseAndSignature(t *testing.T) {
 	}
 }
 
+func TestCardWithoutSigningKeyOmitsActionButtons(t *testing.T) {
+	wc := &webhookContent{
+		l:             zap.NewNop(),
+		frontDomain:   "http://localhost:3000",
+		backendDomain: "http://localhost:8889/api/v1/alerts",
+		dao:           notificationDutyFixture{},
+		robot:         fixturePrivateRobot{},
+		client:        &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) { return nil, nil })},
+	}
+	var body string
+	wc.client = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		payload, _ := io.ReadAll(request.Body)
+		body = string(payload)
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"code":0}`)), Header: make(http.Header), Request: request}, nil
+	})}
+	err := wc.GenerateFeishuCardContentOneAlert(context.Background(), template.Alert{
+		Fingerprint: "fp-1", Status: "firing", StartsAt: time.Now(),
+		Labels: template.KV{"alertname": "fixture", "severity": "critical"},
+	}, &model.MonitorAlertEvent{EventTimes: 1, Status: model.MonitorAlertEventStatusFiring}, nil, &model.MonitorSendGroup{Model: model.Model{ID: 3}, Name: "fixture", OnDutyGroupID: 1, FeiShuQunRobotToken: "fixture-group"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(body, "认领告警") || strings.Contains(body, "屏蔽1小时") || strings.Contains(body, "/renling?") {
+		t.Fatal("unsigned card still exposed action buttons")
+	}
+	if !strings.Contains(body, "未配置签名密钥") {
+		t.Fatal("unsigned card did not explain why buttons are absent")
+	}
+}
+
 func TestContentKeepsSigningKeySnapshot(t *testing.T) {
 	cfg := &config.WebhookConfig{ActionSigningKey: " fixture-action-hmac ", FrontDomain: "http://localhost:3000", BackendDomain: "http://localhost:8889/api/v1/alerts", ImFeishu: config.ImFeishuConfig{RequestTimeoutSeconds: 7}}
 	client := NewWebhookContent(cfg, zap.NewNop(), nil, fixturePrivateRobot{}).(*webhookContent)

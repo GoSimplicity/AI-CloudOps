@@ -33,7 +33,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(destination.stat().st_mode), 0o600)
         settings = dict(line.split("=", 1) for line in content.splitlines() if "=" in line)
         self.assertEqual(len(settings["TREE_PASSWORD_ENCRYPTION_KEY"]), 32)
-        for name in ("MYSQL_PASSWORD", "JWT_KEY1", "JWT_KEY2", "AIOPS_API_KEY"):
+        for name in ("MYSQL_PASSWORD", "JWT_KEY1", "JWT_KEY2", "AIOPS_API_KEY", "WEBHOOK_ACTION_SIGNING_KEY", "WEBHOOK_ALERTMANAGER_BEARER_TOKEN"):
             self.assertNotIn(settings[name], result.stdout + result.stderr)
         again = subprocess.run([sys.executable, str(script)], capture_output=True, text=True)
         self.assertNotEqual(again.returncode, 0)

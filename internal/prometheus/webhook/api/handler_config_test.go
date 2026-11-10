@@ -206,6 +206,21 @@ func TestWebhookHandlerRejectsUnboundedTimeout(t *testing.T) {
 	}
 }
 
+func (memory *silenceMemoryDAO) ClaimMonitorAlertEvent(_ context.Context, id int, expected model.MonitorAlertEventStatus) error {
+	if id <= 0 || (expected != model.MonitorAlertEventStatusFiring && expected != model.MonitorAlertEventStatusUpgraded) {
+		return dao.ErrAlertClaimConflict
+	}
+	if memory.event.ID == id && memory.event.Status == model.MonitorAlertEventStatusClaimed {
+		return nil
+	}
+	if memory.event.ID != id || memory.event.Status != expected {
+		return dao.ErrAlertClaimConflict
+	}
+	event := memory.event
+	event.Status = model.MonitorAlertEventStatusClaimed
+	return memory.UpdateMonitorAlertEvent(context.Background(), &event)
+}
+
 func (memory *silenceMemoryDAO) UpdateMonitorAlertEventSilence(ctx context.Context, id int, expected, desired dao.AlertEventSilenceState) error {
 	current := dao.AlertEventSilenceState{Status: memory.event.Status, SilenceID: memory.event.SilenceID}
 	if current != expected {

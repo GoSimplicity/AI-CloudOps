@@ -231,23 +231,27 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 		sendGroup.Name,
 		sendGroupUrl,
 	)
-	issuedAt := time.Now()
-	buttonURLs := make([]string, 6)
-	specs := []struct {
-		action, hour string
-	}{
-		{"renling", ""},
-		{"silence", "1"},
-		{"silence", "24"},
-		{"unsilence", ""},
-		{"silence", "6"},
-		{"silence", "168"},
-	}
-	for i, spec := range specs {
-		buttonURLs[i], err = wc.signedActionURL(spec.action, alert.Fingerprint, spec.hour, issuedAt)
-		if err != nil {
-			return ErrCardBuild
+	actions := constant.CardActionsUnavailable
+	if strings.TrimSpace(wc.signingKey) != "" {
+		issuedAt := time.Now()
+		buttonURLs := make([]string, 6)
+		specs := []struct {
+			name, hour string
+		}{
+			{"renling", ""},
+			{"silence", "1"},
+			{"silence", "24"},
+			{"unsilence", ""},
+			{"silence", "6"},
+			{"silence", "168"},
 		}
+		for i, spec := range specs {
+			buttonURLs[i], err = wc.signedActionURL(spec.name, alert.Fingerprint, spec.hour, issuedAt)
+			if err != nil {
+				return ErrCardBuild
+			}
+		}
+		actions = fmt.Sprintf(constant.CardActionButtons, buttonURLs[0], buttonURLs[1], buttonURLs[2], buttonURLs[3], buttonURLs[4], buttonURLs[5])
 	}
 
 	// 使用 feiShuCardContent 模板构建 Feishu 卡片内容
@@ -264,12 +268,7 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 		msgGrafana,       // 查看 Grafana 大盘图
 		msgSendGroup,     // 修改发送组
 		msgExpr,          // 修改告警规则
-		buttonURLs[0],    // 认领告警 URL
-		buttonURLs[1],    // 屏蔽1小时 URL
-		buttonURLs[2],    // 屏蔽24小时 URL
-		buttonURLs[3],    // 取消屏蔽 URL
-		buttonURLs[4],    // 屏蔽6小时 URL
-		buttonURLs[5],    // 屏蔽7天 URL
+		actions,
 	)
 	if err != nil {
 		return ErrCardBuild
@@ -296,31 +295,23 @@ func (wc *webhookContent) GenerateFeishuCardContentOneAlert(ctx context.Context,
 // buildFeishuCardContent 构建 Feishu 卡片内容的 JSON 字符串
 func (wc *webhookContent) buildFeishuCardContent(
 	alertHeaderColor, alertHeader, msgLabel, msgAnno, msgSeverity, msgStatus,
-	msgTime, msgUpgrade, msgOnduty, msgGrafana, msgSendGroup, msgExpr string,
-	buttonURL1, buttonURL2, buttonURL3,
-	buttonURL4, buttonURL5, buttonURL6 string,
+	msgTime, msgUpgrade, msgOnduty, msgGrafana, msgSendGroup, msgExpr, actions string,
 ) (string, error) {
-
-	// 格式化 feiShuCardContent 模板
 	cardContent := fmt.Sprintf(constant.CardContent,
-		alertHeaderColor, // header.template
-		alertHeader,      // header.title.content
-		msgLabel,         // 第一行标签信息
-		msgAnno,          // 第一行 anno 信息
-		msgSeverity,      // 第二行告警级别
-		msgStatus,        // 第二行当前状态
-		msgTime,          // 触发时间
-		msgUpgrade,       // 升级状态
-		msgOnduty,        // 值班组信息
-		msgGrafana,       // 查看 Grafana 大盘图
-		msgSendGroup,     // 修改发送组
-		msgExpr,          // 修改告警规则
-		buttonURL1,       // 认领告警 URL
-		buttonURL2,       // 屏蔽1小时 URL
-		buttonURL3,       // 屏蔽24小时 URL
-		buttonURL4,       // 取消屏蔽 URL
-		buttonURL5,       // 屏蔽6小时 URL
-		buttonURL6,       // 屏蔽7天 URL
+		alertHeaderColor,
+		alertHeader,
+		msgLabel,
+		msgAnno,
+		msgSeverity,
+		msgStatus,
+		msgTime,
+		msgUpgrade,
+		msgOnduty,
+		msgGrafana,
+		msgSendGroup,
+		msgExpr,
+		msgExpr,
+		actions,
 	)
 
 	// 验证生成的 JSON 是否有效

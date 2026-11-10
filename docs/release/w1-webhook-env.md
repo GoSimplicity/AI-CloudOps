@@ -46,6 +46,10 @@
 | `WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET` | `webhook.im_feishu.private_robot_app_secret` | 空 | 占位 `xxx`（**凭据**，请用环境变量注入，不要写进文件） |
 | `WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API` | `webhook.im_feishu.tenant_access_token_api` | `https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal` | 同默认值 |
 
+`ENV` 按 `pkg/envmode` 判断。只有 `development` / `dev` 允许签名密钥、Alertmanager bearer token 和卡片对外地址为空，进程打警告后继续启动：`/receive` 不校验令牌，飞书卡片不放认领和静默按钮。`production` / `prod` / `prd`、未设置，以及 `test` 这类无法识别的取值，只要有一项为空就拒绝启动。发布栈由 `scripts/release-env.py` 生成两个密钥（与 `openssl rand -hex 32` 同长度），并把同一个 bearer token 交给 Alertmanager 启动脚本写入 `credentials_file`，配置文件里不写真实值。
+
+签名链接默认 24 小时内有效，有效期内可以重复使用。卡片被转发后，拿到链接的人也能提交。重复静默、取消静默或认领是幂等的：认领只在状态仍是触发或已升级时把 `status` 改成已认领，不写认领人，也不改静默 ID。
+
 说明：
 
 - **飞书群机器人地址**：`group_message_api` 是群机器人 webhook 的前缀，发送时拼成 `前缀/机器人 token`。默认值与仓库 `webhook.yaml`

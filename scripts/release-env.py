@@ -53,12 +53,16 @@ def derived_additions(settings, host):
     if "WEBHOOK_BACKEND_DOMAIN" not in settings:
         lines.append("# External base for Feishu card actions. Includes scheme and /api/v1/alerts.")
         lines.append("WEBHOOK_BACKEND_DOMAIN=http://127.0.0.1:8889/api/v1/alerts")
-    if "WEBHOOK_ACTION_SIGNING_KEY" not in settings:
-        lines.append("# HMAC key for Feishu card action links.")
+    if not settings.get("WEBHOOK_ACTION_SIGNING_KEY"):
+        if "WEBHOOK_ACTION_SIGNING_KEY" in settings:
+            return None, "WEBHOOK_ACTION_SIGNING_KEY= exists but is empty; remove that line and rerun with --add-missing."
+        lines.append("# HMAC key for Feishu card action links. Generated; do not copy into git.")
         lines.append(f"WEBHOOK_ACTION_SIGNING_KEY={secrets.token_hex(32)}")
-    if "WEBHOOK_ALERTMANAGER_BEARER_TOKEN" not in settings:
-        lines.append("# Empty keeps /receive unauthenticated. Match alertmanager http_config when set.")
-        lines.append("WEBHOOK_ALERTMANAGER_BEARER_TOKEN=")
+    if not settings.get("WEBHOOK_ALERTMANAGER_BEARER_TOKEN"):
+        if "WEBHOOK_ALERTMANAGER_BEARER_TOKEN" in settings:
+            return None, "WEBHOOK_ALERTMANAGER_BEARER_TOKEN= exists but is empty; remove that line and rerun with --add-missing."
+        lines.append("# Bearer token for Alertmanager /receive. Same value is injected into Alertmanager at start.")
+        lines.append(f"WEBHOOK_ALERTMANAGER_BEARER_TOKEN={secrets.token_hex(32)}")
     return lines, ""
 
 
@@ -131,9 +135,10 @@ def main():
     content += 'WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API=http://127.0.0.1:9/open-apis/bot/v2/hook\n'
     content += "# Feishu card action base. Replace with the external URL (scheme + /api/v1/alerts) before exposing webhook.\n"
     content += "WEBHOOK_BACKEND_DOMAIN=http://127.0.0.1:8889/api/v1/alerts\n"
-    content += f"WEBHOOK_ACTION_SIGNING_KEY={secrets.token_hex(32)}\n"
-    content += "# Empty: /receive stays open and webhook logs a startup warning. Set with alertmanager http_config.\n"
-    content += "WEBHOOK_ALERTMANAGER_BEARER_TOKEN=\n"
+    signing_key = secrets.token_hex(32)
+    bearer_token = secrets.token_hex(32)
+    content += f"WEBHOOK_ACTION_SIGNING_KEY={signing_key}\n"
+    content += f"WEBHOOK_ALERTMANAGER_BEARER_TOKEN={bearer_token}\n"
     try:
         descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:

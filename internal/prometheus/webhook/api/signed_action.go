@@ -166,6 +166,8 @@ func writeActionErrorPage(ctx *gin.Context, message string) {
 func writeActionPage(ctx *gin.Context, status int, data actionPageData) {
 	ctx.Header("Content-Type", "text/html; charset=utf-8")
 	ctx.Header("X-Content-Type-Options", "nosniff")
+	ctx.Header("X-Frame-Options", "DENY")
+	ctx.Header("Content-Security-Policy", "frame-ancestors 'none'; form-action 'self'")
 	ctx.Header("Referrer-Policy", "no-referrer")
 	ctx.Header("Cache-Control", "no-store")
 	ctx.Status(status)
@@ -177,11 +179,11 @@ func writeActionPage(ctx *gin.Context, status int, data actionPageData) {
 func confirmCopy(act signedAction) (title, message, button string) {
 	switch act.name {
 	case "silence":
-		return "确认静默", "确认静默这条告警 " + act.hour + " 小时？打开链接不会静默，提交后才会调用 Alertmanager。", "确认静默"
+		return "确认静默", "确认静默这条告警 " + act.hour + " 小时？打开链接不会静默，提交后才会调用 Alertmanager。链接在过期前可重复提交；卡片转发出去后，拿到链接的人也能操作。", "确认静默"
 	case "unsilence":
-		return "确认取消静默", "确认取消静默？打开链接不会生效，提交后才会调用 Alertmanager。", "确认取消静默"
+		return "确认取消静默", "确认取消静默？打开链接不会生效，提交后才会调用 Alertmanager。链接在过期前可重复提交；卡片转发出去后，拿到链接的人也能操作。", "确认取消静默"
 	case "renling":
-		return "确认认领", "确认认领这条告警？打开链接不会生效。提交后只把现有告警状态标为已认领并记日志，不会写入认领人。", "确认认领"
+		return "确认认领", "确认认领这条告警？打开链接不会生效。提交后只在告警处于触发或已升级时把状态改为已认领，不写认领人。重复提交是幂等的。链接在过期前可重复使用，转发后拿到链接的人也能提交。", "确认认领"
 	default:
 		return "确认操作", "确认继续？", "确认"
 	}

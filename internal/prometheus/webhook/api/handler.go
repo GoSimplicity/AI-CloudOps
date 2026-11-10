@@ -37,6 +37,7 @@ import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/prometheus/webhook/dao"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/envmode"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/alertmanager/notify/webhook"
 	"github.com/prometheus/alertmanager/pkg/labels"
@@ -66,6 +67,9 @@ func NewWebHookHandler(cfg *config.WebhookConfig, l *zap.Logger, dao dao.Webhook
 	if cfg.ImFeishu.RequestTimeoutSeconds < 1 || cfg.ImFeishu.RequestTimeoutSeconds > 600 {
 		return nil, fmt.Errorf("webhook.im_feishu.request_timeout_seconds 必须在1到600之间")
 	}
+	if err := requireRuntimeSecrets(cfg); err != nil {
+		return nil, err
+	}
 
 	handler := &WebHookHandler{
 		l:                       l,
@@ -78,12 +82,37 @@ func NewWebHookHandler(cfg *config.WebhookConfig, l *zap.Logger, dao dao.Webhook
 		alertmanagerBearerToken: strings.TrimSpace(cfg.AlertmanagerBearerToken),
 	}
 	if l != nil && handler.actionSigningKey == "" {
-		l.Warn("WEBHOOK_ACTION_SIGNING_KEY 未配置，飞书卡片中的静默、取消静默和认领链接无法通过签名校验")
+		l.Warn("WEBHOOK_ACTION_SIGNING_KEY 未配置，飞书卡片不带认领和静默按钮")
 	}
 	if l != nil && handler.alertmanagerBearerToken == "" {
-		l.Warn("WEBHOOK_ALERTMANAGER_BEARER_TOKEN 未配置，/api/v1/alerts/receive 不校验 Authorization，保持现有行为")
+		l.Warn("WEBHOOK_ALERTMANAGER_BEARER_TOKEN 未配置，/api/v1/alerts/receive 不校验 Authorization")
+	}
+	if l != nil && strings.TrimSpace(cfg.BackendDomain) == "" {
+		l.Warn("WEBHOOK_BACKEND_DOMAIN 未配置，飞书卡片操作链接没有对外地址")
 	}
 	return handler, nil
+}
+
+// requireRuntimeSecrets 按 envmode.IsProduction 判断。
+// 只有 development/dev 允许缺省并在上面打警告；生产别名、未设置和无法识别的 ENV（含 test）拒绝启动。
+func requireRuntimeSecrets(cfg *config.WebhookConfig) error {
+	if !envmode.IsProduction() {
+		return nil
+	}
+	var missing []string
+	if strings.TrimSpace(cfg.AlertmanagerBearerToken) == "" {
+		missing = append(missing, "WEBHOOK_ALERTMANAGER_BEARER_TOKEN")
+	}
+	if strings.TrimSpace(cfg.ActionSigningKey) == "" {
+		missing = append(missing, "WEBHOOK_ACTION_SIGNING_KEY")
+	}
+	if strings.TrimSpace(cfg.BackendDomain) == "" {
+		missing = append(missing, "WEBHOOK_BACKEND_DOMAIN")
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf("生产或无法识别的环境缺少 Webhook 配置: %s", strings.Join(missing, "、"))
 }
 
 // RegisterRouters 注册Webhook相关的HTTP路由
@@ -315,10 +344,10 @@ func (w *WebHookHandler) MonitorAlertClaim(ctx *gin.Context) {
 		base.ErrorWithMessage(ctx, "当前状态不能认领")
 		return
 	}
-	event.Status = model.MonitorAlertEventStatusClaimed
-	if err := w.dao.UpdateMonitorAlertEvent(ctx, event); err != nil {
+	expected := event.Status
+	if err := w.dao.ClaimMonitorAlertEvent(ctx, event.ID, expected); err != nil {
 		w.l.Error("更新告警事件状态失败", zap.String("operation", "alert_claim_save"), zap.Int("event_id", event.ID))
-		base.ErrorWithMessage(ctx, "认领状态保存未确认，请人工核对，勿重复提交")
+		base.ErrorWithMessage(ctx, "告警状态已变化，认领未生效")
 		return
 	}
 	w.l.Info("告警已从卡片认领", zap.String("operation", "alert_claim"), zap.Int("event_id", event.ID))
