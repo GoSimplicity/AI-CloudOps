@@ -60,8 +60,10 @@ func (s *monitorConfigService) GetMonitorConfigList(ctx context.Context, req *mo
 		return model.ListResp[*model.MonitorConfig]{}, err
 	}
 
+	items := redactConfigPreviews(list)
+	s.logRedactionFailures(list, items)
 	return model.ListResp[*model.MonitorConfig]{
-		Items: list,
+		Items: items,
 		Total: total,
 	}, nil
 }
@@ -74,10 +76,16 @@ func (s *monitorConfigService) GetMonitorConfigByID(ctx context.Context, req *mo
 		return nil, err
 	}
 
-	return config, nil
+	presented := redactConfigPreview(config)
+	s.logRedactionFailure(config, presented)
+	return presented, nil
 }
 
 func (s *monitorConfigService) CreateMonitorConfig(ctx context.Context, req *model.CreateMonitorConfigReq) error {
+	if err := rejectCreateCredentialPlaceholder(req.ConfigContent); err != nil {
+		s.l.Error("创建监控配置失败", zap.Error(err))
+		return err
+	}
 	config := &model.MonitorConfig{
 		Name:          req.Name,
 		PoolID:        req.PoolID,
@@ -97,23 +105,55 @@ func (s *monitorConfigService) CreateMonitorConfig(ctx context.Context, req *mod
 }
 
 func (s *monitorConfigService) UpdateMonitorConfig(ctx context.Context, req *model.UpdateMonitorConfigReq) error {
+	content, err := s.restoreUpdateContent(ctx, req)
+	if err != nil {
+		s.l.Error("更新监控配置失败", zap.Error(err))
+		return err
+	}
 	config := &model.MonitorConfig{
 		Model:         model.Model{ID: req.ID},
 		Name:          req.Name,
 		PoolID:        req.PoolID,
 		InstanceIP:    req.InstanceIP,
 		ConfigType:    req.ConfigType,
-		ConfigContent: req.ConfigContent,
+		ConfigContent: content,
 		Status:        req.Status,
 	}
 
-	err := s.configDao.UpdateMonitorConfig(ctx, config)
+	err = s.configDao.UpdateMonitorConfig(ctx, config)
 	if err != nil {
 		s.l.Error("更新监控配置失败", zap.Error(err))
 		return err
 	}
 
 	return nil
+}
+
+func (s *monitorConfigService) restoreUpdateContent(ctx context.Context, req *model.UpdateMonitorConfigReq) (string, error) {
+	if req.ConfigContent == "" || !updateNeedsStoredConfig(req.ConfigContent) {
+		return req.ConfigContent, nil
+	}
+	current, err := s.configDao.GetMonitorConfigByID(ctx, req.ID)
+	if err != nil {
+		return "", err
+	}
+	return restoreSubmittedConfig(current.ConfigContent, req.ConfigContent)
+}
+
+func (s *monitorConfigService) logRedactionFailures(stored, presented []*model.MonitorConfig) {
+	for i, item := range stored {
+		if i >= len(presented) {
+			break
+		}
+		s.logRedactionFailure(item, presented[i])
+	}
+}
+
+func (s *monitorConfigService) logRedactionFailure(stored, presented *model.MonitorConfig) {
+	if stored == nil || presented == nil || presented.ConfigContent != hiddenConfigContent || stored.ConfigContent == hiddenConfigContent {
+		return
+	}
+	s.l.Error("监控配置解析失败，已隐藏内容", zap.Int("id", stored.ID), zap.String("name", stored.Name))
 }
 
 func (s *monitorConfigService) DeleteMonitorConfig(ctx context.Context, req *model.DeleteMonitorConfigReq) error {
