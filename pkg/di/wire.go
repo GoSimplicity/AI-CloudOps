@@ -152,6 +152,7 @@ var ServiceSet = wire.NewSet(
 	k8sService.NewSecretService,
 	k8sService.NewPVService,
 	k8sService.NewPVCService,
+	authService.NewLoginGuard,
 	authService.NewUserService,
 	authService.NewDepartmentService,
 	authService.NewApiService,
@@ -278,6 +279,7 @@ var Injector = wire.NewSet(
 	InitLogger,
 	InitRedis,
 	ProvideRedisCmdable,
+	ProvideLoginLockoutConfig,
 	InitDB,
 	CronSet,
 )

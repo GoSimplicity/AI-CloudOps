@@ -3,6 +3,7 @@ package config
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -55,6 +56,61 @@ func TestJWTExpirationDefaultIs30Minutes(t *testing.T) {
 		}
 		if got := v.GetInt64("jwt.expiration"); got != 30 {
 			t.Fatalf("%s 中 jwt.expiration 应为 30（分钟）, got %d", f, got)
+		}
+	}
+}
+
+func TestLoginLockoutDefaults(t *testing.T) {
+	viper.Reset()
+	t.Cleanup(viper.Reset)
+	setDefaults()
+	if got := viper.GetInt("auth.login_lockout.pair_max_failures"); got != 5 {
+		t.Fatalf("pair_max_failures=%d", got)
+	}
+	if got := viper.GetInt("auth.login_lockout.username_max_failures"); got != 50 {
+		t.Fatalf("username_max_failures=%d", got)
+	}
+	if got := viper.GetDuration("auth.login_lockout.username_window"); got != 15*time.Minute {
+		t.Fatalf("username_window=%s", got)
+	}
+	if got := viper.GetDuration("auth.login_lockout.username_lock"); got != 15*time.Minute {
+		t.Fatalf("username_lock=%s", got)
+	}
+	if got := viper.GetInt("auth.login_lockout.ip_max_failures"); got != 20 {
+		t.Fatalf("ip_max_failures=%d", got)
+	}
+	if got := viper.GetDuration("auth.login_lockout.ip_window"); got != 15*time.Minute {
+		t.Fatalf("ip_window=%s", got)
+	}
+	if got := viper.GetDuration("auth.login_lockout.ip_lock"); got != 15*time.Minute {
+		t.Fatalf("ip_lock=%s", got)
+	}
+	proxies, err := TrustedProxyList("")
+	if err != nil || len(proxies) != len(defaultTrustedProxies) {
+		t.Fatalf("default proxies: %v %v", proxies, err)
+	}
+	if _, err = TrustedProxyList("not-a-cidr"); err == nil {
+		t.Fatal("invalid proxy CIDR accepted")
+	}
+	got := LoginLockoutConfig{}.Normalized()
+	if got.PairMaxFailures != 5 || got.UsernameMaxFailures != 50 || got.IPMaxFailures != 20 || got.UsernameLock != 15*time.Minute {
+		t.Fatalf("normalized zero config = %+v", got)
+	}
+	custom := LoginLockoutConfig{UsernameMaxFailures: 3, IPMaxFailures: 9, UsernameWindow: time.Minute}.Normalized()
+	if custom.UsernameMaxFailures != 3 || custom.IPMaxFailures != 9 || custom.UsernameWindow != time.Minute || custom.IPLock != 15*time.Minute {
+		t.Fatalf("explicit values changed: %+v", custom)
+	}
+	for _, f := range []string{"../../config/config.development.yaml", "../../config/config.production.yaml"} {
+		v := viper.New()
+		v.SetConfigFile(f)
+		if err := v.ReadInConfig(); err != nil {
+			t.Fatal(err)
+		}
+		if v.GetInt("auth.login_lockout.pair_max_failures") != 5 || v.GetInt("auth.login_lockout.username_max_failures") != 50 || v.GetInt("auth.login_lockout.ip_max_failures") != 20 {
+			t.Fatalf("%s 登录锁定默认值不正确", f)
+		}
+		if v.GetDuration("auth.login_lockout.username_window") != 15*time.Minute || v.GetDuration("auth.login_lockout.ip_lock") != 15*time.Minute {
+			t.Fatalf("%s 登录锁定时长不正确", f)
 		}
 	}
 }

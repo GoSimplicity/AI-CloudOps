@@ -40,6 +40,7 @@ const (
 )
 
 var (
-	ErrorUserNotExist      = errors.New("user not exists")
-	ErrorPasswordIncorrect = errors.New("user password incorrect")
+	ErrorUserNotExist       = errors.New("user not exists")
+	ErrorPasswordIncorrect  = errors.New("user password incorrect")
+	ErrorInvalidCredentials = errors.New("invalid username or password")
 )

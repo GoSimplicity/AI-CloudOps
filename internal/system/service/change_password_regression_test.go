@@ -37,7 +37,7 @@ func TestChangePasswordVerifiesOldPasswordOfTokenUser(t *testing.T) {
 		7:  {Model: model.Model{ID: 7}, Password: selfOld},
 		99: {Model: model.Model{ID: 99}, Password: otherOld},
 	}}
-	s := NewUserService(d, nil, zap.NewNop())
+	s := NewUserService(d, nil, zap.NewNop(), nil)
 	err := s.ChangePassword(context.Background(), &model.ChangePasswordReq{UserID: 7, Password: "wrong-x", NewPassword: "new-pass-x", ConfirmPassword: "new-pass-x"})
 	if !errors.Is(err, constants.ErrorPasswordIncorrect) || d.changedID != 0 {
 		t.Fatalf("wrong old password accepted: %v", err)
@@ -51,7 +51,7 @@ func TestChangePasswordVerifiesOldPasswordOfTokenUser(t *testing.T) {
 
 func TestChangePasswordRejectsNonPositiveUserID(t *testing.T) {
 	d := &changePasswordDAO{users: map[int]*model.User{}}
-	s := NewUserService(d, nil, zap.NewNop())
+	s := NewUserService(d, nil, zap.NewNop(), nil)
 	for _, uid := range []int{0, -1} {
 		err := s.ChangePassword(context.Background(), &model.ChangePasswordReq{UserID: uid, Password: "old-x", NewPassword: "new-pass-x", ConfirmPassword: "new-pass-x"})
 		if err == nil || d.changedID != 0 {

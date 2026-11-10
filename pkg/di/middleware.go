@@ -52,7 +52,7 @@ func InitMiddlewares(cfg *config.Config, ih ijwt.Handler, l *zap.Logger, roleSvc
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
 			AllowCredentials: true,
 			AllowHeaders:     []string{"Content-Type", "Authorization", "X-Refresh-Token"},
-			ExposeHeaders:    []string{"x-jwt-token", "x-refresh-token"},
+			ExposeHeaders:    []string{"x-jwt-token", "x-refresh-token", "Retry-After"},
 			AllowOriginFunc: func(origin string) bool {
 				_, allowed := allowedOrigins[origin]
 				return allowed

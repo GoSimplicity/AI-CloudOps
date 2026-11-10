@@ -42,7 +42,7 @@ import (
 
 type UserService interface {
 	SignUp(ctx context.Context, user *model.UserSignUpReq) error
-	Login(ctx context.Context, user *model.UserLoginReq) (*model.User, error)
+	Login(ctx context.Context, user *model.UserLoginReq, clientIP string) (*model.User, error)
 	GetProfile(ctx context.Context, uid int) (*model.User, error)
 	GetPermCode(ctx context.Context, uid int) ([]string, error)
 	GetPermissions(ctx context.Context, uid int, catalog []permission.CatalogEntry) (*model.UserPermissionsResp, error)
@@ -59,15 +59,27 @@ type userService struct {
 	dao     dao.UserDAO
 	logger  *zap.Logger
 	roleDao dao.RoleDAO
+	guard   LoginGuard
 }
 
-func NewUserService(dao dao.UserDAO, roleDao dao.RoleDAO, logger *zap.Logger) UserService {
+func NewUserService(dao dao.UserDAO, roleDao dao.RoleDAO, logger *zap.Logger, guard LoginGuard) UserService {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	return &userService{
 		dao:     dao,
 		roleDao: roleDao,
 		logger:  logger,
+		guard:   guard,
 	}
 }
+
+// dummyPasswordHash 与真实口令使用相同的 bcrypt cost，账号不存在时也做一次比较。
+func dummyPasswordHash() string {
+	return userutils.LoginTimingHash()
+}
+
+var comparePassword = userutils.ComparePassword
 
 // SignUp 用户注册
 func (us *userService) SignUp(ctx context.Context, user *model.UserSignUpReq) error {
@@ -91,26 +103,68 @@ func (us *userService) SignUp(ctx context.Context, user *model.UserSignUpReq) er
 	return nil
 }
 
-// Login 用户登录
-func (us *userService) Login(ctx context.Context, user *model.UserLoginReq) (*model.User, error) {
-	u, err := us.dao.GetByUsername(ctx, user.Username)
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return &model.User{}, constants.ErrorUserNotExist
-	} else if err != nil {
-		us.logger.Error("获取用户失败", zap.Error(err))
-		return &model.User{}, err
+// Login 校验登录。用户不存在、密码错误、账号不可用对外都是同一凭证错误；
+// 达到阈值时返回锁定错误。clientIP 只用于计数，密码不会写入日志。
+func (us *userService) Login(ctx context.Context, req *model.UserLoginReq, clientIP string) (*model.User, error) {
+	if req == nil {
+		return nil, constants.ErrorInvalidCredentials
+	}
+	username := strings.TrimSpace(req.Username)
+	if username == "" {
+		_ = comparePassword(dummyPasswordHash(), req.Password)
+		us.logger.Warn("登录失败", zap.String("reason", "empty_username"))
+		return nil, constants.ErrorInvalidCredentials
+	}
+	if us.guard == nil {
+		us.logger.Error("登录防护未配置")
+		return nil, ErrLoginUnavailable
+	}
+	if err := us.guard.Check(ctx, username, clientIP); err != nil {
+		return nil, err
 	}
 
-	if u.Enable != 1 {
-		return &model.User{}, constants.ErrorPasswordIncorrect
+	user, err := us.dao.GetByUsername(ctx, username)
+	hash := dummyPasswordHash()
+	forced := false
+	reason := ""
+	switch {
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		forced = true
+		reason = "user_not_found"
+		user = nil
+	case err != nil:
+		us.logger.Error("获取用户失败", zap.String("username", username), zap.Error(err))
+		return nil, errors.New("登录失败")
+	case user.Enable != 1:
+		forced = true
+		reason = "disabled"
+		if user.Password != "" {
+			hash = user.Password
+		}
+	default:
+		if user.Password != "" {
+			hash = user.Password
+		}
 	}
 
-	if err = userutils.ComparePassword(u.Password, user.Password); err != nil {
-		us.logger.Error("密码错误", zap.Error(err))
-		return &model.User{}, constants.ErrorPasswordIncorrect
+	if compareErr := comparePassword(hash, req.Password); compareErr != nil || forced {
+		if reason == "" {
+			reason = "password_mismatch"
+		}
+		us.logger.Warn("登录失败", zap.String("username", username), zap.String("reason", reason))
+		if lockErr := us.guard.RecordFailure(ctx, username, clientIP); lockErr != nil {
+			return nil, lockErr
+		}
+		return nil, constants.ErrorInvalidCredentials
 	}
 
-	return u, nil
+	if err = us.guard.Check(ctx, username, clientIP); err != nil {
+		return nil, err
+	}
+	if err = us.guard.RecordSuccess(ctx, username, clientIP); err != nil {
+		us.logger.Error("清除登录失败计数失败", zap.String("username", username), zap.Error(err))
+	}
+	return user, nil
 }
 
 func (us *userService) GetProfile(ctx context.Context, uid int) (*model.User, error) {
