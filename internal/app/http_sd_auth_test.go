@@ -11,6 +11,7 @@ import (
 )
 
 func TestHTTPServiceDiscoveryStartupLogOmitsToken(t *testing.T) {
+	t.Setenv("ENV", "development")
 	for _, tt := range []struct {
 		name, token, want string
 		warn              bool

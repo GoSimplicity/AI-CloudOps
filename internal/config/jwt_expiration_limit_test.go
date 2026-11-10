@@ -19,6 +19,7 @@ func captureConfigWarn(t *testing.T) *[]string {
 func expirationTestConfig(exp int64) *Config {
 	c := validConfigForTest()
 	c.Tree.PasswordEncryptionKey = randomTestKey()[:32] // 生产环境要求恰好32字节
+	c.Prometheus.HttpSdToken = "fixture-http-sd-token"
 	c.JWT.Expiration = exp
 	return c
 }

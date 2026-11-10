@@ -39,7 +39,7 @@ prometheus:
   alert_webhook_addr: "http://localhost:8889/api/v1/alerts/receive"
   alert_webhook_file_dir: "/tmp/webhook_files"
   httpSdAPI: "http://localhost:8889/api/not_auth/getTreeNodeBindIps"
-  httpSdToken: "" # 敏感信息，不写入配置文件；由环境变量 PROMETHEUS_HTTP_SD_TOKEN 注入。留空时仅接受本机回环直连
+  httpSdToken: "" # 敏感信息，不写入配置文件；由环境变量 PROMETHEUS_HTTP_SD_TOKEN 注入。生产环境留空会拒绝启动
 mock:
   enabled: false # 是否开启mock
 notification:

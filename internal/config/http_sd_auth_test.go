@@ -51,7 +51,39 @@ func TestValidateHTTPServiceDiscoveryToken(t *testing.T) {
 	}
 }
 
+func TestMissingHTTPServiceDiscoveryTokenFollowsEnvironment(t *testing.T) {
+	for _, env := range []string{"development", "dev", " Dev ", "DEVELOPMENT"} {
+		t.Run("allow/"+env, func(t *testing.T) {
+			t.Setenv("ENV", env)
+			cfg := validConfigForTest()
+			cfg.Prometheus.HttpSdToken = ""
+			if err := cfg.Validate(); err != nil {
+				t.Fatalf("开发环境应允许留空: %v", err)
+			}
+		})
+	}
+	for _, env := range []string{"production", "prod", "prd", " Production ", "PROD", "", " ", "test", "testing", "TEST", "staging"} {
+		t.Run("refuse/"+env, func(t *testing.T) {
+			t.Setenv("ENV", env)
+			cfg := prodTestConfig()
+			cfg.Prometheus.HttpSdToken = ""
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "PROMETHEUS_HTTP_SD_TOKEN") || !strings.Contains(err.Error(), "拒绝启动") {
+				t.Fatalf("ENV=%q 应拒绝启动, got %v", env, err)
+			}
+			if strings.Contains(err.Error(), "fixture") || strings.Contains(err.Error(), "fake-") {
+				t.Fatal("错误信息泄露了配置值")
+			}
+		})
+	}
+	t.Setenv("ENV", "production")
+	if err := prodTestConfig().Validate(); err != nil {
+		t.Fatalf("生产环境配置了令牌后应通过: %v", err)
+	}
+}
+
 func TestHTTPServiceDiscoveryStartupMessageOmitsToken(t *testing.T) {
+	t.Setenv("ENV", "development")
 	for _, token := range []string{"", "fixture-http-sd-token", "fixture token", "fixture\nhttp"} {
 		warn, message := (PrometheusConfig{HttpSdToken: token}).HTTPServiceDiscoveryStartup()
 		if strings.Contains(message, "fixture") {
@@ -66,6 +98,11 @@ func TestHTTPServiceDiscoveryStartupMessageOmitsToken(t *testing.T) {
 		if !warn || !strings.Contains(message, "回环") {
 			t.Fatal("unset or invalid token did not report loopback-only mode")
 		}
+	}
+	t.Setenv("ENV", "production")
+	warn, message := (PrometheusConfig{}).HTTPServiceDiscoveryStartup()
+	if !warn || !strings.Contains(message, "拒绝启动") || strings.Contains(message, "当前为开发环境") {
+		t.Fatalf("生产环境未配置提示不正确: warn=%v message=%s", warn, message)
 	}
 }
 

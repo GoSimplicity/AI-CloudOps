@@ -1,6 +1,6 @@
 # 公共 HTTP-SD 输入边界
 
-`/api/not_auth/getBindIps` 与已发布别名 `/api/not_auth/getTreeNodeBindIps` 继续提供 Prometheus HTTP 服务发现，但不走用户登录。请求必须携带 `Authorization: Bearer <PROMETHEUS_HTTP_SD_TOKEN>`，比较使用 SHA-256 摘要和常量时间比较。令牌来自环境变量或配置 `prometheus.httpSdToken`，不写进代码和日志。未配置或配置无效时，只接受 TCP 对端是本机回环地址的直连，不信任 `X-Forwarded-For` 或 `X-Real-IP`；启动时会打印明确告警。非空但不合法的令牌会在配置校验阶段拒绝启动。成功响应仍是原始 target-group JSON 数组，不包裹业务 API envelope；响应仅包含目标地址和现有发现标签，不返回树节点关联用户、密码或资源密钥。
+`/api/not_auth/getBindIps` 与已发布别名 `/api/not_auth/getTreeNodeBindIps` 继续提供 Prometheus HTTP 服务发现，但不走用户登录。请求必须携带 `Authorization: Bearer <PROMETHEUS_HTTP_SD_TOKEN>`，比较使用 SHA-256 摘要和常量时间比较。令牌来自环境变量或配置 `prometheus.httpSdToken`，不写进代码和日志。只有 `ENV` 明确为 `development`/`dev` 且令牌未配置时，才只接受 TCP 对端是本机回环地址的直连，不信任 `X-Forwarded-For` 或 `X-Real-IP`，并在启动时打印告警。生产环境（`production`/`prod`/`prd`）以及未设置、空白、`test` 等无法识别的环境，未配置令牌会拒绝启动。判定与 `pkg/envmode.IsProduction` 一致。非空但不合法的令牌在所有环境都会拒绝启动。升级后必须重新生成一次 Prometheus 配置，否则已下发的 http_sd 抓取会返回 401。成功响应仍是原始 target-group JSON 数组，不包裹业务 API envelope；响应仅包含目标地址和现有发现标签，不返回树节点关联用户、密码或资源密钥。
 
 输入现在保序去重：`tree_node_ids=7,7,8` 只分别查询节点 7、8 一次，目标地址也保持原有去重行为，标签中的节点 ID 统一为 `7,8`。空白和空片段仍可忽略；非整数、非正整数或全部为空的请求返回 HTTP 400，避免旧行为悄悄执行部分查询。
 

@@ -49,6 +49,7 @@ func TestSecretsInjectedFromEnvironment(t *testing.T) {
 			if strings.Contains(file, "production") {
 				t.Setenv("ENV", "production")
 				t.Setenv("MOCK_ENABLED", "false")
+				t.Setenv("PROMETHEUS_HTTP_SD_TOKEN", "fixture-http-sd-token")
 			} else {
 				t.Setenv("ENV", "development")
 			}

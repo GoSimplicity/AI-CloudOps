@@ -131,6 +131,8 @@ AIOps 飞书自定义机器人可在服务端私有 `.env` 设置 `FEISHU_WEBHOO
 
 发布模板将访问令牌有效期设为 30 分钟。沿用当前后端配置契约：`JWT_EXPIRATION` 的单位为分钟。
 
+HTTP-SD 在这次升级之后要求 `PROMETHEUS_HTTP_SD_TOKEN`。发布 compose 将该变量标成必填（`${PROMETHEUS_HTTP_SD_TOKEN:?Generate .env first}`），示例文件只保留空占位，真实值由 `scripts/release-env.py` 生成，不要写进仓库。生产环境以及无法识别的 `ENV` 如果没配这个变量，后端会拒绝启动；只有 `development`/`dev` 会退回“只接受本机回环并在启动时告警”。升级后必须重新生成一次 Prometheus 配置，否则已经下发、没有 `http_sd_configs.authorization` 的抓取会拿到 401。重新生成由平台的 Prometheus 配置生成器完成，它会把同一令牌写进发现配置。
+
 ## 发布门槛
 
 发布工具回归使用 `python3 -m unittest discover -s scripts/tests -v`，无需运行容器，覆盖仓库路径、启动预检与私有密钥的防覆盖行为。CI 与标签发布均执行该检查。其中发布 compose 用例需要 `docker compose` 与 `jq`（只做 `compose config`，不连守护进程）：本地缺少时跳过；`CI=true`（或 `1`）或 `RELEASE_TESTS_REQUIRE_COMPOSE=1` 时缺少即判失败，不允许跳过。

@@ -97,8 +97,8 @@ services:
       WORKORDER_EVENT_RETENTION_DAYS: ${WORKORDER_EVENT_RETENTION_DAYS:-90}
       PROMETHEUS_HTTP_SD_API: ${PROMETHEUS_HTTP_SD_API:-http://backend:8889/api/not_auth/getTreeNodeBindIps}
       # HTTP-SD bearer token。backend 用它校验发现接口，并写入生成的 Prometheus http_sd_configs.authorization。
-      # 未设置时 compose 拒绝启动。进程内留空则只接受本机回环直连，Prometheus 容器将无法发现目标。
-      PROMETHEUS_HTTP_SD_TOKEN: ${PROMETHEUS_HTTP_SD_TOKEN:?Set PROMETHEUS_HTTP_SD_TOKEN in deploy/release/.env}
+      # 未设置时 compose 拒绝启动。生产进程缺少该变量也会拒绝启动。升级后必须重新生成一次 Prometheus 配置，否则 http_sd 会返回 401。
+      PROMETHEUS_HTTP_SD_TOKEN: ${PROMETHEUS_HTTP_SD_TOKEN:?Generate .env first}
       # 告警推送地址：backend 按它生成 Alertmanager 的 webhook 接收地址，目标是 webhook 服务（不是 backend 自己），
       # 与 alertmanager.yml 的 http://webhook:8889/api/v1/alerts/receive 一致。本模板用 Compose 默认网络，服务名 webhook 可解析；
       # 端口 8889 来自 webhook 镜像内 config/webhook.yaml（compose 不给 webhook 传 WEBHOOK_PORT），两边改端口要同步。

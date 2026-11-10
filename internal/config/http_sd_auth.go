@@ -7,14 +7,21 @@ import (
 	"net"
 	"strings"
 	"unicode"
+
+	"github.com/GoSimplicity/AI-CloudOps/pkg/envmode"
 )
 
 // maxHTTPServiceDiscoveryTokenLength 限制写入 Authorization 头和 Prometheus 配置的令牌长度。
 const maxHTTPServiceDiscoveryTokenLength = 512
 
-// validateHTTPServiceDiscoveryToken 空值表示未配置。非空值拒绝任何空白、控制字符和超长值，错误信息只含变量名。
+// validateHTTPServiceDiscoveryToken 空值只允许开发环境（development/dev）。
+// 生产别名以及未设置、空白、test 等无法识别的取值都按 envmode.IsProduction 拒绝启动。
+// 非空值在所有环境都拒绝空白、控制字符和超长值。错误信息只含变量名。
 func validateHTTPServiceDiscoveryToken(value string) error {
 	if value == "" {
+		if envmode.IsProduction() {
+			return fmt.Errorf("PROMETHEUS_HTTP_SD_TOKEN 未配置：生产环境及无法识别的环境拒绝启动")
+		}
 		return nil
 	}
 	if strings.IndexFunc(value, unicode.IsSpace) >= 0 || hasControlChar(value) {
@@ -39,7 +46,10 @@ func (c PrometheusConfig) UsableHTTPServiceDiscoveryToken() string {
 // 文案不包含令牌本身。
 func (c PrometheusConfig) HTTPServiceDiscoveryStartup() (warn bool, message string) {
 	if c.HttpSdToken == "" {
-		return true, "[SECURITY] PROMETHEUS_HTTP_SD_TOKEN 未配置，HTTP-SD 仅接受本机回环地址的直连；经反向代理或其他主机的请求会被拒绝。生产环境请设置该环境变量，平台生成的 Prometheus http_sd_configs 会带上相同的 bearer token。"
+		if envmode.IsProduction() {
+			return true, "[SECURITY] PROMETHEUS_HTTP_SD_TOKEN 未配置，生产环境及无法识别的环境拒绝启动。令牌缺失时 HTTP-SD 只接受本机回环直连。升级后必须重新生成一次 Prometheus 配置，否则 http_sd 会返回 401。"
+		}
+		return true, "[SECURITY] PROMETHEUS_HTTP_SD_TOKEN 未配置，当前为开发环境，HTTP-SD 仅接受本机回环地址的直连；经反向代理或其他主机的请求会被拒绝。升级后必须重新生成一次 Prometheus 配置，否则 http_sd 会返回 401。"
 	}
 	if validateHTTPServiceDiscoveryToken(c.HttpSdToken) != nil {
 		return true, "[SECURITY] PROMETHEUS_HTTP_SD_TOKEN 无效，已按未配置处理，HTTP-SD 仅接受本机回环地址的直连。请改为不含空白和控制字符、且不超过512字节的令牌。"

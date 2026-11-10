@@ -8,6 +8,7 @@ import (
 func prodTestConfig() *Config {
 	c := validConfigForTest()
 	c.Tree.PasswordEncryptionKey = randomTestKey()[:32]
+	c.Prometheus.HttpSdToken = "fixture-http-sd-token"
 	return c
 }
 

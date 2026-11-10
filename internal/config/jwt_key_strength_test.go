@@ -73,6 +73,7 @@ func TestJWTKeyStrengthAllEnvs(t *testing.T) {
 				t.Setenv("ENV", env)
 				c := validConfigForTest()
 				c.Tree.PasswordEncryptionKey = randomTestKey()[:32] // 生产环境要求恰好32字节
+				c.Prometheus.HttpSdToken = "fixture-http-sd-token"
 				c.JWT.Key1, c.JWT.Key2 = tc.key1, tc.key2
 				err := c.Validate()
 				if tc.wantErr == "" {
@@ -105,6 +106,7 @@ func TestJWTKeyRejectsKnownSampleHash(t *testing.T) {
 		t.Setenv("ENV", env)
 		c := validConfigForTest()
 		c.Tree.PasswordEncryptionKey = randomTestKey()[:32]
+		c.Prometheus.HttpSdToken = "fixture-http-sd-token"
 		c.JWT.Key2 = sample
 		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "JWT_KEY2 不能使用仓库示例值") {
 			t.Fatalf("ENV=%q 示例值应被拒, got %v", env, err)
@@ -137,6 +139,7 @@ func TestJWTKeyDistinctCharsBoundary(t *testing.T) {
 			t.Setenv("ENV", env)
 			c := validConfigForTest()
 			c.Tree.PasswordEncryptionKey = randomTestKey()[:32]
+			c.Prometheus.HttpSdToken = "fixture-http-sd-token"
 
 			c.JWT.Key1, c.JWT.Key2 = low, randomTestKey()
 			assertRejectedWithoutLeak(t, c.Validate(), "JWT_KEY1 熵过低", low)

@@ -47,7 +47,7 @@ func TestProductionChecksFollowNormalizedEnv(t *testing.T) {
 	// 合规的生产配置在别名下也能通过
 	setOrUnsetEnv(t, " Prod ", true)
 	ok := &Config{Server: ServerConfig{Port: "8889"}, Log: LogConfig{Dir: "logs"}, MySQL: MySQLConfig{Addr: "db"}, Redis: RedisConfig{Addr: "redis"},
-		JWT: JWTConfig{Key1: randomTestKey(), Key2: randomTestKey(), Issuer: "fake-issuer-value"}, Tree: TreeConfig{PasswordEncryptionKey: strings.Repeat("c", 32)}}
+		JWT: JWTConfig{Key1: randomTestKey(), Key2: randomTestKey(), Issuer: "fake-issuer-value"}, Tree: TreeConfig{PasswordEncryptionKey: strings.Repeat("c", 32)}, Prometheus: PrometheusConfig{HttpSdToken: "fixture-http-sd-token"}}
 	if err := ok.Validate(); err != nil {
 		t.Errorf("ENV=\" Prod \" 下合规配置不应失败：%v", err)
 	}
