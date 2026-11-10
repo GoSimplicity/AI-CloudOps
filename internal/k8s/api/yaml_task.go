@@ -28,6 +28,7 @@ package api
 import (
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/internal/permission"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/jwt"
 	"github.com/gin-gonic/gin"
@@ -109,8 +110,11 @@ func (h *K8sYamlTaskHandler) UpdateYamlTask(ctx *gin.Context) {
 	req.ClusterID = clusterId
 	req.ID = id
 
-	base.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.yamlTaskService.UpdateYamlTask(ctx.Request.Context(), &req)
+	handleMappedRequest(ctx, &req, func() (interface{}, error) {
+		req.UserID = uc.Uid
+		req.ClusterID = clusterId
+		req.ID = id
+		return nil, h.yamlTaskService.UpdateYamlTask(ctx.Request.Context(), &req, permission.IsSuperAdmin(ctx))
 	})
 }
 
@@ -138,7 +142,7 @@ func (h *K8sYamlTaskHandler) ApplyYamlTask(ctx *gin.Context) {
 		req.ID = id
 		req.ClusterID = clusterId
 		req.UserID = uc.Uid
-		return nil, h.yamlTaskService.ApplyYamlTask(ctx.Request.Context(), &req)
+		return nil, h.yamlTaskService.ApplyYamlTask(ctx.Request.Context(), &req, permission.IsSuperAdmin(ctx))
 	})
 }
 
@@ -157,11 +161,16 @@ func (h *K8sYamlTaskHandler) DeleteYamlTask(ctx *gin.Context) {
 		return
 	}
 
+	uc := ctx.MustGet("user").(jwt.UserClaims)
 	req.ID = id
 	req.ClusterID = clusterId
+	req.UserID = uc.Uid
 
-	base.HandleRequest(ctx, &req, func() (interface{}, error) {
-		return nil, h.yamlTaskService.DeleteYamlTask(ctx.Request.Context(), &req)
+	handleMappedRequest(ctx, &req, func() (interface{}, error) {
+		req.ID = id
+		req.ClusterID = clusterId
+		req.UserID = uc.Uid
+		return nil, h.yamlTaskService.DeleteYamlTask(ctx.Request.Context(), &req, permission.IsSuperAdmin(ctx))
 	})
 }
 

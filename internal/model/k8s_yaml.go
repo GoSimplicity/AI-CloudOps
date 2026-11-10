@@ -164,6 +164,7 @@ type YamlTaskUpdateReq struct {
 type YamlTaskDeleteReq struct {
 	ID        int `json:"id" binding:"required" comment:"任务ID"`                           // 任务ID
 	ClusterID int `json:"cluster_id" form:"cluster_id" binding:"required" comment:"集群ID"` // 集群ID
+	UserID    int `json:"user_id" comment:"用户ID"`                                         // 用户ID，由登录态写入
 }
 
 // YamlTemplateDetailReq 获取YAML模板详情请求

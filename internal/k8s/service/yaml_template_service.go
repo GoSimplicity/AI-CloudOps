@@ -40,8 +40,8 @@ type YamlTemplateService interface {
 	GetYamlTemplateList(ctx context.Context, req *model.YamlTemplateListReq) (model.ListResp[*model.K8sYamlTemplate], error)
 	CreateYamlTemplate(ctx context.Context, req *model.YamlTemplateCreateReq) error
 	CheckYamlTemplate(ctx context.Context, req *model.YamlTemplateCheckReq) error
-	UpdateYamlTemplate(ctx context.Context, req *model.YamlTemplateUpdateReq) error
-	DeleteYamlTemplate(ctx context.Context, req *model.YamlTemplateDeleteReq) error
+	UpdateYamlTemplate(ctx context.Context, req *model.YamlTemplateUpdateReq, super bool) error
+	DeleteYamlTemplate(ctx context.Context, req *model.YamlTemplateDeleteReq, super bool) error
 	GetYamlTemplateDetail(ctx context.Context, req *model.YamlTemplateDetailReq) (*model.K8sYamlTemplate, error)
 }
 
@@ -87,35 +87,47 @@ func (s *yamlTemplateService) CheckYamlTemplate(ctx context.Context, req *model.
 	return s.manager.CheckYamlTemplate(ctx, template)
 }
 
-func (s *yamlTemplateService) UpdateYamlTemplate(ctx context.Context, req *model.YamlTemplateUpdateReq) error {
-	template := &model.K8sYamlTemplate{
-		Model:     model.Model{ID: req.ID},
-		Name:      req.Name,
-		UserID:    req.UserID,
-		Content:   req.Content,
-		ClusterID: req.ClusterID,
-	}
-	return s.manager.UpdateYamlTemplate(ctx, template)
-}
-
-func (s *yamlTemplateService) DeleteYamlTemplate(ctx context.Context, req *model.YamlTemplateDeleteReq) error {
+func (s *yamlTemplateService) UpdateYamlTemplate(ctx context.Context, req *model.YamlTemplateUpdateReq, super bool) error {
 	if req == nil {
-		return base.NewBusinessError(constants.ErrInvalidParam, "删除YAML模板请求不能为空")
+		return base.NewBusinessError(constants.ErrInvalidParam, "更新YAML模板请求不能为空")
 	}
-	if req.UserID <= 0 {
-		return base.NewBusinessError(constants.ErrInvalidParam, "删除YAML模板参数错误")
-	}
-	template, err := s.manager.GetYamlTemplateDetail(ctx, req.ID, req.ClusterID)
+	template, err := s.ownedYamlTemplate(ctx, req.ID, req.ClusterID, req.UserID, super)
 	if err != nil {
 		return err
 	}
+	updated := &model.K8sYamlTemplate{
+		Model:     model.Model{ID: req.ID},
+		Name:      req.Name,
+		UserID:    template.UserID,
+		Content:   req.Content,
+		ClusterID: req.ClusterID,
+	}
+	return s.manager.UpdateYamlTemplate(ctx, updated, template.UserID)
+}
+
+func (s *yamlTemplateService) DeleteYamlTemplate(ctx context.Context, req *model.YamlTemplateDeleteReq, super bool) error {
+	if req == nil {
+		return base.NewBusinessError(constants.ErrInvalidParam, "删除YAML模板请求不能为空")
+	}
+	template, err := s.ownedYamlTemplate(ctx, req.ID, req.ClusterID, req.UserID, super)
+	if err != nil {
+		return err
+	}
+	return s.manager.DeleteYamlTemplate(ctx, req.ID, req.ClusterID, template.UserID)
+}
+
+func (s *yamlTemplateService) ownedYamlTemplate(ctx context.Context, id, clusterID, actorID int, super bool) (*model.K8sYamlTemplate, error) {
+	template, err := s.manager.GetYamlTemplateDetail(ctx, id, clusterID)
+	if err != nil {
+		return nil, err
+	}
 	if template == nil {
-		return fmt.Errorf("YAML 模板不存在或不属于指定集群")
+		return nil, fmt.Errorf("YAML 模板不存在或不属于指定集群")
 	}
-	if template.UserID != req.UserID {
-		return base.NewBusinessError(constants.ErrNotResourceOwner, "当前用户无权限操作该YAML模板")
+	if err := authorizeYamlOwner(s.logger, actorID, template.UserID, template.ID, yamlObjectTemplate, super); err != nil {
+		return nil, err
 	}
-	return s.manager.DeleteYamlTemplate(ctx, req.ID, req.ClusterID, req.UserID)
+	return template, nil
 }
 
 func (s *yamlTemplateService) GetYamlTemplateDetail(ctx context.Context, req *model.YamlTemplateDetailReq) (*model.K8sYamlTemplate, error) {

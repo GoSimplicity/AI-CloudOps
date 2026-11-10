@@ -38,8 +38,8 @@ import (
 type YamlTaskDAO interface {
 	ListAllYamlTasks(ctx context.Context, req *model.YamlTaskListReq) ([]*model.K8sYamlTask, error)
 	CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
-	UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
-	DeleteYamlTask(ctx context.Context, id int, clusterID int) error
+	UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask, ownerID int) error
+	DeleteYamlTask(ctx context.Context, id int, clusterID int, ownerID int) error
 	GetYamlTaskByID(ctx context.Context, id int, clusterID int) (*model.K8sYamlTask, error)
 	GetOwnedYamlTask(ctx context.Context, id int, clusterID int, userID int) (*model.K8sYamlTask, error)
 	GetYamlTaskByTemplateID(ctx context.Context, templateID int) ([]*model.K8sYamlTask, error)
@@ -97,28 +97,47 @@ func (d *yamlTaskDAO) CreateYamlTask(ctx context.Context, task *model.K8sYamlTas
 	return nil
 }
 
-func (d *yamlTaskDAO) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
-	if task.ID == 0 {
+func (d *yamlTaskDAO) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask, ownerID int) error {
+	if task == nil || task.ID == 0 {
 		d.logger.Error("UpdateYamlTask ID 不能为空", zap.Any("task", task))
 		return fmt.Errorf("invalid task ID")
 	}
-
-	if err := d.db.WithContext(ctx).Model(&model.K8sYamlTask{}).Where("id = ? AND cluster_id = ?", task.ID, task.ClusterID).Updates(task).Error; err != nil {
-		d.logger.Error("UpdateYamlTask 更新Yaml任务失败", zap.Int("taskID", task.ID), zap.Int("clusterID", task.ClusterID), zap.Error(err))
+	if _, err := d.GetOwnedYamlTask(ctx, task.ID, task.ClusterID, ownerID); err != nil {
 		return err
+	}
+
+	result := d.db.WithContext(ctx).Model(&model.K8sYamlTask{}).
+		Where("id = ? AND cluster_id = ? AND user_id = ?", task.ID, task.ClusterID, ownerID).
+		Omit("user_id").
+		Updates(task)
+	if result.Error != nil {
+		d.logger.Error("UpdateYamlTask 更新Yaml任务失败", zap.Int("taskID", task.ID), zap.Int("clusterID", task.ClusterID), zap.Error(result.Error))
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		if _, err := d.GetOwnedYamlTask(ctx, task.ID, task.ClusterID, ownerID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (d *yamlTaskDAO) DeleteYamlTask(ctx context.Context, id int, clusterID int) error {
+func (d *yamlTaskDAO) DeleteYamlTask(ctx context.Context, id int, clusterID int, ownerID int) error {
 	if id == 0 {
 		d.logger.Error("DeleteYamlTask ID 不能为空", zap.Int("id", id))
 		return fmt.Errorf("invalid task ID")
 	}
-
-	if err := d.db.WithContext(ctx).Where("id = ? AND cluster_id = ?", id, clusterID).Delete(&model.K8sYamlTask{}).Error; err != nil {
-		d.logger.Error("DeleteYamlTask 删除Yaml任务失败", zap.Int("taskID", id), zap.Int("clusterID", clusterID), zap.Error(err))
+	if _, err := d.GetOwnedYamlTask(ctx, id, clusterID, ownerID); err != nil {
 		return err
+	}
+
+	result := d.db.WithContext(ctx).Where("id = ? AND cluster_id = ? AND user_id = ?", id, clusterID, ownerID).Delete(&model.K8sYamlTask{})
+	if result.Error != nil {
+		d.logger.Error("DeleteYamlTask 删除Yaml任务失败", zap.Int("taskID", id), zap.Int("clusterID", clusterID), zap.Error(result.Error))
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return constants.ErrNotResourceOwner
 	}
 	return nil
 }
