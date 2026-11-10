@@ -31,6 +31,22 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// loginTimingHash 只用于登录失败时做一次与真实口令相同 cost 的比较，不对应任何账号。
+var loginTimingHash = newLoginTimingHash()
+
+func newLoginTimingHash() string {
+	hash, err := bcrypt.GenerateFromPassword([]byte{0xc1, 0x0d, 0x09, 0x5, 0x11}, bcrypt.DefaultCost)
+	if err != nil {
+		panic(err)
+	}
+	return string(hash)
+}
+
+// LoginTimingHash 返回登录耗时对齐用的 bcrypt 摘要。
+func LoginTimingHash() string {
+	return loginTimingHash
+}
+
 func HashPassword(password string) (string, error) {
 	if err := RequireNonEmpty(password, "密码"); err != nil {
 		return "", err

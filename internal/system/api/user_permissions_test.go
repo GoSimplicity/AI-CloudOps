@@ -79,7 +79,7 @@ func permissionsRouter(t *testing.T, roles userRolesDAO, uid int) *gin.Engine {
 			c.AbortWithStatus(204)
 		}
 	})
-	NewUserHandler(service.NewUserService(nil, roles, zap.NewNop()), nil).RegisterRoutes(engine)
+	NewUserHandler(service.NewUserService(nil, roles, zap.NewNop(), nil), nil).RegisterRoutes(engine)
 	k8sapi.NewK8sEventHandler(nil).RegisterRouters(engine)
 	treeapi.NewCloudAccountHandler(nil).RegisterRouters(engine)
 	treeapi.NewTreeCloudHandler(nil, nil, nil, nil).RegisterRouters(engine)
@@ -156,7 +156,7 @@ func TestUserPermissionsForSuperAdminAndEmptyUser(t *testing.T) {
 func TestUserPermissionsReportsRoleLookupFailure(t *testing.T) {
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) { c.Set("user", jwt.UserClaims{Uid: 5}); c.Next() })
-	NewUserHandler(service.NewUserService(nil, userRolesDAO{err: errors.New("db down")}, zap.NewNop()), nil).RegisterRoutes(engine)
+	NewUserHandler(service.NewUserService(nil, userRolesDAO{err: errors.New("db down")}, zap.NewNop(), nil), nil).RegisterRoutes(engine)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, httptest.NewRequest("GET", "/api/user/permissions", nil))
 	var body permissionsBody

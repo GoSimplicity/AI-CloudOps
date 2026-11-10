@@ -1186,6 +1186,13 @@ func setDefaults() {
 	viper.SetDefault("redis.addr", "localhost:6379")
 	viper.SetDefault("redis.password", "")
 
+	viper.SetDefault("auth.login_lockout.username_max_failures", 5)
+	viper.SetDefault("auth.login_lockout.username_window", "15m")
+	viper.SetDefault("auth.login_lockout.username_lock", "15m")
+	viper.SetDefault("auth.login_lockout.ip_max_failures", 20)
+	viper.SetDefault("auth.login_lockout.ip_window", "15m")
+	viper.SetDefault("auth.login_lockout.ip_lock", "15m")
+
 	viper.SetDefault("mysql.max_open_conns", 20)
 	viper.SetDefault("mysql.max_idle_conns", 5)
 	viper.SetDefault("mysql.conn_max_lifetime", "30m")
