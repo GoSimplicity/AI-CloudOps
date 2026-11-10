@@ -161,7 +161,7 @@ func (us *userService) Login(ctx context.Context, req *model.UserLoginReq, clien
 	if err = us.guard.Check(ctx, username, clientIP); err != nil {
 		return nil, err
 	}
-	if err = us.guard.RecordSuccess(ctx, username); err != nil {
+	if err = us.guard.RecordSuccess(ctx, username, clientIP); err != nil {
 		us.logger.Error("清除登录失败计数失败", zap.String("username", username), zap.Error(err))
 	}
 	return user, nil

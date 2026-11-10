@@ -7,10 +7,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/internal/system/dao"
 	userutils "github.com/GoSimplicity/AI-CloudOps/internal/system/utils"
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -68,7 +71,7 @@ func (g *memoryGuard) RecordFailure(_ context.Context, username, ip string) erro
 	return err
 }
 
-func (g *memoryGuard) RecordSuccess(context.Context, string) error {
+func (g *memoryGuard) RecordSuccess(context.Context, string, string) error {
 	g.okCount++
 	return g.successErr
 }
@@ -211,6 +214,40 @@ func TestLoginSuccessSurvivesCounterResetFailure(t *testing.T) {
 		t.Fatalf("user=%v err=%v", user, err)
 	}
 	assertNoSecret(t, logs, "right-password")
+}
+
+func TestAnotherIPCanLoginAfterPairLock(t *testing.T) {
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	hash, err := userutils.HashPassword("right-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	users := &loginUserDAO{users: map[string]*model.User{
+		"alice": {Model: model.Model{ID: 7}, Username: "alice", Password: hash, Enable: 1},
+	}}
+	guard := NewLoginGuard(client, config.LoginLockoutConfig{}.Normalized(), nil, zap.NewNop())
+	svc := NewUserService(users, nil, zap.NewNop(), guard)
+	ctx := context.Background()
+	for i := 0; i < 4; i++ {
+		_, err = svc.Login(ctx, &model.UserLoginReq{Username: "alice", Password: "wrong-password"}, "203.0.113.8")
+		if !errors.Is(err, constants.ErrorInvalidCredentials) {
+			t.Fatalf("failure %d: %v", i+1, err)
+		}
+	}
+	_, err = svc.Login(ctx, &model.UserLoginReq{Username: "alice", Password: "wrong-password"}, "203.0.113.8")
+	if !errors.As(err, new(*LoginLockedError)) {
+		t.Fatalf("pair lock: %v", err)
+	}
+	user, err := svc.Login(ctx, &model.UserLoginReq{Username: "alice", Password: "right-password"}, "203.0.113.9")
+	if err != nil || user == nil || user.ID != 7 {
+		t.Fatalf("other IP login: user=%v err=%v", user, err)
+	}
+	_, err = svc.Login(ctx, &model.UserLoginReq{Username: "alice", Password: "right-password"}, "203.0.113.8")
+	if !errors.As(err, new(*LoginLockedError)) {
+		t.Fatalf("original IP should stay locked: %v", err)
+	}
 }
 
 func assertNoSecret(t *testing.T, logs *observer.ObservedLogs, secret string) {

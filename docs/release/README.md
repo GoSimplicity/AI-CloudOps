@@ -37,6 +37,32 @@ python3 scripts/release-smoke.py
 
 默认访问地址为 `http://localhost:18080`，只绑定回环地址。对外服务应通过有 TLS 的反向代理，配置 `PUBLIC_ORIGIN` 为实际 HTTPS 源站。不要直接暴露 MySQL、Redis 或 AIOps。浏览器所有 `/api/v1/*` 请求经过 Go 的 JWT/RBAC 检查，再由 Go 注入内部密钥。
 
+发布栈网关和前端同源，`deploy/release/nginx.conf` 不设置 CORS。登录接口由网关按来源 IP 限流，超出后返回 JSON `{"code":1,"data":{},"message":"请求过于频繁，请稍后再试"}`，并带 `Retry-After: 1`。这是网关自己的 429。账号锁定仍由后端返回 429，`data` 同样是 `{}`，`Retry-After` 是真实剩余秒数；网关不开启 `proxy_intercept_errors`，后端响应原样透传。浏览器访问同源网关时不依赖 CORS 才能读到这个头。
+
+网关把 `$remote_addr` 写入 `X-Real-IP`。后端只在直连对端属于可信代理时采信该头，默认是回环和私有网段（Compose 内网）。默认配置没有 `real_ip_header` / `set_real_ip_from`。如果 gateway 前面还有云负载均衡，需要在 `deploy/release/nginx.conf` 的 `server` 里自行加上负载均衡网段和真实客户端头，例如 `set_real_ip_from <负载均衡网段>; real_ip_header X-Forwarded-For;`，否则 `$remote_addr` 一直是负载均衡地址，所有人共用同一个 IP 锁定阈值。
+
+登录锁定放在 Redis，键前缀如下。用户名先去掉首尾空白再转小写，IP 用 Go `net.ParseIP` 的规范文本；摘要是这些字节的 SHA-256 十六进制。用户名+IP 的原文是 `小写用户名`、一个 NUL（`\x00`）、规范 IP 依次拼接。
+
+- `cloudops:auth:login:lock:pair:` 用户名+IP
+- `cloudops:auth:login:lock:user:` 用户名
+- `cloudops:auth:login:lock:ip:` IP
+- 对应失败计数把 `lock` 换成 `fail`
+
+手动解锁时删除对应 `lock` 键；若希望立刻重新计数，把同名 `fail` 键一并删除。IP 失败计数不会在登录成功时清掉。
+
+```bash
+python3 - <<'PY'
+import hashlib
+user = "alice".strip().lower()
+ip = "203.0.113.8"
+print("user", hashlib.sha256(user.encode()).hexdigest())
+print("pair", hashlib.sha256(user.encode() + b"\x00" + ip.encode()).hexdigest())
+print("ip", hashlib.sha256(ip.encode()).hexdigest())
+PY
+redis-cli --scan --pattern 'cloudops:auth:login:lock:*'
+redis-cli DEL "cloudops:auth:login:lock:user:<上面的 user 摘要>"
+```
+
 ## 告警 webhook 与可选 Alertmanager
 
 `webhook` 服务（`cmd/webhook`，镜像 `cloudops-webhook:${RELEASE_VERSION}`，由 `deploy/release/webhook.Dockerfile` 构建）默认随栈启动，只在 Compose 内网监听 `8889`（取自镜像内 `config/webhook.yaml` 的 `webhook.port`。`WEBHOOK_PORT` 的优先级是 `WEBHOOK_PORT > 配置文件 > 默认 8889`；compose 没有传这个变量，所以发布栈默认监听 `8889`），不发布端口；依赖 `mysql` 健康，且只读取 `WEBHOOK_MYSQL_ADDR`（缺失时 `compose config` 即报错）。代码没有专用健康端点，健康检查请求 `GET /api/v1/alerts/silence`：缺少 fingerprint 时不访问数据库和 Alertmanager，直接返回 HTTP 200；进程启动时会 Ping MySQL，连不上即退出，因此 HTTP 可响应即表示已连上 MySQL。

@@ -14,9 +14,12 @@ redis:
   addr: "redis:6379"
   password: "" # 敏感信息，不写入配置文件；由环境变量 REDIS_PASSWORD 注入（可选）
 auth:
-  # 登录失败锁定。可用 AUTH_LOGIN_USERNAME_* / AUTH_LOGIN_IP_* 覆盖
+  # 登录失败锁定。可用 AUTH_LOGIN_PAIR_* / AUTH_LOGIN_USERNAME_* / AUTH_LOGIN_IP_* 覆盖
   login_lockout:
-    username_max_failures: 5 # 窗口内同一用户名失败次数上限
+    pair_max_failures: 5 # 窗口内同一用户名+IP 失败次数上限
+    pair_window: 15m
+    pair_lock: 15m
+    username_max_failures: 50 # 窗口内同一用户名失败次数上限
     username_window: 15m
     username_lock: 15m
     ip_max_failures: 20 # 窗口内同一 IP 失败次数上限

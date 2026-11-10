@@ -1174,6 +1174,7 @@ func normalizePort(s string) string {
 
 func setDefaults() {
 	viper.SetDefault("server.port", "8889")
+	viper.SetDefault("server.trusted_proxies", strings.Join(defaultTrustedProxies, ","))
 
 	viper.SetDefault("log.dir", "./logs")
 	viper.SetDefault("log.level", "debug")
@@ -1186,7 +1187,10 @@ func setDefaults() {
 	viper.SetDefault("redis.addr", "localhost:6379")
 	viper.SetDefault("redis.password", "")
 
-	viper.SetDefault("auth.login_lockout.username_max_failures", 5)
+	viper.SetDefault("auth.login_lockout.pair_max_failures", 5)
+	viper.SetDefault("auth.login_lockout.pair_window", "15m")
+	viper.SetDefault("auth.login_lockout.pair_lock", "15m")
+	viper.SetDefault("auth.login_lockout.username_max_failures", 50)
 	viper.SetDefault("auth.login_lockout.username_window", "15m")
 	viper.SetDefault("auth.login_lockout.username_lock", "15m")
 	viper.SetDefault("auth.login_lockout.ip_max_failures", 20)
