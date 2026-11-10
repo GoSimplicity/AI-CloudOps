@@ -62,6 +62,8 @@ AIOps 飞书自定义机器人可在服务端私有 `.env` 设置 `FEISHU_WEBHOO
 
 使用固定 `RELEASE_VERSION` 构建镜像，保留上一版镜像。应用回滚可指定上一版镜像，但数据库结构变化必须依据升级前备份和演练结果处理。`docker compose down` 保留数据卷；不要在生产使用 `down -v`。
 
+未填 `work_dir` 的 Cron 命令和脚本，默认工作目录从 `/app` 改为 `/tmp/cloudops-cron`，依赖相对路径的任务需显式配置 `work_dir`。镜像以非 root 且 `cap_drop: [ALL]` 运行，容器内 ping/ICMP 类 Cron 任务会失败，建议改用 TCP/HTTP 探测。
+
 `python3 scripts/release-backup.py` 创建权限受限、不会覆盖已有目录的 MySQL 一致性快照和部署密钥备份，记录三仓 commit。默认输出目录 `deploy/release/backups.local` 被 Git 忽略。该脚本明确不包括 Redis 队列和 AIOps 上传文档；完整恢复点还必须在暂停相关写入后保存对应数据卷。备份含资产密文、用户哈希和部署密钥，应存放在加密存储，限制访问。
 
 发布模板将访问令牌有效期设为 30 分钟。沿用当前后端配置契约：`JWT_EXPIRATION` 的单位为分钟。
