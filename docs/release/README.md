@@ -41,14 +41,33 @@ python3 scripts/release-smoke.py
 
 网关把 `$remote_addr` 写入 `X-Real-IP`。后端只在直连对端属于可信代理时采信该头，默认是回环和私有网段（Compose 内网）。默认配置没有 `real_ip_header` / `set_real_ip_from`。如果 gateway 前面还有云负载均衡，需要在 `deploy/release/nginx.conf` 的 `server` 里自行加上负载均衡网段和真实客户端头，例如 `set_real_ip_from <负载均衡网段>; real_ip_header X-Forwarded-For;`，否则 `$remote_addr` 一直是负载均衡地址，所有人共用同一个 IP 锁定阈值。
 
-登录锁定放在 Redis，键前缀如下。用户名先去掉首尾空白再转小写，IP 用 Go `net.ParseIP` 的规范文本；摘要是这些字节的 SHA-256 十六进制。用户名+IP 的原文是 `小写用户名`、一个 NUL（`\x00`）、规范 IP 依次拼接。
+如果后端端口在内网可以直接访问、请求不经过网关，默认把私有网段当作可信代理。内网客户端可以自己写 `X-Real-IP`，从而绕过按 IP 的 20 次锁定；按用户名的 50 次锁定仍然生效。这种部署必须把 `server.trusted_proxies` 收窄到网关地址，不要保留整段私网。多个网关地址用逗号分隔。环境变量 `SERVER_TRUSTED_PROXIES` 覆盖同一项。
 
-- `cloudops:auth:login:lock:pair:` 用户名+IP
-- `cloudops:auth:login:lock:user:` 用户名
-- `cloudops:auth:login:lock:ip:` IP
-- 对应失败计数把 `lock` 换成 `fail`
+```yaml
+server:
+  trusted_proxies: "10.0.8.10"
+```
 
-手动解锁时删除对应 `lock` 键；若希望立刻重新计数，把同名 `fail` 键一并删除。IP 失败计数不会在登录成功时清掉。
+```bash
+SERVER_TRUSTED_PROXIES=10.0.8.10,10.0.8.11
+```
+
+登录失败按三档计数，窗口和锁定时长都是 15 分钟：同一用户名+IP 5 次、同一用户名 50 次、同一 IP 20 次。用户名这一档与来源 IP 无关，知道账号名的人可以故意打满 50 次，把该用户锁 15 分钟。这是有意的取舍，用来堵住换 IP 继续尝试。运维按下面的 Redis 键手动解锁。
+
+登录锁定放在 Redis。用户名先去掉首尾空白再转小写，IP 用 Go `net.ParseIP` 的规范文本；摘要是这些字节的 SHA-256 十六进制。用户名+IP 的原文是 `小写用户名`、一个 NUL（`\x00`）、规范 IP 依次拼接。摘要必须用这份规范文本计算，否则键名对不上。
+
+键名里的 `{login}` 是 Redis Cluster 哈希标签。一次失败脚本同时写入用户名+IP、用户名、IP 三组计数或锁定键，成功登录时一次 `DEL` 也会同时删掉用户名+IP 与用户名的失败计数。这三组键必须落在同一个槽，标签因此固定为 `login`。全部登录锁定键集中在这一个槽；当前登录量可以接受这个热点。
+
+- `cloudops:auth:{login}:lock:pair:<pair 摘要>` 用户名+IP 锁定
+- `cloudops:auth:{login}:fail:pair:<pair 摘要>` 用户名+IP 计数
+- `cloudops:auth:{login}:lock:user:<user 摘要>` 用户名锁定
+- `cloudops:auth:{login}:fail:user:<user 摘要>` 用户名计数
+- `cloudops:auth:{login}:lock:ip:<ip 摘要>` IP 锁定
+- `cloudops:auth:{login}:fail:ip:<ip 摘要>` IP 计数
+
+IP 失败计数不会在登录成功时清掉。手动解锁时把对应的 `lock` 和 `fail` 一起删掉，否则残留计数会在窗口内继续累加。Cluster 上用 `redis-cli -c`：这些键在同一槽，可以放在同一条 `DEL`。`--scan` 只看当前连接的节点，要连到持有 `{login}` 槽的节点，或直接按完整键名删除。
+
+下面用 `alice` 与 `203.0.113.8` 算出的摘要与代码一致。换成别的账号时重新计算，IP 必须是 `net.ParseIP` 的规范文本。
 
 ```bash
 python3 - <<'PY'
@@ -59,8 +78,24 @@ print("user", hashlib.sha256(user.encode()).hexdigest())
 print("pair", hashlib.sha256(user.encode() + b"\x00" + ip.encode()).hexdigest())
 print("ip", hashlib.sha256(ip.encode()).hexdigest())
 PY
-redis-cli --scan --pattern 'cloudops:auth:login:lock:*'
-redis-cli DEL "cloudops:auth:login:lock:user:<上面的 user 摘要>"
+
+# 用户名：2bd806c97f0e00af1a1fc3328fa763a9269723c8db8fac4f93af71db186d6e90
+redis-cli DEL \
+  "cloudops:auth:{login}:lock:user:2bd806c97f0e00af1a1fc3328fa763a9269723c8db8fac4f93af71db186d6e90" \
+  "cloudops:auth:{login}:fail:user:2bd806c97f0e00af1a1fc3328fa763a9269723c8db8fac4f93af71db186d6e90"
+
+# 用户名+IP：a3207baf8628933a3c83a091a422bc3ef17659427445d92b44a6dfecb8e1a2f4
+redis-cli DEL \
+  "cloudops:auth:{login}:lock:pair:a3207baf8628933a3c83a091a422bc3ef17659427445d92b44a6dfecb8e1a2f4" \
+  "cloudops:auth:{login}:fail:pair:a3207baf8628933a3c83a091a422bc3ef17659427445d92b44a6dfecb8e1a2f4"
+
+# IP：ddbea5471056690e5b1dcfe0c39ffca2f91ee81710048d066e2d53c7d012e14e
+redis-cli DEL \
+  "cloudops:auth:{login}:lock:ip:ddbea5471056690e5b1dcfe0c39ffca2f91ee81710048d066e2d53c7d012e14e" \
+  "cloudops:auth:{login}:fail:ip:ddbea5471056690e5b1dcfe0c39ffca2f91ee81710048d066e2d53c7d012e14e"
+
+redis-cli --scan --pattern 'cloudops:auth:{login}:lock:*'
+redis-cli --scan --pattern 'cloudops:auth:{login}:fail:*'
 ```
 
 ## 告警 webhook 与可选 Alertmanager
@@ -85,6 +120,8 @@ AIOps 飞书自定义机器人可在服务端私有 `.env` 设置 `FEISHU_WEBHOO
 ## 升级与回滚
 
 升级前备份 MySQL、Redis、AIOps 数据卷及 `.env`，保存三仓 commit SHA 和镜像 digest。尤其保留 `TREE_PASSWORD_ENCRYPTION_KEY`，更换它会影响已存资产密码的解密。先在数据库副本上演练升级；MySQL DDL可能隐式提交，版本账本也不提供DDL回滚；当前支持明确的新库基线、匹配当前结构的旧库认领，以及来源严格匹配 a8f1700 的49表旧库显式升级；未知结构拒绝。参见[已知历史升级](known-a8f1700-upgrade.md)与[物理恢复旧库演练](known-upgrade-rollback.md)，须先停写、备份、预检，并按副本演练结果操作。
+
+登录锁定键从 `cloudops:auth:login:` 改为 `cloudops:auth:{login}:`。升级后只读写新键。旧的 `cloudops:auth:login:lock:*` 和 `cloudops:auth:login:fail:*` 不再参与判断，进行中的锁定和失败计数会失效一次，相当于锁定被清空一次。不需要迁移。旧键按原来的 TTL 自行过期。阈值仍是用户名+IP 5 次、用户名 50 次、IP 20 次，窗口和锁定都是 15 分钟。手动解锁命令见上文。
 
 使用固定 `RELEASE_VERSION` 构建镜像，保留上一版镜像。应用回滚可指定上一版镜像，但数据库结构变化必须依据升级前备份和演练结果处理。`docker compose down` 保留数据卷；不要在生产使用 `down -v`。
 
