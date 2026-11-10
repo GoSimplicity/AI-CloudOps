@@ -58,7 +58,7 @@ func TestSilenceHandlersUseTypedConfiguration(t *testing.T) {
 			t.Cleanup(viper.Reset)
 			viper.Set("webhook.alert_manager_api", "https://global-wrong.invalid")
 			viper.Set("webhook.im_feishu.request_timeout_seconds", globalTimeout)
-			cfg := &config.WebhookConfig{AlertManagerAPI: "https://typed-alertmanager.invalid/base", ImFeishu: config.ImFeishuConfig{RequestTimeoutSeconds: 7}}
+			cfg := withActionKey(&config.WebhookConfig{AlertManagerAPI: "https://typed-alertmanager.invalid/base", ImFeishu: config.ImFeishuConfig{RequestTimeoutSeconds: 7}})
 			memory := &silenceMemoryDAO{event: model.MonitorAlertEvent{Status: model.MonitorAlertEventStatusFiring, Labels: model.StringList{"alertname=fixture"}}}
 			handler, err := NewWebHookHandler(cfg, zap.NewNop(), memory, nil)
 			if err != nil {
@@ -110,7 +110,7 @@ func TestSilenceHandlersUseTypedConfiguration(t *testing.T) {
 				}
 			})
 			recorder := httptest.NewRecorder()
-			engine.ServeHTTP(recorder, httptest.NewRequest("GET", "/api/v1/alerts/silence?fingerprint=fixture&hour=1", nil))
+			engine.ServeHTTP(recorder, signActionRequest(t, http.MethodPost, "silence", "fixture", "1"))
 			if memory.updates != 1 || memory.event.Status != model.MonitorAlertEventStatusSilenced || memory.event.SilenceID != "fixture-silence" {
 				t.Fatal("successful silence state was not persisted")
 			}
@@ -125,7 +125,7 @@ func TestSilenceHandlersUseTypedConfiguration(t *testing.T) {
 				viper.Set("webhook.im_feishu.request_timeout_seconds", 0)
 			}
 			recorder = httptest.NewRecorder()
-			engine.ServeHTTP(recorder, httptest.NewRequest("GET", "/api/v1/alerts/unsilence?fingerprint=fixture", nil))
+			engine.ServeHTTP(recorder, signActionRequest(t, http.MethodPost, "unsilence", "fixture", ""))
 			if calls != 2 || memory.updates != 2 || memory.event.Status != model.MonitorAlertEventStatusFiring || memory.event.SilenceID != "" {
 				t.Fatal("successful unsilence state was not persisted")
 			}
@@ -152,7 +152,7 @@ func TestSilenceHandlersDoNotUpdateAfterUpstreamFailure(t *testing.T) {
 				initial = model.MonitorAlertEventStatusSilenced
 			}
 			memory := &silenceMemoryDAO{event: model.MonitorAlertEvent{Status: initial, SilenceID: "fixture-old", Labels: model.StringList{"alertname=fixture"}}}
-			handler, err := NewWebHookHandler(&config.WebhookConfig{AlertManagerAPI: "https://typed-alertmanager.invalid", ImFeishu: config.ImFeishuConfig{RequestTimeoutSeconds: 7}}, zap.NewNop(), memory, nil)
+			handler, err := NewWebHookHandler(withActionKey(&config.WebhookConfig{AlertManagerAPI: "https://typed-alertmanager.invalid", ImFeishu: config.ImFeishuConfig{RequestTimeoutSeconds: 7}}), zap.NewNop(), memory, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -170,7 +170,11 @@ func TestSilenceHandlersDoNotUpdateAfterUpstreamFailure(t *testing.T) {
 			engine := gin.New()
 			handler.RegisterRouters(engine)
 			recorder := httptest.NewRecorder()
-			engine.ServeHTTP(recorder, httptest.NewRequest("GET", "/api/v1/alerts/"+test.path, nil))
+			actionName, hour := "silence", "1"
+			if strings.HasPrefix(test.path, "unsilence") {
+				actionName, hour = "unsilence", ""
+			}
+			engine.ServeHTTP(recorder, signActionRequest(t, http.MethodPost, actionName, "fixture", hour))
 			if calls != 1 || memory.updates != 0 || memory.event.Status != initial || memory.event.SilenceID != "fixture-old" {
 				t.Fatal("failed upstream request changed persisted event")
 			}

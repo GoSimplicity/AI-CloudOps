@@ -35,33 +35,50 @@ def read_settings(path):
     return settings
 
 
+def derived_additions(settings, host):
+    """Lines to append. None means refuse and leave the file unchanged."""
+    lines = []
+    if "WEBHOOK_MYSQL_ADDR" not in settings:
+        password = settings.get("MYSQL_PASSWORD", "")
+        if not password:
+            return None, "MYSQL_PASSWORD is missing or empty; cannot derive WEBHOOK_MYSQL_ADDR."
+        try:
+            dsn = webhook_dsn(password, host)
+        except ValueError as error:
+            return None, f"{error}; set WEBHOOK_MYSQL_ADDR manually."
+        lines.append("# Webhook (cmd/webhook) MySQL DSN, derived from MYSQL_PASSWORD.")
+        lines.append(f"WEBHOOK_MYSQL_ADDR={dsn}")
+    elif not settings.get("WEBHOOK_MYSQL_ADDR"):
+        return None, "WEBHOOK_MYSQL_ADDR= exists but is empty; remove that line and rerun with --add-missing."
+    if "WEBHOOK_BACKEND_DOMAIN" not in settings:
+        lines.append("# External base for Feishu card actions. Includes scheme and /api/v1/alerts.")
+        lines.append("WEBHOOK_BACKEND_DOMAIN=http://127.0.0.1:8889/api/v1/alerts")
+    if "WEBHOOK_ACTION_SIGNING_KEY" not in settings:
+        lines.append("# HMAC key for Feishu card action links.")
+        lines.append(f"WEBHOOK_ACTION_SIGNING_KEY={secrets.token_hex(32)}")
+    if "WEBHOOK_ALERTMANAGER_BEARER_TOKEN" not in settings:
+        lines.append("# Empty keeps /receive unauthenticated. Match alertmanager http_config when set.")
+        lines.append("WEBHOOK_ALERTMANAGER_BEARER_TOKEN=")
+    return lines, ""
+
+
 def add_missing(destination, host):
-    """Upgrade an existing .env: only append derived keys that are missing or empty."""
+    """Upgrade an existing .env: append derived keys that are absent. Never print secret values."""
     settings = read_settings(destination)
-    current = settings.get("WEBHOOK_MYSQL_ADDR", "")
-    if current:
-        print(f"{destination} already has WEBHOOK_MYSQL_ADDR; nothing changed. No secrets printed.")
+    lines, error = derived_additions(settings, host)
+    if error:
+        print(error, file=sys.stderr)
+        return 1
+    if not lines:
+        print(f"{destination} already has the derived webhook settings; nothing changed. No secrets printed.")
         return 0
-    password = settings.get("MYSQL_PASSWORD", "")
-    if not password:
-        print("MYSQL_PASSWORD is missing or empty; cannot derive WEBHOOK_MYSQL_ADDR.", file=sys.stderr)
-        return 1
-    if "WEBHOOK_MYSQL_ADDR" in settings:
-        # 存在空占位行时不改写原行（避免重写整个文件），提示人工删除空行后重试
-        print("WEBHOOK_MYSQL_ADDR= exists but is empty; remove that line and rerun with --add-missing.", file=sys.stderr)
-        return 1
-    try:
-        line = f"WEBHOOK_MYSQL_ADDR={webhook_dsn(password, host)}\n"
-    except ValueError as error:
-        print(f"{error}; set WEBHOOK_MYSQL_ADDR manually.", file=sys.stderr)
-        return 1
     raw = destination.read_bytes()
     needs_newline = bool(raw) and not raw.endswith(b"\n")
     descriptor = os.open(destination, os.O_WRONLY | os.O_APPEND)
     with os.fdopen(descriptor, "w") as output:
-        output.write(("\n" if needs_newline else "") + "# Webhook (cmd/webhook) MySQL DSN, derived from MYSQL_PASSWORD.\n" + line)
+        output.write(("\n" if needs_newline else "") + "\n".join(lines) + "\n")
     os.chmod(destination, 0o600)
-    print(f"Appended WEBHOOK_MYSQL_ADDR to {destination} (mode 0600). No secrets printed.")
+    print(f"Appended derived webhook settings to {destination} (mode 0600). No secrets printed.")
     return 0
 
 
@@ -73,7 +90,7 @@ def main():
     parser.add_argument("--mysql-host", default=DEFAULT_MYSQL_HOST,
                         help="host:port used in WEBHOOK_MYSQL_ADDR (default: mysql:3306, the Compose service)")
     parser.add_argument("--add-missing", action="store_true",
-                        help="for an existing .env, append missing derived keys (WEBHOOK_MYSQL_ADDR) without touching other values")
+                        help="for an existing .env, append missing derived keys (WEBHOOK_MYSQL_ADDR, card link base, signing key) without touching other values")
     args = parser.parse_args()
     destination = args.env_file
     if not SAFE_HOST.match(args.mysql_host):
@@ -112,6 +129,11 @@ def main():
     content += 'WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API=http://127.0.0.1:9/open-apis/auth/v3/tenant_access_token/internal\n'
     content += 'WEBHOOK_IM_FEISHU_PRIVATE_MESSAGE_API=http://127.0.0.1:9/open-apis/im/v1/messages\n'
     content += 'WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API=http://127.0.0.1:9/open-apis/bot/v2/hook\n'
+    content += "# Feishu card action base. Replace with the external URL (scheme + /api/v1/alerts) before exposing webhook.\n"
+    content += "WEBHOOK_BACKEND_DOMAIN=http://127.0.0.1:8889/api/v1/alerts\n"
+    content += f"WEBHOOK_ACTION_SIGNING_KEY={secrets.token_hex(32)}\n"
+    content += "# Empty: /receive stays open and webhook logs a startup warning. Set with alertmanager http_config.\n"
+    content += "WEBHOOK_ALERTMANAGER_BEARER_TOKEN=\n"
     try:
         descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:

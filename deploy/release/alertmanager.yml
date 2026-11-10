@@ -11,3 +11,10 @@ receivers:
     webhook_configs:
       - url: http://webhook:8889/api/v1/alerts/receive
         send_resolved: true
+        # webhook 配置了 WEBHOOK_ALERTMANAGER_BEARER_TOKEN 后，去掉下面的注释，
+        # 并把 credentials 换成与该变量相同的值。这里只放占位符。
+        # 变量留空时不要启用这段：webhook 会打启动警告并继续接受无令牌的 /receive。
+        # http_config:
+        #   authorization:
+        #     type: Bearer
+        #     credentials: "<WEBHOOK_ALERTMANAGER_BEARER_TOKEN>"

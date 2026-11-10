@@ -47,13 +47,15 @@ import (
 
 // WebHookHandler 负责处理Webhook相关的HTTP请求
 type WebHookHandler struct {
-	l                     *zap.Logger
-	dao                   dao.WebhookDao
-	alertQueue            chan template.Alert // 告警队列，用于异步处理
-	workerWG              sync.WaitGroup      // 工作组用于等待所有工作者完成
-	alertManagerAPI       string
-	requestTimeoutSeconds int
-	quitChan              chan struct{} // 用于优雅地关闭工作者的通道
+	l                       *zap.Logger
+	dao                     dao.WebhookDao
+	alertQueue              chan template.Alert // 告警队列，用于异步处理
+	workerWG                sync.WaitGroup      // 工作组用于等待所有工作者完成
+	alertManagerAPI         string
+	requestTimeoutSeconds   int
+	actionSigningKey        string
+	alertmanagerBearerToken string
+	quitChan                chan struct{} // 用于优雅地关闭工作者的通道
 }
 
 // NewWebHookHandler 创建处理器并保存已验证配置的静默请求参数快照。
@@ -66,12 +68,20 @@ func NewWebHookHandler(cfg *config.WebhookConfig, l *zap.Logger, dao dao.Webhook
 	}
 
 	handler := &WebHookHandler{
-		l:                     l,
-		dao:                   dao,
-		alertQueue:            alertQueue,
-		quitChan:              make(chan struct{}),
-		alertManagerAPI:       cfg.AlertManagerAPI,
-		requestTimeoutSeconds: cfg.ImFeishu.RequestTimeoutSeconds,
+		l:                       l,
+		dao:                     dao,
+		alertQueue:              alertQueue,
+		quitChan:                make(chan struct{}),
+		alertManagerAPI:         cfg.AlertManagerAPI,
+		requestTimeoutSeconds:   cfg.ImFeishu.RequestTimeoutSeconds,
+		actionSigningKey:        strings.TrimSpace(cfg.ActionSigningKey),
+		alertmanagerBearerToken: strings.TrimSpace(cfg.AlertmanagerBearerToken),
+	}
+	if l != nil && handler.actionSigningKey == "" {
+		l.Warn("WEBHOOK_ACTION_SIGNING_KEY 未配置，飞书卡片中的静默、取消静默和认领链接无法通过签名校验")
+	}
+	if l != nil && handler.alertmanagerBearerToken == "" {
+		l.Warn("WEBHOOK_ALERTMANAGER_BEARER_TOKEN 未配置，/api/v1/alerts/receive 不校验 Authorization，保持现有行为")
 	}
 	return handler, nil
 }
@@ -80,14 +90,21 @@ func NewWebHookHandler(cfg *config.WebhookConfig, l *zap.Logger, dao dao.Webhook
 func (w *WebHookHandler) RegisterRouters(server *gin.Engine) {
 	alertGroup := server.Group("/api/v1/alerts")
 	{
-		alertGroup.POST("/receive", w.MonitorAlertReceive)    // 处理告警接收请求
-		alertGroup.GET("/silence", w.MonitorAlertSilence)     // 处理静默告警请求
-		alertGroup.GET("/unsilence", w.MonitorAlertUnSilence) // 处理取消静默告警请求
+		alertGroup.POST("/receive", w.MonitorAlertReceive)
+		alertGroup.GET("/silence", w.MonitorAlertSilence)
+		alertGroup.POST("/silence", w.MonitorAlertSilence)
+		alertGroup.GET("/unsilence", w.MonitorAlertUnSilence)
+		alertGroup.POST("/unsilence", w.MonitorAlertUnSilence)
+		alertGroup.GET("/renling", w.MonitorAlertClaim)
+		alertGroup.POST("/renling", w.MonitorAlertClaim)
 	}
 }
 
 // MonitorAlertReceive 处理来自Alertmanager的告警接收请求
 func (w *WebHookHandler) MonitorAlertReceive(ctx *gin.Context) {
+	if !w.authorizeReceive(ctx) {
+		return
+	}
 	var msg webhook.Message
 
 	if err := ctx.ShouldBindJSON(&msg); err != nil {
@@ -119,13 +136,12 @@ func (w *WebHookHandler) MonitorAlertReceive(ctx *gin.Context) {
 }
 
 func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
-	fingerprint := ctx.DefaultQuery("fingerprint", "")
-	hour := ctx.DefaultQuery("hour", "")
-
-	if fingerprint == "" {
-		base.ErrorWithMessage(ctx, "缺少必要的fingerprint参数")
+	act, ok := w.beginSignedAction(ctx, "silence")
+	if !ok {
 		return
 	}
+	fingerprint := act.fingerprint
+	hour := act.hour
 
 	hourInt, err := strconv.Atoi(hour)
 	if err != nil || hourInt <= 0 {
@@ -145,15 +161,11 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 	}
 	expectedState := dao.AlertEventSilenceState{Status: event.Status, SilenceID: event.SilenceID}
 
-	// 解析标签
-	labelsM := make(map[string]string)
-	for _, label := range event.Labels {
-		parts := strings.Split(label, "=")
-		if len(parts) != 2 {
-			w.l.Warn("无效的标签格式")
-			continue
-		}
-		labelsM[parts[0]] = parts[1]
+	labelsM, err := parseSilenceLabels(event.Labels)
+	if err != nil {
+		w.l.Warn("无效的标签格式", zap.String("operation", "silence_labels"))
+		base.ErrorWithMessage(ctx, "无效的标签格式")
+		return
 	}
 	event.LabelsMap = labelsM
 
@@ -221,11 +233,11 @@ func (w *WebHookHandler) MonitorAlertSilence(ctx *gin.Context) {
 }
 
 func (w *WebHookHandler) MonitorAlertUnSilence(ctx *gin.Context) {
-	fingerprint := ctx.Query("fingerprint")
-	if fingerprint == "" {
-		base.ErrorWithMessage(ctx, "缺少必要的fingerprint参数")
+	act, ok := w.beginSignedAction(ctx, "unsilence")
+	if !ok {
 		return
 	}
+	fingerprint := act.fingerprint
 
 	event, err := w.dao.GetMonitorAlertEventByFingerprintId(ctx, fingerprint)
 	if err != nil {
@@ -276,6 +288,41 @@ func (w *WebHookHandler) MonitorAlertUnSilence(ctx *gin.Context) {
 	w.l.Info("取消静默成功", zap.Int("event_id", event.ID))
 
 	base.SuccessWithMessage(ctx, "取消静默成功")
+}
+
+// MonitorAlertClaim 认领告警。卡片链接没有登录用户，只把现有事件状态改为已认领并记日志，不写认领人，也不建新表。
+func (w *WebHookHandler) MonitorAlertClaim(ctx *gin.Context) {
+	act, ok := w.beginSignedAction(ctx, "renling")
+	if !ok {
+		return
+	}
+	event, err := w.dao.GetMonitorAlertEventByFingerprintId(ctx, act.fingerprint)
+	if err != nil {
+		w.l.Error("获取告警事件失败", zap.String("operation", "alert_event_lookup"))
+		base.ErrorWithMessage(ctx, "获取告警事件失败")
+		return
+	}
+	if event == nil {
+		base.ErrorWithMessage(ctx, "未找到对应的告警事件")
+		return
+	}
+	switch event.Status {
+	case model.MonitorAlertEventStatusClaimed:
+		base.SuccessWithMessage(ctx, "告警已认领")
+		return
+	case model.MonitorAlertEventStatusFiring, model.MonitorAlertEventStatusUpgraded:
+	default:
+		base.ErrorWithMessage(ctx, "当前状态不能认领")
+		return
+	}
+	event.Status = model.MonitorAlertEventStatusClaimed
+	if err := w.dao.UpdateMonitorAlertEvent(ctx, event); err != nil {
+		w.l.Error("更新告警事件状态失败", zap.String("operation", "alert_claim_save"), zap.Int("event_id", event.ID))
+		base.ErrorWithMessage(ctx, "认领状态保存未确认，请人工核对，勿重复提交")
+		return
+	}
+	w.l.Info("告警已从卡片认领", zap.String("operation", "alert_claim"), zap.Int("event_id", event.ID))
+	base.SuccessWithMessage(ctx, "认领成功")
 }
 
 // AlertManager IDs occupy one bounded URL segment and fit the persisted column.

@@ -78,7 +78,7 @@ func TestSilenceErrorChainDoesNotLeakOrFalselyConfirm(t *testing.T) {
 					if action == "unsilence" && mode == "invalid_id" {
 						memory.event.SilenceID = "../" + canary
 					}
-					handler, err := NewWebHookHandler(&config.WebhookConfig{AlertManagerAPI: "https://" + canary + ":" + canary + "@upstream.invalid", ImFeishu: config.ImFeishuConfig{RequestTimeoutSeconds: 7}}, logger, memory, nil)
+					handler, err := NewWebHookHandler(withActionKey(&config.WebhookConfig{AlertManagerAPI: "https://" + canary + ":" + canary + "@upstream.invalid", ImFeishu: config.ImFeishuConfig{RequestTimeoutSeconds: 7}}), logger, memory, nil)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -109,11 +109,11 @@ func TestSilenceErrorChainDoesNotLeakOrFalselyConfirm(t *testing.T) {
 					engine := gin.New()
 					handler.RegisterRouters(engine)
 					recorder := httptest.NewRecorder()
-					path := "/api/v1/alerts/" + action + "?fingerprint=" + canary
+					hour := ""
 					if action == "silence" {
-						path += "&hour=1"
+						hour = "1"
 					}
-					engine.ServeHTTP(recorder, httptest.NewRequest("GET", path, nil))
+					engine.ServeHTTP(recorder, signActionRequest(t, http.MethodPost, action, canary, hour))
 					expectedCalls := 1
 					if mode == "lookup" || (mode == "invalid_id" && action == "unsilence") {
 						expectedCalls = 0

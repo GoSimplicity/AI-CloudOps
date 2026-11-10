@@ -19,7 +19,9 @@ type webhookLeafSpec struct {
 }
 
 var webhookLeafSpecs = []webhookLeafSpec{
+	{"webhook.action_signing_key", "WEBHOOK_ACTION_SIGNING_KEY", false},
 	{"webhook.alert_manager_api", "WEBHOOK_ALERT_MANAGER_API", false},
+	{"webhook.alertmanager_bearer_token", "WEBHOOK_ALERTMANAGER_BEARER_TOKEN", false},
 	{"webhook.backend_domain", "WEBHOOK_BACKEND_DOMAIN", false},
 	{"webhook.common_map_renew_interval_seconds", "WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS", true},
 	{"webhook.default_upgrade_minutes", "WEBHOOK_DEFAULT_UPGRADE_MINUTES", true},
@@ -182,7 +184,7 @@ func TestLoadWebhookParentNullOrEmptyMapAccepted(t *testing.T) {
 			if cfg.ImFeishu.RequestTimeoutSeconds != 7 || cfg.ImFeishu.GroupMessageAPI != "https://open.feishu.cn/open-apis/bot/v2/hook" {
 				t.Fatal("子键应取环境变量/默认值")
 			}
-			if n := compareWebhookCfgWithGlobal(t, reflect.ValueOf(*cfg), "webhook"); n != 13 {
+			if n := compareWebhookCfgWithGlobal(t, reflect.ValueOf(*cfg), "webhook"); n != len(webhookLeafSpecs) {
 				t.Fatalf("应比对 13 个字段, got %d", n)
 			}
 		})
@@ -504,7 +506,7 @@ func TestLoadWebhookFailureKeepsPreviousGlobal(t *testing.T) {
 		if err != nil {
 			t.Fatalf("预置旧值应加载成功: %v", err)
 		}
-		if n := compareWebhookCfgWithGlobal(t, reflect.ValueOf(*cfg), "webhook"); n != 13 {
+		if n := compareWebhookCfgWithGlobal(t, reflect.ValueOf(*cfg), "webhook"); n != len(webhookLeafSpecs) {
 			t.Fatalf("应有 13 个字段, got %d", n)
 		}
 	})

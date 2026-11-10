@@ -594,7 +594,9 @@ type WebhookConfig struct {
 	Port                          string         `mapstructure:"port" env:"WEBHOOK_PORT" default:"8889"`
 	FixedWorkers                  int            `mapstructure:"fixed_workers" env:"WEBHOOK_FIXED_WORKERS" default:"10"`
 	FrontDomain                   string         `mapstructure:"front_domain" env:"WEBHOOK_FRONT_DOMAIN" default:"http://localhost:3000"`
-	BackendDomain                 string         `mapstructure:"backend_domain" env:"WEBHOOK_BACKEND_DOMAIN" default:"http://localhost:8889"`
+	BackendDomain                 string         `mapstructure:"backend_domain" env:"WEBHOOK_BACKEND_DOMAIN" default:"http://localhost:8889/api/v1/alerts"`
+	ActionSigningKey              string         `mapstructure:"action_signing_key" env:"WEBHOOK_ACTION_SIGNING_KEY" default:""`
+	AlertmanagerBearerToken       string         `mapstructure:"alertmanager_bearer_token" env:"WEBHOOK_ALERTMANAGER_BEARER_TOKEN" default:""`
 	DefaultUpgradeMinutes         int            `mapstructure:"default_upgrade_minutes" env:"WEBHOOK_DEFAULT_UPGRADE_MINUTES" default:"60"`
 	AlertManagerAPI               string         `mapstructure:"alert_manager_api" env:"WEBHOOK_ALERT_MANAGER_API" default:"http://localhost:9093"`
 	CommonMapRenewIntervalSeconds int            `mapstructure:"common_map_renew_interval_seconds" env:"WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS" default:"300"`

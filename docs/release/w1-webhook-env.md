@@ -33,8 +33,10 @@
 | --- | --- | --- | --- |
 | `WEBHOOK_PORT` | `webhook.port` | `8889` | `"8889"` |
 | `WEBHOOK_FIXED_WORKERS` | `webhook.fixed_workers` | `10` | 未设置 |
-| `WEBHOOK_FRONT_DOMAIN` | `webhook.front_domain` | `http://localhost:3000` | `localhost:3000` |
-| `WEBHOOK_BACKEND_DOMAIN` | `webhook.backend_domain` | `http://localhost:8889` | `localhost:8889/api/v1/alerts` |
+| `WEBHOOK_FRONT_DOMAIN` | `webhook.front_domain` | `http://localhost:3000` | `http://localhost:3000` |
+| `WEBHOOK_BACKEND_DOMAIN` | `webhook.backend_domain` | `http://localhost:8889/api/v1/alerts` | `http://localhost:8889/api/v1/alerts` |
+| `WEBHOOK_ACTION_SIGNING_KEY` | `webhook.action_signing_key` | 空 | 空 |
+| `WEBHOOK_ALERTMANAGER_BEARER_TOKEN` | `webhook.alertmanager_bearer_token` | 空 | 空 |
 | `WEBHOOK_DEFAULT_UPGRADE_MINUTES` | `webhook.default_upgrade_minutes` | `60` | `30` |
 | `WEBHOOK_ALERT_MANAGER_API` | `webhook.alert_manager_api` | `http://localhost:9093` | `http://localhost:9093` |
 | `WEBHOOK_COMMON_MAP_RENEW_INTERVAL_SECONDS` | `webhook.common_map_renew_interval_seconds` | `300` | `10` |

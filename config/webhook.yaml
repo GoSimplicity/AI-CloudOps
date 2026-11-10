@@ -2,8 +2,10 @@ webhook:
   common_map_renew_interval_seconds: 10  # 通用映射刷新间隔（秒）
   alert_manager_api: "http://localhost:9093"  # 告警管理 API
   default_upgrade_minutes: 30
-  front_domain: "localhost:3000"  # 前端域名
-  backend_domain: "localhost:8889/api/v1/alerts"  # 后端域名
+  front_domain: "http://localhost:3000"  # 前端地址，含 scheme
+  backend_domain: "http://localhost:8889/api/v1/alerts"  # 飞书卡片操作链接的对外地址，含 scheme 和 /api/v1/alerts 前缀
+  action_signing_key: ""  # 由环境变量 WEBHOOK_ACTION_SIGNING_KEY 注入，不把密钥写入文件
+  alertmanager_bearer_token: ""  # 由环境变量 WEBHOOK_ALERTMANAGER_BEARER_TOKEN 注入；留空时 /receive 不校验
   im_feishu:
     group_message_api: "https://open.feishu.cn/open-apis/bot/v2/hook"  # 群聊消息 API
     tenant_access_token_api: "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"  # 租户访问令牌 API
