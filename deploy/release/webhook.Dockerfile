@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # 告警 webhook 服务（cmd/webhook）镜像；构建上下文为后端仓库根目录（compose.yaml 中 context: ../..）
-FROM golang:1.26.10-alpine AS builder
+FROM golang:1.26.11-alpine AS builder
 ARG GOPROXY=https://proxy.golang.org,direct
 ENV GOPROXY=${GOPROXY}
 ARG TARGETOS
