@@ -423,6 +423,93 @@ class ReleaseEnvTests(unittest.TestCase):
                     self.assertNotIn(marker, add_output)
                 self.assertNotIn(FIXTURE_PASSWORD, add_output)
 
+    def test_webhook_backend_domain_rejects_unspecified_addresses(self):
+        # 主机是未指定地址才拒绝。路径、查询、以及仅仅包含这些字符的主机名仍然合法。
+        rejected = (
+            ("v4", "http://0.0.0.0/canary-unspec-v4", ("0.0.0.0",)),
+            ("v4-port", "http://0.0.0.0:8889/canary-unspec-v4port", ("0.0.0.0",)),
+            ("v4-https", "https://0.0.0.0:443/canary-unspec-v4https", ("0.0.0.0",)),
+            ("v4-dot", "http://0.0.0.0./canary-unspec-v4dot", ("0.0.0.0",)),
+            ("v4-upper", "HTTP://0.0.0.0/canary-unspec-v4upper", ("0.0.0.0",)),
+            ("v4-query", "http://0.0.0.0/canary-unspec-v4query?x=1", ("0.0.0.0",)),
+            ("v6", "http://[::]/canary-unspec-v6", ("[::]",)),
+            ("v6-https", "https://[::]/canary-unspec-v6https", ("[::]",)),
+            ("v6-port", "http://[::]:8889/canary-unspec-v6port", ("[::]",)),
+            ("v6-compress", "http://[::0]/canary-unspec-v6comp", ("[::0]",)),
+            ("v6-expand", "http://[0::0]/canary-unspec-v6expand", ("[0::0]",)),
+            ("v6-full", "http://[0:0:0:0:0:0:0:0]:9/canary-unspec-v6full", ("0:0:0:0:0:0:0:0",)),
+            ("v4mapped", "http://[::ffff:0.0.0.0]/canary-unspec-v4mapped", ("::ffff:0.0.0.0", "0.0.0.0")),
+            ("v4mapped-port", "http://[::FFFF:0:0]:8889/canary-unspec-v4mappedport", ("::FFFF:0:0", "::ffff:0:0")),
+            ("v6-compat", "https://[::0.0.0.0]/canary-unspec-v6compat", ("::0.0.0.0",)),
+            ("v6-zone", "http://[::%25lo0]:8889/canary-unspec-v6zone", ("::%25lo0", "[::")),
+            ("v6-userinfo", "http://user:canary-unspec-userinfo@[::]:8889/api", ("canary-unspec-userinfo", "[::]")),
+            ("v6-bare", "http://::/canary-unspec-v6bare", ("http://::/canary-unspec-v6bare",)),
+            ("literal-v4", "0.0.0.0", ("0.0.0.0",)),
+            ("literal-v6", "[::]", ("[::]",)),
+        )
+        for name, value, hidden in rejected:
+            with self.subTest(case=name):
+                fresh = self.dir / f"unspec-fresh-{name}.env"
+                fresh_result = self.run_script("--env-file", str(fresh), "--webhook-backend-domain", value)
+                self.assertEqual(fresh_result.returncode, 2)
+                self.assertIn("--webhook-backend-domain", fresh_result.stderr)
+                self.assertIn("WEBHOOK_BACKEND_DOMAIN", fresh_result.stderr)
+                self.assertFalse(fresh.exists())
+                fresh_output = fresh_result.stdout + fresh_result.stderr
+                self.assertNotIn(value, fresh_output)
+                for token in hidden:
+                    self.assertNotIn(token, fresh_output)
+
+                existing = self.dir / f"unspec-add-{name}.env"
+                existing.write_text(f"MYSQL_PASSWORD={FIXTURE_PASSWORD}\nOTHER=keep\n")
+                before = existing.read_bytes()
+                add_result = self.run_script(
+                    "--env-file", str(existing), "--add-missing", "--webhook-backend-domain", value)
+                self.assertEqual(add_result.returncode, 2)
+                self.assertEqual(existing.read_bytes(), before)
+                add_output = add_result.stdout + add_result.stderr
+                self.assertIn("--webhook-backend-domain", add_result.stderr)
+                self.assertIn("WEBHOOK_BACKEND_DOMAIN", add_result.stderr)
+                self.assertNotIn(value, add_output)
+                for token in hidden:
+                    self.assertNotIn(token, add_output)
+                self.assertNotIn(FIXTURE_PASSWORD, add_output)
+
+        accepted = (
+            "http://alerts.ci.invalid/api/v1/alerts",
+            "https://alerts.example:8443/api/v1/alerts",
+            "http://alerts.ci.invalid/0.0.0.0",
+            "http://alerts.ci.invalid/api/v1/alerts?host=0.0.0.0&v6=[::]",
+            "http://0.0.0.0.example/api/v1/alerts",
+            "http://alerts.example/path/[::]/keep",
+            "http://[::1]:8889/api/v1/alerts",
+        )
+        for domain in accepted:
+            with self.subTest(domain=domain):
+                destination = self.dir / "accepted.env"
+                if destination.exists():
+                    destination.unlink()
+                result = self.run_script("--env-file", str(destination), "--webhook-backend-domain", domain)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(read_env(destination)["WEBHOOK_BACKEND_DOMAIN"], domain)
+                output = result.stdout + result.stderr
+                self.assertNotIn(domain, output)
+                self.assertNotIn(FIXTURE_PASSWORD, output)
+
+        added = self.dir / "accepted-add.env"
+        added.write_text(
+            f"MYSQL_PASSWORD={FIXTURE_PASSWORD}\n"
+            "WEBHOOK_MYSQL_ADDR=cloudops:fixture-only-pw@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=UTC\n"
+            "WEBHOOK_ACTION_SIGNING_KEY=ab\n"
+            "WEBHOOK_ALERTMANAGER_BEARER_TOKEN=cd\n"
+        )
+        domain = "http://alerts.ci.invalid/api/v1/alerts"
+        added_result = self.run_script("--env-file", str(added), "--add-missing", "--webhook-backend-domain", domain)
+        self.assertEqual(added_result.returncode, 0, added_result.stderr)
+        self.assertEqual(read_env(added)["WEBHOOK_BACKEND_DOMAIN"], domain)
+        self.assertNotIn(domain, added_result.stdout + added_result.stderr)
+        self.assert_no_value_leak(added_result, FIXTURE_PASSWORD)
+
     def test_fresh_stack_workflows_pass_non_loopback_backend_domain(self):
         domain = "http://alerts.ci.invalid/api/v1/alerts"
         generators = []
