@@ -12,7 +12,7 @@
 
 ## Prometheus HTTP 服务发现
 
-`NewPrometheusConfigCache` 同样接收已有的 typed `*config.Config`，配置为空时返回错误，并复制 `Prometheus.HttpSdAPI`。该字段继续由配置加载器的 `PROMETHEUS_HTTP_SD_API` 环境变量、原配置键及默认值提供，不再从全局 Viper 另行读取。
+`NewPrometheusConfigCache` 同样接收已有的 typed `*config.Config`，配置为空时返回错误，并复制 `Prometheus.HttpSdAPI` 与可用的 `Prometheus.HttpSdToken`。地址继续由配置加载器的 `PROMETHEUS_HTTP_SD_API` 环境变量、原配置键及默认值提供，不再从全局 Viper 另行读取。令牌来自 `PROMETHEUS_HTTP_SD_TOKEN`。生产环境及无法识别的环境不允许留空；开发环境留空时不写入发现配置。有效令牌只放进 `http_sd_configs.authorization`，不进入采集目标身份，也不进入发现 URL。升级后必须重新生成一次 Prometheus 配置，否则已下发的 http_sd 会返回 401。
 
 生成的 HTTP SD 配置保留该地址的 scheme、host、path 和已有 query，同时以采集任务的 `port`、`tree_node_ids` 覆盖同名参数。构造后的全局配置或原 Config 对象变动不会改变实例使用的发现地址。空地址或非法 URL 仍按原行为跳过 HTTP SD 任务，不替换成其他地址，也不会因此发起网络请求。采集目标认证、TLS 及其他服务发现方式维持原有处理流程。
 

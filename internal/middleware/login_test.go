@@ -144,6 +144,20 @@ func TestFakeUpgradePOSTCannotUseBrowserCredential(t *testing.T) {
 }
 
 // RFC 6455 §4.1：Sec-WebSocket-Key 必须是随机 16 字节值的 base64 编码
+func TestHTTPDiscoverySkipsUserLogin(t *testing.T) {
+	engine := gin.New()
+	engine.Use(NewJWTMiddleware(nil, nil).CheckLogin())
+	engine.GET("/api/not_auth/getBindIps", func(c *gin.Context) { c.Status(204) })
+	engine.GET("/api/not_auth/getTreeNodeBindIps", func(c *gin.Context) { c.Status(204) })
+	for _, path := range []string{"/api/not_auth/getBindIps", "/api/not_auth/getTreeNodeBindIps"} {
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		if rec.Code != 204 {
+			t.Fatalf("%s status=%d", path, rec.Code)
+		}
+	}
+}
+
 func TestSampleWebSocketKeyIsValidNonce(t *testing.T) {
 	raw, err := base64.StdEncoding.DecodeString(sampleWebSocketKey())
 	if err != nil || len(raw) != 16 {

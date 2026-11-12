@@ -96,4 +96,7 @@ func setRequiredSecretsForTest(t *testing.T, file string) {
 	t.Setenv("JWT_KEY2", "fake-key2-"+randomTestKey())
 	t.Setenv("MYSQL_ADDR", "fake_user:fake_pass@tcp(127.0.0.1:3306)/fake")
 	t.Setenv("TREE_PASSWORD_ENCRYPTION_KEY", strings.Repeat("t", 32))
+	if strings.Contains(file, "production") {
+		t.Setenv("PROMETHEUS_HTTP_SD_TOKEN", "fixture-http-sd-token")
+	}
 }

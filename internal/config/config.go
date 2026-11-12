@@ -126,6 +126,9 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("生产环境 AIOPS_API_KEY 至少32字符")
 		}
 	}
+	if err := validateHTTPServiceDiscoveryToken(c.Prometheus.HttpSdToken); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -378,6 +381,7 @@ type PrometheusConfig struct {
 	AlertWebhookAddr               string        `mapstructure:"alert_webhook_addr" env:"PROMETHEUS_ALERT_WEBHOOK_ADDR" default:"http://localhost:8889/api/v1/alerts/receive"`
 	AlertWebhookFileDir            string        `mapstructure:"alert_webhook_file_dir" env:"PROMETHEUS_ALERT_WEBHOOK_FILE_DIR" default:"/tmp/webhook_files"`
 	HttpSdAPI                      string        `mapstructure:"httpSdAPI" env:"PROMETHEUS_HTTP_SD_API" default:"http://localhost:8889/api/not_auth/getTreeNodeBindIps"`
+	HttpSdToken                    string        `mapstructure:"httpSdToken" env:"PROMETHEUS_HTTP_SD_TOKEN"`
 }
 
 // CronConfig 定时任务配置

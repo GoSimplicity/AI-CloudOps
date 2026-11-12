@@ -30,19 +30,41 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/config"
 	"github.com/GoSimplicity/AI-CloudOps/internal/not_auth/service"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type NotAuthHandler struct {
-	svc service.NotAuthService
+	svc    service.NotAuthService
+	cfg    *config.Config
+	logger *zap.Logger
 }
 
-func NewNotAuthHandler(svc service.NotAuthService) *NotAuthHandler {
-	return &NotAuthHandler{
-		svc: svc,
+func NewNotAuthHandler(svc service.NotAuthService, cfg *config.Config, logger *zap.Logger) *NotAuthHandler {
+	if logger == nil {
+		logger = zap.NewNop()
 	}
+	return &NotAuthHandler{
+		svc:    svc,
+		cfg:    cfg,
+		logger: logger,
+	}
+}
+
+func (n *NotAuthHandler) authorize(ctx *gin.Context) bool {
+	token := ""
+	if n.cfg != nil {
+		token = n.cfg.Prometheus.UsableHTTPServiceDiscoveryToken()
+	}
+	if config.HTTPServiceDiscoveryRequestAllowed(token, ctx.Request.RemoteAddr, ctx.GetHeader("Authorization")) {
+		return true
+	}
+	n.logger.Warn("HTTP-SD 请求被拒绝", zap.String("path", ctx.Request.URL.Path), zap.String("remote", ctx.Request.RemoteAddr))
+	base.UnauthorizedErrorWithDetails(ctx, map[string]interface{}{}, "未授权")
+	return false
 }
 
 func (n *NotAuthHandler) RegisterRouters(server *gin.Engine) {
@@ -54,6 +76,9 @@ func (n *NotAuthHandler) RegisterRouters(server *gin.Engine) {
 
 // GetBindIps 获取绑定IP地址
 func (n *NotAuthHandler) GetBindIps(ctx *gin.Context) {
+	if !n.authorize(ctx) {
+		return
+	}
 	if len(ctx.Request.URL.RawQuery) > service.MaxDiscoveryQueryLength {
 		base.BadRequest(ctx, base.StatusError, nil, "查询参数过长")
 		return

@@ -94,7 +94,7 @@ func ProvideApp(cfg *config.Config) (*app.App, func(), error) {
 	systemHandler := api.NewSystemHandler(systemService)
 	treeNodeDAO := dao2.NewTreeNodeDAO(logger, db)
 	notAuthService := service2.NewNotAuthService(logger, treeNodeDAO)
-	notAuthHandler := api2.NewNotAuthHandler(notAuthService)
+	notAuthHandler := api2.NewNotAuthHandler(notAuthService, cfg, logger)
 	clusterDAO := dao3.NewClusterDAO(db, logger)
 	k8sClient := client.NewK8sClient(logger, clusterDAO)
 	clusterManager := manager.NewClusterManager(logger, k8sClient, clusterDAO)

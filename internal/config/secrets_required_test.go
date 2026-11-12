@@ -12,12 +12,13 @@ var requiredEnvNames = []string{"JWT_KEY1", "JWT_KEY2", "MYSQL_ADDR", "TREE_PASS
 
 func validConfigForTest() *Config {
 	return &Config{
-		Server: ServerConfig{Port: "8889"},
-		Log:    LogConfig{Dir: "logs"},
-		MySQL:  MySQLConfig{Addr: "fake-dsn-value"},
-		Redis:  RedisConfig{Addr: "redis"},
-		JWT:    JWTConfig{Key1: "fake-key1-" + randomTestKey(), Key2: "fake-key2-" + randomTestKey(), Issuer: "fake-issuer-value"},
-		Tree:   TreeConfig{PasswordEncryptionKey: "fake-tree-key-value"},
+		Server:     ServerConfig{Port: "8889"},
+		Log:        LogConfig{Dir: "logs"},
+		MySQL:      MySQLConfig{Addr: "fake-dsn-value"},
+		Redis:      RedisConfig{Addr: "redis"},
+		JWT:        JWTConfig{Key1: "fake-key1-" + randomTestKey(), Key2: "fake-key2-" + randomTestKey(), Issuer: "fake-issuer-value"},
+		Tree:       TreeConfig{PasswordEncryptionKey: "fake-tree-key-value"},
+		Prometheus: PrometheusConfig{HttpSdToken: "fixture-http-sd-token"},
 	}
 }
 

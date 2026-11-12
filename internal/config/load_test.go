@@ -90,6 +90,7 @@ func TestLoadWithoutConfigFileAcceptsReleaseEnvironment(t *testing.T) {
 	t.Setenv("MOCK_ENABLED", "false")
 	t.Setenv("AIOPS_BASE_URL", "http://aiops:8080")
 	t.Setenv("AIOPS_API_KEY", randomTestKey())
+	t.Setenv("PROMETHEUS_HTTP_SD_TOKEN", "fixture-http-sd-token")
 	cfg, _, err := callLoadIsolated(t, "--config", filepath.Join(t.TempDir(), "missing.yaml"))
 	if !IsNonFatal(err) {
 		t.Fatalf("missing YAML should only warn after environment configuration validates: %v", err)
