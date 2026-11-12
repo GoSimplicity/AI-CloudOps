@@ -12,7 +12,7 @@
 - MySQL 必须使用 `cloudops_demo` 用户、字面量 `127.0.0.1:13306` 和 `cloudops_demo_` 前缀数据库。schema DSN 与运行 DSN 必须完全一致，包含 `charset=utf8mb4&parseTime=True&loc=UTC`。
 - Docker 必须选择本地 Unix socket；拒绝 SSH/TCP daemon。已准备容器须属于上述 project，数据库端口只发布到 loopback。
 - schema 和 UTC 通知时区已经通过官方 `cmd/schema` 初始化。已有三个内置 Cron 行必须保留；所有内置和用户 Cron 均禁用。K8s kubeconfig 和 Prometheus instances 必须为空。
-- 当前 macOS 机器已缓存 Go `1.26.10` 工具链、依赖以及 MySQL/Redis 镜像。启动构建使用 CLT、`GOPROXY=off` 和 `GOSUMDB=off`；不拉镜像或依赖。
+- 当前 macOS 机器需已缓存 Go `1.26.11` darwin-arm64 工具链（与 `go.mod` 的 `go` 指令一致）、依赖以及 MySQL/Redis 镜像。启动构建使用 CLT、`GOTOOLCHAIN=local`、`GOPROXY=off` 和 `GOSUMDB=off`；不拉镜像、依赖或工具链。
 
 缺少这些文件、schema 或依赖时，工具会失败，不能将其当作 fresh 安装完成。`/tmp` 可能被系统清理；恢复前自行保管需要保留的私有配置，不要提交到 Git。
 
