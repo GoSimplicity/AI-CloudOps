@@ -239,8 +239,9 @@ func (q *rootRecordQueue) relay(client net.Conn) {
 			return
 		}
 		if q.match(request) && q.held.CompareAndSwap(false, true) {
-			// The caller sees an unknown result and releases its SQL lease. The
-			// original Redis request remains in this real TCP intermediary's queue.
+			// held is stored before this EOF. seen is closed only after it, so a
+			// waiter can observe the publication error before seen. The original
+			// Redis request stays queued until unblock.
 			client.Close()
 			close(q.seen)
 			select {
