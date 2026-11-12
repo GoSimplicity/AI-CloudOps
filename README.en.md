@@ -73,7 +73,7 @@ The list below reflects what is implemented in this repository today.
 
 ## Tech Stack
 
-- **Language / runtime:** Go 1.26.10 (`GOTOOLCHAIN=auto` will download the toolchain declared in `go.mod`)
+- **Language / runtime:** Go 1.26.11 (`GOTOOLCHAIN=auto` will download the toolchain declared in `go.mod`)
 - **Web framework:** Gin; dependency injection with Google Wire
 - **Storage:** MySQL 8 (GORM), Redis (cache, sessions, asynq task queue)
 - **Integrations:** Kubernetes client-go 0.35 and OpenKruise API, Prometheus / Alertmanager libraries, Alibaba Cloud / AWS / Tencent Cloud SDKs, SSH, WebSocket, SSE
@@ -107,7 +107,7 @@ AI-CloudOps/
 
 ### Requirements
 
-- Go 1.26.10+ (or any recent Go with `GOTOOLCHAIN=auto`)
+- Go 1.26.11+ (or any recent Go with `GOTOOLCHAIN=auto`)
 - Docker with Docker Compose v2
 - Node.js 22 and pnpm 9 (for the [web console](https://github.com/GoSimplicity/AI-CloudOps-web))
 - Python 3.11 (optional, for the [AIOps service](https://github.com/GoSimplicity/AI-CloudOps-aiops))
