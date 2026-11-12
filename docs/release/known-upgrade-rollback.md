@@ -13,7 +13,7 @@ python3 scripts/integration/known_upgrade_rollback.py
 默认只输出 dry-run，不构造 Docker runner、不读取凭据或源数据、不创建资源。实际运行必须显式授权这个新 fixture：
 
 ```sh
-python3 scripts/integration/known_upgrade_rollback.py --execute --go /path/to/go1.26.10/bin/go
+python3 scripts/integration/known_upgrade_rollback.py --execute --go /path/to/go1.26.11/bin/go
 ```
 
 需要本机固定 `/var/run/docker.sock`、已缓存的 `mysql:8.4.11` 和 `redis:7.4.11-alpine`、源 Git 对象及离线 Go 模块缓存。构建强制 `GOTOOLCHAIN=local`、`GOPROXY=off`、`GOSUMDB=off`、`CGO_ENABLED=0`，不下载模块或工具链。Docker 环境覆盖一律拒绝，不支持远程 daemon、任意旧容器、旧卷或用户指定数据库。

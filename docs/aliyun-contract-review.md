@@ -31,8 +31,8 @@
 ## 离线验证
 
 ```sh
-GOTOOLCHAIN=go1.26.10 go test ./internal/tree/...
-GOTOOLCHAIN=go1.26.10 go test -race ./internal/tree/utils ./internal/tree/service
+GOTOOLCHAIN=go1.26.11 go test ./internal/tree/...
+GOTOOLCHAIN=go1.26.11 go test -race ./internal/tree/utils ./internal/tree/service
 ```
 
 测试使用注入的ECS接口替身，覆盖短页继续、TotalCount=0、后页错误、重复token、101个ID分批和JSON转义、

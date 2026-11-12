@@ -16,7 +16,7 @@
 
 ## 前置依赖与环境
 
-复用仓库 Go 1.26.10、Asynq v0.22.0 和 zap，使用原生 testing 与本地接口替身，无新增依赖。新增专项不使用真实 SMTP、飞书、Webhook、Redis、数据库或外部网络。通知包及服务包的原有本地回归仍一起执行
+复用仓库 Go 1.26.11、Asynq v0.22.0 和 zap，使用原生 testing 与本地接口替身，无新增依赖。新增专项不使用真实 SMTP、飞书、Webhook、Redis、数据库或外部网络。通知包及服务包的原有本地回归仍一起执行
 
 模型与现有 UI 均将 RetryInterval 定义为分钟，SendRequest 使用可选 MaxRetries 与 RetryIntervalMinutes；nil 使用通道原默认，显式 0 不丢失。次数上限与已有请求 DTO 一致为 100，分钟乘 duration 前校验溢出；额外重试次数不包含首次发送
 

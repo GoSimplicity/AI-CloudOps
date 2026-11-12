@@ -4,7 +4,7 @@
 
 一个基于人工智能的云原生运维管理平台，集成 Kubernetes 管理、监控告警、智能分析等功能。
 
-[![Go](https://img.shields.io/badge/Go-1.26.10-00ADD8?logo=go&logoColor=white)](https://golang.org/)
+[![Go](https://img.shields.io/badge/Go-1.26.11-00ADD8?logo=go&logoColor=white)](https://golang.org/)
 [![Vue](https://img.shields.io/badge/Vue-3.0+-4FC08D?logo=vue.js&logoColor=white)](https://vuejs.org/)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-v1.25+-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -118,7 +118,7 @@ AI 助手会话另按已登录用户隔离，内部服务身份拥有独立会�
 
 ### 获取代码与启动
 
-需要 Git、Docker 和 Docker Compose v2，以及用于生成私有配置的 Python 3。镜像内使用项目固定的 Go 1.26.10、Node 22 与 Python 3.11，无需为容器部署在宿主机安装这些语言运行时。
+需要 Git、Docker 和 Docker Compose v2，以及用于生成私有配置的 Python 3。镜像内使用项目固定的 Go 1.26.11、Node 22 与 Python 3.11，无需为容器部署在宿主机安装这些语言运行时。
 
 ```sh
 mkdir -p ~/project
@@ -351,7 +351,7 @@ AI 请求通过 Go 的 `/api/v1/*` 网关接受 JWT 和角色权限检查，然�
 启用用户；部门/自定义接收人尚缺组织或地址配置，返回明确错误，不会假报发送成功。
 测试通知必须填写实际接收地址；渠道/接收人发送失败会返回错误。
 
-安全维护基线使用 Go 1.26.10、Prometheus 0.311.3 和 Kubernetes Go SDK 0.35.3。
+安全维护基线使用 Go 1.26.11、Prometheus 0.311.3 和 Kubernetes Go SDK 0.35.3。
 开发环境设置 `GOTOOLCHAIN=auto` 可按 `go.mod` 下载所需 Go 工具链。
 CI 在每次提交运行 `govulncheck`；只有显式推送 `v*` 标签才生成发行附件，
 附件通过测试、网关冒烟、静态检查和可达漏洞检查，并提供 SHA256 校验和。

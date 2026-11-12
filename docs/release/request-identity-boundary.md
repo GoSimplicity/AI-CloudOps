@@ -17,7 +17,7 @@
 | 相关5包race | base、Prom API、Tree API、K8s API、Workorder API通过 |
 | integration/smoke/schema_smoke标签 | 全仓只编译通过，不当作已执行外部集成 |
 
-使用既有Go1.26.10、Gin与仓库接口recorder，无新增依赖；新增测试只执行内存httptest handler，不调用真实K8s回滚。既有完整API包回归沿用其隔离设施，未连接生产或上线。
+使用既有Go1.26.11、Gin与仓库接口recorder，无新增依赖；新增测试只执行内存httptest handler，不调用真实K8s回滚。既有完整API包回归沿用其隔离设施，未连接生产或上线。
 
 ```sh
 go test ./...

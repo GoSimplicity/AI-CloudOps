@@ -18,7 +18,7 @@ Kubernetes 与数据库没有跨系统事务，多命名空间操作可能部分
 
 ```bash
 CLOUDOPS_QUOTA_TEST_KUBECONFIG=/tmp/cloudops-release-kubeconfig \
-  GOTOOLCHAIN=go1.26.10 go test -p 2 ./internal/k8s/utils -run TestQuota -count=1
+  GOTOOLCHAIN=go1.26.11 go test -p 2 ./internal/k8s/utils -run TestQuota -count=1
 ```
 
 依据：[Kubernetes ResourceQuota](https://kubernetes.io/docs/concepts/policy/resource-quotas/)、项目使用的 client-go `ResourceQuotas` API 与 `resource.ParseQuantity` 实现。
