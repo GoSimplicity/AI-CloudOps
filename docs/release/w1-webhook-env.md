@@ -46,9 +46,9 @@
 | `WEBHOOK_IM_FEISHU_PRIVATE_ROBOT_APP_SECRET` | `webhook.im_feishu.private_robot_app_secret` | 空 | 占位 `xxx`（**凭据**，请用环境变量注入，不要写进文件） |
 | `WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API` | `webhook.im_feishu.tenant_access_token_api` | `https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal` | 同默认值 |
 
-`ENV` 按 `pkg/envmode` 判断。只有 `development` / `dev` 允许签名密钥、Alertmanager bearer token 和卡片对外地址为空，进程打警告后继续启动：`/receive` 不校验令牌，飞书卡片不放认领和静默按钮。`production` / `prod` / `prd`、未设置，以及 `test` 这类无法识别的取值，只要有一项为空就拒绝启动。发布栈由 `scripts/release-env.py` 生成两个密钥（与 `openssl rand -hex 32` 同长度），并把同一个 bearer token 交给 Alertmanager 启动脚本写入 `credentials_file`，配置文件里不写真实值。
+`ENV` 按 `pkg/envmode` 判断。只有 `development` / `dev` 允许签名密钥、Alertmanager bearer token 和卡片对外地址为空，进程打警告后继续启动：`/receive` 不校验令牌，飞书卡片不放认领和静默按钮。`development` / `dev` 也允许卡片对外地址使用回环主机和未指定地址，行为与原来一样（地址为空时打警告）。`production` / `prod` / `prd`、未设置，以及 `test` 这类无法识别的取值，只要有一项为空就拒绝启动。同一套环境判断下，`WEBHOOK_BACKEND_DOMAIN`（`webhook.backend_domain`，飞书卡片操作链接的对外地址）还必须能解析成带 `http` 或 `https`、主机名、可选端口和路径的 URL，且主机不能是回环地址或未指定地址；解析失败、主机为回环或未指定时同样拒绝启动，不只是打警告。回环包括 `localhost`（不区分大小写，以及 `*.localhost`）、`127.0.0.0/8` 任意地址、`::1`（含 `[::1]`，可以带端口）。未指定地址包括 `0.0.0.0`、`::`、`[::]`，以及带端口的 `0.0.0.0:8889`。发布栈由 `scripts/release-env.py` 生成两个密钥（与 `openssl rand -hex 32` 同长度），并把同一个 bearer token 交给 Alertmanager 启动脚本写入 `credentials_file`，配置文件里不写真实值。该脚本给本机栈写入的 `WEBHOOK_BACKEND_DOMAIN` 仍是 `http://127.0.0.1:8889/api/v1/alerts`。发布 compose 的 webhook 服务没有设置 `ENV`，未设置按生产处理，因此生产部署必须把这项改成真实对外地址，否则 webhook 启动失败。生产部署用 `--webhook-backend-domain` 或手改 `.env` 填真实对外地址。生成或补齐这项时脚本会打一条提示，不打印地址或密钥。
 
-签名链接默认 24 小时内有效，有效期内可以重复使用。卡片被转发后，拿到链接的人也能提交。重复静默、取消静默或认领是幂等的：认领只在状态仍是触发或已升级时把 `status` 改成已认领，不写认领人，也不改静默 ID。
+卡片签名链接在 24 小时有效期内可以重复使用（`action.LinkTTL`）。校验只核对 HMAC 和过期时间，不记录是否已经用过，也不绑定点击的人。群里任何拿到链接的人点击都会生效，当前设计可接受。打开链接（GET）只显示确认页，确认页提交（POST）才静默、取消静默或认领。重复静默、取消静默或认领是幂等的：认领只在状态仍是触发或已升级时把 `status` 改成已认领，不写认领人，也不改静默 ID。
 
 说明：
 
@@ -229,3 +229,4 @@
   用仓库 `webhook.yaml` 时拼成 `hook//<token>`。通过 `WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API` 设置了其他地址的部署不受影响（但若设为 `im/v1/messages` 仍发不出去）。
 - Kubernetes 中同命名空间有名为 `webhook` 的 Service 时，注入的 `WEBHOOK_PORT=tcp://…` 会让 webhook 启动失败（见上文“Kubernetes 注意”）。
 - 主后端（`SERVER_PORT`）和 webhook 默认都是 8889；部署在同一台机器或共享网络命名空间时，**用 `WEBHOOK_PORT` 错开 webhook 端口的做法从本提交起成立**。
+- **生产环境的 `WEBHOOK_BACKEND_DOMAIN` 不能再使用回环地址或未指定地址。** `scripts/release-env.py` 新建或 `--add-missing` 补齐时仍写入本机占位 `http://127.0.0.1:8889/api/v1/alerts`（含 scheme、端口和 `/api/v1/alerts`）。`production` / `prod` / `prd`、未设置以及无法识别的 `ENV` 下，主机是回环地址（`localhost`、`*.localhost`、`127.0.0.0/8`、`::1` / `[::1]`）、未指定地址（`0.0.0.0`、`::` / `[::]`，含 `0.0.0.0:8889`）或 URL 无法解析时，webhook **启动失败**。发布 compose 的 webhook 没有设置 `ENV`，因此沿用这份占位直接上生产会起不来，必须改成真实对外地址。生产部署用 `--webhook-backend-domain` 或手改 `.env` 填真实对外地址。`development` / `dev` 仍可使用回环地址和未指定地址。

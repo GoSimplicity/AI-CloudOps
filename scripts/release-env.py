@@ -2,11 +2,13 @@
 """Create local release secrets without printing them or overwriting an existing file."""
 
 import argparse
+import ipaddress
 import os
 from pathlib import Path
 import re
 import secrets
 import sys
+from urllib.parse import urlparse
 
 # Runtime account is explicitly provisioned by release-fresh.py; never MYSQL_USER/ALL.
 MYSQL_USER = "cloudops"
@@ -17,6 +19,13 @@ DSN_PARAMS = "charset=utf8mb4&parseTime=True&loc=UTC"
 # 口令直接拼进 DSN 且 .env 不加引号：只接受不含 DSN 分隔符和 Compose 插值字符的值
 SAFE_VALUE = re.compile(r"^[A-Za-z0-9._~-]+$")
 SAFE_HOST = re.compile(r"^[A-Za-z0-9.-]+:[0-9]{1,5}$")
+# 不传 --webhook-backend-domain 时写入的本机占位。生产 webhook 会拒绝回环主机。
+LOOPBACK_BACKEND_DOMAIN = "http://127.0.0.1:8889/api/v1/alerts"
+# 校验失败时只打这句，不回显调用方传入的原始值。
+BACKEND_DOMAIN_ERROR = (
+    "--webhook-backend-domain must be an http or https URL with a hostname "
+    "and must not contain whitespace, $, or quotes."
+)
 
 
 def webhook_dsn(password, host):
@@ -24,6 +33,56 @@ def webhook_dsn(password, host):
     if not SAFE_VALUE.match(password):
         raise ValueError("MYSQL_PASSWORD contains characters unsafe for an unquoted DSN")
     return f"{MYSQL_USER}:{password}@tcp({host})/{MYSQL_DATABASE}?{DSN_PARAMS}"
+
+
+def backend_domain_rejected(value):
+    """True when value is not an http(s) URL with a hostname, or contains whitespace, $ or quotes."""
+    if not value or any(character.isspace() for character in value) or "$" in value or "'" in value or '"' in value:
+        return True
+    try:
+        parsed = urlparse(value)
+        host = parsed.hostname
+        # 非数字或超出范围的端口在这里抛出 ValueError，不能当成合法地址写入。
+        parsed.port
+    except (ValueError, UnicodeError):
+        return True
+    if parsed.scheme.lower() not in ("http", "https") or not host or not host.strip("."):
+        return True
+    return False
+
+
+def host_is_loopback(value):
+    """Whether the URL host is a loopback name or address. Unspecified addresses are not loopback."""
+    try:
+        host = urlparse(value).hostname or ""
+    except (ValueError, UnicodeError):
+        return False
+    name = host.strip().rstrip(".").lower()
+    if name == "localhost" or name.endswith(".localhost"):
+        return True
+    try:
+        address = ipaddress.ip_address(name.split("%", 1)[0])
+    except ValueError:
+        return False
+    return bool(address.is_loopback)
+
+
+def backend_domain_header(kind, domain):
+    """Comment lines above WEBHOOK_BACKEND_DOMAIN. The loopback wording stays stable when the flag is omitted."""
+    if host_is_loopback(domain):
+        if kind == "create":
+            return (
+                "# Feishu card action base (scheme and /api/v1/alerts). Loopback placeholder for local use.\n"
+                "# Production, unset, and unrecognized ENV refuse to start until this host is an external address.\n"
+            )
+        return (
+            "# External base for Feishu card actions (scheme and /api/v1/alerts).\n"
+            "# Loopback placeholder for local use. Production refuses to start until this is an external address.\n"
+        )
+    return (
+        "# Feishu card action base (scheme and /api/v1/alerts).\n"
+        "# Supplied with --webhook-backend-domain. Production refuses loopback and unspecified hosts.\n"
+    )
 
 
 def read_settings(path):
@@ -35,7 +94,7 @@ def read_settings(path):
     return settings
 
 
-def derived_additions(settings, host):
+def derived_additions(settings, host, backend_domain):
     """Lines to append. None means refuse and leave the file unchanged."""
     lines = []
     if "WEBHOOK_MYSQL_ADDR" not in settings:
@@ -51,8 +110,8 @@ def derived_additions(settings, host):
     elif not settings.get("WEBHOOK_MYSQL_ADDR"):
         return None, "WEBHOOK_MYSQL_ADDR= exists but is empty; remove that line and rerun with --add-missing."
     if "WEBHOOK_BACKEND_DOMAIN" not in settings:
-        lines.append("# External base for Feishu card actions. Includes scheme and /api/v1/alerts.")
-        lines.append("WEBHOOK_BACKEND_DOMAIN=http://127.0.0.1:8889/api/v1/alerts")
+        lines.extend(backend_domain_header("add", backend_domain).splitlines())
+        lines.append(f"WEBHOOK_BACKEND_DOMAIN={backend_domain}")
     if not settings.get("WEBHOOK_ACTION_SIGNING_KEY"):
         if "WEBHOOK_ACTION_SIGNING_KEY" in settings:
             return None, "WEBHOOK_ACTION_SIGNING_KEY= exists but is empty; remove that line and rerun with --add-missing."
@@ -66,10 +125,10 @@ def derived_additions(settings, host):
     return lines, ""
 
 
-def add_missing(destination, host):
+def add_missing(destination, host, backend_domain):
     """Upgrade an existing .env: append derived keys that are absent. Never print secret values."""
     settings = read_settings(destination)
-    lines, error = derived_additions(settings, host)
+    lines, error = derived_additions(settings, host, backend_domain)
     if error:
         print(error, file=sys.stderr)
         return 1
@@ -83,7 +142,23 @@ def add_missing(destination, host):
         output.write(("\n" if needs_newline else "") + "\n".join(lines) + "\n")
     os.chmod(destination, 0o600)
     print(f"Appended derived webhook settings to {destination} (mode 0600). No secrets printed.")
+    if wrote_backend_domain(lines) and host_is_loopback(backend_domain):
+        note_loopback_backend_placeholder()
     return 0
+
+
+def wrote_backend_domain(lines):
+    return any(line.startswith("WEBHOOK_BACKEND_DOMAIN=") for line in lines)
+
+
+def note_loopback_backend_placeholder():
+    """Local placeholder only. Do not print the address or any secret."""
+    print(
+        "WEBHOOK_BACKEND_DOMAIN was filled with a loopback placeholder for local use. "
+        "Production, an unset ENV, and an unrecognized ENV refuse to start until it is replaced "
+        "with the external card action base. No address or secret was printed.",
+        file=sys.stderr,
+    )
 
 
 def main():
@@ -95,17 +170,28 @@ def main():
                         help="host:port used in WEBHOOK_MYSQL_ADDR (default: mysql:3306, the Compose service)")
     parser.add_argument("--add-missing", action="store_true",
                         help="for an existing .env, append missing derived keys (WEBHOOK_MYSQL_ADDR, card link base, signing key) without touching other values")
+    parser.add_argument("--webhook-backend-domain",
+                        help="WEBHOOK_BACKEND_DOMAIN written for a new file or when --add-missing adds that key. "
+                             "Must be an http or https URL with a hostname and no whitespace, $, or quotes. "
+                             "Omit to write the local loopback placeholder.")
     args = parser.parse_args()
     destination = args.env_file
     if not SAFE_HOST.match(args.mysql_host):
         print("--mysql-host must look like host:port", file=sys.stderr)
         return 2
+    if args.webhook_backend_domain is None:
+        backend_domain = LOOPBACK_BACKEND_DOMAIN
+    elif backend_domain_rejected(args.webhook_backend_domain):
+        print(BACKEND_DOMAIN_ERROR, file=sys.stderr)
+        return 2
+    else:
+        backend_domain = args.webhook_backend_domain
 
     if args.add_missing:
         if not destination.exists():
             print(f"{destination} does not exist; run without --add-missing first.", file=sys.stderr)
             return 1
-        return add_missing(destination, args.mysql_host)
+        return add_missing(destination, args.mysql_host, backend_domain)
 
     names = (
         "MYSQL_PASSWORD", "MYSQL_ROOT_PASSWORD", "MYSQL_MIGRATOR_PASSWORD", "REDIS_PASSWORD", "JWT_KEY1",
@@ -133,8 +219,8 @@ def main():
     content += 'WEBHOOK_IM_FEISHU_TENANT_ACCESS_TOKEN_API=http://127.0.0.1:9/open-apis/auth/v3/tenant_access_token/internal\n'
     content += 'WEBHOOK_IM_FEISHU_PRIVATE_MESSAGE_API=http://127.0.0.1:9/open-apis/im/v1/messages\n'
     content += 'WEBHOOK_IM_FEISHU_GROUP_MESSAGE_API=http://127.0.0.1:9/open-apis/bot/v2/hook\n'
-    content += "# Feishu card action base. Replace with the external URL (scheme + /api/v1/alerts) before exposing webhook.\n"
-    content += "WEBHOOK_BACKEND_DOMAIN=http://127.0.0.1:8889/api/v1/alerts\n"
+    content += backend_domain_header("create", backend_domain)
+    content += f"WEBHOOK_BACKEND_DOMAIN={backend_domain}\n"
     signing_key = secrets.token_hex(32)
     bearer_token = secrets.token_hex(32)
     content += f"WEBHOOK_ACTION_SIGNING_KEY={signing_key}\n"
@@ -148,6 +234,8 @@ def main():
     with os.fdopen(descriptor, "w") as output:
         output.write(content)
     print(f"Created {destination} with mode 0600. No secrets printed.")
+    if host_is_loopback(backend_domain):
+        note_loopback_backend_placeholder()
     return 0
 
 

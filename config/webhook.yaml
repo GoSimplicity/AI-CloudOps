@@ -3,7 +3,7 @@ webhook:
   alert_manager_api: "http://localhost:9093"  # 告警管理 API
   default_upgrade_minutes: 30
   front_domain: "http://localhost:3000"  # 前端地址，含 scheme
-  backend_domain: "http://localhost:8889/api/v1/alerts"  # 飞书卡片操作链接的对外地址，含 scheme 和 /api/v1/alerts 前缀
+  backend_domain: "http://localhost:8889/api/v1/alerts"  # 飞书卡片操作链接的对外地址，含 scheme 和 /api/v1/alerts。生产或无法识别的 ENV 拒绝回环主机、未指定地址和无法解析的 URL
   action_signing_key: ""  # 由 WEBHOOK_ACTION_SIGNING_KEY 注入。生产或无法识别的 ENV 下为空会拒绝启动
   alertmanager_bearer_token: ""  # 由 WEBHOOK_ALERTMANAGER_BEARER_TOKEN 注入。生产或无法识别的 ENV 下为空会拒绝启动
   im_feishu:

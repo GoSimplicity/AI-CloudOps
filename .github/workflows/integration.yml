@@ -60,7 +60,9 @@ jobs:
       - name: Cross-repository cloud provider contract
         run: go run scripts/integration/cloud_provider_contract.go ../AI-CloudOps-web
       - name: Generate private isolated configuration
-        run: python scripts/release-env.py
+        # alerts.ci.invalid is an RFC 2606 reserved name: non-loopback and not resolvable.
+        # It only lets this fresh stack pass the production webhook host check. It is not a credential.
+        run: python scripts/release-env.py --webhook-backend-domain http://alerts.ci.invalid/api/v1/alerts
       - name: Offline fresh-stack safety regression
         run: python -m unittest scripts.tests.test_release_fresh scripts.tests.test_release_env scripts.tests.test_locked_sources -v
       - name: Explicitly migrate a new owned stack and start with runtime roles

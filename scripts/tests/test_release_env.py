@@ -258,6 +258,182 @@ class ReleaseEnvTests(unittest.TestCase):
                 self.assertEqual(destination.read_bytes(), before)
                 self.assert_no_value_leak(result, FIXTURE_PASSWORD, "fixture@pw/x")
 
+    def test_loopback_backend_placeholder_is_called_out_without_leaking_values(self):
+        destination, result = self.generate()
+        settings = read_env(destination)
+        note = "loopback placeholder"
+        output = result.stdout + result.stderr
+        self.assertIn(note, result.stderr)
+        self.assertNotIn("127.0.0.1", output)
+        self.assertNotIn(settings["WEBHOOK_BACKEND_DOMAIN"], output)
+        self.assertNotIn(settings["WEBHOOK_ACTION_SIGNING_KEY"], output)
+        self.assertNotIn(settings["WEBHOOK_ALERTMANAGER_BEARER_TOKEN"], output)
+        self.assertNotIn(settings["MYSQL_PASSWORD"], output)
+        self.assertIn("Production", result.stderr)
+
+        kept = self.dir / "kept-domain.env"
+        kept.write_text(
+            f"MYSQL_PASSWORD={FIXTURE_PASSWORD}\n"
+            "WEBHOOK_MYSQL_ADDR=cloudops:fixture-only-pw@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=UTC\n"
+            "WEBHOOK_BACKEND_DOMAIN=https://alerts.example/api/v1/alerts\n"
+            "WEBHOOK_ACTION_SIGNING_KEY=ab\n"
+            "WEBHOOK_ALERTMANAGER_BEARER_TOKEN=cd\n"
+        )
+        kept_result = self.run_script("--env-file", str(kept), "--add-missing")
+        self.assertEqual(kept_result.returncode, 0, kept_result.stderr)
+        self.assertNotIn(note, kept_result.stdout + kept_result.stderr)
+        self.assertEqual(read_env(kept)["WEBHOOK_BACKEND_DOMAIN"], "https://alerts.example/api/v1/alerts")
+        self.assert_no_value_leak(kept_result, FIXTURE_PASSWORD)
+
+        added = self.dir / "need-domain.env"
+        added.write_text(
+            f"MYSQL_PASSWORD={FIXTURE_PASSWORD}\n"
+            "WEBHOOK_MYSQL_ADDR=cloudops:fixture-only-pw@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=UTC\n"
+            "WEBHOOK_ACTION_SIGNING_KEY=ab\n"
+            "WEBHOOK_ALERTMANAGER_BEARER_TOKEN=cd\n"
+        )
+        added_result = self.run_script("--env-file", str(added), "--add-missing")
+        self.assertEqual(added_result.returncode, 0, added_result.stderr)
+        added_output = added_result.stdout + added_result.stderr
+        self.assertIn(note, added_result.stderr)
+        self.assertNotIn("127.0.0.1", added_output)
+        self.assertEqual(read_env(added)["WEBHOOK_BACKEND_DOMAIN"], "http://127.0.0.1:8889/api/v1/alerts")
+        self.assert_no_value_leak(added_result, FIXTURE_PASSWORD, "fixture-only-pw@tcp")
+
+    def test_webhook_backend_domain_argument(self):
+        domain = "http://alerts.ci.invalid/api/v1/alerts"
+        created, created_result = self.generate("--webhook-backend-domain", domain)
+        self.assertEqual(read_env(created)["WEBHOOK_BACKEND_DOMAIN"], domain)
+        created_output = created_result.stdout + created_result.stderr
+        self.assertNotIn("loopback placeholder", created_output)
+        self.assertNotIn(domain, created_output)
+        self.assertNotIn("127.0.0.1", created_output)
+
+        https = "https://alerts.example/api/v1/alerts"
+        https_path = self.dir / "https.env"
+        https_result = self.run_script("--env-file", str(https_path), "--webhook-backend-domain", https)
+        self.assertEqual(https_result.returncode, 0, https_result.stderr)
+        self.assertEqual(read_env(https_path)["WEBHOOK_BACKEND_DOMAIN"], https)
+        self.assertNotIn("loopback placeholder", https_result.stdout + https_result.stderr)
+        self.assertNotIn(https, https_result.stdout + https_result.stderr)
+
+        added = self.dir / "add-domain.env"
+        added.write_text(
+            f"MYSQL_PASSWORD={FIXTURE_PASSWORD}\n"
+            "WEBHOOK_MYSQL_ADDR=cloudops:fixture-only-pw@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=UTC\n"
+            "WEBHOOK_ACTION_SIGNING_KEY=ab\n"
+            "WEBHOOK_ALERTMANAGER_BEARER_TOKEN=cd\n"
+        )
+        added_result = self.run_script("--env-file", str(added), "--add-missing", "--webhook-backend-domain", domain)
+        self.assertEqual(added_result.returncode, 0, added_result.stderr)
+        self.assertEqual(read_env(added)["WEBHOOK_BACKEND_DOMAIN"], domain)
+        self.assertEqual(added.read_text().count("WEBHOOK_BACKEND_DOMAIN="), 1)
+        added_output = added_result.stdout + added_result.stderr
+        self.assertNotIn("loopback placeholder", added_output)
+        self.assertNotIn(domain, added_output)
+        self.assert_no_value_leak(added_result, FIXTURE_PASSWORD)
+
+        # 不传时两条写入路径仍是回环占位，并保留 stderr 提示
+        omitted = self.dir / "omitted.env"
+        omitted_result = self.run_script("--env-file", str(omitted))
+        self.assertEqual(omitted_result.returncode, 0, omitted_result.stderr)
+        self.assertEqual(read_env(omitted)["WEBHOOK_BACKEND_DOMAIN"], "http://127.0.0.1:8889/api/v1/alerts")
+        self.assertIn("loopback placeholder", omitted_result.stderr)
+        self.assertNotIn("127.0.0.1", omitted_result.stdout + omitted_result.stderr)
+
+        omitted_add = self.dir / "omitted-add.env"
+        omitted_add.write_text(
+            f"MYSQL_PASSWORD={FIXTURE_PASSWORD}\n"
+            "WEBHOOK_MYSQL_ADDR=cloudops:fixture-only-pw@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=UTC\n"
+            "WEBHOOK_ACTION_SIGNING_KEY=ab\n"
+            "WEBHOOK_ALERTMANAGER_BEARER_TOKEN=cd\n"
+        )
+        omitted_add_result = self.run_script("--env-file", str(omitted_add), "--add-missing")
+        self.assertEqual(omitted_add_result.returncode, 0, omitted_add_result.stderr)
+        self.assertEqual(read_env(omitted_add)["WEBHOOK_BACKEND_DOMAIN"], "http://127.0.0.1:8889/api/v1/alerts")
+        self.assertIn("loopback placeholder", omitted_add_result.stderr)
+        self.assertNotIn("127.0.0.1", omitted_add_result.stdout + omitted_add_result.stderr)
+
+        # 已有值不覆盖，即使传入了另一个地址
+        kept = self.dir / "keep-custom.env"
+        custom = "https://kept.example/api/v1/alerts"
+        kept.write_text(
+            f"MYSQL_PASSWORD={FIXTURE_PASSWORD}\n"
+            "WEBHOOK_MYSQL_ADDR=cloudops:fixture-only-pw@tcp(mysql:3306)/cloudops?charset=utf8mb4&parseTime=True&loc=UTC\n"
+            f"WEBHOOK_BACKEND_DOMAIN={custom}\n"
+            "WEBHOOK_ACTION_SIGNING_KEY=ab\n"
+            "WEBHOOK_ALERTMANAGER_BEARER_TOKEN=cd\n"
+        )
+        kept_before = kept.read_bytes()
+        kept_result = self.run_script("--env-file", str(kept), "--add-missing", "--webhook-backend-domain", domain)
+        self.assertEqual(kept_result.returncode, 0, kept_result.stderr)
+        self.assertEqual(kept.read_bytes(), kept_before)
+        self.assertNotIn("loopback placeholder", kept_result.stdout + kept_result.stderr)
+        self.assertNotIn(domain, kept_result.stdout + kept_result.stderr)
+
+        # 显式传入回环地址仍写入，并继续打回环提示，但不回显地址
+        loopback = "http://localhost:8889/api/v1/alerts"
+        loop_path = self.dir / "explicit-loopback.env"
+        loop_result = self.run_script("--env-file", str(loop_path), "--webhook-backend-domain", loopback)
+        self.assertEqual(loop_result.returncode, 0, loop_result.stderr)
+        self.assertEqual(read_env(loop_path)["WEBHOOK_BACKEND_DOMAIN"], loopback)
+        self.assertIn("loopback placeholder", loop_result.stderr)
+        self.assertNotIn(loopback, loop_result.stdout + loop_result.stderr)
+        self.assertNotIn("localhost", loop_result.stdout + loop_result.stderr)
+
+        rejected = (
+            ("space", "http://bad host.example/canary-space-9f3a2c"),
+            ("dollar", "http://bad.example/canary-dollar-9f3a2c$secret"),
+            ("quote", "http://bad.example/canary-quote-9f3a2c'"),
+            ("dquote", 'http://bad.example/canary-dquote-9f3a2c"'),
+            ("newline", "http://bad.example/canary-newline-9f3a2c\nINJECTED=1"),
+            ("scheme", "ftp://bad.example/canary-scheme-9f3a2c"),
+            ("noscheme", "canary-noscheme-9f3a2c.example/api"),
+            ("nohost", "http:///canary-nohost-9f3a2c"),
+            ("noport", "http://canary-noport-9f3a2c:notaport/api"),
+            ("empty", ""),
+        )
+        for name, value in rejected:
+            with self.subTest(case=name):
+                marker = f"canary-{name}-9f3a2c" if name != "empty" else ""
+                fresh = self.dir / f"rejected-fresh-{name}.env"
+                fresh_result = self.run_script("--env-file", str(fresh), "--webhook-backend-domain", value)
+                self.assertEqual(fresh_result.returncode, 2)
+                self.assertIn("--webhook-backend-domain", fresh_result.stderr)
+                self.assertFalse(fresh.exists())
+                fresh_output = fresh_result.stdout + fresh_result.stderr
+                if value:
+                    self.assertNotIn(value, fresh_output)
+                if marker:
+                    self.assertNotIn(marker, fresh_output)
+                    self.assertNotIn("INJECTED", fresh_output)
+
+                existing = self.dir / f"rejected-add-{name}.env"
+                existing.write_text(f"MYSQL_PASSWORD={FIXTURE_PASSWORD}\nOTHER=keep\n")
+                before = existing.read_bytes()
+                add_result = self.run_script(
+                    "--env-file", str(existing), "--add-missing", "--webhook-backend-domain", value)
+                self.assertEqual(add_result.returncode, 2)
+                self.assertEqual(existing.read_bytes(), before)
+                add_output = add_result.stdout + add_result.stderr
+                self.assertIn("--webhook-backend-domain", add_result.stderr)
+                if value:
+                    self.assertNotIn(value, add_output)
+                if marker:
+                    self.assertNotIn(marker, add_output)
+                self.assertNotIn(FIXTURE_PASSWORD, add_output)
+
+    def test_fresh_stack_workflows_pass_non_loopback_backend_domain(self):
+        domain = "http://alerts.ci.invalid/api/v1/alerts"
+        generators = []
+        for path in sorted((ROOT / ".github/workflows").glob("*.yml")):
+            text = path.read_text()
+            if "release-env.py" not in text:
+                continue
+            generators.append(path.name)
+            self.assertIn("release-env.py --webhook-backend-domain " + domain, text, path.name)
+        self.assertIn("integration.yml", generators)
+
     def test_add_missing_requires_existing_file(self):
         destination = self.dir / "absent.env"
         result = self.run_script("--env-file", str(destination), "--add-missing")
