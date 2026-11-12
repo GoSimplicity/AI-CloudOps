@@ -21,7 +21,7 @@ DEFAULT_RUNTIME = Path("/tmp/cloudops-demo-20261103")
 PROJECT = "cloudops-demo-20261103"
 MYSQL_CONTAINER = PROJECT + "-mysql-1"
 REDIS_CONTAINER = PROJECT + "-redis-1"
-GO_ROOT = Path.home() / "go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.10.darwin-arm64"
+GO_ROOT = Path.home() / "go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.11.darwin-arm64"
 
 
 class DemoError(Exception):

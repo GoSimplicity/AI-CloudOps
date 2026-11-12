@@ -154,6 +154,11 @@ class DemoLocalTests(unittest.TestCase):
             dependencies.assert_not_called()
             build.assert_not_called()
 
+    def test_offline_build_toolchain_matches_module_go_version(self):
+        go_mod = (SCRIPT.parents[1] / "go.mod").read_text()
+        version = next(line.split()[1] for line in go_mod.splitlines() if line.startswith("go "))
+        self.assertEqual(DEMO.GO_ROOT.name, f"toolchain@v0.0.1-go{version}.darwin-arm64")
+
     def test_build_does_not_follow_existing_binary_symlink(self):
         demo = DEMO.LocalDemo(self.directory)
         target = self.write("unrelated", "preserve")
