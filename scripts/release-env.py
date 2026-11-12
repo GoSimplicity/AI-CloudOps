@@ -24,7 +24,8 @@ LOOPBACK_BACKEND_DOMAIN = "http://127.0.0.1:8889/api/v1/alerts"
 # 校验失败时只打这句，不回显调用方传入的原始值。
 BACKEND_DOMAIN_ERROR = (
     "--webhook-backend-domain must be an http or https URL with a hostname "
-    "and must not contain whitespace, $, or quotes."
+    "and must not contain whitespace, $, or quotes. "
+    "Unspecified addresses are rejected for WEBHOOK_BACKEND_DOMAIN."
 )
 
 
@@ -35,8 +36,24 @@ def webhook_dsn(password, host):
     return f"{MYSQL_USER}:{password}@tcp({host})/{MYSQL_DATABASE}?{DSN_PARAMS}"
 
 
+def host_is_unspecified(host):
+    """主机是否为未指定地址（0.0.0.0 或 ::）。等价写法和 zone 后缀按地址本身判断。"""
+    name = host.strip().rstrip(".")
+    if not name:
+        return False
+    try:
+        address = ipaddress.ip_address(name.split("%", 1)[0])
+    except ValueError:
+        return False
+    if address.is_unspecified:
+        return True
+    # Go 的 IP.Equal 把 IPv4 映射的 ::ffff:0.0.0.0 当成 0.0.0.0。
+    mapped = address.ipv4_mapped if isinstance(address, ipaddress.IPv6Address) else None
+    return bool(mapped and mapped.is_unspecified)
+
+
 def backend_domain_rejected(value):
-    """True when value is not an http(s) URL with a hostname, or contains whitespace, $ or quotes."""
+    """True when value is not an http(s) URL with a hostname, contains whitespace, $ or quotes, or the host is unspecified."""
     if not value or any(character.isspace() for character in value) or "$" in value or "'" in value or '"' in value:
         return True
     try:
@@ -47,6 +64,8 @@ def backend_domain_rejected(value):
     except (ValueError, UnicodeError):
         return True
     if parsed.scheme.lower() not in ("http", "https") or not host or not host.strip("."):
+        return True
+    if host_is_unspecified(host):
         return True
     return False
 
@@ -173,6 +192,7 @@ def main():
     parser.add_argument("--webhook-backend-domain",
                         help="WEBHOOK_BACKEND_DOMAIN written for a new file or when --add-missing adds that key. "
                              "Must be an http or https URL with a hostname and no whitespace, $, or quotes. "
+                             "Unspecified addresses are rejected. "
                              "Omit to write the local loopback placeholder.")
     args = parser.parse_args()
     destination = args.env_file
