@@ -27,9 +27,12 @@ package service
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"go.uber.org/zap"
 )
 
@@ -42,9 +45,9 @@ const (
 type YamlTaskService interface {
 	GetYamlTaskList(ctx context.Context, req *model.YamlTaskListReq) (model.ListResp[*model.K8sYamlTask], error)
 	CreateYamlTask(ctx context.Context, req *model.YamlTaskCreateReq) error
-	UpdateYamlTask(ctx context.Context, req *model.YamlTaskUpdateReq) error
-	DeleteYamlTask(ctx context.Context, req *model.YamlTaskDeleteReq) error
-	ApplyYamlTask(ctx context.Context, req *model.YamlTaskExecuteReq) error
+	UpdateYamlTask(ctx context.Context, req *model.YamlTaskUpdateReq, super bool) error
+	DeleteYamlTask(ctx context.Context, req *model.YamlTaskDeleteReq, super bool) error
+	ApplyYamlTask(ctx context.Context, req *model.YamlTaskExecuteReq, super bool) error
 	GetYamlTaskDetail(ctx context.Context, req *model.YamlTaskDetailReq) (*model.K8sYamlTask, error)
 }
 
@@ -72,6 +75,9 @@ func (s *yamlTaskService) GetYamlTaskList(ctx context.Context, req *model.YamlTa
 }
 
 func (s *yamlTaskService) CreateYamlTask(ctx context.Context, req *model.YamlTaskCreateReq) error {
+	if req == nil {
+		return base.NewBusinessError(constants.ErrInvalidParam, "创建YAML任务请求不能为空")
+	}
 	task := &model.K8sYamlTask{
 		Name:       req.Name,
 		UserID:     req.UserID,
@@ -83,24 +89,59 @@ func (s *yamlTaskService) CreateYamlTask(ctx context.Context, req *model.YamlTas
 	return s.manager.CreateYamlTask(ctx, task)
 }
 
-func (s *yamlTaskService) UpdateYamlTask(ctx context.Context, req *model.YamlTaskUpdateReq) error {
-	task := &model.K8sYamlTask{
+func (s *yamlTaskService) UpdateYamlTask(ctx context.Context, req *model.YamlTaskUpdateReq, super bool) error {
+	if req == nil {
+		return base.NewBusinessError(constants.ErrInvalidParam, "更新YAML任务请求不能为空")
+	}
+	task, err := s.ownedYamlTask(ctx, req.ID, req.ClusterID, req.UserID, super)
+	if err != nil {
+		return err
+	}
+	updated := &model.K8sYamlTask{
 		Model:      model.Model{ID: req.ID},
 		Name:       req.Name,
-		UserID:     req.UserID,
+		UserID:     task.UserID,
 		TemplateID: req.TemplateID,
 		ClusterID:  req.ClusterID,
 		Variables:  req.Variables,
 	}
-	return s.manager.UpdateYamlTask(ctx, task)
+	return s.manager.UpdateYamlTask(ctx, updated, task.UserID)
 }
 
-func (s *yamlTaskService) DeleteYamlTask(ctx context.Context, req *model.YamlTaskDeleteReq) error {
-	return s.manager.DeleteYamlTask(ctx, req.ID, req.ClusterID)
+func (s *yamlTaskService) DeleteYamlTask(ctx context.Context, req *model.YamlTaskDeleteReq, super bool) error {
+	if req == nil {
+		return base.NewBusinessError(constants.ErrInvalidParam, "删除YAML任务请求不能为空")
+	}
+	task, err := s.ownedYamlTask(ctx, req.ID, req.ClusterID, req.UserID, super)
+	if err != nil {
+		return err
+	}
+	return s.manager.DeleteYamlTask(ctx, req.ID, req.ClusterID, task.UserID)
 }
 
-func (s *yamlTaskService) ApplyYamlTask(ctx context.Context, req *model.YamlTaskExecuteReq) error {
-	return s.manager.ApplyYamlTask(ctx, req.ID, req.ClusterID, req.DryRun)
+func (s *yamlTaskService) ApplyYamlTask(ctx context.Context, req *model.YamlTaskExecuteReq, super bool) error {
+	if req == nil {
+		return base.NewBusinessError(constants.ErrInvalidParam, "执行YAML任务请求不能为空")
+	}
+	task, err := s.ownedYamlTask(ctx, req.ID, req.ClusterID, req.UserID, super)
+	if err != nil {
+		return err
+	}
+	return s.manager.ApplyYamlTask(ctx, req.ID, req.ClusterID, req.DryRun, task.UserID)
+}
+
+func (s *yamlTaskService) ownedYamlTask(ctx context.Context, id, clusterID, actorID int, super bool) (*model.K8sYamlTask, error) {
+	task, err := s.manager.GetYamlTaskDetail(ctx, id, clusterID)
+	if err != nil {
+		return nil, err
+	}
+	if task == nil {
+		return nil, fmt.Errorf("YAML 任务不存在或不属于指定集群")
+	}
+	if err := authorizeYamlOwner(s.logger, actorID, task.UserID, task.ID, yamlObjectTask, super); err != nil {
+		return nil, err
+	}
+	return task, nil
 }
 
 func (s *yamlTaskService) GetYamlTaskDetail(ctx context.Context, req *model.YamlTaskDetailReq) (*model.K8sYamlTask, error) {

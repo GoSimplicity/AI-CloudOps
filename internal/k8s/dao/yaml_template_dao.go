@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -37,9 +38,10 @@ import (
 type YamlTemplateDAO interface {
 	ListAllYamlTemplates(ctx context.Context, req *model.YamlTemplateListReq) ([]*model.K8sYamlTemplate, error)
 	CreateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error
-	UpdateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error
-	DeleteYamlTemplate(ctx context.Context, id int, clusterId int) error
+	UpdateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate, ownerID int) error
+	DeleteYamlTemplate(ctx context.Context, id int, clusterId int, userID int) error
 	GetYamlTemplateByID(ctx context.Context, id int, clusterId int) (*model.K8sYamlTemplate, error)
+	GetOwnedYamlTemplate(ctx context.Context, id int, clusterID int, userID int) (*model.K8sYamlTemplate, error)
 }
 
 type yamlTemplateDAO struct {
@@ -94,31 +96,52 @@ func (d *yamlTemplateDAO) CreateYamlTemplate(ctx context.Context, yaml *model.K8
 	return nil
 }
 
-func (d *yamlTemplateDAO) UpdateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate) error {
-	if yaml.ID == 0 {
+func (d *yamlTemplateDAO) UpdateYamlTemplate(ctx context.Context, yaml *model.K8sYamlTemplate, ownerID int) error {
+	if yaml == nil || yaml.ID == 0 {
 		d.l.Error("UpdateYamlTemplate ID 不能为空", zap.Any("yaml", yaml))
 		return fmt.Errorf("invalid yaml ID")
 	}
-
-	if err := d.db.WithContext(ctx).Where("id = ? AND cluster_id = ?", yaml.ID, yaml.ClusterID).Updates(yaml).Error; err != nil {
-		d.l.Error("UpdateYamlTemplate 更新Yaml模板失败", zap.Int("yamlID", yaml.ID), zap.Error(err))
+	if _, err := d.GetOwnedYamlTemplate(ctx, yaml.ID, yaml.ClusterID, ownerID); err != nil {
 		return err
 	}
 
+	result := d.db.WithContext(ctx).Model(&model.K8sYamlTemplate{}).
+		Where("id = ? AND cluster_id = ? AND user_id = ?", yaml.ID, yaml.ClusterID, ownerID).
+		Omit("user_id").
+		Updates(yaml)
+	if result.Error != nil {
+		d.l.Error("UpdateYamlTemplate 更新Yaml模板失败", zap.Int("yamlID", yaml.ID), zap.Error(result.Error))
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		if _, err := d.GetOwnedYamlTemplate(ctx, yaml.ID, yaml.ClusterID, ownerID); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
-func (d *yamlTemplateDAO) DeleteYamlTemplate(ctx context.Context, id int, clusterId int) error {
+func (d *yamlTemplateDAO) DeleteYamlTemplate(ctx context.Context, id int, clusterId int, userID int) error {
 	if id == 0 {
 		d.l.Error("DeleteYamlTemplate ID 不能为空", zap.Int("id", id))
 		return fmt.Errorf("invalid yaml template ID")
 	}
+	if userID <= 0 {
+		return fmt.Errorf("%w: user id", constants.ErrInvalidParam)
+	}
 
-	if err := d.db.WithContext(ctx).Where("id = ? AND cluster_id = ?", id, clusterId).Delete(&model.K8sYamlTemplate{}).Error; err != nil {
-		d.l.Error("DeleteYamlTemplate 删除Yaml模板失败", zap.Int("yamlID", id), zap.Error(err))
+	if _, err := d.GetOwnedYamlTemplate(ctx, id, clusterId, userID); err != nil {
 		return err
 	}
 
+	result := d.db.WithContext(ctx).Where("id = ? AND cluster_id = ? AND user_id = ?", id, clusterId, userID).Delete(&model.K8sYamlTemplate{})
+	if result.Error != nil {
+		d.l.Error("DeleteYamlTemplate 删除Yaml模板失败", zap.Int("yamlID", id), zap.Error(result.Error))
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return constants.ErrNotResourceOwner
+	}
 	return nil
 }
 
@@ -136,4 +159,19 @@ func (d *yamlTemplateDAO) GetYamlTemplateByID(ctx context.Context, id int, clust
 	}
 
 	return yaml, nil
+}
+
+func (d *yamlTemplateDAO) GetOwnedYamlTemplate(ctx context.Context, id int, clusterID int, userID int) (*model.K8sYamlTemplate, error) {
+	if userID <= 0 {
+		return nil, fmt.Errorf("%w: user id", constants.ErrInvalidParam)
+	}
+	template, err := d.GetYamlTemplateByID(ctx, id, clusterID)
+	if err != nil {
+		return nil, err
+	}
+	if template.UserID != userID {
+		d.l.Warn("YAML模板归属校验失败", zap.Int("yamlID", id), zap.Int("clusterID", clusterID), zap.Int("userID", userID))
+		return nil, constants.ErrNotResourceOwner
+	}
+	return template, nil
 }

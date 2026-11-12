@@ -34,9 +34,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/manager"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
@@ -497,6 +499,10 @@ func (s *podService) PodExec(ctx context.Context, req *model.PodExecReq, conn *w
 		return fmt.Errorf("Pod名称不能为空")
 	}
 
+	if !utils.IsAllowedPodExecShell(req.Shell) {
+		return base.NewBusinessError(constants.ErrInvalidParam, "不支持的shell类型: "+req.Shell)
+	}
+
 	if conn == nil {
 		return fmt.Errorf("WebSocket连接不能为空")
 	}
@@ -560,8 +566,8 @@ func (s *podService) PodFileUpload(ctx context.Context, req *model.PodFileUpload
 		return fmt.Errorf("容器名称不能为空")
 	}
 
-	if req.FilePath == "" {
-		return fmt.Errorf("文件路径不能为空")
+	if err := validatePodFilePath(req.FilePath); err != nil {
+		return err
 	}
 
 	if form == nil {
@@ -619,8 +625,8 @@ func (s *podService) PodFileDownload(ctx context.Context, req *model.PodFileDown
 		return nil, "", fmt.Errorf("容器名称不能为空")
 	}
 
-	if req.FilePath == "" {
-		return nil, "", fmt.Errorf("文件路径不能为空")
+	if err := validatePodFilePath(req.FilePath); err != nil {
+		return nil, "", err
 	}
 
 	s.logger.Info("开始从Pod下载文件",
@@ -649,6 +655,16 @@ func (s *podService) PodFileDownload(ctx context.Context, req *model.PodFileDown
 	}
 
 	return reader, fileName, nil
+}
+
+func validatePodFilePath(path string) error {
+	if path == "" {
+		return fmt.Errorf("文件路径不能为空")
+	}
+	if err := utils.ValidatePodFilePath(path); err != nil {
+		return base.NewBusinessError(constants.ErrInvalidParam, "无效的文件路径格式")
+	}
+	return nil
 }
 
 func (s *podService) CreatePodByYaml(ctx context.Context, req *model.CreatePodByYamlReq) error {

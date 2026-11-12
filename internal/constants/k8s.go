@@ -54,4 +54,6 @@ var (
 
 	// ErrK8sResourceConflict 乐观锁冲突（提交的 resourceVersion 已过期），handler 映射为 HTTP 409
 	ErrK8sResourceConflict = errors.New("k8s resource conflict")
+	// ErrNotResourceOwner 当前用户不是资源创建者，handler 映射为 HTTP 403
+	ErrNotResourceOwner = errors.New("resource owner mismatch")
 )

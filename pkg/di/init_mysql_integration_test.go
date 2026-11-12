@@ -112,21 +112,21 @@ func TestMySQLStartupMigrationAndYAMLCRUD(t *testing.T) {
 		t.Fatal("task database list failed")
 	}
 	template.Content = "apiVersion: v1\nkind: Secret"
-	if err := templates.UpdateYamlTemplate(ctx, template); err != nil {
+	if err := templates.UpdateYamlTemplate(ctx, template, template.UserID); err != nil {
 		t.Fatal("template update failed")
 	}
 	task.Name = "updated-task"
-	if err := tasks.UpdateYamlTask(ctx, task); err != nil {
+	if err := tasks.UpdateYamlTask(ctx, task, task.UserID); err != nil {
 		t.Fatal("task update failed")
 	}
 	saved, err = tasks.GetYamlTaskByID(ctx, task.ID, 42)
 	if err != nil || saved.Name != "updated-task" {
 		t.Fatal("task update did not persist")
 	}
-	if err := tasks.DeleteYamlTask(ctx, task.ID, 42); err != nil {
+	if err := tasks.DeleteYamlTask(ctx, task.ID, 42, task.UserID); err != nil {
 		t.Fatal("task delete failed")
 	}
-	if err := templates.DeleteYamlTemplate(ctx, template.ID, 42); err != nil {
+	if err := templates.DeleteYamlTemplate(ctx, template.ID, 42, template.UserID); err != nil {
 		t.Fatal("template delete failed")
 	}
 	taskList, err = tasks.ListAllYamlTasks(ctx, &model.YamlTaskListReq{ClusterID: 42})

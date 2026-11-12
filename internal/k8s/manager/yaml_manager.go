@@ -27,13 +27,16 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/GoSimplicity/AI-CloudOps/internal/constants"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/client"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/dao"
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
+	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"go.uber.org/zap"
 )
 
@@ -47,15 +50,17 @@ type YamlManager interface {
 	GetYamlTemplateList(ctx context.Context, req *model.YamlTemplateListReq) ([]*model.K8sYamlTemplate, error)
 	CreateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error
 	CheckYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error
-	UpdateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error
-	DeleteYamlTemplate(ctx context.Context, templateID int, clusterID int) error
+	UpdateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate, ownerID int) error
+	DeleteYamlTemplate(ctx context.Context, templateID int, clusterID int, ownerID int) error
 	GetYamlTemplateDetail(ctx context.Context, templateID int, clusterID int) (*model.K8sYamlTemplate, error)
+	GetOwnedYamlTemplate(ctx context.Context, templateID int, clusterID int, ownerID int) (*model.K8sYamlTemplate, error)
 	GetYamlTaskList(ctx context.Context, req *model.YamlTaskListReq) ([]*model.K8sYamlTask, error)
 	CreateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
-	UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error
-	DeleteYamlTask(ctx context.Context, taskID int, clusterID int) error
-	ApplyYamlTask(ctx context.Context, taskID int, clusterID int, dryRun bool) error
+	UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask, ownerID int) error
+	DeleteYamlTask(ctx context.Context, taskID int, clusterID int, ownerID int) error
+	ApplyYamlTask(ctx context.Context, taskID int, clusterID int, dryRun bool, userID int) error
 	GetYamlTaskDetail(ctx context.Context, taskID int, clusterID int) (*model.K8sYamlTask, error)
+	GetOwnedYamlTask(ctx context.Context, taskID int, clusterID int, ownerID int) (*model.K8sYamlTask, error)
 }
 
 type yamlManager struct {
@@ -129,12 +134,18 @@ func (ym *yamlManager) CheckYamlTemplate(ctx context.Context, template *model.K8
 	return utils.ValidateYamlWithCluster(ctx, discoveryClient, dynamicClient, template.Content)
 }
 
-func (ym *yamlManager) UpdateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate) error {
+func (ym *yamlManager) UpdateYamlTemplate(ctx context.Context, template *model.K8sYamlTemplate, ownerID int) error {
+	if _, err := ym.GetOwnedYamlTemplate(ctx, template.ID, template.ClusterID, ownerID); err != nil {
+		return err
+	}
 	if err := utils.ValidateYamlContent(template.Content); err != nil {
 		return fmt.Errorf("YAML 格式错误: %w", err)
 	}
 
-	if err := ym.yamlTemplateDao.UpdateYamlTemplate(ctx, template); err != nil {
+	if err := ym.yamlTemplateDao.UpdateYamlTemplate(ctx, template, ownerID); err != nil {
+		if errors.Is(err, constants.ErrNotResourceOwner) {
+			return base.NewBusinessError(constants.ErrNotResourceOwner, "当前用户无权限操作该YAML模板")
+		}
 		ym.logger.Error("更新 YAML 模板失败", zap.Int("templateID", template.ID), zap.String("templateName", template.Name), zap.Error(err))
 		return fmt.Errorf("更新 YAML 模板失败: %w", err)
 	}
@@ -143,7 +154,11 @@ func (ym *yamlManager) UpdateYamlTemplate(ctx context.Context, template *model.K
 	return nil
 }
 
-func (ym *yamlManager) DeleteYamlTemplate(ctx context.Context, templateID int, clusterID int) error {
+func (ym *yamlManager) DeleteYamlTemplate(ctx context.Context, templateID int, clusterID int, ownerID int) error {
+	if _, err := ym.GetOwnedYamlTemplate(ctx, templateID, clusterID, ownerID); err != nil {
+		return err
+	}
+
 	tasks, err := ym.yamlTaskDao.GetYamlTaskByTemplateID(ctx, templateID)
 	if err != nil {
 		ym.logger.Error("检查模板使用情况失败", zap.Int("templateID", templateID), zap.Error(err))
@@ -158,7 +173,13 @@ func (ym *yamlManager) DeleteYamlTemplate(ctx context.Context, templateID int, c
 		return fmt.Errorf("该模板正在被以下任务使用: %v, 删除失败", taskNames)
 	}
 
-	if err := ym.yamlTemplateDao.DeleteYamlTemplate(ctx, templateID, clusterID); err != nil {
+	if err := ym.yamlTemplateDao.DeleteYamlTemplate(ctx, templateID, clusterID, ownerID); err != nil {
+		if errors.Is(err, constants.ErrNotResourceOwner) {
+			return base.NewBusinessError(constants.ErrNotResourceOwner, "当前用户无权限操作该YAML模板")
+		}
+		if errors.Is(err, constants.ErrInvalidParam) {
+			return base.NewBusinessError(constants.ErrInvalidParam, "删除YAML模板参数错误")
+		}
 		ym.logger.Error("删除 YAML 模板失败", zap.Int("templateID", templateID), zap.Int("clusterID", clusterID), zap.Error(err))
 		return fmt.Errorf("删除 YAML 模板失败: %w", err)
 	}
@@ -171,6 +192,20 @@ func (ym *yamlManager) GetYamlTemplateDetail(ctx context.Context, templateID int
 	template, err := ym.yamlTemplateDao.GetYamlTemplateByID(ctx, templateID, clusterID)
 	if err != nil {
 		ym.logger.Error("获取 YAML 模板详情失败", zap.Int("templateID", templateID), zap.Int("clusterID", clusterID), zap.Error(err))
+		return nil, fmt.Errorf("获取 YAML 模板详情失败: %w", err)
+	}
+	return template, nil
+}
+
+func (ym *yamlManager) GetOwnedYamlTemplate(ctx context.Context, templateID int, clusterID int, ownerID int) (*model.K8sYamlTemplate, error) {
+	template, err := ym.yamlTemplateDao.GetOwnedYamlTemplate(ctx, templateID, clusterID, ownerID)
+	if err != nil {
+		if errors.Is(err, constants.ErrNotResourceOwner) {
+			return nil, base.NewBusinessError(constants.ErrNotResourceOwner, "当前用户无权限操作该YAML模板")
+		}
+		if errors.Is(err, constants.ErrInvalidParam) {
+			return nil, base.NewBusinessError(constants.ErrInvalidParam, "YAML模板参数错误")
+		}
 		return nil, fmt.Errorf("获取 YAML 模板详情失败: %w", err)
 	}
 	return template, nil
@@ -203,9 +238,9 @@ func (ym *yamlManager) CreateYamlTask(ctx context.Context, task *model.K8sYamlTa
 	return nil
 }
 
-func (ym *yamlManager) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask) error {
-	if _, err := ym.yamlTaskDao.GetYamlTaskByID(ctx, task.ID, task.ClusterID); err != nil {
-		return fmt.Errorf("YAML 任务不存在或不属于指定集群: %w", err)
+func (ym *yamlManager) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTask, ownerID int) error {
+	if _, err := ym.GetOwnedYamlTask(ctx, task.ID, task.ClusterID, ownerID); err != nil {
+		return err
 	}
 
 	if task.TemplateID > 0 {
@@ -223,7 +258,10 @@ func (ym *yamlManager) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTa
 	task.Status = TaskPending
 	task.ApplyResult = ""
 
-	if err := ym.yamlTaskDao.UpdateYamlTask(ctx, task); err != nil {
+	if err := ym.yamlTaskDao.UpdateYamlTask(ctx, task, ownerID); err != nil {
+		if errors.Is(err, constants.ErrNotResourceOwner) {
+			return base.NewBusinessError(constants.ErrNotResourceOwner, "当前用户无权限操作该YAML任务")
+		}
 		ym.logger.Error("更新 YAML 任务失败", zap.Int("taskID", task.ID), zap.String("taskName", task.Name), zap.Int("clusterID", task.ClusterID), zap.Error(err))
 		return fmt.Errorf("更新 YAML 任务失败: %w", err)
 	}
@@ -232,8 +270,14 @@ func (ym *yamlManager) UpdateYamlTask(ctx context.Context, task *model.K8sYamlTa
 	return nil
 }
 
-func (ym *yamlManager) DeleteYamlTask(ctx context.Context, taskID int, clusterID int) error {
-	if err := ym.yamlTaskDao.DeleteYamlTask(ctx, taskID, clusterID); err != nil {
+func (ym *yamlManager) DeleteYamlTask(ctx context.Context, taskID int, clusterID int, ownerID int) error {
+	if err := ym.yamlTaskDao.DeleteYamlTask(ctx, taskID, clusterID, ownerID); err != nil {
+		if errors.Is(err, constants.ErrNotResourceOwner) {
+			return base.NewBusinessError(constants.ErrNotResourceOwner, "当前用户无权限操作该YAML任务")
+		}
+		if errors.Is(err, constants.ErrInvalidParam) {
+			return base.NewBusinessError(constants.ErrInvalidParam, "删除YAML任务参数错误")
+		}
 		ym.logger.Error("删除 YAML 任务失败", zap.Int("taskID", taskID), zap.Int("clusterID", clusterID), zap.Error(err))
 		return fmt.Errorf("删除 YAML 任务失败: %w", err)
 	}
@@ -249,9 +293,29 @@ func (ym *yamlManager) GetYamlTaskDetail(ctx context.Context, taskID int, cluste
 	return task, nil
 }
 
-func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int, clusterID int, dryRun bool) error {
-	task, err := ym.yamlTaskDao.GetYamlTaskByID(ctx, taskID, clusterID)
+func (ym *yamlManager) GetOwnedYamlTask(ctx context.Context, taskID int, clusterID int, ownerID int) (*model.K8sYamlTask, error) {
+	task, err := ym.yamlTaskDao.GetOwnedYamlTask(ctx, taskID, clusterID, ownerID)
 	if err != nil {
+		if errors.Is(err, constants.ErrNotResourceOwner) {
+			return nil, base.NewBusinessError(constants.ErrNotResourceOwner, "当前用户无权限操作该YAML任务")
+		}
+		if errors.Is(err, constants.ErrInvalidParam) {
+			return nil, base.NewBusinessError(constants.ErrInvalidParam, "YAML任务参数错误")
+		}
+		return nil, fmt.Errorf("YAML 任务不存在或不属于指定集群: %w", err)
+	}
+	return task, nil
+}
+
+func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int, clusterID int, dryRun bool, userID int) error {
+	task, err := ym.yamlTaskDao.GetOwnedYamlTask(ctx, taskID, clusterID, userID)
+	if err != nil {
+		if errors.Is(err, constants.ErrNotResourceOwner) {
+			return base.NewBusinessError(constants.ErrNotResourceOwner, "当前用户无权限操作该YAML任务")
+		}
+		if errors.Is(err, constants.ErrInvalidParam) {
+			return base.NewBusinessError(constants.ErrInvalidParam, "执行YAML任务参数错误")
+		}
 		return fmt.Errorf("YAML 任务不存在或不属于指定集群: %w", err)
 	}
 
@@ -261,7 +325,7 @@ func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int, clusterID 
 		if !dryRun {
 			task.Status = TaskFailed
 			task.ApplyResult = fmt.Sprintf("获取模板失败: %v", err)
-			ym.yamlTaskDao.UpdateYamlTask(ctx, task)
+			ym.yamlTaskDao.UpdateYamlTask(ctx, task, task.UserID)
 		}
 		return fmt.Errorf("获取 YAML 模板失败: %w", err)
 	}
@@ -272,7 +336,7 @@ func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int, clusterID 
 		if !dryRun {
 			task.Status = TaskFailed
 			task.ApplyResult = fmt.Sprintf("解析模板失败: %v", err)
-			ym.yamlTaskDao.UpdateYamlTask(ctx, task)
+			ym.yamlTaskDao.UpdateYamlTask(ctx, task, task.UserID)
 		}
 		return fmt.Errorf("解析 YAML 模板失败: %w", err)
 	}
@@ -283,7 +347,7 @@ func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int, clusterID 
 		if !dryRun {
 			task.Status = TaskFailed
 			task.ApplyResult = fmt.Sprintf("获取客户端失败: %v", err)
-			ym.yamlTaskDao.UpdateYamlTask(ctx, task)
+			ym.yamlTaskDao.UpdateYamlTask(ctx, task, task.UserID)
 		}
 		return fmt.Errorf("获取 discovery client 失败: %w", err)
 	}
@@ -294,7 +358,7 @@ func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int, clusterID 
 		if !dryRun {
 			task.Status = TaskFailed
 			task.ApplyResult = fmt.Sprintf("获取客户端失败: %v", err)
-			ym.yamlTaskDao.UpdateYamlTask(ctx, task)
+			ym.yamlTaskDao.UpdateYamlTask(ctx, task, task.UserID)
 		}
 		return fmt.Errorf("获取 dynamic client 失败: %w", err)
 	}
@@ -304,7 +368,7 @@ func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int, clusterID 
 		if !dryRun {
 			task.Status = TaskFailed
 			task.ApplyResult = fmt.Sprintf("应用失败: %v", err)
-			ym.yamlTaskDao.UpdateYamlTask(ctx, task)
+			ym.yamlTaskDao.UpdateYamlTask(ctx, task, task.UserID)
 		}
 		return fmt.Errorf("应用 YAML 到集群失败: %w", err)
 	}
@@ -318,7 +382,7 @@ func (ym *yamlManager) ApplyYamlTask(ctx context.Context, taskID int, clusterID 
 	// 正式应用模式，更新任务状态
 	task.Status = TaskSucceeded
 	task.ApplyResult = "应用成功"
-	if err := ym.yamlTaskDao.UpdateYamlTask(ctx, task); err != nil {
+	if err := ym.yamlTaskDao.UpdateYamlTask(ctx, task, task.UserID); err != nil {
 		ym.logger.Error("更新任务状态失败", zap.Int("taskID", taskID), zap.Error(err))
 	}
 

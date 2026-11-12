@@ -32,11 +32,11 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/GoSimplicity/AI-CloudOps/internal/k8s/service"
+	k8sutils "github.com/GoSimplicity/AI-CloudOps/internal/k8s/utils"
 	"github.com/GoSimplicity/AI-CloudOps/internal/model"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/base"
 	"github.com/GoSimplicity/AI-CloudOps/pkg/sse"
@@ -378,16 +378,7 @@ func (h *K8sPodHandler) PodExec(ctx *gin.Context) {
 		return
 	}
 
-	// 安全性：只允许常见的安全shell，防止命令注入
-	validShells := []string{"sh", "bash", "zsh", "fish", "ash"}
-	isValidShell := false
-	for _, validShell := range validShells {
-		if shell == validShell {
-			isValidShell = true
-			break
-		}
-	}
-	if !isValidShell {
+	if !k8sutils.IsAllowedPodExecShell(shell) {
 		base.BadRequestError(ctx, "不支持的shell类型: "+shell)
 		return
 	}
@@ -752,34 +743,6 @@ func (h *K8sPodHandler) streamPodLogLines(ctx context.Context, out io.ReadCloser
 	}
 }
 
-// isValidPath 验证文件路径的安全性，防止路径遍历等安全攻击
-// 1. 路径遍历攻击 (..)
-// 2. 注入攻击 (\n, \r)
-// 3. 空字节注入 (\x00)
-// 4. 缓冲区溢出 (长度限制)
-// 5. 用户主目录访问 (~)
 func isValidPath(path string) bool {
-	if path == "" {
-		return false
-	}
-
-	cleanPath := filepath.Clean(path)
-
-	dangerousPatterns := []string{"..", "\n", "\r", "\x00"}
-
-	for _, pattern := range dangerousPatterns {
-		if strings.Contains(cleanPath, pattern) {
-			return false
-		}
-	}
-
-	if len(cleanPath) > 4096 {
-		return false
-	}
-
-	if strings.HasPrefix(cleanPath, "~") {
-		return false
-	}
-
-	return true
+	return k8sutils.ValidatePodFilePath(path) == nil
 }
