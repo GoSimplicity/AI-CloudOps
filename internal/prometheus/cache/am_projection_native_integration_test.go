@@ -635,20 +635,18 @@ func rootAMHoldIntentRemoval(t *testing.T, f *rootAMNativeFixture) *rootRecordQu
 	pub := delayed.publisher("http://native-aba.invalid")
 	finished := make(chan error, 1)
 	go func() { finished <- pub.GenerateMainConfig(f.ctx) }()
-	select {
-	case <-queue.seen:
-	case err := <-finished:
+	switch wait, err := rootObserveHeldCommand(f.ctx, queue.seen, finished, &queue.held); wait {
+	case rootHeldWaitAccepted:
+	case rootHeldWaitMissed:
 		t.Fatal("publication returned before its intent removal request", err)
-	case <-f.ctx.Done():
+	case rootHeldWaitCompleted:
+		t.Fatal("unknown intent removal result falsely completed publication")
+	case rootHeldWaitNotReached:
 		t.Fatal("publication did not reach actual intent removal request")
-	}
-	select {
-	case err := <-finished:
-		if err == nil {
-			t.Fatal("unknown intent removal result falsely completed publication")
-		}
-	case <-f.ctx.Done():
+	case rootHeldWaitNotReleased:
 		t.Fatal("intent removal EOF did not release SQL lease")
+	default:
+		t.Fatal("intent removal wait returned an unknown result", wait, err)
 	}
 	return queue
 }
