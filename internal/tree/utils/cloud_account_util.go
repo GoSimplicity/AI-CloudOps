@@ -67,23 +67,6 @@ func VerifyAWSCredentials(ctx context.Context, req *model.VerifyCloudCredentials
 	return client.VerifyCredentials(ctx)
 }
 
-func VerifyHuaweiCredentials(ctx context.Context, req *model.VerifyCloudCredentialsReq, logger *zap.Logger) error {
-	logger.Warn("华为云凭证验证功能暂未实现")
-	return fmt.Errorf("华为云凭证验证功能暂未实现")
-}
-
-// VerifyAzureCredentials 验证Azure凭证
-func VerifyAzureCredentials(ctx context.Context, req *model.VerifyCloudCredentialsReq, logger *zap.Logger) error {
-	logger.Warn("Azure凭证验证功能暂未实现")
-	return fmt.Errorf("Azure凭证验证功能暂未实现")
-}
-
-// VerifyGCPCredentials 验证GCP凭证
-func VerifyGCPCredentials(ctx context.Context, req *model.VerifyCloudCredentialsReq, logger *zap.Logger) error {
-	logger.Warn("GCP凭证验证功能暂未实现")
-	return fmt.Errorf("GCP凭证验证功能暂未实现")
-}
-
 // GetDefaultRegion 从云账户的区域列表中获取默认区域
 // 返回默认区域的Region字符串，如果没有找到默认区域则返回第一个区域
 // 如果区域列表为空，返回空字符串和错误
