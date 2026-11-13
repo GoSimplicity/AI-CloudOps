@@ -164,7 +164,10 @@ openssl rand -base64 48   # 再运行一次，作为 JWT_KEY2
 ```sh
 GOTOOLCHAIN=auto go test ./...
 GOTOOLCHAIN=auto go build .
+make help
 ```
+
+`make help` 只打印本机开发目标和隔离栈的离线计划命令。`make docker-build`、`make dev`、`make stop` 以及根目录 Compose 相关目标已停用：它们失败退出，不构建镜像，也不启动或停止容器。当前隔离栈入口仍是上面的 `bash scripts/release-start.sh`，编排文件是 `deploy/release/compose.yaml`。
 
 提交前密钥扫描：运行 `bash scripts/setup-git-hooks.sh` 把 `core.hooksPath` 设为 `.githooks`，并检查本机依赖。需要 **gitleaks >= 8.25.0**（从 [官方发布页](https://github.com/gitleaks/gitleaks/releases) 下载并校验 sha256；版本过低或无法解析时脚本与 pre-commit 钩子都会失败），以及 **Python 3.11+**（提交 `.gitleaks.toml` 时钩子用 `tomllib` 检查配置，缺少时拒绝提交）。本地钩子只是第一道防线，CI 的 gitleaks 工作流是最终兜底。
 
