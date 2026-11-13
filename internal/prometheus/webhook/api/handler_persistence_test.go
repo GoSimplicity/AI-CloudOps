@@ -84,6 +84,11 @@ func TestSilenceHandlersPersistThroughRealDAO(t *testing.T) {
 			if test.action == "silence" {
 				hour = "1"
 			}
+			if test.action == "unsilence" && test.mutation == "new-id" {
+				if err := db.Model(&event).Updates(map[string]any{"status": model.MonitorAlertEventStatusSilenced, "silence_id": "newer-id"}).Error; err != nil {
+					t.Fatal(err)
+				}
+			}
 			engine.ServeHTTP(recorder, signActionRequest(t, http.MethodPost, test.action, "fixture", hour))
 			var result struct {
 				Code    int
@@ -91,6 +96,28 @@ func TestSilenceHandlersPersistThroughRealDAO(t *testing.T) {
 			}
 			if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
 				t.Fatal(err)
+			}
+			if test.action == "unsilence" {
+				if calls != 0 {
+					t.Fatal("unsilence issued a remote request")
+				}
+				if result.Code == 0 {
+					t.Fatal("unproven unsilence was reported successful")
+				}
+				var current model.MonitorAlertEvent
+				if err := db.WithContext(context.Background()).First(&current, event.ID).Error; err != nil {
+					t.Fatal(err)
+				}
+				if test.mutation == "new-id" {
+					if current.SilenceID != "newer-id" || current.Status != model.MonitorAlertEventStatusSilenced {
+						t.Fatal("refusal cleared the replacement silence")
+					}
+					return
+				}
+				if current.Status != model.MonitorAlertEventStatusSilenced || current.SilenceID != "old-id" || result.Message != "未能取消，静默关联已保留" {
+					t.Fatalf("unsilence changed stored association: status=%d id=%s message=%s", current.Status, current.SilenceID, result.Message)
+				}
+				return
 			}
 			if calls != 1 {
 				t.Fatal("handler retried an upstream side effect")
