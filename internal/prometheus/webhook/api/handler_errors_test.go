@@ -115,14 +115,14 @@ func TestSilenceErrorChainDoesNotLeakOrFalselyConfirm(t *testing.T) {
 					}
 					engine.ServeHTTP(recorder, signActionRequest(t, http.MethodPost, action, canary, hour))
 					expectedCalls := 1
-					if mode == "lookup" || (mode == "invalid_id" && action == "unsilence") {
+					if action == "unsilence" || mode == "lookup" {
 						expectedCalls = 0
 					}
 					if calls != expectedCalls {
 						t.Fatal("failed operation retried or reached an unsafe upstream path")
 					}
 					expectedUpdates := 0
-					if mode == "success" || mode == "save" {
+					if action == "silence" && (mode == "success" || mode == "save") {
 						expectedUpdates = 1
 					}
 					if memory.updates != expectedUpdates {
@@ -138,14 +138,19 @@ func TestSilenceErrorChainDoesNotLeakOrFalselyConfirm(t *testing.T) {
 					if recorder.Code != http.StatusOK {
 						t.Fatal("existing business envelope HTTP status changed")
 					}
-					if (business.Code == 0) != (mode == "success") {
+					if (business.Code == 0) != (action == "silence" && mode == "success") {
 						t.Fatal("failed or unconfirmed operation returned business success")
 					}
-					if mode == "save" && !strings.Contains(business.Message, "未确认") {
+					if action == "silence" && mode == "save" && !strings.Contains(business.Message, "未确认") {
 						t.Fatal("DAO failure omitted manual reconciliation status")
 					}
-					if mode != "success" && memory.event.Status != initial {
-						t.Fatal("failure changed persisted status")
+					if action == "unsilence" && mode != "lookup" && mode != "invalid_id" && business.Message != "未能取消，静默关联已保留" {
+						t.Fatalf("unsilence message = %s", business.Message)
+					}
+					if action == "unsilence" || mode != "success" {
+						if memory.event.Status != initial {
+							t.Fatal("failure changed persisted status")
+						}
 					}
 					if strings.Contains(recorder.Body.String(), canary) {
 						t.Fatal("private upstream/request/DAO value leaked in business response")

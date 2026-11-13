@@ -226,38 +226,10 @@ func (a *alertManagerEventService) EventAlertUnSilence(ctx context.Context, req 
 		return fmt.Errorf("该告警事件未被静默")
 	}
 
-	alertPool, err := a.poolDao.GetAlertPoolByID(ctx, alertEvent.SendGroup.PoolID)
-	if err != nil {
-		a.l.Error("取消静默失败: 无法获取告警管理器实例", zap.Error(err))
-		return fmt.Errorf("获取告警管理器实例失败: %v", err)
-	}
-
-	if len(alertPool.AlertManagerInstances) == 0 {
-		a.l.Error("取消静默失败: 告警管理器实例为空", zap.Int("poolID", alertPool.ID))
-		return fmt.Errorf("告警管理器实例未配置")
-	}
-
-	// 构建请求URL
-	alertAddr := fmt.Sprintf("http://%v:9093", alertPool.AlertManagerInstances[0])
-	_ = fmt.Sprintf("%s/api/v1/silence/%s", alertAddr, alertEvent.SilenceID)
-
-	// TODO: 暂时不删除静默，因为删除静默后，告警事件会重新触发
-	// if err := pkg.DeleteSilenceRequest(ctx, a.l, alertUrl); err != nil {
-	// 	a.l.Error("取消静默失败: 发送删除静默请求失败", zap.Error(err))
-	// 	return fmt.Errorf("发送删除静默请求失败: %v", err)
-	// }
-
-	// 标记为已取消静默
-	alertEvent.SilenceID = ""
-	alertEvent.Status = model.MonitorAlertEventStatusFiring
-
-	if err := a.dao.UpdateAlertEvent(ctx, alertEvent); err != nil {
-		a.l.Error("取消静默失败: 更新告警事件状态失败", zap.Error(err), zap.Int("id", req.ID))
-		return fmt.Errorf("更新告警事件状态失败: %v", err)
-	}
-
-	a.l.Info("取消静默成功", zap.Int("id", req.ID), zap.String("silenceID", alertEvent.SilenceID))
-	return nil
+	// 本地 ID、注释、标签和 fingerprint 都不能证明该静默没有覆盖其他告警。
+	// 本阶段不调用 Alertmanager 删除，也不改 silence_id 或状态。
+	a.l.Warn("取消静默被拒绝", zap.Int("id", req.ID))
+	return fmt.Errorf("未能取消，静默关联已保留")
 }
 
 func (a *alertManagerEventService) processSingleSilence(ctx context.Context, eventID int, request *model.EventAlertSilenceReq, user *model.User) error {
