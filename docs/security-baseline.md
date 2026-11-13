@@ -1,5 +1,29 @@
 # 1.0 安全基线验证
 
+2026-11-13 在 `a797990ed88b423d088ffe2f1327ca72ffb883d5` 上用 `govulncheck v1.9.0` 复扫：可达漏洞为 0，导入包 5 个、依赖模块 2 个不可达。这组计数取代 2026-10-22 记录里的 3 个导入包和 1 个模块；下方该日原文保留。
+
+官方记录与模块代理核对后的最小稳定版本：
+
+| 公告 | 修复前 | 选定版本 | 依据 |
+| --- | --- | --- | --- |
+| GO-2026-6866、GO-2026-6860，`x/net/html` | `golang.org/x/net` v0.60.0 | v0.62.0 | 漏洞库固定版本；v0.63.0 尚不存在 |
+| GO-2026-6443，gRPC transport | `google.golang.org/grpc` v1.83.1 | v1.83.2 | 1.83 线的补丁；未跳到 1.84/1.85 |
+| GO-2026-5841，`compress/s2` | `github.com/klauspost/compress` v1.18.5 | v1.20.2 | v1.18.7 只覆盖这条包级公告 |
+| GO-2026-6865，`compress/fse` 与 `huff0` | 同上 | v1.20.2 | 模块级公告的固定版本；v1.20.2 同时覆盖 s2 |
+| GO-2026-4503，edwards25519 | `filippo.io/edwards25519` v1.1.0 | v1.1.1 | 补丁版本；未采用同日的 v1.2.0 |
+| GO-2026-5932，`x/crypto/openpgp` | `golang.org/x/crypto` v0.57.0 | v0.59.0 | 漏洞库给出的首个修复是伪版本 `v0.58.1-0.20261009181718-2f1f834330b2`。稳定版 v0.58.0 仍包含 `openpgp`；v0.59.0 已移除该包，且本模块与已选依赖都不导入它 |
+
+`x/crypto` v0.59.0 要求 `x/net` v0.62.0、`x/sys` v0.50.0、`x/term` v0.48.0、`x/text` v0.44.0。`x/text` v0.44.0 再要求 `x/sync` v0.25.0、`x/mod` v0.42.0、`x/tools` v0.52.0。这些是所选模块的传递约束，不是额外功能升级。`go mod tidy` 同时把本模块已经导入的 `go-sql-driver/mysql` 与 `mattn/go-sqlite3` 归入直接依赖，并去掉没有引用的 `github.com/imdario/mergo`；版本没有因此改变。
+
+升级后在同一工作区执行：
+
+```sh
+GOTOOLCHAIN=go1.26.11 go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+GOTOOLCHAIN=go1.26.11 go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -json ./...
+```
+
+文本输出只有 `No vulnerabilities found.`，退出码 0。JSON 为 scanner v1.9.0、Go 1.26.11、source/symbol 模式，328 个消息、0 个 finding。上面 7 条公告不再出现，也没有新的可达或不可达公告。这仍只覆盖调用图和当前模块选择，不代替运行环境、云权限和渗透测试。真实 MySQL、Redis 与 Docker 验收这次没有执行。
+
 2026-10-22 对本仓库执行 Go 官方 `govulncheck v1.9.0` 源码调用图分析。
 首轮发现 29 个可达漏洞；升级并适配后，可达漏洞为 0。
 扫描仍报告导入包中的 3 个、依赖模块中的 1 个不可达漏洞，不等于整个依赖图没有漏洞，
