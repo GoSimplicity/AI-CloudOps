@@ -14,7 +14,7 @@ fmt-imports:
 		echo "⚠️  goimports 未安装，正在安装..."; \
 		go install golang.org/x/tools/cmd/goimports@latest; \
 	fi
-	@goimports -w -local github.com/yourusername ./
+	@goimports -w -local github.com/GoSimplicity/AI-CloudOps ./
 	@echo "✅ 代码格式化和导入整理完成"
 
 # 检查代码格式 (用于 CI)
@@ -69,24 +69,28 @@ dev-setup: install-dev-tools
 	@echo "  make fmt-check         # 检查代码格式"
 	@echo "  make lint              # 代码检查 (go vet)"
 
-docker-build:
-	docker build -t Bamboo/gomodd:v1.23.1 .
+# 当前入口说明。默认 make 仍是 generate，避免无参数时改跑发布流程。
+help:
+	@printf '%s\n' \
+		'本机开发：' \
+		'  make generate          go generate ./...' \
+		'  make fmt / fmt-check / fmt-imports / lint' \
+		'  make dev-setup         安装 air，不启动服务' \
+		'  make dev-air           本机 Air 热重载' \
+		'  make clean             清理 bin、tmp、logs' \
+		'  make clean-data        额外清理本地 data 目录，不用于发布栈' \
+		'隔离栈计划（只打印，不启动）：' \
+		'  bash scripts/release-start.sh' \
+		'编排文件：deploy/release/compose.yaml' \
+		'已停用且不会调用 Docker：' \
+		'  make docker-build docker-start-env docker-start-server' \
+		'  make docker-stop-env docker-stop-server docker-net-remove dev stop'
 
-docker-start-env:
-	docker-compose -f docker-compose-env.yaml up -d
+# 历史根目录 Compose 与缺失的 docker-compose-env.yaml 不是当前发布入口。
+# 这些目标只拒绝，不构建镜像、不启停容器、不删网络或卷。
+retired_docker = printf '%s\n' '此目标已停用，不会构建镜像、启动容器、停止容器或删除网络。' '历史根目录 Compose 与不存在的 docker-compose-env.yaml 不是当前发布入口。' '查看离线计划：bash scripts/release-start.sh' '编排文件：deploy/release/compose.yaml' >&2; exit 1
 
-docker-start-server:
-	docker-compose -f docker-compose.yaml up -d
+docker-build docker-start-env docker-start-server docker-stop-server docker-stop-env docker-net-remove dev stop:
+	@$(retired_docker)
 
-docker-stop-server:
-	docker-compose -f docker-compose.yaml down
-
-docker-stop-env:
-	docker-compose -f docker-compose-env.yaml down
-
-docker-net-remove:
-	docker network rm cloudOps_net
-
-dev: docker-build docker-start-env docker-start-server
-
-stop: docker-stop-env docker-stop-server docker-net-remove
+.PHONY: help docker-build docker-start-env docker-start-server docker-stop-server docker-stop-env docker-net-remove dev stop
