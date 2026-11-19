@@ -96,14 +96,6 @@ func TestSilenceHandlersUseTypedConfiguration(t *testing.T) {
 						t.Fatal("requested silence duration changed")
 					}
 					return fixtureResponse(request, http.StatusOK, `{"silenceID":"fixture-silence"}`), nil
-				case 2:
-					if request.Method != "DELETE" || request.URL.String() != "https://typed-alertmanager.invalid/base/api/v2/silence/fixture-silence" {
-						t.Fatal("DELETE ignored typed endpoint or current event silence ID")
-					}
-					if memory.updates != 1 {
-						t.Fatal("DAO updated before upstream unsilence succeeded")
-					}
-					return fixtureResponse(request, http.StatusOK, `{}`), nil
 				default:
 					t.Fatal("unexpected outbound request")
 					return nil, errors.New("unexpected request")
@@ -126,8 +118,15 @@ func TestSilenceHandlersUseTypedConfiguration(t *testing.T) {
 			}
 			recorder = httptest.NewRecorder()
 			engine.ServeHTTP(recorder, signActionRequest(t, http.MethodPost, "unsilence", "fixture", ""))
-			if calls != 2 || memory.updates != 2 || memory.event.Status != model.MonitorAlertEventStatusFiring || memory.event.SilenceID != "" {
-				t.Fatal("successful unsilence state was not persisted")
+			if calls != 1 || memory.updates != 1 || memory.event.Status != model.MonitorAlertEventStatusSilenced || memory.event.SilenceID != "fixture-silence" {
+				t.Fatal("unsilence deleted the remote silence or cleared the local association")
+			}
+			var refused struct {
+				Code    int
+				Message string
+			}
+			if err := json.Unmarshal(recorder.Body.Bytes(), &refused); err != nil || recorder.Code != http.StatusOK || refused.Code != 1 || refused.Message != "未能取消，静默关联已保留" {
+				t.Fatalf("unsilence response = %d %s", recorder.Code, recorder.Body.String())
 			}
 		})
 	}
@@ -175,8 +174,15 @@ func TestSilenceHandlersDoNotUpdateAfterUpstreamFailure(t *testing.T) {
 				actionName, hour = "unsilence", ""
 			}
 			engine.ServeHTTP(recorder, signActionRequest(t, http.MethodPost, actionName, "fixture", hour))
-			if calls != 1 || memory.updates != 0 || memory.event.Status != initial || memory.event.SilenceID != "fixture-old" {
+			wantCalls := 1
+			if strings.HasPrefix(test.path, "unsilence") {
+				wantCalls = 0
+			}
+			if calls != wantCalls || memory.updates != 0 || memory.event.Status != initial || memory.event.SilenceID != "fixture-old" {
 				t.Fatal("failed upstream request changed persisted event")
+			}
+			if strings.HasPrefix(test.path, "unsilence") && !strings.Contains(recorder.Body.String(), "未能取消，静默关联已保留") {
+				t.Fatalf("unsilence body = %s", recorder.Body.String())
 			}
 		})
 	}

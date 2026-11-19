@@ -332,7 +332,6 @@ func (w *WebHookHandler) MonitorAlertUnSilence(ctx *gin.Context) {
 		base.ErrorWithMessage(ctx, "未找到对应的告警事件")
 		return
 	}
-	expectedState := dao.AlertEventSilenceState{Status: event.Status, SilenceID: event.SilenceID}
 
 	if event.Status != model.MonitorAlertEventStatusSilenced {
 		base.ErrorWithMessage(ctx, "该告警未处于静默状态")
@@ -344,32 +343,9 @@ func (w *WebHookHandler) MonitorAlertUnSilence(ctx *gin.Context) {
 		base.ErrorWithMessage(ctx, "本地静默标识无效，请人工核对")
 		return
 	}
-	// 构建取消静默的URL
-	silenceURL := fmt.Sprintf("%s/api/v2/silence/%v",
-		w.alertManagerAPI,
-		event.SilenceID)
-
-	// 调用AlertManager API取消静默
-	_, err = base.DeleteWithId(w.l, "MonitorAlertUnSilence",
-		w.requestTimeoutSeconds,
-		silenceURL, nil, nil)
-
-	if err != nil {
-		w.l.Error("取消静默失败", zap.String("operation", "unsilence_upstream"))
-		base.ErrorWithMessage(ctx, "上游取消静默结果未确认，请人工核对，勿重复提交")
-		return
-	}
-
-	desiredState := dao.AlertEventSilenceState{Status: model.MonitorAlertEventStatusFiring, SilenceID: ""}
-	if err := w.dao.UpdateMonitorAlertEventSilence(ctx, event.ID, expectedState, desiredState); err != nil {
-		w.l.Error("更新告警事件状态失败", zap.String("operation", "unsilence_local_save"), zap.Int("event_id", event.ID))
-		base.ErrorWithMessage(ctx, "上游取消静默已受理，本地状态保存未确认，请人工核对，勿重复提交")
-		return
-	}
-
-	w.l.Info("取消静默成功", zap.Int("event_id", event.ID))
-
-	base.SuccessWithMessage(ctx, "取消静默成功")
+	// 与控制台相同：现有记录证明不了排他归属。不删除远端静默，也不改本地关联。
+	w.l.Warn("取消静默被拒绝", zap.Int("event_id", event.ID))
+	base.ErrorWithMessage(ctx, "未能取消，静默关联已保留")
 }
 
 // MonitorAlertClaim 认领告警。卡片链接没有登录用户，只把现有事件状态改为已认领并记日志，不写认领人，也不建新表。
