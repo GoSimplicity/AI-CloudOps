@@ -81,20 +81,3 @@ func SyncAliyunResources(ctx context.Context, config *AliyunSyncConfig, logger *
 
 	return resources, nil
 }
-
-func SyncHuaweiResources(ctx context.Context, req *model.SyncTreeCloudResourceReq, logger *zap.Logger) error {
-	logger.Warn("华为云资源同步功能暂未实现")
-	return fmt.Errorf("华为云资源同步功能暂未实现")
-}
-
-// SyncAzureResources 同步Azure资源
-func SyncAzureResources(ctx context.Context, req *model.SyncTreeCloudResourceReq, logger *zap.Logger) error {
-	logger.Warn("Azure资源同步功能暂未实现")
-	return fmt.Errorf("Azure资源同步功能暂未实现")
-}
-
-// SyncGCPResources 同步GCP资源
-func SyncGCPResources(ctx context.Context, req *model.SyncTreeCloudResourceReq, logger *zap.Logger) error {
-	logger.Warn("GCP资源同步功能暂未实现")
-	return fmt.Errorf("GCP资源同步功能暂未实现")
-}
